@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+
+SHELL ["/bin/bash", "-c"]
+RUN echo "alias ll='ls $LS_OPTIONS -alh'" >> ~/.bashrc && source ~/.bashrc
+
+RUN <<EOF
+# apt-get package
+apt-get update
+apt-get install -y openssh-server liblzma-dev libbz2-dev git-lfs curl vim nodejs
+
+apt update
+apt install -y npm
+
+# docker cli 설치
+apt-get install -y ca-certificates curl gnupg lsb-release
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y docker-ce-cli docker-compose-plugin
+
+# claude code 설치
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+nvm install --lts
+npm install -g @anthropic-ai/claude-code
+npm install -g @fission-ai/openspec@latest
+
+# timezone
+export DEBIAN_FRONTEND=noninteractive
+ln -fs /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+apt-get install -y tzdata
+dpkg-reconfigure --frontend noninteractive tzdata
+EOF
+
+# uv 설치
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# set environments.
+COPY ./docker/dev/config/.env .
+RUN <<EOF
+# env
+source ./.env
+echo "export LC_ALL=C.UTF-8" >> ~/.bashrc
+echo "export LANG=C.UTF-8" >> ~/.bashrc
+echo "export PYTHONPATH=$PYTHONPATH" >> ~/.bashrc
+echo "export MILVUS_URL=$MILVUS_URL" >> ~/.bashrc
+echo "export HF_HOME=/work/.huggingface/" >> ~/.bashrc
+echo "export OLLAMA_MODELS=/data/.ollama/" >> ~/.bashrc
+echo "export PATH=/opt/conda/bin:$PATH" >> ~/.bashrc
+echo "export PATH=/root/.local/bin:$PATH" >> ~/.bashrc
+source ~/.bashrc
+EOF
+
+# install packages via pyproject.toml
+COPY ./docker/dev/pyproject.toml .
+RUN source /opt/conda/bin/activate base && \
+    uv pip install -r pyproject.toml --system
+
+RUN curl -fsSL https://ollama.com/install.sh | bash
+
+RUN mkdir /root/.ssh
+RUN chmod 700 /root/.ssh
+
+# ssh 설정
+RUN <<EOF
+mkdir -p /var/run/sshd
+# set password
+echo 'root:root'|chpasswd
+
+# replace sshd_config
+sed -ri 's/^#?PermitRootLogin\s+.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+sed -ri 's/UsePAM yes/#UsePAM yes/g' /etc/ssh/sshd_config
+echo "Port 2222" >> /etc/ssh/sshd_config
+ssh-keygen -A
+EOF

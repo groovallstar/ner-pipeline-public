@@ -1,0 +1,26 @@
+services:
+  ner-pipeline:
+    image: ner-pipeline:dev
+    container_name: ner_pipeline_dev
+    build:
+      context: ../../
+      dockerfile: ./docker/dev/dockerfile
+    env_file:
+      - ./config/.env
+    volumes:
+      - /data:/data
+      - /work:/work
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - '11111:2222'
+    privileged: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    command:
+      - /bin/bash
+      - -c
+      - |
+        OLLAMA_MODELS="/data/.ollama/" ollama serve & /usr/sbin/sshd -D
