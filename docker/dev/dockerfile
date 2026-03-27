@@ -4,13 +4,12 @@ FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 SHELL ["/bin/bash", "-c"]
 RUN echo "alias ll='ls $LS_OPTIONS -alh'" >> ~/.bashrc && source ~/.bashrc
 
+ENV NVM_DIR="/usr/local/nvm"
+
 RUN <<EOF
 # apt-get package
 apt-get update
-apt-get install -y openssh-server liblzma-dev libbz2-dev git-lfs curl vim nodejs
-
-apt update
-apt install -y npm
+apt-get install -y openssh-server liblzma-dev libbz2-dev git-lfs curl vim
 
 # docker cli 설치
 apt-get install -y ca-certificates curl gnupg lsb-release
@@ -19,11 +18,13 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 apt-get update
 apt-get install -y docker-ce-cli docker-compose-plugin
 
-# claude code 설치
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+# nvm 및 node 설치 (/usr/local/nvm)
+mkdir -p /usr/local/nvm
+NVM_LATEST=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST}/install.sh | NVM_DIR=/usr/local/nvm bash
+source /usr/local/nvm/nvm.sh
 nvm install --lts
+nvm alias default lts/*
 npm install -g @anthropic-ai/claude-code
 npm install -g @fission-ai/openspec@latest
 
@@ -51,13 +52,19 @@ echo "export HF_HOME=/work/.huggingface/" >> ~/.bashrc
 echo "export OLLAMA_MODELS=/data/.ollama/" >> ~/.bashrc
 echo "export PATH=/opt/conda/bin:$PATH" >> ~/.bashrc
 echo "export PATH=/root/.local/bin:$PATH" >> ~/.bashrc
+echo 'export NVM_DIR="/usr/local/nvm"' >> ~/.bashrc
+echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> ~/.bashrc
+NODE_VERSION=$(ls /usr/local/nvm/versions/node | head -1)
+echo "export PATH=\"/usr/local/nvm/versions/node/${NODE_VERSION}/bin:\$PATH\"" >> ~/.bashrc
 source ~/.bashrc
 EOF
 
-# install packages via pyproject.toml
+# install packages via uv sync
 COPY ./docker/dev/pyproject.toml .
+COPY ./docker/dev/uv.lock .
+COPY ./docker/dev/.python-version .
 RUN source /opt/conda/bin/activate base && \
-    uv pip install -r pyproject.toml --system
+    uv sync --frozen --system
 
 RUN curl -fsSL https://ollama.com/install.sh | bash
 
