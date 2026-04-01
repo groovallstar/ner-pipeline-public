@@ -1,0 +1,31 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.8.1
+    container_name: vllm-server
+    env_file:
+      - ./config/.env
+    volumes:
+      - /data:/data
+      - /work/.huggingface:/root/.cache/huggingface
+    ports:
+      - '${VLLM_PORT:-8000}:${VLLM_PORT:-8000}'
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    networks:
+      - llm-network
+    command: >
+      --model ${VLLM_MODEL}
+      --gpu-memory-utilization ${VLLM_GPU_MEM_UTIL:-0.9}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --tensor-parallel-size ${VLLM_TENSOR_PARALLEL:-1}
+      --dtype ${VLLM_DTYPE:-auto}
+      --host 0.0.0.0
+      --port ${VLLM_PORT:-8000}
+
+networks:
+  llm-network:
+    external: true

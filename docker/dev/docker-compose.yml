@@ -5,22 +5,31 @@ services:
     build:
       context: ../../
       dockerfile: ./docker/dev/dockerfile
+      args:
+        USERNAME: ${USER:-devuser}
+        USER_UID: ${DOCKER_UID:-1000}
+        USER_GID: ${DOCKER_GID:-1000}
     env_file:
       - ./config/.env
     volumes:
       - /data:/data
       - /work:/work
       - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - '11111:2222'
+      - ${HOME}/dev/.claude:/home/${USER:-devuser}/.claude
     privileged: true
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
+    networks:
+      - llm-network
     command:
       - /bin/bash
       - -c
       - |
-        OLLAMA_MODELS="/data/.ollama/" ollama serve & /usr/sbin/sshd -D
+        sleep infinity
+
+networks:
+  llm-network:
+    external: true

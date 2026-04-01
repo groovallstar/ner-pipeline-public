@@ -1,15 +1,17 @@
 # syntax=docker/dockerfile:1
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel
 
 SHELL ["/bin/bash", "-c"]
-RUN echo "alias ll='ls $LS_OPTIONS -alh'" >> ~/.bashrc && source ~/.bashrc
 
-ENV NVM_DIR="/usr/local/nvm"
+# Build args for host user mapping
+ARG USERNAME=devuser
+ARG USER_UID=1000
+ARG USER_GID=1000
 
 RUN <<EOF
 # apt-get package
 apt-get update
-apt-get install -y openssh-server liblzma-dev libbz2-dev git-lfs curl vim
+apt-get install -y liblzma-dev libbz2-dev git-lfs curl vim sudo
 
 # docker cli 설치
 apt-get install -y ca-certificates curl gnupg lsb-release
@@ -18,15 +20,9 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 apt-get update
 apt-get install -y docker-ce-cli docker-compose-plugin
 
-# nvm 및 node 설치 (/usr/local/nvm)
-mkdir -p /usr/local/nvm
-NVM_LATEST=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST}/install.sh | NVM_DIR=/usr/local/nvm bash
-source /usr/local/nvm/nvm.sh
-nvm install --lts
-nvm alias default lts/*
-npm install -g @anthropic-ai/claude-code
-npm install -g @fission-ai/openspec@latest
+# Node.js LTS via NodeSource (nvm 없이)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+apt-get install -y nodejs
 
 # timezone
 export DEBIAN_FRONTEND=noninteractive
@@ -35,51 +31,57 @@ apt-get install -y tzdata
 dpkg-reconfigure --frontend noninteractive tzdata
 EOF
 
-# uv 설치
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+# uv 설치 (전역 경로에 설치)
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
-# set environments.
-COPY ./docker/dev/config/.env .
-RUN <<EOF
-# env
-source ./.env
-echo "export LC_ALL=C.UTF-8" >> ~/.bashrc
-echo "export LANG=C.UTF-8" >> ~/.bashrc
-echo "export PYTHONPATH=$PYTHONPATH" >> ~/.bashrc
-echo "export MILVUS_URL=$MILVUS_URL" >> ~/.bashrc
-echo "export HF_HOME=/work/.huggingface/" >> ~/.bashrc
-echo "export OLLAMA_MODELS=/data/.ollama/" >> ~/.bashrc
-echo "export PATH=/opt/conda/bin:$PATH" >> ~/.bashrc
-echo "export PATH=/root/.local/bin:$PATH" >> ~/.bashrc
-echo 'export NVM_DIR="/usr/local/nvm"' >> ~/.bashrc
-echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> ~/.bashrc
-NODE_VERSION=$(ls /usr/local/nvm/versions/node | head -1)
-echo "export PATH=\"/usr/local/nvm/versions/node/${NODE_VERSION}/bin:\$PATH\"" >> ~/.bashrc
-source ~/.bashrc
-EOF
-
-# install packages via uv sync
+# install packages via uv sync (root 권한으로 먼저 수행)
 COPY ./docker/dev/pyproject.toml .
 COPY ./docker/dev/uv.lock .
 COPY ./docker/dev/.python-version .
-RUN source /opt/conda/bin/activate base && \
-    uv sync --frozen --system
+RUN uv sync --frozen --system-certs
 
-RUN curl -fsSL https://ollama.com/install.sh | bash
+# 호스트 사용자와 동일한 UID/GID를 가진 사용자 생성
+# 베이스 이미지의 기존 uid/gid 충돌 사용자 제거 (예: ubuntu)
+RUN EXISTING_USER=$(getent passwd ${USER_UID} | cut -d: -f1) && \
+    if [ -n "$EXISTING_USER" ] && [ "$EXISTING_USER" != "${USERNAME}" ]; then \
+        userdel -r "$EXISTING_USER" 2>/dev/null || true; \
+    fi && \
+    EXISTING_GROUP=$(getent group ${USER_GID} | cut -d: -f1) && \
+    if [ -n "$EXISTING_GROUP" ] && [ "$EXISTING_GROUP" != "${USERNAME}" ]; then \
+        groupdel "$EXISTING_GROUP" 2>/dev/null || true; \
+    fi && \
+    groupadd --gid ${USER_GID} ${USERNAME} 2>/dev/null || true && \
+    useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
 
-RUN mkdir /root/.ssh
-RUN chmod 700 /root/.ssh
+# uv를 사용자 홈에도 설치
+RUN su - ${USERNAME} -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
 
-# ssh 설정
+# 사용자 환경 설정
+COPY ./docker/dev/config/.env .
 RUN <<EOF
-mkdir -p /var/run/sshd
-# set password
-echo 'root:root'|chpasswd
+USER_HOME=$(eval echo ~${USERNAME})
 
-# replace sshd_config
-sed -ri 's/^#?PermitRootLogin\s+.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-sed -ri 's/UsePAM yes/#UsePAM yes/g' /etc/ssh/sshd_config
-echo "Port 2222" >> /etc/ssh/sshd_config
-ssh-keygen -A
+echo "alias ll='ls \$LS_OPTIONS -alh'" >> ${USER_HOME}/.bashrc
+
+# set environments
+source ./.env 2>/dev/null || true
+echo "export LC_ALL=C.UTF-8" >> ${USER_HOME}/.bashrc
+echo "export LANG=C.UTF-8" >> ${USER_HOME}/.bashrc
+echo "export PYTHONPATH=${PYTHONPATH}" >> ${USER_HOME}/.bashrc
+echo "export MILVUS_URL=${MILVUS_URL}" >> ${USER_HOME}/.bashrc
+echo "export HF_HOME=/work/.huggingface/" >> ${USER_HOME}/.bashrc
+echo "export PATH=/usr/bin:\$PATH" >> ${USER_HOME}/.bashrc
+echo "export PATH=${USER_HOME}/.local/bin:\$PATH" >> ${USER_HOME}/.bashrc
+
+chown ${USER_UID}:${USER_GID} ${USER_HOME}/.bashrc
 EOF
+
+# openspec, oh-my-claudecode 설치 (root 권한)
+RUN npm install -g @fission-ai/openspec@latest && \
+    npm install -g oh-my-claude-sisyphus@latest
+
+# Claude Code 설치 (사용자 권한)
+USER ${USERNAME}
+RUN curl -fsSL https://claude.ai/install.sh | bash
