@@ -11,12 +11,9 @@ This project runs inside a Docker container with GPU support. All development sh
 ```bash
 # First-time setup (builds image from scratch)
 cd docker/dev && bash init.sh
-
-# Subsequent starts
-cd docker/dev && bash start.sh
 ```
 
-The container runs SSH on port 11111 (host) → 2222 (container). Connect with `ssh root@localhost -p 11111` (password: `root`).
+VS Code devcontainer (`.devcontainer/devcontainer.json`) 또는 `docker exec`로 접속한다. SSH 포트는 열려 있지 않다.
 
 ### Python Package Manager
 
@@ -55,7 +52,7 @@ The compose file at `docker/dev/docker-compose.yml` mounts:
 - `/data` → datasets and model weights
 - `/var/run/docker.sock` → nested Docker access
 
-GPU support is enabled via NVIDIA device reservations. The base image is `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel`.
+GPU support is enabled via NVIDIA device reservations. The base image is `pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel`.
 
 ### Claude Code Settings Sync
 
@@ -64,3 +61,23 @@ After updating Claude Code settings inside the container, sync them to the host 
 ```bash
 bash docker/dev/copy_claude_setting.sh
 ```
+
+## Skill routing
+
+When the user's request matches an available skill, ALWAYS invoke it using the Skill
+tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+The skill has specialized workflows that produce better results than ad-hoc answers.
+
+Key routing rules:
+- Product ideas, "is this worth building", brainstorming → invoke office-hours
+- Bugs, errors, "why is this broken", 500 errors → invoke investigate
+- Ship, deploy, push, create PR → invoke ship
+- QA, test the site, find bugs → invoke qa
+- Code review, check my diff → invoke review
+- Update docs after shipping → invoke document-release
+- Weekly retro → invoke retro
+- Design system, brand → invoke design-consultation
+- Visual audit, design polish → invoke design-review
+- Architecture review → invoke plan-eng-review
+- Save progress, checkpoint, resume → invoke checkpoint
+- Code quality, health check → invoke health
