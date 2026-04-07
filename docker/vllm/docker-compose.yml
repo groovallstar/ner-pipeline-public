@@ -1,9 +1,11 @@
 services:
   vllm:
-    image: vllm/vllm-openai:v0.8.1
+    image: vllm/vllm-openai:v0.19.0
     container_name: vllm-server
     env_file:
       - ./config/.env
+    environment:
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
     volumes:
       - /data:/data
       - /work/.huggingface:/root/.cache/huggingface
@@ -15,8 +17,6 @@ services:
         reservations:
           devices:
             - capabilities: [gpu]
-    networks:
-      - llm-network
     command: >
       --model ${VLLM_MODEL}
       --gpu-memory-utilization ${VLLM_GPU_MEM_UTIL:-0.9}
@@ -25,7 +25,6 @@ services:
       --dtype ${VLLM_DTYPE:-auto}
       --host 0.0.0.0
       --port ${VLLM_PORT:-8000}
-
-networks:
-  llm-network:
-    external: true
+      --generation-config vllm
+      ${VLLM_EXTRA_ARGS:-}
+      --default-chat-template-kwargs '{"enable_thinking": false}'

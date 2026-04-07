@@ -1,0 +1,210 @@
+{
+  "timestamp": "2026-04-06T09:25:25.308430+00:00",
+  "num_models": 1,
+  "results": [
+    {
+      "model_name": "Jackrong/Qwen3.5-35B-A3B-Claude-4.6-Opus-Reasoning-Distilled",
+      "backend": "vllm",
+      "metrics": {
+        "span_match": {
+          "exact": {
+            "overall": {
+              "f1": 0.6706,
+              "precision": 0.7511,
+              "recall": 0.6058
+            },
+            "per_entity": {
+              "DT": {
+                "precision": 0.7219,
+                "recall": 0.6136,
+                "f1": 0.6634,
+                "support": 220
+              },
+              "LC": {
+                "precision": 0.4406,
+                "recall": 0.3818,
+                "f1": 0.4091,
+                "support": 165
+              },
+              "OG": {
+                "precision": 0.5787,
+                "recall": 0.5816,
+                "f1": 0.5802,
+                "support": 196
+              },
+              "PS": {
+                "precision": 0.9338,
+                "recall": 0.6622,
+                "f1": 0.7749,
+                "support": 447
+              },
+              "QT": {
+                "precision": 0.8472,
+                "recall": 0.6159,
+                "f1": 0.7132,
+                "support": 315
+              },
+              "TI": {
+                "precision": 0.8333,
+                "recall": 0.8511,
+                "f1": 0.8421,
+                "support": 47
+              }
+            }
+          },
+          "relaxed": {
+            "overall": {
+              "f1": 0.7503,
+              "precision": 0.8403,
+              "recall": 0.6777
+            },
+            "per_entity": {
+              "DT": {
+                "precision": 0.877,
+                "recall": 0.7455,
+                "f1": 0.8059,
+                "support": 220
+              },
+              "LC": {
+                "precision": 0.6573,
+                "recall": 0.5697,
+                "f1": 0.6104,
+                "support": 165
+              },
+              "OG": {
+                "precision": 0.6396,
+                "recall": 0.6429,
+                "f1": 0.6412,
+                "support": 196
+              },
+              "PS": {
+                "precision": 0.9748,
+                "recall": 0.6913,
+                "f1": 0.8089,
+                "support": 447
+              },
+              "QT": {
+                "precision": 0.9039,
+                "recall": 0.6571,
+                "f1": 0.761,
+                "support": 315
+              },
+              "TI": {
+                "precision": 0.875,
+                "recall": 0.8936,
+                "f1": 0.8842,
+                "support": 47
+              }
+            }
+          },
+          "counts": {
+            "gold_spans": 1390,
+            "pred_spans": 1121,
+            "exact_matches": 842,
+            "relaxed_matches": 942
+          }
+        },
+        "overall": {
+          "f1": 0.572,
+          "precision": 0.6464,
+          "recall": 0.5129
+        },
+        "per_entity": {
+          "DT": {
+            "precision": 0.5385,
+            "recall": 0.4455,
+            "f1": 0.4876,
+            "support": 220
+          },
+          "LC": {
+            "precision": 0.4014,
+            "recall": 0.3455,
+            "f1": 0.3713,
+            "support": 165
+          },
+          "OG": {
+            "precision": 0.5538,
+            "recall": 0.551,
+            "f1": 0.5524,
+            "support": 196
+          },
+          "PS": {
+            "precision": 0.8045,
+            "recall": 0.5615,
+            "f1": 0.6614,
+            "support": 447
+          },
+          "QT": {
+            "precision": 0.7902,
+            "recall": 0.5619,
+            "f1": 0.6568,
+            "support": 315
+          },
+          "TI": {
+            "precision": 0.4583,
+            "recall": 0.4681,
+            "f1": 0.4632,
+            "support": 47
+          }
+        },
+        "span_f1": {
+          "overall": {
+            "f1": 0.572,
+            "precision": 0.6464,
+            "recall": 0.5129
+          },
+          "per_entity": {
+            "DT": {
+              "precision": 0.5385,
+              "recall": 0.4455,
+              "f1": 0.4876,
+              "support": 220
+            },
+            "LC": {
+              "precision": 0.4014,
+              "recall": 0.3455,
+              "f1": 0.3713,
+              "support": 165
+            },
+            "OG": {
+              "precision": 0.5538,
+              "recall": 0.551,
+              "f1": 0.5524,
+              "support": 196
+            },
+            "PS": {
+              "precision": 0.8045,
+              "recall": 0.5615,
+              "f1": 0.6614,
+              "support": 447
+            },
+            "QT": {
+              "precision": 0.7902,
+              "recall": 0.5619,
+              "f1": 0.6568,
+              "support": 315
+            },
+            "TI": {
+              "precision": 0.4583,
+              "recall": 0.4681,
+              "f1": 0.4632,
+              "support": 47
+            }
+          }
+        }
+      },
+      "latency": {
+        "total_seconds": 547.99,
+        "samples_per_second": 0.885,
+        "avg_per_sample": 1.1299,
+        "prompt_tokens": 1438633,
+        "completion_tokens": 17354,
+        "total_tokens": 1455987,
+        "tokens_per_second": 2656.94,
+        "output_tokens_per_second": 31.67
+      },
+      "num_samples": 485,
+      "errors": 15
+    }
+  ]
+}

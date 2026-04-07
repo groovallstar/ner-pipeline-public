@@ -5,7 +5,7 @@ services:
     env_file:
       - ./config/.env
     volumes:
-      - /data/.ollama:/root/.ollama
+      - /data/.ollama:/root/.ollama/models
     ports:
       - '${OLLAMA_PORT:-11434}:11434'
     deploy:
@@ -17,10 +17,4 @@ services:
       - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-1h}
       - OLLAMA_FLASH_ATTENTION=${OLLAMA_FLASH_ATTENTION:-1}
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
-    networks:
-      - llm-network
     restart: unless-stopped
-
-networks:
-  llm-network:
-    external: true

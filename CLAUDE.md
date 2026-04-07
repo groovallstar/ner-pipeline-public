@@ -1,65 +1,56 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+이 파일은 Claude Code가 이 프로젝트를 이해하기 위한 가이드이다.
 
-## Development Environment
+## 프로젝트 개요
 
-This project runs inside a Docker container with GPU support. All development should be done inside the container.
+**다국어 NER(Named Entity Recognition) 파이프라인** — LangChain 기반 멀티 백엔드 LLM 지원.
 
-### Starting the Container
+- 한국어: KLUE NER (6 엔티티 타입)
+- 일본어: Stockmark NER Wikipedia (8 엔티티 타입)
 
-```bash
-# First-time setup (builds image from scratch)
-cd docker/dev && bash init.sh
+## 개발 환경
+
+- Docker 컨테이너 내부에서 개발 (GPU 지원)
+- 패키지 관리자: **UV** (`uv pip install`)
+- `PYTHONPATH=/work/git/ner_pipeline/src/`
+- import 형태: `from labelers.xxx import Xxx`
+
+## 핵심 디렉토리 구조
+
+```
+src/
+├── labelers/          # NER 라벨링 모듈
+│   ├── ko/            # 한국어 (ollama, vllm, openai)
+│   ├── ja/            # 일본어 (ollama, vllm, openai, enhanced_labeler)
+│   ├── dataset_loader.py
+│   └── labeler_base.py
+└── evaluators/        # 벤치마크 및 평가
+docker/
+├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
+├── ollama/            # Ollama 서비스
+└── vllm/              # vLLM 서비스
+results/               # 벤치마크 결과 JSON + 리포트
+tests/                 # 테스트 (상세: tests/CLAUDE.md)
+docs/                  # 참고 문서
 ```
 
-VS Code devcontainer (`.devcontainer/devcontainer.json`) 또는 `docker exec`로 접속한다. SSH 포트는 열려 있지 않다.
+## 주요 의존성
 
-### Python Package Manager
+| 레이어 | 라이브러리 |
+|--------|-----------|
+| LLM 백엔드 | LangChain + OpenAI, Ollama, HuggingFace |
+| NLP/ML | transformers, datasets, evaluate, seqeval, bert-score |
+| 데이터 | NumPy, Pandas, scikit-learn |
 
-This project uses **UV** (not pip or poetry). Install packages with:
-
-```bash
-uv pip install <package>
-```
-
-### Environment
-
-- `PYTHONPATH` is set to `/work/git/ner_pipeline/src/` — all source modules live under `src/`
-- HuggingFace model cache: `/work/.huggingface/`
-- Ollama model cache: `/data/.ollama/`
-
-## Architecture
-
-The project is a **Named Entity Recognition pipeline** built on LangChain with multi-backend LLM support.
-
-**Key dependency groups:**
-
-| Layer | Libraries |
-|---|---|
-| LLM backends | LangChain + OpenAI, Ollama (local), HuggingFace |
-| Vector store / RAG | Milvus (`pymilvus`, `langchain-milvus`), `sentence_transformers` |
-| NLP/ML | `transformers`, `datasets`, `accelerate`, `evaluate`, `seqeval`, `bert-score` |
-| Orchestration | LangGraph |
-| Data | NumPy, Pandas, scikit-learn |
-
-Source code lives under `src/collectors/` (the only current module path). New modules should be added under `src/`.
-
-## Docker Details
-
-The compose file at `docker/dev/docker-compose.yml` mounts:
-- `/work` → workspace (project code)
-- `/data` → datasets and model weights
-- `/var/run/docker.sock` → nested Docker access
-
-GPU support is enabled via NVIDIA device reservations. The base image is `pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel`.
-
-### Claude Code Settings Sync
-
-After updating Claude Code settings inside the container, sync them to the host with:
+## 벤치마크 실행
 
 ```bash
-bash docker/dev/copy_claude_setting.sh
+# 일본어
+PYTHONPATH=src python -m evaluators --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+
+# 한국어
+PYTHONPATH=src python -m evaluators --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
 ```
 
 ## Skill routing

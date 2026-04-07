@@ -69,9 +69,7 @@ echo "alias ll='ls \$LS_OPTIONS -alh'" >> ${USER_HOME}/.bashrc
 source ./.env 2>/dev/null || true
 echo "export LC_ALL=C.UTF-8" >> ${USER_HOME}/.bashrc
 echo "export LANG=C.UTF-8" >> ${USER_HOME}/.bashrc
-echo "export PYTHONPATH=${PYTHONPATH}" >> ${USER_HOME}/.bashrc
-echo "export MILVUS_URL=${MILVUS_URL}" >> ${USER_HOME}/.bashrc
-echo "export HF_HOME=/work/.huggingface/" >> ${USER_HOME}/.bashrc
+echo "export HF_HOME=${USER_HOME}/.huggingface/" >> ${USER_HOME}/.bashrc
 echo "export PATH=/usr/bin:\$PATH" >> ${USER_HOME}/.bashrc
 echo "export PATH=${USER_HOME}/.local/bin:\$PATH" >> ${USER_HOME}/.bashrc
 

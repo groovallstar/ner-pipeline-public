@@ -70,7 +70,7 @@ docker/vllm/
 
 ```
 openspec/changes/
-├── implement-data-collectors/tasks.md
+├── implement-data-labelers/tasks.md
 ├── korean-ner-dataset-loader/tasks.md
 ├── korean-ner-web-crawler/tasks.md
 ├── ollama-ner-labeler/tasks.md
@@ -121,7 +121,7 @@ openspec/changes/
 
 ```markdown
 목표: Ollama NER 라벨러 파이프라인 구현
-수정한 파일: src/collectors/ollama_labeler.py, tests/test_labeler.py
+수정한 파일: src/labelers/ollama_labeler.py, tests/test_labeler.py
 확인한 사실: Ollama API는 /api/generate 엔드포인트 사용, JSON 모드 지원
 실패한 시도: LangChain ChatOllama의 structured output이 한국어에서 불안정
 다음 작업: 직접 Ollama API 호출 방식으로 전환
@@ -223,7 +223,7 @@ ner_pipeline/
 
 **올바른 방식:**
 ```
-"src/collectors/web_crawler.py의 fetch_article 함수에서
+"src/labelers/web_crawler.py의 fetch_article 함수에서
 타임아웃 에러가 발생한다. 관련 코드를 확인하고 수정해줘"
 ```
 
@@ -283,8 +283,8 @@ ner_pipeline/
 
 ### 2단계: 이번 주 안에
 
+- [x] `CLAUDE.md` 슬림화 및 계층 구조 도입 (루트 + src/ + docker/ + tests/)
 - [ ] Plan mode (openspec 흐름) 일관 적용
-- [ ] `CLAUDE.md` 슬림화 및 계층 구조 도입
 - [ ] 반복 절차의 skill 승격 (NER 평가, 데이터 파이프라인)
 
 ### 3단계: 장기 구조 투자

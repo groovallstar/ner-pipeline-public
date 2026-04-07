@@ -1,0 +1,57 @@
+[project]
+name = "ner-pipeline"
+version = "0.1.0"
+description = "Named Entity Recognition pipeline built on LangChain with multi-backend LLM support"
+requires-python = ">=3.13"
+dependencies = [
+    # PyTorch (CUDA 13.0)
+    "torch",
+    # Data / ML
+    "scikit-learn",
+    "numpy",
+    "pandas",
+    "seaborn",
+    "matplotlib",
+    "emoji",
+    "tiktoken",
+    # NLP / HuggingFace
+    "transformers",
+    "datasets",
+    "accelerate",
+    "evaluate",
+    "sentence-transformers",
+    "bert-score",
+    "seqeval",
+    "sentencepiece",
+    # LangChain ecosystem
+    "langchain",
+    "langgraph",
+    "langchain-openai",
+    "langchain-ollama",
+    "langchain-huggingface",
+    "langchain-community",
+    "langchain-milvus",
+    # Vector store
+    "pymilvus",
+    # Web crawling
+    "beautifulsoup4",
+    "requests",
+    "lxml",
+    # Utilities
+    "langdetect",
+    "tavily-python",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

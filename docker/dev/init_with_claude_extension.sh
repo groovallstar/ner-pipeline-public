@@ -18,7 +18,7 @@ docker compose -f docker-compose.yml build
 
 # 2. .claude 마운트 없이 컨테이너 시작 (인증을 위해)
 echo "=== 컨테이너 시작 (마운트 없이) ==="
-docker compose -f docker-compose.yml -f docker-compose.init.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.yml up -d
 
 # 3. 사용자에게 인증 안내
 echo ""

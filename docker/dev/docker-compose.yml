@@ -12,24 +12,17 @@ services:
     env_file:
       - ./config/.env
     volumes:
-      - /data:/data
-      - /work:/work
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/dev/.claude:/home/${USER:-devuser}/.claude
     privileged: true
+    init: true
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
-    networks:
-      - llm-network
     command:
       - /bin/bash
       - -c
       - |
         sleep infinity
-
-networks:
-  llm-network:
-    external: true

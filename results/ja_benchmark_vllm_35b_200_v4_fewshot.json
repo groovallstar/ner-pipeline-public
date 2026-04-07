@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-04-07T05:52:29.938375+00:00",
+  "language": "ja",
+  "num_models": 1,
+  "results": [
+    {
+      "model_name": "Qwen/Qwen3.5-35B-A3B",
+      "backend": "vllm",
+      "metrics": {
+        "span_f1": {
+          "overall": {
+            "f1": 0.7881981032665965,
+            "precision": 0.7695473251028807,
+            "recall": 0.8077753779697624,
+            "support": 463
+          },
+          "per_entity": {
+            "その他の組織名": {
+              "f1": 0.6610169491525423,
+              "precision": 0.527027027027027,
+              "recall": 0.8863636363636364,
+              "support": 44
+            },
+            "イベント名": {
+              "f1": 0.6835443037974683,
+              "precision": 0.6136363636363636,
+              "recall": 0.7714285714285715,
+              "support": 35
+            },
+            "人名": {
+              "f1": 0.9052631578947367,
+              "precision": 0.9247311827956989,
+              "recall": 0.8865979381443299,
+              "support": 97
+            },
+            "地名": {
+              "f1": 0.8372093023255813,
+              "precision": 0.8709677419354839,
+              "recall": 0.8059701492537313,
+              "support": 67
+            },
+            "政治的組織名": {
+              "f1": 0.7916666666666666,
+              "precision": 0.7450980392156863,
+              "recall": 0.8444444444444444,
+              "support": 45
+            },
+            "施設名": {
+              "f1": 0.746987951807229,
+              "precision": 0.7045454545454546,
+              "recall": 0.7948717948717948,
+              "support": 39
+            },
+            "法人名": {
+              "f1": 0.8050314465408805,
+              "precision": 1.0,
+              "recall": 0.6736842105263158,
+              "support": 95
+            },
+            "製品名": {
+              "f1": 0.7368421052631579,
+              "precision": 0.6481481481481481,
+              "recall": 0.8536585365853658,
+              "support": 41
+            }
+          }
+        }
+      },
+      "latency": {
+        "total_seconds": 191.28,
+        "samples_per_second": 1.0456,
+        "avg_per_sample": 0.9564,
+        "prompt_tokens": 249837,
+        "completion_tokens": 8845,
+        "total_tokens": 258682,
+        "tokens_per_second": 1352.37,
+        "output_tokens_per_second": 46.24
+      },
+      "num_samples": 200,
+      "errors": 0
+    }
+  ]
+}

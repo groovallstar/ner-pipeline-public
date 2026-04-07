@@ -69,7 +69,13 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code / OMC
+.claude/
+.omc/
+openspec/
+
 # Project specific
+docker/dev/config/.env
 *.pt
 *.pth
 *.bin
