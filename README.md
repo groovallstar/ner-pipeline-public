@@ -1,0 +1,115 @@
+# NER Pipeline
+
+LangChain 기반 다국어 Named Entity Recognition(NER) 파이프라인. 멀티 백엔드 LLM을 활용한 개체명 인식 및 벤치마크 시스템.
+
+## 지원 언어 및 데이터셋
+
+| 언어 | 데이터셋 | 엔티티 타입 | 최고 F1 |
+|------|----------|-------------|---------|
+| 한국어 | KLUE NER | PS, LC, OG, DT, TI, QT (6종) | 0.656 |
+| 일본어 | Stockmark NER Wikipedia | 人名, 法人名, 地名, 施設名, 製品名, イベント名, 政治的組織名, その他の組織名 (8종) | 0.849 |
+
+## 지원 백엔드
+
+- **vLLM** — 로컬 GPU 추론 (Qwen3.5-27B, Qwen3.5-35B-A3B 등)
+- **Ollama** — 로컬 LLM 서빙
+- **OpenAI** — API 기반 (gpt-5-mini 등)
+
+## 프로젝트 구조
+
+```
+src/
+├── labelers/              # NER 라벨링 모듈
+│   ├── ko/                # 한국어 라벨러 (ollama, vllm, openai)
+│   ├── ja/                # 일본어 라벨러 + enhanced_labeler (two-pass 검증)
+│   ├── dataset_loader.py  # HuggingFace 데이터셋 로딩
+│   └── labeler_base.py    # 라벨러 베이스 클래스
+└── evaluators/            # 벤치마크 CLI 및 평가 모듈
+docker/
+├── dev/                   # 개발 컨테이너 (GPU)
+├── ollama/                # Ollama 서비스
+└── vllm/                  # vLLM 서비스
+results/                   # 벤치마크 결과 JSON + 리포트
+tests/                     # pytest 테스트
+```
+
+## 설치
+
+```bash
+# UV 패키지 매니저 사용
+uv pip install -r pyproject.toml
+
+# 또는 Docker 개발 환경
+cd docker/dev && docker compose up -d
+```
+
+## 사용법
+
+### 벤치마크 실행
+
+```bash
+# 일본어 NER 벤치마크
+PYTHONPATH=src python -m evaluators --lang ja \
+    --models "vllm:Qwen/Qwen3.5-27B" \
+    --max-samples 200 \
+    --vllm-url "http://localhost:8081/v1"
+
+# 한국어 NER 벤치마크
+PYTHONPATH=src python -m evaluators --lang ko \
+    --models "vllm:Qwen/Qwen3.5-27B" \
+    --max-samples 500 \
+    --vllm-url "http://localhost:8081/v1"
+```
+
+### Two-Pass 검증 (일본어)
+
+```python
+from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+from labelers.ja.enhanced_labeler import EnhancedLabeler
+
+base = VllmNERLabeler(base_url="http://localhost:8081/v1", model="Qwen/Qwen3.5-27B")
+labeler = EnhancedLabeler(base, two_pass=True)
+spans = labeler.label_spans("テキスト入力")
+```
+
+### 테스트
+
+```bash
+PYTHONPATH=src pytest tests/ -v
+```
+
+## 벤치마크 결과
+
+### 일본어 (Stockmark, 200 샘플)
+
+| 모델 | F1 | Precision | Recall |
+|------|------|-----------|--------|
+| vLLM Qwen3.5-27B + 2pass | **0.849** | 0.849 | 0.849 |
+| vLLM Qwen3.5-35B-A3B + 2pass | 0.811 | 0.812 | 0.810 |
+| OpenAI gpt-5-mini + 2pass | 0.794 | 0.781 | 0.808 |
+| Ollama qwen3.5:27b (v3) | 0.819 | 0.753 | 0.801 |
+
+### 한국어 (KLUE, 500 샘플)
+
+| 모델 | F1 | Precision | Recall |
+|------|------|-----------|--------|
+| vLLM Qwen3.5-27B | **0.656** | 0.669 | 0.643 |
+| vLLM Qwen3.5-35B-A3B | 0.626 | 0.662 | 0.593 |
+
+자세한 벤치마크 결과는 [results/BENCHMARK_REPORT.md](results/BENCHMARK_REPORT.md) 참조.
+
+## 성능 개선 기법
+
+- **프롬프트 튜닝** — 에러 분석 → 혼동 패턴 발견 → 규칙/few-shot 추가 (일본어 F1 +6.9%p)
+- **Two-Pass 검증** — 1차 추출 + 2차 LLM 검증으로 precision 향상 (+1~2%p)
+- **Span Matcher 개선** — 공백 정규화, 조사/접미사 제거 폴백
+
+## 주요 의존성
+
+- LangChain + OpenAI / Ollama / HuggingFace
+- transformers, datasets, evaluate, seqeval
+- NumPy, Pandas, scikit-learn
+
+## License
+
+Private repository.
