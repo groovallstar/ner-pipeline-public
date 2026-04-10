@@ -3,7 +3,7 @@
 > 작성 일자: 2026-04-10
 > 목적: 한국어 NER 파이프라인에서 사용되는 토큰화 단위(음절/어절/형태소), BIO 태그 체계, Span 표현, 그리고 BIO ↔ Span 변환 알고리즘을 정리한다.
 > 관련 코드: `src/labelers/tag_aligner.py`, `src/labelers/ko/ner_prompts.py`
-> 데이터셋 목록은 별도 문서 `docs/ko/ko-ner-alternative-datasets.md` 참조.
+> 데이터셋 목록은 별도 문서 `docs/wiki/entities/datasets/korean-ner-datasets.md` 참조.
 
 ## 목차
 

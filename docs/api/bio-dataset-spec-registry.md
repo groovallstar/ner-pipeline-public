@@ -8,7 +8,7 @@ BIO 토큰 시퀀스 NER 데이터셋을 스펙 기반으로 로드하고, BIO �
 
 ## 배경
 
-한국어 NER 데이터셋은 토큰화 단위(음절/어절/형태소)와 BIO 변종(표준 IOB2 vs KMOU의 `I` 단독 태그)이 다르다. 이 메타데이터를 `DatasetSpec`으로 1급 개념화하여 "로드 → BIO 정규화 → span 추출"을 한 번에 수행할 수 있게 했다. 토큰 단위별 span 추출 과정의 이론적 배경은 `docs/ko/bio-span-process.md` §2~§4를 참조.
+한국어 NER 데이터셋은 토큰화 단위(음절/어절/형태소)와 BIO 변종(표준 IOB2 vs KMOU의 `I` 단독 태그)이 다르다. 이 메타데이터를 `DatasetSpec`으로 1급 개념화하여 "로드 → BIO 정규화 → span 추출"을 한 번에 수행할 수 있게 했다. 토큰 단위별 span 추출 과정의 이론적 배경은 `docs/wiki/concepts/bio-tagging.md` §2~§4를 참조.
 
 ## 공개 API
 

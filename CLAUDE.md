@@ -24,15 +24,20 @@ src/
 │   ├── ko/            # 한국어 (ollama, vllm, openai)
 │   ├── ja/            # 일본어 (ollama, vllm, openai, enhanced_labeler)
 │   ├── dataset_loader.py
-│   └── labeler_base.py
-└── evaluators/        # 벤치마크 및 평가
+│   ├── labeler_base.py
+│   ├── tag_aligner.py    # BIO 태그 정렬/정규화/span 추출
+│   └── hf_ner_labeler.py # HuggingFace BERT NER 라벨러
+└── evaluators/        # 벤치마크 및 평가 (metrics, report, runner)
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
 ├── ollama/            # Ollama 서비스
 └── vllm/              # vLLM 서비스
 results/               # 벤치마크 결과 JSON + 리포트
 tests/                 # 테스트 (상세: tests/CLAUDE.md)
-docs/                  # 참고 문서
+docs/                  # 문서 (상세: docs/schema.md)
+│   ├── wiki/          # 프로젝트 독립적 도메인 지식
+│   ├── api/           # 코드 종속 API 레퍼런스
+│   └── guides/        # 프로젝트 종속 실행 가이드
 ```
 
 ## 주요 의존성
@@ -52,6 +57,28 @@ PYTHONPATH=src python -m evaluators --lang ja --models "vllm:Qwen/Qwen3.5-27B" -
 # 한국어
 PYTHONPATH=src python -m evaluators --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
 ```
+
+## Development Protocol (The 3 Rules)
+
+1. **Atomic Functionality**: Every request must be handled in the smallest possible functional unit.
+2. **Verification & Documentation**: A function is not "done" until:
+   - A corresponding test case passes.
+   - Its logic is documented in `/docs/`.
+3. **Human-Led Decomposition**: The User defines the functions. Claude must ask for confirmation if a function seems too large to be verified in a single step.
+
+## Wiki 운영
+
+`docs/wiki/`에 프로젝트 독립적 도메인 지식을 관리한다. 운영 규칙은 `docs/schema.md` 참조.
+
+**트리거 키워드**: "위키에 추가", "위키 업데이트", "위키에 넣어", "wiki에 추가"
+
+위키 관련 요청 시 다음 절차를 따른다:
+1. 기존 위키 페이지에 통합 가능한지 먼저 확인 (`docs/wiki/` 내 파일 탐색)
+2. 통합 가능하면 기존 페이지 업데이트, 아니면 새 페이지 생성
+3. 관련 페이지 간 교차 참조 추가
+4. `docs/schema.md`의 페이지 유형 기준에 따라 배치 (concepts / entities / sources)
+
+**코드 변경 후**: `docs/api/` 문서가 최신인지 확인한다.
 
 ## Skill routing
 

@@ -70,14 +70,11 @@ docker/vllm/
 
 ```
 openspec/changes/
-├── implement-data-labelers/tasks.md
-├── korean-ner-dataset-loader/tasks.md
-├── korean-ner-web-crawler/tasks.md
-├── ollama-ner-labeler/tasks.md
 └── archive/
+    └── 2026-04-10-add-bio-dataset-spec-registry/tasks.md
 ```
 
-이 구조는 이미 좋은 패턴을 따르고 있다. 추가로 고려할 점:
+완료된 변경은 archive로 이동하는 패턴을 따르고 있다. 추가로 고려할 점:
 
 - 각 tasks.md에 현재 상태 요약을 상단에 두어 전체를 읽지 않아도 진행 상황을 파악할 수 있게 한다
 - archive 디렉토리를 활용하여 완료된 작업을 격리한다
