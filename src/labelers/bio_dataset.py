@@ -238,6 +238,7 @@ def load(
             "tokens": tokens,
             "bio_tags": bio_tags,
             "spans": spans,
+            "sentence": spec.joiner.join(tokens),
         })
 
     return records
@@ -270,6 +271,7 @@ def _load_from_jsonl(
             "tokens": tokens,
             "bio_tags": bio_tags,
             "spans": spans,
+            "sentence": spec.joiner.join(tokens),
         })
 
     return records

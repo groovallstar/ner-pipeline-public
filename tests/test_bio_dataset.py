@@ -5,6 +5,7 @@ Smoke tests require HF cache and are skipped when absent.
 """
 
 import dataclasses
+import json
 import os
 
 import pytest
@@ -173,6 +174,52 @@ class TestExtractSpans:
 # load — error path (unit test, no cache needed)
 # ---------------------------------------------------------------------------
 
+class TestLoadFromJsonl:
+    """Unit tests for JSONL fallback path (no HF cache needed)."""
+
+    def test_sentence_field_from_jsonl(self, tmp_path):
+        """JSONL fallback produces sentence field using spec joiner."""
+        jsonl_file = tmp_path / "validation.jsonl"
+        record = {
+            "id": "0",
+            "tokens": ["경", "찰", "은", " ", "출", "동"],
+            "ner_tags": ["B-OG", "I-OG", "O", "O", "O", "O"],
+        }
+        jsonl_file.write_text(json.dumps(record, ensure_ascii=False) + "\n")
+
+        # Monkey-patch the JSONL path to point to tmp_path
+        import labelers.bio_dataset as bio_mod
+        original_load = bio_mod.load
+
+        def patched_load(spec_name, split, max_samples=None):
+            from pathlib import Path
+            spec = bio_mod.REGISTRY[spec_name]
+            return bio_mod._load_from_jsonl(Path(jsonl_file), spec, max_samples)
+
+        results = patched_load("klue", "validation")
+        assert len(results) == 1
+        r = results[0]
+        assert "sentence" in r
+        assert r["sentence"] == "".join(r["tokens"])
+        assert r["spans"] == [{"text": "경찰", "type": "OG"}]
+
+    def test_jsonl_max_samples(self, tmp_path):
+        """JSONL fallback respects max_samples."""
+        jsonl_file = tmp_path / "train.jsonl"
+        lines = []
+        for i in range(20):
+            lines.append(json.dumps({
+                "tokens": ["서", "울"], "ner_tags": ["B-LC", "I-LC"],
+            }, ensure_ascii=False))
+        jsonl_file.write_text("\n".join(lines) + "\n")
+
+        import labelers.bio_dataset as bio_mod
+        from pathlib import Path
+        spec = bio_mod.REGISTRY["klue"]
+        results = bio_mod._load_from_jsonl(Path(jsonl_file), spec, max_samples=5)
+        assert len(results) == 5
+
+
 class TestLoadErrors:
     def test_unknown_spec_raises(self):
         with pytest.raises(DatasetNotFoundError):
@@ -202,9 +249,10 @@ class TestSmokeKLUE:
         assert len(records) <= 5
         assert len(records) > 0
         for r in records:
-            assert set(r.keys()) == {"id", "tokens", "bio_tags", "spans"}
+            assert set(r.keys()) == {"id", "tokens", "bio_tags", "spans", "sentence"}
             for tag in r["bio_tags"]:
                 assert tag == "O" or tag.startswith("B-") or tag.startswith("I-")
+            assert r["sentence"] == "".join(r["tokens"])
 
     def test_at_least_one_span(self):
         records = load("klue", "validation", max_samples=5)
@@ -229,10 +277,11 @@ class TestSmokeKMOU:
         records = load("nlp-kmu/kor_ner", "validation", max_samples=5)
         assert len(records) > 0
         for r in records:
-            assert set(r.keys()) == {"id", "tokens", "bio_tags", "spans"}
+            assert set(r.keys()) == {"id", "tokens", "bio_tags", "spans", "sentence"}
             for tag in r["bio_tags"]:
                 assert tag != "I", f"bare 'I' tag found — normalization failed"
                 assert "_" not in tag or tag == "O", f"underscore tag found: {tag}"
+            assert r["sentence"] == " ".join(r["tokens"])
 
     def test_at_least_one_span(self):
         records = load("nlp-kmu/kor_ner", "validation", max_samples=5)

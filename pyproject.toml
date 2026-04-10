@@ -40,6 +40,8 @@ dependencies = [
     # Utilities
     "langdetect",
     "tavily-python",
+    # NLP tokenization
+    "spacy",
 ]
 
 [tool.uv]
@@ -51,6 +53,11 @@ url = "https://download.pytorch.org/whl/cu130"
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests requiring HF dataset cache",
+]
 
 [build-system]
 requires = ["hatchling"]
