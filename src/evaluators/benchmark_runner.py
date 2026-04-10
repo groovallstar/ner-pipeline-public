@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from tqdm import tqdm
 
-from evaluators.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
+from labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
 from evaluators.metrics import MetricsCalculator
 
 logger = logging.getLogger(__name__)
@@ -32,11 +32,13 @@ class BenchmarkRunner:
         gold_records: List[dict],
         max_samples: Optional[int] = None,
         compute_bertscore: bool = True,
+        lang: str = "ko",
     ) -> None:
         if max_samples is not None:
             gold_records = gold_records[:max_samples]
         self.gold_records = gold_records
         self.compute_bertscore = compute_bertscore
+        self.lang = lang
         self._labelers: List[tuple] = []  # (name, backend, labeler)
 
     def add_labeler(self, name: str, backend: str, labeler: Any) -> None:
@@ -79,23 +81,23 @@ class BenchmarkRunner:
                 has_space_tokens = any(t.strip() == "" for t in gold_tokens)
 
                 # Extract gold spans from BIO tags (for span-level evaluation)
-                g_spans = extract_spans_from_bio(gold_tokens, gold_tags)
+                g_spans = extract_spans_from_bio(gold_tokens, gold_tags, lang=self.lang)
 
                 if has_space_tokens and hasattr(labeler, "label_spans"):
                     # LLM labelers: get raw spans directly (primary path)
                     p_spans = labeler.label_spans(text)
                     # Also produce syllable BIO for seqeval (secondary metric)
-                    aligned_pred = TagAligner.spans_to_syllable_bio(text, gold_tokens, p_spans)
+                    aligned_pred = TagAligner.spans_to_syllable_bio(text, gold_tokens, p_spans, lang=self.lang)
                     pred_tokens = gold_tokens
-                    aligned_gold = normalize_tags(gold_tags)
+                    aligned_gold = normalize_tags(gold_tags, lang=self.lang)
                 elif has_space_tokens and hasattr(labeler, "label_syllables"):
                     # HF models: direct syllable alignment via char offsets
                     pred_tags = labeler.label_syllables(text, gold_tokens)
                     pred_tokens = gold_tokens
-                    aligned_gold = normalize_tags(gold_tags)
+                    aligned_gold = normalize_tags(gold_tags, lang=self.lang)
                     aligned_pred = pred_tags
                     # Extract pred spans from aligned BIO for span-level eval
-                    p_spans = extract_spans_from_bio(gold_tokens, aligned_pred)
+                    p_spans = extract_spans_from_bio(gold_tokens, aligned_pred, lang=self.lang)
                 else:
                     pred_records = labeler.label(text)
                     if not pred_records:
@@ -107,9 +109,9 @@ class BenchmarkRunner:
                         pred_tokens.extend(pr.get("tokens", []))
                         pred_tags.extend(pr.get("ner_tags", []))
                     aligned_gold, aligned_pred = TagAligner.align(
-                        gold_tokens, gold_tags, pred_tokens, pred_tags
+                        gold_tokens, gold_tags, pred_tokens, pred_tags, lang=self.lang
                     )
-                    p_spans = extract_spans_from_bio(pred_tokens, aligned_pred)
+                    p_spans = extract_spans_from_bio(pred_tokens, aligned_pred, lang=self.lang)
             except Exception as e:
                 logger.warning("Labeling failed for sample %d: %s", i, e)
                 errors += 1

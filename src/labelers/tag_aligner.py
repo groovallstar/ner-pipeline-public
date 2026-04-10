@@ -9,8 +9,9 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# KLUE uses tags like B-PS, I-LC. Some HF models may use B-PER, I-LOC, etc.
-_TAG_NORMALIZE_MAP = {
+# Language-specific tag normalization maps
+# Korean (KLUE): standardize to PS, LC, OG, DT, TI, QT
+_TAG_NORMALIZE_MAP_KO = {
     "PER": "PS",
     "LOC": "LC",
     "ORG": "OG",
@@ -25,9 +26,27 @@ _TAG_NORMALIZE_MAP = {
     "ORGANIZATION": "OG",
 }
 
+# Vietnamese: standardize to PER, LOC, ORG (keep international standard tags)
+_TAG_NORMALIZE_MAP_VI = {
+    "PERSON": "PER",
+    "LOCATION": "LOC",
+    "ORGANIZATION": "ORG",
+    "MISCELLANEOUS": "MISC",
+}
 
-def normalize_tag(tag: str) -> str:
-    """Normalize a BIO tag to KLUE standard (B-PS, I-LC, O, etc.)."""
+_TAG_NORMALIZE_MAPS = {
+    "ko": _TAG_NORMALIZE_MAP_KO,
+    "ja": _TAG_NORMALIZE_MAP_KO,  # Japanese uses same mapping as Korean
+    "vi": _TAG_NORMALIZE_MAP_VI,
+}
+
+
+def normalize_tag(tag: str, lang: str = "ko") -> str:
+    """Normalize a BIO tag to language-specific standard.
+
+    Korean/Japanese: B-PER → B-PS, B-LOC → B-LC (KLUE standard)
+    Vietnamese: B-PERSON → B-PER, B-LOCATION → B-LOC (international standard)
+    """
     if tag == "O" or not tag:
         return "O"
     parts = tag.split("-", 1)
@@ -35,12 +54,13 @@ def normalize_tag(tag: str) -> str:
         return tag
     prefix, entity = parts
     entity_upper = entity.upper()
-    normalized = _TAG_NORMALIZE_MAP.get(entity_upper, entity)
+    tag_map = _TAG_NORMALIZE_MAPS.get(lang, _TAG_NORMALIZE_MAP_KO)
+    normalized = tag_map.get(entity_upper, entity)
     return f"{prefix}-{normalized}"
 
 
-def normalize_tags(tags: List[str]) -> List[str]:
-    return [normalize_tag(t) for t in tags]
+def normalize_tags(tags: List[str], lang: str = "ko") -> List[str]:
+    return [normalize_tag(t, lang=lang) for t in tags]
 
 
 def _find_ignore_spaces(text: str, pattern: str, start: int = 0) -> tuple:
@@ -72,14 +92,19 @@ def _find_ignore_spaces(text: str, pattern: str, start: int = 0) -> tuple:
 
 
 def extract_spans_from_bio(
-    tokens: List[str], tags: List[str]
+    tokens: List[str], tags: List[str], lang: str = "ko"
 ) -> List[dict]:
-    """Extract entity spans from syllable-level BIO tags.
+    """Extract entity spans from BIO tags.
 
-    Reconstructs entity text by joining syllable tokens (skipping space tokens).
+    Handles both syllable-level tokens (KLUE-style, with space tokens)
+    and word-level tokens (WikiANN-style, no space tokens).
     Returns [{"text": "경찰", "type": "OG"}, ...].
     """
-    tags = normalize_tags(tags)
+    tags = normalize_tags(tags, lang=lang)
+    # Detect token level: if any token is pure whitespace, it's syllable-level
+    has_space_tokens = any(t.strip() == "" for t in tokens)
+    joiner = "" if has_space_tokens else " "
+
     spans: List[dict] = []
     current_chars: List[str] = []
     current_type: str = ""
@@ -87,7 +112,7 @@ def extract_spans_from_bio(
     for tok, tag in zip(tokens, tags):
         if tag.startswith("B-"):
             if current_chars and current_type:
-                spans.append({"text": "".join(current_chars), "type": current_type})
+                spans.append({"text": joiner.join(current_chars), "type": current_type})
             current_chars = [tok] if tok.strip() else []
             current_type = tag[2:]
         elif tag.startswith("I-") and current_type and tag[2:] == current_type:
@@ -95,12 +120,12 @@ def extract_spans_from_bio(
                 current_chars.append(tok)
         else:
             if current_chars and current_type:
-                spans.append({"text": "".join(current_chars), "type": current_type})
+                spans.append({"text": joiner.join(current_chars), "type": current_type})
             current_chars = []
             current_type = ""
 
     if current_chars and current_type:
-        spans.append({"text": "".join(current_chars), "type": current_type})
+        spans.append({"text": joiner.join(current_chars), "type": current_type})
 
     return spans
 
@@ -129,13 +154,14 @@ class TagAligner:
         gold_tags: List[str],
         pred_tokens: List[str],
         pred_tags: List[str],
+        lang: str = "ko",
     ) -> Tuple[List[str], List[str]]:
         """Align predicted tags to gold token grid.
 
         Returns (gold_tags, aligned_pred_tags) of equal length.
         """
-        gold_tags = normalize_tags(gold_tags)
-        pred_tags = normalize_tags(pred_tags)
+        gold_tags = normalize_tags(gold_tags, lang=lang)
+        pred_tags = normalize_tags(pred_tags, lang=lang)
 
         # Fast path: tokenizations match exactly
         if gold_tokens == pred_tokens:
@@ -153,6 +179,7 @@ class TagAligner:
         syllable_tags: List[str],
         word_tokens: List[str],
         word_tags: List[str],
+        lang: str = "ko",
     ) -> Tuple[List[str], List[str]]:
         """Align word-level predicted tags to syllable-level gold token grid.
 
@@ -160,8 +187,8 @@ class TagAligner:
         Models produce word-level predictions. This maps word predictions back
         to the syllable grid.
         """
-        syllable_tags = normalize_tags(syllable_tags)
-        word_tags = normalize_tags(word_tags)
+        syllable_tags = normalize_tags(syllable_tags, lang=lang)
+        word_tags = normalize_tags(word_tags, lang=lang)
 
         # Reconstruct which syllable tokens belong to which word
         # Space tokens (' ' or '') are separators
@@ -196,6 +223,7 @@ class TagAligner:
         text: str,
         syllable_tokens: List[str],
         spans: List[dict],
+        lang: str = "ko",
     ) -> List[str]:
         """Map raw entity spans directly to syllable tokens via character offsets.
 
@@ -265,7 +293,7 @@ class TagAligner:
                 if tags[syl_idx] == "O":  # don't overwrite existing tags
                     tags[syl_idx] = f"B-{entity_type}" if j == 0 else f"I-{entity_type}"
 
-        return normalize_tags(tags)
+        return normalize_tags(tags, lang=lang)
 
     @staticmethod
     def _char_offset_align(

@@ -2,16 +2,19 @@
 
 Imports are lazy to avoid forcing seqeval dependency on Japanese-only paths.
 Use direct module imports: e.g. `from evaluators.benchmark_runner import BenchmarkRunner`
+
+Tag alignment utilities (TagAligner, extract_spans_from_bio, normalize_tags)
+and HFNERLabeler have moved to labelers/ package.
 """
 
 
 def __getattr__(name):
     """Lazy imports for backward compatibility."""
     if name == "TagAligner":
-        from evaluators.tag_aligner import TagAligner
+        from labelers.tag_aligner import TagAligner
         return TagAligner
     if name == "extract_spans_from_bio":
-        from evaluators.tag_aligner import extract_spans_from_bio
+        from labelers.tag_aligner import extract_spans_from_bio
         return extract_spans_from_bio
     if name == "MetricsCalculator":
         from evaluators.metrics import MetricsCalculator

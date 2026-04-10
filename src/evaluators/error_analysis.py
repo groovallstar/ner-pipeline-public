@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 from typing import Dict, List, Tuple
 
 from labelers.dataset_loader import DatasetLoader
-from evaluators.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
+from labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
 
 logger = logging.getLogger(__name__)
 
@@ -374,8 +374,8 @@ def main():
     parser.add_argument("--split", default="validation")
     parser.add_argument("--max-samples", type=int, default=50)
     parser.add_argument("--output", default=None)
-    parser.add_argument("--ollama-url", default="http://ollama:11434")
-    parser.add_argument("--vllm-url", default="http://vllm-server:8081/v1")
+    parser.add_argument("--ollama-url", default="http://localhost:11434")
+    parser.add_argument("--vllm-url", default="http://localhost:8081/v1")
     parser.add_argument("--num-ctx", type=int, default=4096)
     parser.add_argument("--batch-size", type=int, default=10)
     parser.add_argument("--concurrency", type=int, default=32)
