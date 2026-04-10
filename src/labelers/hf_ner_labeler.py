@@ -6,7 +6,7 @@ from typing import List, Optional
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 
-from evaluators.tag_aligner import normalize_tag
+from labelers.tag_aligner import normalize_tag
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,11 @@ class HFNERLabeler:
         model_name: str,
         device: Optional[str] = None,
         batch_size: int = 32,
+        lang: str = "ko",
     ) -> None:
         self.model_name = model_name
         self.batch_size = batch_size
+        self.lang = lang
 
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -98,7 +100,7 @@ class HFNERLabeler:
                 tok_idx = char_to_tok.get(char_pos)
                 if tok_idx is not None and score > token_scores[tok_idx]:
                     token_scores[tok_idx] = score
-                    token_tags[tok_idx] = normalize_tag(entity_label)
+                    token_tags[tok_idx] = normalize_tag(entity_label, lang=self.lang)
 
         # Fix B/I continuity: consecutive same-entity tokens should be I- after first B-
         prev_entity = None

@@ -56,6 +56,8 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
 
     if lang == "ja":
         return _create_labeler_ja(backend, model_name, args)
+    if lang == "vi":
+        return _create_labeler_vi(backend, model_name, args)
 
     if backend == "ollama":
         from labelers.ollama_ner_labeler import OllamaNERLabeler
@@ -77,8 +79,8 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
         from labelers.openai_ner_labeler import OpenAINERLabeler
         return backend, OpenAINERLabeler(model=model_name)
     elif backend == "hf":
-        from evaluators.hf_ner_labeler import HFNERLabeler
-        return backend, HFNERLabeler(model_name=model_name)
+        from labelers.hf_ner_labeler import HFNERLabeler
+        return backend, HFNERLabeler(model_name=model_name, lang="ko")
     else:
         raise ValueError(f"Unknown backend '{backend}'. Use: ollama, vllm, openai, hf")
 
@@ -108,6 +110,34 @@ def _create_labeler_ja(backend: str, model_name: str, args):
         raise ValueError(f"Unknown backend '{backend}' for Japanese. Use: ollama, vllm, openai")
 
 
+def _create_labeler_vi(backend: str, model_name: str, args):
+    """Create a Vietnamese NER labeler."""
+    if backend == "ollama":
+        from labelers.vi.ollama_ner_labeler import OllamaNERLabeler
+        return backend, OllamaNERLabeler(
+            model=model_name,
+            base_url=args.ollama_url,
+            num_ctx=args.num_ctx,
+            batch_size=args.batch_size,
+        )
+    elif backend == "vllm":
+        from labelers.vi.vllm_ner_labeler import VllmNERLabeler
+        return backend, VllmNERLabeler(
+            base_url=args.vllm_url,
+            model=model_name,
+            concurrency=args.concurrency,
+            thinking=getattr(args, "thinking", False),
+        )
+    elif backend == "openai":
+        from labelers.vi.openai_ner_labeler import OpenAINERLabeler
+        return backend, OpenAINERLabeler(model=model_name)
+    elif backend == "hf":
+        from labelers.hf_ner_labeler import HFNERLabeler
+        return backend, HFNERLabeler(model_name=model_name, lang="vi")
+    else:
+        raise ValueError(f"Unknown backend '{backend}' for Vietnamese. Use: ollama, vllm, openai, hf")
+
+
 def main():
     _load_env()
 
@@ -119,7 +149,7 @@ def main():
         "--models", nargs="+", required=True,
         help="Model specs: 'backend:model' (e.g. ollama:qwen3.5:27b, vllm:Qwen/Qwen3.5-9B)",
     )
-    parser.add_argument("--lang", default="ko", choices=["ko", "ja"], help="Language (default: ko)")
+    parser.add_argument("--lang", default="ko", choices=["ko", "ja", "vi"], help="Language (default: ko)")
     parser.add_argument("--dataset", default=None, help="Dataset name (default: klue for ko, stockmark for ja)")
     parser.add_argument("--config", default="ner", help="Dataset config (default: ner)")
     parser.add_argument("--split", default=None, help="Dataset split (default: validation for ko, test for ja)")
@@ -139,14 +169,21 @@ def main():
 
     # Apply language-specific defaults
     if args.dataset is None:
-        args.dataset = "stockmark/ner-wikipedia-dataset" if args.lang == "ja" else "klue"
+        if args.lang == "ja":
+            args.dataset = "stockmark/ner-wikipedia-dataset"
+        elif args.lang == "vi":
+            args.dataset = "unimelb-nlp/wikiann"
+        else:
+            args.dataset = "klue"
     if args.split is None:
-        args.split = "test" if args.lang == "ja" else "validation"
+        args.split = "test" if args.lang in ("ja", "vi") else "validation"
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     if args.lang == "ja":
         _run_japanese(args)
+    elif args.lang == "vi":
+        _run_vietnamese(args)
     else:
         _run_korean(args)
 
@@ -158,7 +195,7 @@ def _run_korean(args):
     gold_records = loader.load(args.dataset, config=args.config, split=args.split, max_samples=args.max_samples)
     print(f"  Loaded {len(gold_records)} records")
 
-    runner = BenchmarkRunner(gold_records, compute_bertscore=not args.no_bertscore)
+    runner = BenchmarkRunner(gold_records, compute_bertscore=not args.no_bertscore, lang="ko")
 
     for spec in args.models:
         try:
@@ -204,6 +241,36 @@ def _run_japanese(args):
     results = runner.run()
 
     report = JaReportGenerator(results)
+    report.print_table()
+
+    if args.output:
+        report.save_json(args.output)
+
+
+def _run_vietnamese(args):
+    """Run Vietnamese NER benchmark using BIO-based evaluation (same as Korean)."""
+    print(f"Loading gold data: {args.dataset} (vi) [{args.split}]")
+    loader = DatasetLoader()
+    gold_records = loader.load(
+        args.dataset, config="vi", split=args.split, max_samples=args.max_samples,
+    )
+    print(f"  Loaded {len(gold_records)} records")
+
+    runner = BenchmarkRunner(gold_records, compute_bertscore=not args.no_bertscore, lang="vi")
+
+    for spec in args.models:
+        try:
+            backend, labeler = _create_labeler(spec, args, lang="vi")
+            display_name = spec.split(":", 1)[1] if ":" in spec else spec
+            runner.add_labeler(display_name, backend, labeler)
+            print(f"  Added: [{backend}] {display_name}")
+        except Exception as e:
+            print(f"  ERROR creating labeler for '{spec}': {e}", file=sys.stderr)
+            continue
+
+    results = runner.run()
+
+    report = ReportGenerator(results)
     report.print_table()
 
     if args.output:
