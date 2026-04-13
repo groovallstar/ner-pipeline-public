@@ -1,6 +1,6 @@
-"""Abstract base for Ollama-backed NER labelers.
+"""Ollama 백엔드 NER 라벨러의 추상 베이스 클래스.
 
-Subclasses inject a language pack (entity_types, single+batch prompt templates, lang).
+서브클래스는 언어 팩(entity_types, 단일/배치 프롬프트 템플릿, lang)을 주입한다.
 """
 import json
 import logging
@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 class BaseOllamaLabeler:
-    """Ollama batch NER labeler base.
+    """Ollama 배치 NER 라벨러 베이스 클래스.
 
-    Subclasses must pass ``single_prompt_template`` and ``batch_prompt_template``
-    as keyword arguments.
+    서브클래스는 ``single_prompt_template``과 ``batch_prompt_template``을
+    키워드 인자로 전달해야 한다.
     """
 
     def __init__(
@@ -44,8 +44,8 @@ class BaseOllamaLabeler:
         self.lang = lang
         self._single_prompt_template = single_prompt_template
         self._batch_prompt_template = batch_prompt_template
-        # Ollama via langchain_ollama does not expose usage metadata reliably;
-        # these stubs exist for a uniform interface with vllm/openai backends.
+        # langchain_ollama는 usage 메타데이터를 안정적으로 제공하지 않는다.
+        # vllm/openai 백엔드와 인터페이스 통일을 위한 스텁이다.
         self.total_prompt_tokens: int = 0
         self.total_completion_tokens: int = 0
         self._llm = ChatOllama(
@@ -60,7 +60,7 @@ class BaseOllamaLabeler:
         )
 
     def label(self, text: str) -> List[dict]:
-        """Label a text string. Returns a list of NERRecords (one per sentence)."""
+        """텍스트를 라벨링한다. 문장당 하나의 NERRecord 리스트를 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [(i, s) for i, s in enumerate(sentences) if s.split()]
         print(
@@ -98,7 +98,7 @@ class BaseOllamaLabeler:
         return [r for r in records if r["tokens"]]
 
     def label_spans(self, text: str) -> List[dict]:
-        """Return raw entity spans without BIO conversion."""
+        """BIO 변환 없이 원시 엔티티 span을 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [s for s in sentences if s.split()]
         all_spans = []
@@ -110,12 +110,12 @@ class BaseOllamaLabeler:
         return all_spans
 
     def label_records(self, records: List[dict]) -> List[dict]:
-        """Label a list of RawTextRecords. Returns NERRecords.
+        """RawTextRecord 리스트를 라벨링하여 NERRecord 리스트를 반환한다.
 
-        Note: sentence IDs are assigned within each record (str(orig_idx)), so IDs
-        restart at "0" per record. This matches pre-refactor behavior for Ollama and
-        OpenAI backends. vLLM uses f"{r_idx}-{s_idx}" (cross-record unique). The
-        asymmetry is intentional to preserve existing downstream behavior.
+        문장 ID는 레코드 내에서 str(orig_idx)로 부여되므로 레코드마다 "0"부터
+        재시작한다. 이는 Ollama/OpenAI 백엔드의 리팩터 이전 동작을 유지한다.
+        vLLM은 f"{r_idx}-{s_idx}" 형태의 전역 고유 ID를 사용한다.
+        이 비대칭은 기존 하위 동작 보존을 위해 의도적으로 유지한다.
         """
         results = []
         for raw in records:
@@ -127,7 +127,7 @@ class BaseOllamaLabeler:
         return results
 
     def _call_llm_batch(self, sentences: List[str]) -> List[List[dict]]:
-        """Call Ollama LLM for a batch of sentences. Returns a list of span lists."""
+        """문장 배치에 대해 Ollama LLM을 호출한다. span 리스트의 리스트를 반환한다."""
         if len(sentences) == 1:
             return [self._call_llm(sentences[0])]
 
@@ -158,7 +158,7 @@ class BaseOllamaLabeler:
             return [self._call_llm(s) for s in sentences]
 
     def _call_llm(self, sentence: str) -> List[dict]:
-        """Call Ollama LLM and parse entity spans. Returns [] on failure."""
+        """Ollama LLM을 호출하여 엔티티 span을 파싱한다. 실패 시 []를 반환한다."""
         prompt = self._single_prompt_template.format(
             entity_types=", ".join(self.entity_types),
             sentence=sentence,

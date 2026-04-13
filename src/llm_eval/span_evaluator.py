@@ -1,9 +1,9 @@
-"""Lightweight span-level evaluator for LLM NER labeling results.
+"""LLM NER 라벨링 결과를 위한 경량 span 수준 평가기.
 
-Connects bio_dataset.load() gold records with labeler.label_spans() predictions,
-using MetricsCalculator.compute_span_match() for exact/relaxed F1 computation.
+bio_dataset.load() gold 레코드와 labeler.label_spans() 예측을 연결하고,
+MetricsCalculator.compute_span_match()로 정확/완화 F1을 계산한다.
 
-Usage:
+사용 예:
     from labelers.bio_dataset import load
     from llm_eval.span_evaluator import evaluate
 
@@ -28,19 +28,19 @@ def evaluate(
     show_progress: bool = True,
     collect_diffs: bool = False,
 ) -> dict:
-    """Evaluate LLM labeler against gold span annotations.
+    """LLM 라벨러를 gold span 어노테이션과 비교하여 평가한다.
 
     Args:
-        gold_records: Records from bio_dataset.load(), each with
-                      "sentence", "spans", "tokens", "bio_tags", "id".
-        labeler: Object with label_spans(text) -> list[{"text", "type"}].
-        max_samples: Limit evaluation to first N records.
-        show_progress: Show tqdm progress bar.
-        collect_diffs: If True, include per-record diff analysis in result.
+        gold_records: bio_dataset.load()의 레코드. 각 레코드는
+                      "sentence", "spans", "tokens", "bio_tags", "id" 키를 가진다.
+        labeler: label_spans(text) -> list[{"text", "type"}]를 가진 객체.
+        max_samples: 평가를 처음 N개 레코드로 제한한다.
+        show_progress: tqdm 진행 바 표시 여부.
+        collect_diffs: True이면 결과에 레코드별 diff 분석을 포함한다.
 
     Returns:
-        Dict with "exact", "relaxed", "counts", "latency" keys.
-        If collect_diffs=True, also includes "diffs" list.
+        "exact", "relaxed", "counts", "latency" 키를 가진 dict.
+        collect_diffs=True이면 "diffs" 리스트도 포함된다.
     """
     if max_samples is not None:
         gold_records = gold_records[:max_samples]
@@ -117,7 +117,7 @@ def evaluate(
 
 
 def _norm(text: str) -> str:
-    """Normalize entity text: strip and remove internal spaces."""
+    """엔티티 텍스트를 정규화한다: 앞뒤 공백 및 내부 공백을 제거한다."""
     return text.strip().replace(" ", "")
 
 
@@ -127,27 +127,27 @@ def _compute_diffs(
     gold_spans_all: List[List[dict]],
     pred_spans_all: List[List[dict]],
 ) -> List[dict]:
-    """Compute per-record diff between gold and pred spans.
+    """레코드별 gold span과 pred span의 diff를 계산한다.
 
-    Classifies each span as:
-    - exact match: normalized text + type identical
-    - boundary_error: relaxed match (containment) but not exact
-    - false_negative: gold span with no match at all
-    - false_positive: pred span with no match at all
+    각 span을 다음으로 분류한다:
+    - exact match: 정규화 텍스트 + 타입이 동일
+    - boundary_error: 완화 매칭(포함 관계)이지만 정확 매칭은 아닌 경우
+    - false_negative: 매칭되지 않은 gold span
+    - false_positive: 매칭되지 않은 pred span
     """
     diffs = []
     for rid, sentence, gold_spans, pred_spans in zip(
         record_ids, sentences, gold_spans_all, pred_spans_all
     ):
-        # Normalize spans for comparison
+        # 비교를 위해 span을 정규화한다
         gold_normed = [(_norm(s["text"]), s["type"]) for s in gold_spans]
         pred_normed = [(_norm(s["text"]), s["type"]) for s in pred_spans]
 
-        # Track which spans are matched
+        # 매칭된 span을 추적한다
         gold_matched = [False] * len(gold_spans)
         pred_matched = [False] * len(pred_spans)
 
-        # Pass 1: exact matches
+        # 1단계: 정확 매칭
         for pi, (pt, ptype) in enumerate(pred_normed):
             for gi, (gt, gtype) in enumerate(gold_normed):
                 if gold_matched[gi] or pred_matched[pi]:
@@ -157,7 +157,7 @@ def _compute_diffs(
                     pred_matched[pi] = True
                     break
 
-        # Pass 2: relaxed (containment) matches among remaining
+        # 2단계: 나머지에 대한 완화(포함 관계) 매칭
         boundary_errors = []
         for pi, (pt, ptype) in enumerate(pred_normed):
             if pred_matched[pi]:
@@ -199,7 +199,7 @@ def _compute_diffs(
 
 
 def _empty_result() -> dict:
-    """Return a zeroed-out result structure."""
+    """모든 값이 0으로 초기화된 결과 구조체를 반환한다."""
     zero_overall = {"f1": 0.0, "precision": 0.0, "recall": 0.0}
     return {
         "exact": {"overall": {**zero_overall}, "per_entity": {}},

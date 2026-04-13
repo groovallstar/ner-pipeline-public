@@ -1,4 +1,4 @@
-"""Shared LLM labeler utilities for JSON response parsing."""
+"""JSON 응답 파싱을 위한 LLM 라벨러 공통 유틸리티."""
 import json
 import logging
 import re
@@ -8,9 +8,9 @@ logger = logging.getLogger(__name__)
 
 
 def parse_json_response(raw: str) -> List[dict]:
-    """Extract JSON span list from LLM output. Returns [] on failure.
+    """LLM 출력에서 JSON span 리스트를 추출한다. 실패 시 []를 반환한다.
 
-    Handles: bare arrays, wrapped dicts, think tags, markdown fences.
+    처리 대상: 단독 배열, 래핑된 딕셔너리, think 태그, 마크다운 펜스.
     """
     raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     try:

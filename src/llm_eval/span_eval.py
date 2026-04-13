@@ -1,21 +1,21 @@
-"""Single-script span-level evaluator for labeling result JSONL files.
+"""라벨링 결과 JSONL 파일을 위한 단독 실행 span 수준 평가기.
 
-Pass 2 of the 2-pass pipeline: consumes prediction JSONL produced by labelers,
-computes char-offset span F1 + latency aggregates, prints a comparison table.
+2단계 파이프라인의 2단계: 라벨러가 생성한 예측 JSONL을 소비하고,
+문자 오프셋 span F1 + 지연 집계를 계산하여 비교 테이블을 출력한다.
 
-Input JSONL (one record per line):
+입력 JSONL (레코드 한 줄):
     {"id": "...",
      "text": "...",
      "gold_spans": [{"start": 0, "end": 3, "label": "人名"}, ...],
      "pred_spans": [{"start": 0, "end": 3, "label": "人名"}, ...],
-     "latency_seconds": 1.23,             # optional
-     "prompt_tokens": 245,                # optional
-     "completion_tokens": 18}             # optional
+     "latency_seconds": 1.23,             # 선택 사항
+     "prompt_tokens": 245,                # 선택 사항
+     "completion_tokens": 18}             # 선택 사항
 
-Optional first line `_meta` record (skipped from evaluation):
+선택적 첫 줄 `_meta` 레코드 (평가에서 제외):
     {"_meta": {"model": "Qwen3.5-27B", "backend": "vllm", "lang": "ja"}}
 
-Usage:
+사용 예:
     python -m llm_eval.span_eval --predictions f1.jsonl f2.jsonl [--output eval.json]
 """
 import argparse
@@ -38,13 +38,13 @@ class EvalResult:
 
 
 def _normalize_span(s: dict) -> dict:
-    """Accept both {label} and {type} keys; pass through start/end."""
+    """{label}과 {type} 키를 모두 허용하며 start/end를 그대로 전달한다."""
     label = s.get("label", s.get("type"))
     return {"start": int(s["start"]), "end": int(s["end"]), "type": label}
 
 
 def _load_jsonl(path: str) -> tuple:
-    """Return (meta_dict_or_empty, records_list)."""
+    """(meta_dict_or_empty, records_list)를 반환한다."""
     meta = {}
     records = []
     with open(path, encoding="utf-8") as f:

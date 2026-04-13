@@ -1,7 +1,7 @@
-"""Abstract base for OpenAI-compatible chat NER labelers.
+"""OpenAI 호환 채팅 NER 라벨러의 추상 베이스 클래스.
 
-Subclasses inject a language pack (entity_types, system_prompt, user_prompt_template, lang).
-Supports both sync and async clients (label() = sync, label_spans() = async).
+서브클래스는 언어 팩(entity_types, system_prompt, user_prompt_template, lang)을 주입한다.
+동기/비동기 클라이언트를 모두 지원한다(label() = 동기, label_spans() = 비동기).
 """
 import asyncio
 import json
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseOpenAILabeler:
-    """OpenAI-compatible batch NER labeler base."""
+    """OpenAI 호환 배치 NER 라벨러 베이스 클래스."""
 
     def __init__(
         self,
@@ -57,7 +57,7 @@ class BaseOpenAILabeler:
         self.total_completion_tokens = 0
 
     def label(self, text: str) -> List[dict]:
-        """Label a text string. Returns a list of NERRecords (one per sentence)."""
+        """텍스트를 라벨링한다. 문장당 하나의 NERRecord 리스트를 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [(i, s) for i, s in enumerate(sentences) if s.split()]
 
@@ -108,7 +108,7 @@ class BaseOpenAILabeler:
         return [r for r in records if r and r["tokens"]]  # type: ignore[misc]
 
     def label_spans(self, text: str) -> List[dict]:
-        """Return raw entity spans without BIO conversion (async concurrent)."""
+        """BIO 변환 없이 원시 엔티티 span을 반환한다 (비동기 병렬 처리)."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [s for s in sentences if s.split()]
         batches = self._make_batches(non_empty)
@@ -139,10 +139,10 @@ class BaseOpenAILabeler:
         return batches
 
     def label_records(self, records: List[dict]) -> List[dict]:
-        """Label a list of RawTextRecords. Returns NERRecords.
+        """RawTextRecord 리스트를 라벨링하여 NERRecord 리스트를 반환한다.
 
-        Note: sentence IDs restart at "0" per record (pre-refactor behavior).
-        vLLM uses f"{r_idx}-{s_idx}" cross-record IDs; asymmetry is intentional.
+        문장 ID는 레코드마다 "0"부터 재시작한다(리팩터 이전 동작).
+        vLLM은 f"{r_idx}-{s_idx}" 형태의 전역 ID를 사용하며, 이 비대칭은 의도적이다.
         """
         results = []
         for raw in records:

@@ -1,9 +1,9 @@
-"""Language-neutral helpers shared by NER labeler backends.
+"""NER 라벨러 백엔드가 공유하는 언어 중립 헬퍼.
 
-Lifted verbatim (logic-preserving) from ko/ja *_ner_labeler.py duplicates:
-- `split_sentences(text, lang)` — sentence splitter, parameterized punctuation.
-- `parse_spans(raw)` — JSON span list extractor with <think> and fallback handling.
-- `spans_to_bio(tokens, spans)` — whitespace-token BIO tagging with exact+substring match.
+ko/ja *_ner_labeler.py 중복 코드에서 로직을 보존하여 추출한 함수들:
+- `split_sentences(text, lang)` — 문장 분리기, 구두점 매개변수화.
+- `parse_spans(raw)` — <think> 및 폴백 처리를 포함한 JSON span 리스트 추출기.
+- `spans_to_bio(tokens, spans)` — 정확/부분 매칭을 사용한 공백 분리 토큰 BIO 태깅.
 """
 import logging
 import re
@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def split_sentences(text: str, lang: str = "ko") -> List[str]:
-    """Split text into sentences on punctuation or newlines.
+    """구두점이나 줄바꿈을 기준으로 텍스트를 문장으로 분리한다.
 
     Args:
-        text: Input text to split.
-        lang: Language hint. "ja" adds Japanese punctuation (。！？) to the split set.
+        text: 분리할 입력 텍스트.
+        lang: 언어 힌트. "ja"이면 일본어 구두점(。！？)을 분리 집합에 추가한다.
     """
     if lang == "ja":
         pattern = r'(?<=[.!?。！？])\s*|\n+'
@@ -42,20 +42,20 @@ def split_sentences(text: str, lang: str = "ko") -> List[str]:
 
 
 def parse_spans(raw: str) -> List[dict]:
-    """Extract JSON span list from LLM output. Returns [] on failure.
+    """LLM 출력에서 JSON span 리스트를 추출한다. 실패 시 []를 반환한다.
 
-    Thin alias around `labeler_base.parse_json_response`, which already handles
-    <think> blocks, bare arrays, and `{"entities": [...]}` wrappers.
+    `labeler_base.parse_json_response`의 얇은 별칭으로, <think> 블록,
+    단독 배열, `{"entities": [...]}` 래퍼를 이미 처리한다.
     """
     return parse_json_response(raw)
 
 
 def spans_to_bio(tokens: List[str], spans: List[dict]) -> List[str]:
-    """Convert entity spans to token-level BIO tags (whitespace-split tokens).
+    """엔티티 span을 토큰 수준 BIO 태그로 변환한다 (공백 분리 토큰 기준).
 
-    Matching strategy:
-    1. Exact multi-token match.
-    2. Substring match per token (handles attached particles / 助詞).
+    매칭 전략:
+    1. 정확한 멀티 토큰 매칭.
+    2. 토큰별 부분 문자열 매칭 (조사/助詞 부착 처리).
     """
     tags = ["O"] * len(tokens)
     for span in spans:
@@ -69,7 +69,7 @@ def spans_to_bio(tokens: List[str], spans: List[dict]) -> List[str]:
             continue
         matched = False
 
-        # 1. Exact match
+        # 1. 정확한 매칭
         for i in range(len(tokens) - n + 1):
             if tokens[i : i + n] == span_tokens:
                 tags[i] = f"B-{entity_type}"
@@ -78,7 +78,7 @@ def spans_to_bio(tokens: List[str], spans: List[dict]) -> List[str]:
                 matched = True
                 break
 
-        # 2. Substring match (handles particles attached to root)
+        # 2. 부분 문자열 매칭 (어근에 붙은 조사 처리)
         if not matched:
             for i in range(len(tokens) - n + 1):
                 if all(

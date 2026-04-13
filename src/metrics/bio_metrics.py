@@ -1,4 +1,4 @@
-"""NER evaluation metrics: seqeval F1/Precision/Recall + BERTScore."""
+"""NER 평가 메트릭: seqeval F1/Precision/Recall + BERTScore."""
 
 import logging
 from typing import Dict, List, Optional
@@ -15,23 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 class MetricsCalculator:
-    """Compute NER evaluation metrics."""
+    """NER 평가 메트릭을 계산한다."""
 
     @staticmethod
     def compute_seqeval(
         gold_tags_list: List[List[str]],
         pred_tags_list: List[List[str]],
     ) -> Dict:
-        """Compute seqeval metrics (strict IOB2 mode).
+        """seqeval 메트릭을 계산한다 (엄격한 IOB2 모드).
 
         Args:
-            gold_tags_list: List of gold BIO tag sequences.
-            pred_tags_list: List of predicted BIO tag sequences.
+            gold_tags_list: gold BIO 태그 시퀀스 리스트.
+            pred_tags_list: 예측 BIO 태그 시퀀스 리스트.
 
         Returns:
-            Dict with overall and per-entity-type metrics.
+            전체 및 엔티티 타입별 메트릭이 포함된 dict.
         """
-        # Ensure same length sequences (truncate/pad if needed)
+        # 동일 길이 시퀀스를 보장한다 (필요 시 잘라내거나 패딩)
         clean_gold, clean_pred = [], []
         for gold, pred in zip(gold_tags_list, pred_tags_list):
             min_len = min(len(gold), len(pred))
@@ -53,7 +53,7 @@ class MetricsCalculator:
             overall_prec = float(precision_score(clean_gold, clean_pred))
             overall_rec = float(recall_score(clean_gold, clean_pred))
 
-        # Per-entity breakdown from classification_report
+        # classification_report에서 엔티티별 분석을 추출한다
         try:
             report_str = classification_report(clean_gold, clean_pred, output_dict=False, mode="strict", scheme=IOB2)
             report_dict = classification_report(clean_gold, clean_pred, output_dict=True, mode="strict", scheme=IOB2)
@@ -83,7 +83,7 @@ class MetricsCalculator:
 
     @staticmethod
     def extract_entities(tokens: List[str], tags: List[str]) -> List[str]:
-        """Extract entity strings from BIO-tagged token sequence."""
+        """BIO 태그가 붙은 토큰 시퀀스에서 엔티티 문자열을 추출한다."""
         entities = []
         current = []
         for tok, tag in zip(tokens, tags):
@@ -103,10 +103,10 @@ class MetricsCalculator:
 
     @staticmethod
     def _extract_spans(tokens: List[str], tags: List[str]) -> set:
-        """Extract entity spans as (char_start, char_end, entity_type) tuples.
+        """엔티티 span을 (char_start, char_end, entity_type) 튜플로 추출한다.
 
-        Converts BIO token-level tags to character-level offsets,
-        skipping whitespace-only tokens (KLUE syllable tokenization).
+        BIO 토큰 수준 태그를 문자 수준 오프셋으로 변환하며,
+        공백 전용 토큰(KLUE 음절 토큰화)은 건너뛴다.
         """
         spans = set()
         char_offset = 0
@@ -118,7 +118,7 @@ class MetricsCalculator:
             tok_len = len(tok)
 
             if tag.startswith("B-"):
-                # Close previous span if any
+                # 이전 span이 있으면 닫는다
                 if current_start is not None:
                     spans.add((current_start, char_offset, current_type))
                 if not is_space:
@@ -128,10 +128,10 @@ class MetricsCalculator:
                     current_start = None
                     current_type = None
             elif tag.startswith("I-") and current_type is not None and tag[2:] == current_type:
-                # Continue current span (skip space tokens but don't break span)
+                # 현재 span을 계속한다 (공백 토큰은 건너뛰되 span을 끊지 않음)
                 pass
             else:
-                # O tag or type mismatch: close current span
+                # O 태그 또는 타입 불일치: 현재 span을 닫는다
                 if current_start is not None:
                     spans.add((current_start, char_offset, current_type))
                     current_start = None
@@ -140,7 +140,7 @@ class MetricsCalculator:
             if not is_space:
                 char_offset += tok_len
 
-        # Close any remaining span
+        # 남아 있는 span을 닫는다
         if current_start is not None:
             spans.add((current_start, char_offset, current_type))
 
@@ -153,23 +153,23 @@ class MetricsCalculator:
         gold_tokens_list: List[List[str]],
         pred_tokens_list: List[List[str]],
     ) -> Dict:
-        """Compute character-level entity span F1 (KLUE official metric).
+        """문자 수준 엔티티 span F1을 계산한다 (KLUE 공식 메트릭).
 
-        Extracts entity spans from BIO tag sequences, converts to character
-        offsets (skipping whitespace tokens), and computes exact-match F1.
+        BIO 태그 시퀀스에서 엔티티 span을 추출하고, 문자 오프셋으로 변환하여
+        (공백 토큰 제외) 정확 매칭 F1을 계산한다.
 
         Args:
-            gold_tags_list: List of gold BIO tag sequences.
-            pred_tags_list: List of predicted BIO tag sequences.
-            gold_tokens_list: List of gold token sequences.
-            pred_tokens_list: List of predicted token sequences.
+            gold_tags_list: gold BIO 태그 시퀀스 리스트.
+            pred_tags_list: 예측 BIO 태그 시퀀스 리스트.
+            gold_tokens_list: gold 토큰 시퀀스 리스트.
+            pred_tokens_list: 예측 토큰 시퀀스 리스트.
 
         Returns:
-            Dict with overall and per-entity-type precision/recall/F1.
+            전체 및 엔티티 타입별 precision/recall/F1이 포함된 dict.
         """
         total_gold = set()
         total_pred = set()
-        # Use sentence index as namespace to avoid cross-sentence collisions
+        # 문장 간 충돌을 방지하기 위해 문장 인덱스를 네임스페이스로 사용한다
         for idx, (g_tokens, g_tags, p_tokens, p_tags) in enumerate(
             zip(gold_tokens_list, gold_tags_list, pred_tokens_list, pred_tags_list)
         ):
@@ -177,7 +177,7 @@ class MetricsCalculator:
             min_len_p = min(len(p_tokens), len(p_tags))
             g_spans = MetricsCalculator._extract_spans(g_tokens[:min_len_g], g_tags[:min_len_g])
             p_spans = MetricsCalculator._extract_spans(p_tokens[:min_len_p], p_tags[:min_len_p])
-            # Namespace with sentence index
+            # 문장 인덱스로 네임스페이스를 지정한다
             for s in g_spans:
                 total_gold.add((idx, *s))
             for s in p_spans:
@@ -192,7 +192,7 @@ class MetricsCalculator:
         recall = n_correct / n_gold if n_gold > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
-        # Per-entity type breakdown
+        # 엔티티 타입별 분석
         entity_types = set()
         for item in total_gold | total_pred:
             entity_types.add(item[3])  # (idx, char_start, char_end, entity_type)
@@ -226,27 +226,27 @@ class MetricsCalculator:
         gold_spans_list: List[List[dict]],
         pred_spans_list: List[List[dict]],
     ) -> Dict:
-        """Span-level evaluation: compare entity spans directly without BIO alignment.
+        """BIO 정렬 없이 엔티티 span을 직접 비교하는 span 수준 평가.
 
-        Gold spans and pred spans are both [{"text": "경찰", "type": "OG"}, ...].
-        Computes exact match F1 and relaxed (containment) match F1.
+        gold span과 pred span은 모두 [{"text": "경찰", "type": "OG"}, ...] 형식이다.
+        정확 매칭 F1과 완화된(포함 관계) 매칭 F1을 계산한다.
 
-        Exact match: text and type both identical (after space normalization).
-        Relaxed match: type identical AND one text contains the other
-                       (handles "박" vs "박씨", "서울" vs "서울시").
+        정확 매칭: 텍스트와 타입이 모두 동일 (공백 정규화 후).
+        완화 매칭: 타입이 동일하고 한 텍스트가 다른 것을 포함
+                   ("박" vs "박씨", "서울" vs "서울시" 처리).
         """
         from collections import Counter
 
         def _norm(text: str) -> str:
-            """Normalize entity text: strip and remove internal spaces.
+            """엔티티 텍스트를 정규화한다: 앞뒤 공백 제거 및 내부 공백 제거.
 
-            Gold (from syllable BIO) produces "지난19일" while LLM produces
-            "지난 19일". Removing spaces makes them comparable.
+            음절 BIO에서 추출한 gold는 "지난19일"이지만 LLM은 "지난 19일"을 생성한다.
+            공백 제거로 비교 가능하게 만든다.
             """
             return text.strip().replace(" ", "")
 
-        # Flatten with sentence index to avoid cross-sentence collisions
-        # Keep both original text (for relaxed match) and normalized (for exact match)
+        # 문장 간 충돌을 방지하기 위해 문장 인덱스로 평탄화한다
+        # 원문 텍스트(완화 매칭용)와 정규화 텍스트(정확 매칭용)를 모두 유지한다
         gold_raw = []    # (sent_idx, original_text, type)
         pred_raw = []
         gold_exact = []  # (sent_idx, normalized_text, type)
@@ -261,7 +261,7 @@ class MetricsCalculator:
                 pred_raw.append((idx, text, etype))
                 pred_exact.append((idx, _norm(text), etype))
 
-        # --- Exact Match (space-normalized, multiset) ---
+        # --- 정확 매칭 (공백 정규화, 멀티셋) ---
         gold_counter = Counter(gold_exact)
         pred_counter = Counter(pred_exact)
         exact_correct = sum((gold_counter & pred_counter).values())
@@ -271,9 +271,9 @@ class MetricsCalculator:
         exact_rec = exact_correct / n_gold_exact if n_gold_exact > 0 else 0.0
         exact_f1 = 2 * exact_prec * exact_rec / (exact_prec + exact_rec) if (exact_prec + exact_rec) > 0 else 0.0
 
-        # --- Relaxed Match (containment) ---
-        # For each pred span, check if any gold span has same (sent_idx, type)
-        # and one text contains the other
+        # --- 완화 매칭 (포함 관계) ---
+        # 각 pred span에 대해, 동일한 (sent_idx, type)을 가진 gold span 중
+        # 한 텍스트가 다른 것을 포함하는지 확인한다
         gold_by_sent_type: Dict[tuple, List[str]] = {}
         for idx, text, etype in gold_exact:
             key = (idx, etype)
@@ -285,7 +285,7 @@ class MetricsCalculator:
             pred_by_sent_type.setdefault(key, []).append(text)
 
         relaxed_tp = 0
-        matched_gold = set()  # track matched gold to avoid double-counting
+        matched_gold = set()  # 중복 집계 방지를 위해 매칭된 gold를 추적한다
         matched_pred = set()
 
         for (idx, etype), p_texts in pred_by_sent_type.items():
@@ -308,7 +308,7 @@ class MetricsCalculator:
         relaxed_rec = relaxed_tp / n_gold if n_gold > 0 else 0.0
         relaxed_f1 = 2 * relaxed_prec * relaxed_rec / (relaxed_prec + relaxed_rec) if (relaxed_prec + relaxed_rec) > 0 else 0.0
 
-        # --- Per-entity breakdown (exact, multiset) ---
+        # --- 엔티티별 분석 (정확 매칭, 멀티셋) ---
         entity_types = set(e[2] for e in gold_exact) | set(e[2] for e in pred_exact)
         per_entity: Dict[str, Dict] = {}
         for etype in sorted(entity_types):
@@ -327,7 +327,7 @@ class MetricsCalculator:
                 "support": e_gold_n,
             }
 
-        # --- Per-entity breakdown (relaxed) ---
+        # --- 엔티티별 분석 (완화 매칭) ---
         per_entity_relaxed: Dict[str, Dict] = {}
         for etype in sorted(entity_types):
             e_gold_count = sum(1 for s in gold_exact if s[2] == etype)
@@ -376,10 +376,10 @@ class MetricsCalculator:
         pred_tokens_list: List[List[str]],
         model_type: str = "klue/roberta-base",
     ) -> Dict:
-        """Compute BERTScore between gold and predicted entity strings.
+        """gold 엔티티 문자열과 예측 엔티티 문자열 간의 BERTScore를 계산한다.
 
-        Extracts entity spans from BIO tags, then computes BERTScore
-        on the entity text lists.
+        BIO 태그에서 엔티티 span을 추출한 후, 엔티티 텍스트 리스트에 대해
+        BERTScore를 계산한다.
         """
         try:
             from bert_score import score as bert_score_fn
@@ -398,7 +398,7 @@ class MetricsCalculator:
         if not gold_entities_all or not pred_entities_all:
             return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
 
-        # Pad shorter list to same length for BERTScore
+        # BERTScore를 위해 짧은 리스트를 동일 길이로 패딩한다
         max_len = max(len(gold_entities_all), len(pred_entities_all))
         gold_padded = gold_entities_all + [""] * (max_len - len(gold_entities_all))
         pred_padded = pred_entities_all + [""] * (max_len - len(pred_entities_all))

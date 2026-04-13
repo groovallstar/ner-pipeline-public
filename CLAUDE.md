@@ -52,10 +52,10 @@ docs/                  # 문서 (상세: docs/schema.md)
 
 ```bash
 # 일본어
-PYTHONPATH=src python -m evaluators --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+PYTHONPATH=src python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 
 # 한국어
-PYTHONPATH=src python -m evaluators --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
+PYTHONPATH=src python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
 ```
 
 ## Development Protocol (The 3 Rules)
@@ -65,6 +65,12 @@ PYTHONPATH=src python -m evaluators --lang ko --models "vllm:Qwen/Qwen3.5-27B" -
    - A corresponding test case passes.
    - Its logic is documented in `/docs/`.
 3. **Human-Led Decomposition**: The User defines the functions. Claude must ask for confirmation if a function seems too large to be verified in a single step.
+
+## 코딩 컨벤션 (주석/문서 언어)
+
+- `print()` / `logger.*` / 예외 메시지 / argparse `help`: **영문**
+- 함수·클래스·모듈 docstring, 인라인 `#` 주석: **한국어**
+- 상세 규칙 및 예시: `docs/guides/coding-conventions.md`
 
 ## Wiki 운영
 

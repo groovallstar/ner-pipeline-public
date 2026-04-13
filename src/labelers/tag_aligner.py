@@ -1,7 +1,7 @@
-"""Gold-vs-predicted tag alignment utilities.
+"""gold 태그와 예측 태그 정렬 유틸리티.
 
-Handles tokenization mismatches between gold data (pre-tokenized)
-and LLM labeler output (whitespace-split from reconstructed text).
+사전 토큰화된 gold 데이터와 재구성 텍스트에서 공백 분리된
+LLM 라벨러 출력 간의 토큰화 불일치를 처리한다.
 """
 
 import logging
@@ -9,8 +9,8 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Language-specific tag normalization maps
-# Korean (KLUE): standardize to PS, LC, OG, DT, TI, QT
+# 언어별 태그 정규화 맵
+# 한국어 (KLUE): PS, LC, OG, DT, TI, QT로 표준화
 _TAG_NORMALIZE_MAP_KO = {
     "PER": "PS",
     "LOC": "LC",
@@ -26,7 +26,7 @@ _TAG_NORMALIZE_MAP_KO = {
     "ORGANIZATION": "OG",
 }
 
-# Vietnamese: standardize to PER, LOC, ORG (keep international standard tags)
+# 베트남어: PER, LOC, ORG로 표준화 (국제 표준 태그 유지)
 _TAG_NORMALIZE_MAP_VI = {
     "PERSON": "PER",
     "LOCATION": "LOC",
@@ -36,16 +36,16 @@ _TAG_NORMALIZE_MAP_VI = {
 
 _TAG_NORMALIZE_MAPS = {
     "ko": _TAG_NORMALIZE_MAP_KO,
-    "ja": _TAG_NORMALIZE_MAP_KO,  # Japanese uses same mapping as Korean
+    "ja": _TAG_NORMALIZE_MAP_KO,  # 일본어는 한국어와 동일한 맵을 사용한다
     "vi": _TAG_NORMALIZE_MAP_VI,
 }
 
 
 def normalize_tag(tag: str, lang: str = "ko") -> str:
-    """Normalize a BIO tag to language-specific standard.
+    """BIO 태그를 언어별 표준으로 정규화한다.
 
-    Korean/Japanese: B-PER → B-PS, B-LOC → B-LC (KLUE standard)
-    Vietnamese: B-PERSON → B-PER, B-LOCATION → B-LOC (international standard)
+    한국어/일본어: B-PER → B-PS, B-LOC → B-LC (KLUE 표준)
+    베트남어: B-PERSON → B-PER, B-LOCATION → B-LOC (국제 표준)
     """
     if tag == "O" or not tag:
         return "O"
@@ -64,10 +64,10 @@ def normalize_tags(tags: List[str], lang: str = "ko") -> List[str]:
 
 
 def _find_ignore_spaces(text: str, pattern: str, start: int = 0) -> tuple:
-    """Find pattern in text ignoring spaces in both sides.
+    """양쪽의 공백을 무시하고 텍스트에서 패턴을 찾는다.
 
-    Returns (start_offset, end_offset) in `text`, or (-1, -1).
-    E.g. _find_ignore_spaces("지난 19일", "지난19일") → (0, 5)
+    `text` 내의 (start_offset, end_offset)을 반환하며, 없으면 (-1, -1)을 반환한다.
+    예: _find_ignore_spaces("지난 19일", "지난19일") → (0, 5)
     """
     pattern_nospace = pattern.replace(" ", "")
     if not pattern_nospace:
@@ -94,14 +94,14 @@ def _find_ignore_spaces(text: str, pattern: str, start: int = 0) -> tuple:
 def extract_spans_from_bio(
     tokens: List[str], tags: List[str], lang: str = "ko"
 ) -> List[dict]:
-    """Extract entity spans from BIO tags.
+    """BIO 태그에서 엔티티 span을 추출한다.
 
-    Handles both syllable-level tokens (KLUE-style, with space tokens)
-    and word-level tokens (WikiANN-style, no space tokens).
-    Returns [{"text": "경찰", "type": "OG"}, ...].
+    음절 수준 토큰(KLUE 방식, 공백 토큰 포함)과
+    단어 수준 토큰(WikiANN 방식, 공백 토큰 없음)을 모두 처리한다.
+    [{"text": "경찰", "type": "OG"}, ...] 형태로 반환한다.
     """
     tags = normalize_tags(tags, lang=lang)
-    # Detect token level: if any token is pure whitespace, it's syllable-level
+    # 토큰 수준 감지: 순수 공백 토큰이 있으면 음절 수준이다
     has_space_tokens = any(t.strip() == "" for t in tokens)
     joiner = "" if has_space_tokens else " "
 
@@ -131,21 +131,20 @@ def extract_spans_from_bio(
 
 
 class TagAligner:
-    """Aligns predicted BIO tags to gold token boundaries."""
+    """예측 BIO 태그를 gold 토큰 경계에 정렬한다."""
 
     @staticmethod
     def reconstruct_text(tokens: List[str]) -> str:
-        """Reconstruct original text from syllable tokens.
+        """음절 토큰에서 원문 텍스트를 재구성한다.
 
-        KLUE NER tokens include explicit space tokens (' ' or '').
-        Syllable tokens should be concatenated directly; only space tokens
-        produce whitespace in the output.
+        KLUE NER 토큰은 명시적 공백 토큰(' ' 또는 '')을 포함한다.
+        음절 토큰은 직접 연결하며, 공백 토큰만 출력에서 공백을 생성한다.
         """
         has_space_tokens = any(t.strip() == "" for t in tokens)
         if has_space_tokens:
-            # KLUE-style syllable tokens with explicit space markers
+            # 명시적 공백 마커가 있는 KLUE 방식 음절 토큰
             return "".join(t if t.strip() != "" else " " for t in tokens)
-        # Word-level tokens (e.g. kor_ner) — space-join as before
+        # 단어 수준 토큰 (예: kor_ner) — 이전과 같이 공백으로 연결
         return " ".join(tokens)
 
     @staticmethod
@@ -156,18 +155,18 @@ class TagAligner:
         pred_tags: List[str],
         lang: str = "ko",
     ) -> Tuple[List[str], List[str]]:
-        """Align predicted tags to gold token grid.
+        """예측 태그를 gold 토큰 그리드에 정렬한다.
 
-        Returns (gold_tags, aligned_pred_tags) of equal length.
+        동일 길이의 (gold_tags, aligned_pred_tags)를 반환한다.
         """
         gold_tags = normalize_tags(gold_tags, lang=lang)
         pred_tags = normalize_tags(pred_tags, lang=lang)
 
-        # Fast path: tokenizations match exactly
+        # 빠른 경로: 토큰화가 정확히 일치하는 경우
         if gold_tokens == pred_tokens:
             return gold_tags, pred_tags
 
-        # Character-offset based alignment
+        # 문자 오프셋 기반 정렬
         aligned_pred = TagAligner._char_offset_align(
             gold_tokens, pred_tokens, pred_tags
         )
@@ -181,20 +180,20 @@ class TagAligner:
         word_tags: List[str],
         lang: str = "ko",
     ) -> Tuple[List[str], List[str]]:
-        """Align word-level predicted tags to syllable-level gold token grid.
+        """단어 수준 예측 태그를 음절 수준 gold 토큰 그리드에 정렬한다.
 
-        KLUE NER uses syllable tokens (음절) with space tokens between words.
-        Models produce word-level predictions. This maps word predictions back
-        to the syllable grid.
+        KLUE NER은 단어 사이에 공백 토큰을 포함한 음절(음절) 토큰을 사용한다.
+        모델은 단어 수준 예측을 생성한다. 이 함수는 단어 예측을 음절 그리드로
+        다시 매핑한다.
         """
         syllable_tags = normalize_tags(syllable_tags, lang=lang)
         word_tags = normalize_tags(word_tags, lang=lang)
 
-        # Reconstruct which syllable tokens belong to which word
-        # Space tokens (' ' or '') are separators
+        # 어느 음절 토큰이 어느 단어에 속하는지 재구성한다
+        # 공백 토큰(' ' 또는 '')은 구분자 역할을 한다
         aligned_pred = []
         word_idx = 0
-        in_word_pos = 0  # position within current word's characters
+        in_word_pos = 0  # 현재 단어 내의 문자 위치
 
         for syl_tok in syllable_tokens:
             if syl_tok.strip() == "":
@@ -207,8 +206,8 @@ class TagAligner:
 
             if word_idx < len(word_tags):
                 tag = word_tags[word_idx]
-                # First syllable of word gets the tag as-is
-                # Subsequent syllables: B-X -> I-X
+                # 단어의 첫 음절은 태그를 그대로 사용한다
+                # 이후 음절: B-X → I-X
                 if in_word_pos > 0 and tag.startswith("B-"):
                     tag = "I-" + tag[2:]
                 aligned_pred.append(tag)
@@ -225,17 +224,17 @@ class TagAligner:
         spans: List[dict],
         lang: str = "ko",
     ) -> List[str]:
-        """Map raw entity spans directly to syllable tokens via character offsets.
+        """원시 엔티티 span을 문자 오프셋을 통해 직접 음절 토큰에 매핑한다.
 
-        This avoids the lossy word-level BIO intermediate step.
-        Spans are [{"text": "경찰", "type": "OG"}, ...].
+        손실이 있는 단어 수준 BIO 중간 단계를 피할 수 있다.
+        span 형식: [{"text": "경찰", "type": "OG"}, ...].
         """
-        # Build char→syllable_idx map from original text
+        # 원문 텍스트에서 문자 → 음절 인덱스 맵을 구성한다
         char_to_syl = {}
         text_pos = 0
         for syl_idx, tok in enumerate(syllable_tokens):
             if tok.strip() == "":
-                # Space token
+                # 공백 토큰
                 if text_pos < len(text) and text[text_pos] == " ":
                     text_pos += 1
                 continue
@@ -251,8 +250,8 @@ class TagAligner:
             text_pos = found + len(tok)
 
         tags = ["O"] * len(syllable_tokens)
-        # Track how far we've consumed per entity text to handle duplicates.
-        # Key: entity_text, Value: minimum search_start for next occurrence.
+        # 중복 처리를 위해 엔티티 텍스트별 소비 위치를 추적한다.
+        # 키: entity_text, 값: 다음 출현 탐색의 최소 시작 위치.
         _next_search: dict[str, int] = {}
 
         for span in spans:
@@ -261,7 +260,7 @@ class TagAligner:
             if not entity_text or not entity_type:
                 continue
 
-            # Find entity text in the original text, advancing past previous matches
+            # 이전 매칭을 지나쳐 원문에서 엔티티 텍스트를 찾는다
             search_start = _next_search.get(entity_text, 0)
             exact_found = text.find(entity_text, search_start)
             if exact_found != -1:
@@ -269,8 +268,8 @@ class TagAligner:
             else:
                 match_start, match_end = _find_ignore_spaces(text, entity_text, search_start)
             if match_start == -1:
-                # Wrap around: retry from beginning (entity may appear before search_start
-                # if spans arrive out of order)
+                # 처음부터 재시도: span이 순서 없이 도착한 경우 search_start 이전에
+                # 엔티티가 나타날 수 있다
                 if search_start > 0:
                     exact_found = text.find(entity_text, 0)
                     if exact_found != -1:
@@ -281,16 +280,16 @@ class TagAligner:
                     continue
             _next_search[entity_text] = match_end
 
-            # Map entity chars to syllable indices
+            # 엔티티 문자를 음절 인덱스로 매핑한다
             matched_syls = []
             for c in range(match_start, match_end):
                 syl_idx = char_to_syl.get(c)
                 if syl_idx is not None and syl_idx not in matched_syls:
                     matched_syls.append(syl_idx)
 
-            # Assign B/I tags only to matched syllables
+            # 매칭된 음절에만 B/I 태그를 부여한다
             for j, syl_idx in enumerate(matched_syls):
-                if tags[syl_idx] == "O":  # don't overwrite existing tags
+                if tags[syl_idx] == "O":  # 기존 태그를 덮어쓰지 않는다
                     tags[syl_idx] = f"B-{entity_type}" if j == 0 else f"I-{entity_type}"
 
         return normalize_tags(tags, lang=lang)
@@ -301,22 +300,22 @@ class TagAligner:
         pred_tokens: List[str],
         pred_tags: List[str],
     ) -> List[str]:
-        """Map predicted tags to gold tokens using character offsets.
+        """문자 오프셋을 사용하여 예측 태그를 gold 토큰에 매핑한다.
 
-        Reconstructs text from pred tokens (space-joined) and maps each
-        gold syllable token to the pred token that covers the same characters.
-        Gold space tokens (empty/whitespace) are always tagged 'O'.
+        pred 토큰에서 텍스트를 재구성(공백 결합)하고, 각
+        gold 음절 토큰을 동일 문자를 커버하는 pred 토큰에 매핑한다.
+        gold 공백 토큰(빈 문자열/공백)은 항상 'O'로 태깅된다.
         """
-        # Reconstruct pred text and build char→pred_token_idx map
+        # pred 텍스트를 재구성하고 문자 → pred 토큰 인덱스 맵을 구성한다
         pred_text = " ".join(pred_tokens)
-        pred_char_map = {}  # char_pos -> pred token index
+        pred_char_map = {}  # 문자 위치 → pred 토큰 인덱스
         pos = 0
         for idx, tok in enumerate(pred_tokens):
             for c in range(len(tok)):
                 pred_char_map[pos + c] = idx
             pos += len(tok) + 1  # +1 for space separator
 
-        # Match gold non-space tokens to pred text sequentially
+        # gold 비공백 토큰을 pred 텍스트에 순차적으로 매칭한다
         aligned = []
         pred_pos = 0
         for gold_tok in gold_tokens:
@@ -335,7 +334,7 @@ class TagAligner:
                     aligned.append("O")
                 pred_pos = found + len(gold_tok)
             else:
-                # Fallback: try single-char match for syllables
+                # 폴백: 음절에 대해 단일 문자 매칭을 시도한다
                 found_char = pred_text.find(gold_tok[0], pred_pos)
                 if found_char != -1:
                     pred_idx = pred_char_map.get(found_char)

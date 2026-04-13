@@ -1,6 +1,6 @@
-"""Korean vLLM NER labeler — thin subclass of BaseVllmLabeler.
+"""한국어 vLLM NER 라벨러 — BaseVllmLabeler의 경량 서브클래스.
 
-Injects Korean entity types and single-sentence prompt template.
+한국어 엔티티 타입과 단일 문장 프롬프트 템플릿을 주입한다.
 """
 from typing import List, Optional
 

@@ -1,4 +1,4 @@
-"""Korean Ollama NER labeler — thin subclass of BaseOllamaLabeler."""
+"""한국어 Ollama NER 라벨러 — BaseOllamaLabeler의 경량 서브클래스."""
 from typing import List, Optional
 
 from labelers.base_ollama_labeler import BaseOllamaLabeler

@@ -1,4 +1,4 @@
-"""Orchestrates NER benchmark: load gold data -> run labelers -> evaluate."""
+"""NER 벤치마크를 조율한다: gold 데이터 로드 -> 라벨러 실행 -> 평가."""
 
 import logging
 import re
@@ -26,7 +26,7 @@ class BenchmarkResult:
 
 
 class BenchmarkRunner:
-    """Run NER benchmark against gold data."""
+    """gold 데이터 대비 NER 벤치마크를 실행한다."""
 
     def __init__(
         self,
@@ -41,7 +41,7 @@ class BenchmarkRunner:
         self.gold_records = gold_records
         self.compute_bertscore = compute_bertscore
         self.lang = lang
-        self.eval_mode = eval_mode  # "bio" (ko/vi) or "offset_span" (ja)
+        self.eval_mode = eval_mode  # "bio" (ko/vi) 또는 "offset_span" (ja)
         self._labelers: List[tuple] = []  # (name, backend, labeler)
 
     def add_labeler(self, name: str, backend: str, labeler: Any) -> None:
@@ -62,7 +62,7 @@ class BenchmarkRunner:
         return results
 
     def _run_offset_span(self, name: str, backend: str, labeler: Any) -> BenchmarkResult:
-        """Span F1 path using char offsets (ja). Records: {text, gold_spans}."""
+        """문자 오프셋을 사용하는 Span F1 경로 (ja). 레코드 형식: {text, gold_spans}."""
         from labelers.ja.span_matcher import match_spans
 
         gold_spans_all: List[List[dict]] = []
@@ -126,7 +126,7 @@ class BenchmarkRunner:
         for i, record in enumerate(pbar):
             gold_tokens = record["tokens"]
             gold_tags = record["ner_tags"]
-            # Use original sentence if available (preserves word boundaries)
+            # 원문 문장이 있으면 사용한다 (단어 경계 보존)
             sentence = record.get("sentence")
             if sentence:
                 text = re.sub(r'<([^:>]+):[A-Z]+>', r'\1', sentence)
@@ -136,23 +136,23 @@ class BenchmarkRunner:
             try:
                 has_space_tokens = any(t.strip() == "" for t in gold_tokens)
 
-                # Extract gold spans from BIO tags (for span-level evaluation)
+                # BIO 태그에서 gold span을 추출한다 (span 수준 평가용)
                 g_spans = extract_spans_from_bio(gold_tokens, gold_tags, lang=self.lang)
 
                 if has_space_tokens and hasattr(labeler, "label_spans"):
-                    # LLM labelers: get raw spans directly (primary path)
+                    # LLM 라벨러: raw span을 직접 가져온다 (주 경로)
                     p_spans = labeler.label_spans(text)
-                    # Also produce syllable BIO for seqeval (secondary metric)
+                    # seqeval용 음절 BIO도 생성한다 (보조 메트릭)
                     aligned_pred = TagAligner.spans_to_syllable_bio(text, gold_tokens, p_spans, lang=self.lang)
                     pred_tokens = gold_tokens
                     aligned_gold = normalize_tags(gold_tags, lang=self.lang)
                 elif has_space_tokens and hasattr(labeler, "label_syllables"):
-                    # HF models: direct syllable alignment via char offsets
+                    # HF 모델: 문자 오프셋을 통한 직접 음절 정렬
                     pred_tags = labeler.label_syllables(text, gold_tokens)
                     pred_tokens = gold_tokens
                     aligned_gold = normalize_tags(gold_tags, lang=self.lang)
                     aligned_pred = pred_tags
-                    # Extract pred spans from aligned BIO for span-level eval
+                    # span 수준 평가를 위해 정렬된 BIO에서 pred span을 추출한다
                     p_spans = extract_spans_from_bio(gold_tokens, aligned_pred, lang=self.lang)
                 else:
                     pred_records = labeler.label(text)
@@ -188,13 +188,13 @@ class BenchmarkRunner:
         pbar.close()
         t_total = time.time() - t_start
 
-        # Primary metric: Span-level match (bypasses syllable alignment entirely)
+        # 주 메트릭: span 수준 매칭 (음절 정렬을 완전히 우회)
         span_match = MetricsCalculator.compute_span_match(gold_spans_all, pred_spans_all)
 
-        # Secondary metric: seqeval on syllable BIO (for reference / BERT comparison)
+        # 보조 메트릭: 음절 BIO에 대한 seqeval (참조용 / BERT 비교용)
         seqeval_metrics = MetricsCalculator.compute_seqeval(gold_tags_all, pred_tags_all)
 
-        # Character-level span F1 (from BIO, KLUE official metric)
+        # 문자 수준 span F1 (BIO 기반, KLUE 공식 메트릭)
         char_span_f1 = MetricsCalculator.compute_span_f1(
             gold_tags_all, pred_tags_all, gold_tokens_all, pred_tokens_all
         )
@@ -216,7 +216,7 @@ class BenchmarkRunner:
 
         num_evaluated = len(gold_tags_all)
 
-        # Collect token usage if the labeler tracks it
+        # 라벨러가 토큰 사용량을 추적하는 경우 수집한다
         prompt_tokens = getattr(labeler, "total_prompt_tokens", 0)
         completion_tokens = getattr(labeler, "total_completion_tokens", 0)
         total_tokens = prompt_tokens + completion_tokens

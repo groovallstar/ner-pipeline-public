@@ -1,4 +1,4 @@
-"""Benchmark report: CLI table + JSON output."""
+"""벤치마크 리포트: CLI 테이블 + JSON 출력."""
 
 import json
 from datetime import datetime, timezone
@@ -9,19 +9,19 @@ from llm_eval.benchmark_runner import BenchmarkResult
 
 
 class ReportGenerator:
-    """Generate benchmark reports from results."""
+    """결과에서 벤치마크 리포트를 생성한다."""
 
     def __init__(self, results: List[BenchmarkResult], lang: str = "ko") -> None:
         self.results = results
         self.lang = lang
 
     def print_table(self) -> None:
-        """Print a formatted CLI table of benchmark results."""
+        """벤치마크 결과를 정렬된 CLI 테이블로 출력한다."""
         if not self.results:
             print("No results to display.")
             return
 
-        # Offset-span mode (ja): only span_f1 is populated
+        # 오프셋 span 모드 (ja): span_f1만 채워진다
         if all(not r.metrics.get("span_match") and r.metrics.get("span_f1", {}).get("overall") for r in self.results):
             self._print_offset_span_table()
             return
@@ -29,7 +29,7 @@ class ReportGenerator:
         has_bertscore = any(r.metrics.get("bertscore") for r in self.results)
         has_span_match = any(r.metrics.get("span_match") for r in self.results)
 
-        # --- Primary: Span Match (LLM evaluation) ---
+        # --- 주 메트릭: Span 매칭 (LLM 평가) ---
         if has_span_match:
             print("\n" + "=" * 70)
             print("  SPAN-LEVEL EVALUATION (Primary — no syllable alignment)")
@@ -55,7 +55,7 @@ class ReportGenerator:
                 ])
             self._print_rows(headers, rows)
 
-            # Per-entity span match breakdown
+            # 엔티티별 span 매칭 분석
             for r in self.results:
                 sm = r.metrics.get("span_match", {})
                 exact_pe = sm.get("exact", {}).get("per_entity", {})
@@ -77,7 +77,7 @@ class ReportGenerator:
                         ])
                     self._print_rows(e_headers, e_rows, indent=4)
 
-        # --- Secondary: Seqeval (syllable BIO, for reference) ---
+        # --- 보조 메트릭: Seqeval (음절 BIO, 참조용) ---
         print("\n" + "-" * 70)
         print("  SEQEVAL (Secondary — syllable BIO alignment, for reference)")
         print("-" * 70)
@@ -112,7 +112,7 @@ class ReportGenerator:
         self._print_rows(headers, rows)
 
     def _print_offset_span_table(self) -> None:
-        """Print ja-style char-offset span F1 table."""
+        """일본어 방식의 문자 오프셋 span F1 테이블을 출력한다."""
         title = "JAPANESE NER" if self.lang == "ja" else "NER"
         print("\n" + "=" * 70)
         print(f"  {title} — SPAN-LEVEL EVALUATION (Character Offset)")
@@ -149,7 +149,7 @@ class ReportGenerator:
 
     @staticmethod
     def _print_rows(headers: List[str], rows: List[List[str]], indent: int = 0) -> None:
-        """Print aligned table rows."""
+        """정렬된 테이블 행을 출력한다."""
         col_widths = [len(h) for h in headers]
         for row in rows:
             for i, cell in enumerate(row):
@@ -174,7 +174,7 @@ class ReportGenerator:
         print()
 
     def to_dict(self) -> Dict:
-        """Convert results to a serializable dict."""
+        """결과를 직렬화 가능한 dict로 변환한다."""
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "language": self.lang,
@@ -193,11 +193,11 @@ class ReportGenerator:
         }
 
     def save_json(self, path: str) -> None:
-        """Save full results as JSON."""
+        """전체 결과를 JSON으로 저장한다."""
         out = Path(path)
         out.parent.mkdir(parents=True, exist_ok=True)
         data = self.to_dict()
-        # Remove non-serializable report string
+        # 직렬화할 수 없는 report 문자열을 제거한다
         for r in data["results"]:
             r["metrics"].pop("report", None)
         with out.open("w", encoding="utf-8") as f:

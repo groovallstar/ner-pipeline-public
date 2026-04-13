@@ -1,6 +1,6 @@
-"""Abstract base for vLLM OpenAI-compatible NER labelers.
+"""vLLM OpenAI 호환 NER 라벨러의 추상 베이스 클래스.
 
-Subclasses inject a language pack (entity_types, single_prompt_template, lang).
+서브클래스는 언어 팩(entity_types, single_prompt_template, lang)을 주입한다.
 """
 import asyncio
 import logging
@@ -14,17 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 class BaseVllmLabeler:
-    """Batch NER labeler using the vLLM container's OpenAI-compatible API.
+    """vLLM 컨테이너의 OpenAI 호환 API를 사용하는 배치 NER 라벨러.
 
     Args:
-        base_url: vLLM server URL, e.g. "http://localhost:8081/v1".
-        model: Model name served by the vLLM container.
-        entity_types: NER tag set. Defaults to the language pack's default.
-        max_tokens: Max new tokens per sample.
-        concurrency: Max concurrent requests to the vLLM server.
-        thinking: Enable vLLM chat-template `enable_thinking` flag.
-        lang: Language code ("ko"/"ja") — passed to sentence splitter.
-        single_prompt_template: Prompt template (f-string with {entity_types}, {sentence}).
+        base_url: vLLM 서버 URL (예: "http://localhost:8081/v1").
+        model: vLLM 컨테이너에서 서빙하는 모델 이름.
+        entity_types: NER 태그셋. 기본값은 언어 팩의 기본값을 사용한다.
+        max_tokens: 샘플당 최대 생성 토큰 수.
+        concurrency: vLLM 서버에 대한 최대 동시 요청 수.
+        thinking: vLLM 채팅 템플릿의 `enable_thinking` 플래그 활성화 여부.
+        lang: 언어 코드("ko"/"ja") — 문장 분리기에 전달된다.
+        single_prompt_template: 프롬프트 템플릿 ({entity_types}, {sentence} 포함 f-string).
     """
 
     def __init__(
@@ -49,23 +49,23 @@ class BaseVllmLabeler:
         self._single_prompt_template = single_prompt_template
         self._semaphore = asyncio.Semaphore(concurrency)
         self._client = AsyncOpenAI(base_url=base_url, api_key="none")
-        # Token usage tracking (accumulated across calls, reset by consumer)
+        # 토큰 사용량 추적 (호출 누적, 소비자가 초기화한다)
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
         logger.info("%s ready: %s @ %s", type(self).__name__, model, base_url)
 
     # ------------------------------------------------------------------
-    # Public API
+    # 공개 API
     # ------------------------------------------------------------------
 
     def label(self, text: str) -> List[dict]:
-        """Label a text string. Returns a list of NER records (one per sentence)."""
+        """텍스트를 라벨링한다. 문장당 하나의 NER 레코드 리스트를 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
         return asyncio.run(self._label_sentences(sentences, id_offset=0))
 
     def label_spans(self, text: str) -> List[dict]:
-        """Return raw entity spans without BIO conversion."""
+        """BIO 변환 없이 원시 엔티티 span을 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [s for s in sentences if s.strip()]
 
@@ -80,10 +80,10 @@ class BaseVllmLabeler:
         return asyncio.run(_get_spans())
 
     def label_records(self, records: List[dict]) -> List[dict]:
-        """Label a list of raw text records concurrently.
+        """원시 텍스트 레코드 리스트를 병렬로 라벨링한다.
 
-        Input records must have a ``"text"`` field.
-        Returns NER records with ``"tokens"``, ``"ner_tags"``, and ``"id"`` fields.
+        입력 레코드는 ``"text"`` 필드를 가져야 한다.
+        ``"tokens"``, ``"ner_tags"``, ``"id"`` 필드를 포함한 NER 레코드를 반환한다.
         """
         all_sentences: List[str] = []
         meta: List[tuple] = []
@@ -102,7 +102,7 @@ class BaseVllmLabeler:
         return asyncio.run(self._run_batch(all_sentences, meta))
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 내부 헬퍼
     # ------------------------------------------------------------------
 
     def _build_user_content(self, sentence: str) -> str:
@@ -112,7 +112,7 @@ class BaseVllmLabeler:
         )
 
     async def _chat(self, sentence: str) -> str:
-        """Send a single chat completion request with concurrency limiting."""
+        """동시성 제한을 적용하여 단일 채팅 완성 요청을 전송한다."""
         async with self._semaphore:
             response = await self._client.chat.completions.create(
                 model=self.model,

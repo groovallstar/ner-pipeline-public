@@ -1,9 +1,9 @@
-"""Shared NER prompt templates for LLM labelers.
+"""LLM 라벨러용 공통 NER 프롬프트 템플릿.
 
-Prompts are tuned to KLUE NER annotation guidelines:
-- 6 entity types: PS, LC, OG, DT, TI, QT
-- Strict particle exclusion (조사 제외)
-- Syllable-level boundary rules
+KLUE NER 어노테이션 가이드라인에 맞게 조정되었다:
+- 6개 엔티티 타입: PS, LC, OG, DT, TI, QT
+- 엄격한 조사 제외 규칙
+- 음절 단위 경계 규칙
 """
 
 from typing import List

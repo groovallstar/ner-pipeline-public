@@ -1,4 +1,4 @@
-"""Japanese vLLM NER labeler — thin subclass of BaseVllmLabeler."""
+"""일본어 vLLM NER 라벨러 — BaseVllmLabeler의 경량 서브클래스."""
 from typing import List, Optional
 
 from labelers.base_vllm_labeler import BaseVllmLabeler

@@ -1,6 +1,6 @@
-"""Per-sentence error analysis: extract FN/FP patterns from NER benchmark.
+"""문장별 오류 분석: NER 벤치마크에서 FN/FP 패턴을 추출한다.
 
-Usage:
+사용 예:
     python -m llm_eval.error_analysis \
         --models vllm:Qwen/Qwen3.5-27B \
         --max-samples 50 \
@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 def _norm(text: str) -> str:
-    """Space-normalize for comparison."""
+    """비교를 위해 공백을 정규화한다."""
     return text.strip().replace(" ", "")
 
 
 def _classify_error(gold_text: str, pred_text: str, gold_type: str, pred_type: str) -> str:
-    """Classify an error pattern."""
+    """오류 패턴을 분류한다."""
     gn, pn = _norm(gold_text), _norm(pred_text)
     if gn == pn and gold_type != pred_type:
         return "TYPE_MISMATCH"
@@ -47,18 +47,18 @@ def analyze_sentence(
     gold_spans: List[dict],
     pred_spans: List[dict],
 ) -> dict:
-    """Analyze a single sentence's gold vs predicted spans.
+    """단일 문장의 gold span과 예측 span을 분석한다.
 
-    Returns dict with FN, FP, exact matches, and error classifications.
+    FN, FP, 정확 매칭, 오류 분류가 포함된 dict를 반환한다.
     """
-    # Normalize for comparison
+    # 비교를 위해 정규화한다
     gold_items = [(s["text"].strip(), s["type"].strip()) for s in gold_spans]
     pred_items = [(s["text"].strip(), s["type"].strip()) for s in pred_spans]
 
     gold_normed = [(_norm(t), ty) for t, ty in gold_items]
     pred_normed = [(_norm(t), ty) for t, ty in pred_items]
 
-    # Exact match (space-normalized, multiset)
+    # 정확 매칭 (공백 정규화, 멀티셋)
     gold_counter = Counter(gold_normed)
     pred_counter = Counter(pred_normed)
     exact_matches = list((gold_counter & pred_counter).elements())
@@ -68,11 +68,11 @@ def analyze_sentence(
     fn_items = list(fn_counter.elements())
     fp_items = list(fp_counter.elements())
 
-    # Map back to original text
+    # 원문 텍스트로 역매핑한다
     gold_orig = {(_norm(t), ty): t for t, ty in gold_items}
     pred_orig = {(_norm(t), ty): t for t, ty in pred_items}
 
-    # Classify errors
+    # 오류를 분류한다
     fn_classified = []
     fp_classified = []
     matched_fp = set()
@@ -82,7 +82,7 @@ def analyze_sentence(
         best_match = None
         best_class = "MISS"  # default: completely missed
 
-        # Try to find a related FP (same type, partial overlap)
+        # 관련 FP를 찾는다 (동일 타입, 부분 겹침)
         for j, (fp_norm_text, fp_type) in enumerate(fp_items):
             if j in matched_fp:
                 continue
@@ -108,8 +108,8 @@ def analyze_sentence(
         if j in matched_fp:
             continue
         fp_orig = pred_orig.get((fp_norm_text, fp_type), fp_norm_text)
-        # Check if it's a type mismatch with any gold
-        error_class = "HALLUCINATION"  # default: entity not in gold at all
+        # gold와 타입 불일치인지 확인한다
+        error_class = "HALLUCINATION"  # 기본값: gold에 없는 엔티티
         matched_gold_entry = None
         for gn_text, g_type in gold_normed:
             if gn_text == fp_norm_text and g_type != fp_type:
@@ -151,11 +151,11 @@ def analyze_sentence(
 
 
 def aggregate_errors(sentence_results: List[dict]) -> dict:
-    """Aggregate error patterns across all sentences."""
-    # Error class counts
+    """전체 문장에 걸쳐 오류 패턴을 집계한다."""
+    # 오류 클래스 카운트
     fn_classes = Counter()
     fp_classes = Counter()
-    fn_by_type = defaultdict(list)  # entity_type -> [error details]
+    fn_by_type = defaultdict(list)  # entity_type -> [오류 상세]
     fp_by_type = defaultdict(list)
     total_gold = 0
     total_pred = 0
@@ -207,7 +207,7 @@ def aggregate_errors(sentence_results: List[dict]) -> dict:
 
 
 def print_error_report(agg: dict, sentence_results: List[dict]):
-    """Print human-readable error analysis report."""
+    """사람이 읽기 쉬운 오류 분석 리포트를 출력한다."""
     s = agg["summary"]
     print(f"\n{'='*70}")
     print(f"  ERROR ANALYSIS REPORT")
@@ -250,7 +250,7 @@ def print_error_report(agg: dict, sentence_results: List[dict]):
             print(f"    [{ex['class']:20s}] \"{ex['text']}\"{mg_str}")
             print(f"      문장: {ex['sentence']}...")
 
-    # Show worst sentences
+    # 최악의 문장을 표시한다 (오류 최다)
     worst = sorted(sentence_results, key=lambda x: -(x["counts"]["fn"] + x["counts"]["fp"]))[:10]
     print(f"\n{'─'*70}")
     print(f"  WORST SENTENCES (most errors):")
@@ -273,19 +273,19 @@ def print_error_report(agg: dict, sentence_results: List[dict]):
 
 
 def run_error_analysis(args) -> dict:
-    """Run benchmark with per-sentence error tracking."""
-    # Load gold data
+    """문장별 오류 추적을 포함한 벤치마크를 실행한다."""
+    # gold 데이터를 로드한다
     print(f"Loading gold data: {args.dataset}/{args.config} [{args.split}]")
     loader = DatasetLoader()
     gold_records = loader.load(args.dataset, config=args.config, split=args.split, max_samples=args.max_samples)
     print(f"  Loaded {len(gold_records)} records")
 
-    # Create labeler
+    # 라벨러를 생성한다
     from llm_eval.__main__ import _create_labeler, _load_env
     _load_env()
     backend, labeler = _create_labeler(args.models[0], args)
 
-    # Run per-sentence
+    # 문장별로 실행한다
     sentence_results = []
     errors = 0
     t_start = time.time()
@@ -320,7 +320,7 @@ def run_error_analysis(args) -> dict:
             result = analyze_sentence(i, text, g_spans, p_spans)
             sentence_results.append(result)
 
-            # Progress
+            # 진행 상황 출력
             if (i + 1) % 10 == 0:
                 elapsed = time.time() - t_start
                 print(f"  [{i+1}/{len(gold_records)}] {elapsed:.1f}s elapsed, {errors} errors")
@@ -331,7 +331,7 @@ def run_error_analysis(args) -> dict:
 
     t_total = time.time() - t_start
 
-    # Token usage / TPS
+    # 토큰 사용량 / TPS 계산
     prompt_tokens = getattr(labeler, "total_prompt_tokens", 0)
     completion_tokens = getattr(labeler, "total_completion_tokens", 0)
     total_tokens = prompt_tokens + completion_tokens
@@ -343,7 +343,7 @@ def run_error_analysis(args) -> dict:
     print(f"  Prompt tokens: {prompt_tokens:,}  Completion tokens: {completion_tokens:,}  Total: {total_tokens:,}")
     print(f"  TPS (total): {tps}  Output TPS: {out_tps}  Samples/s: {sps}")
 
-    # Aggregate
+    # 집계한다
     agg = aggregate_errors(sentence_results)
     print_error_report(agg, sentence_results)
 

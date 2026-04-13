@@ -1,4 +1,4 @@
-"""Korean OpenAI NER labeler — thin subclass of BaseOpenAILabeler."""
+"""한국어 OpenAI NER 라벨러 — BaseOpenAILabeler의 경량 서브클래스."""
 from typing import List, Optional
 
 from labelers.base_openai_labeler import BaseOpenAILabeler

@@ -1,6 +1,6 @@
-"""CLI entrypoint: python -m llm_eval.benchmark
+"""CLI 진입점: python -m llm_eval.benchmark
 
-Usage:
+사용 예:
     python -m llm_eval.benchmark \
         --models ollama:qwen3.5:27b vllm:Qwen/Qwen3.5-9B hf:model-name openai:gpt-4o-mini \
         --max-samples 100 \
@@ -18,7 +18,7 @@ from llm_eval.report import ReportGenerator
 
 
 def _load_env():
-    """Load .env file if python-dotenv is available, otherwise skip."""
+    """python-dotenv가 설치된 경우 .env 파일을 로드하고, 없으면 건너뛴다."""
     env_path = os.path.join(os.path.dirname(__file__), "../../docker/dev/config/.env")
     env_path = os.path.abspath(env_path)
     if os.path.exists(env_path):
@@ -26,7 +26,7 @@ def _load_env():
             from dotenv import load_dotenv
             load_dotenv(env_path)
         except ImportError:
-            # Manual fallback: parse KEY=VALUE lines
+            # 수동 폴백: KEY=VALUE 형식으로 파싱한다
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
@@ -39,10 +39,10 @@ def _load_env():
 
 
 def _create_labeler(model_spec: str, args, lang: str = "ko"):
-    """Parse model spec and create the appropriate labeler.
+    """모델 스펙을 파싱하여 적절한 라벨러를 생성한다.
 
-    Format: backend:model_name
-    Examples:
+    형식: backend:model_name
+    예시:
         ollama:qwen3.5:27b
         vllm:Qwen/Qwen3.5-9B
         openai:gpt-5-mini
@@ -86,7 +86,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
 
 
 def _create_labeler_ja(backend: str, model_name: str, args):
-    """Create a Japanese NER labeler."""
+    """일본어 NER 라벨러를 생성한다."""
     if backend == "ollama":
         from labelers.ja.ollama_ner_labeler import OllamaNERLabeler
         return backend, OllamaNERLabeler(
@@ -111,7 +111,7 @@ def _create_labeler_ja(backend: str, model_name: str, args):
 
 
 def _create_labeler_vi(backend: str, model_name: str, args):
-    """Create a Vietnamese NER labeler."""
+    """베트남어 NER 라벨러를 생성한다."""
     if backend == "ollama":
         from labelers.vi.ollama_ner_labeler import OllamaNERLabeler
         return backend, OllamaNERLabeler(
@@ -184,7 +184,7 @@ def main():
 
 
 def _load_gold(args):
-    """Load gold records per language."""
+    """언어별 gold 레코드를 로드한다."""
     if args.lang == "ja":
         from labelers.ja.dataset_loader import JapaneseDatasetLoader
         print(f"Loading gold data: {args.dataset} [{args.split}]")
@@ -202,7 +202,7 @@ def _load_gold(args):
 
 
 def _run_benchmark(args):
-    """Unified benchmark runner: dispatches by lang via eval_mode."""
+    """통합 벤치마크 러너: eval_mode를 통해 언어별로 분기한다."""
     gold_records = _load_gold(args)
     print(f"  Loaded {len(gold_records)} records")
 
