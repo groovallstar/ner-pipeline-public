@@ -1,7 +1,7 @@
 #!/bin/bash
 # 모델 다운로드 → vLLM 로드 → 벤치마크 실행 자동화
 # 사용법: bash load-and-bench.sh <모델명> [벤치마크 출력 파일명]
-# 예시:  bash load-and-bench.sh Jackrong/Qwen3.5-35B-A3B-Claude-4.6-Opus-Reasoning-Distilled
+# 예시:  bash load-and-bench.sh Qwen/Qwen3.5-35B-A3B
 
 set -e
 

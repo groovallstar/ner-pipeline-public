@@ -1,6 +1,6 @@
 #!/bin/bash
-# 3개 모델 순차 벤치마크: 언로드 → 로드 → 대기 → 벤치마크
-# Usage: bash bench-3models.sh [MAX_SAMPLES]
+# 2개 모델 순차 벤치마크: 언로드 → 로드 → 대기 → 벤치마크
+# Usage: bash bench-2models.sh [MAX_SAMPLES]
 
 set -e
 cd "$(dirname "$0")"
@@ -46,44 +46,29 @@ run_benchmark() {
 }
 
 echo "============================================"
-echo "  3-Model Korean NER Benchmark (${MAX_SAMPLES} samples)"
+echo "  2-Model Korean NER Benchmark (${MAX_SAMPLES} samples)"
 echo "============================================"
 
-# --- Model 1: Opus Distilled (현재 로드됨) ---
-MODEL1="Jackrong/Qwen3.5-35B-A3B-Claude-4.6-Opus-Reasoning-Distilled"
+# --- Model 1: Qwen3.5-35B-A3B ---
+MODEL1="Qwen/Qwen3.5-35B-A3B"
 echo ""
-echo "[1/3] $MODEL1"
-# 이미 로드되어 있는지 확인, 아니면 로드
-if ! curl -s "$VLLM_URL/models" 2>/dev/null | grep -q "Opus-Reasoning-Distilled"; then
-    echo "  모델 로드 중..."
-    bash "$VLLM_DIR/start-opus-distilled.sh"
-    wait_for_vllm "Opus-Reasoning-Distilled"
-else
-    echo "  이미 로드됨"
-fi
-run_benchmark "$MODEL1" "$OUT_DIR/ko_bench_500_opus_distilled.json"
-
-# --- Model 2: Qwen3.5-35B-A3B ---
-MODEL2="Qwen/Qwen3.5-35B-A3B"
-echo ""
-echo "[2/3] $MODEL2"
+echo "[1/2] $MODEL1"
 bash "$VLLM_DIR/start-35b-a3b.sh"
 wait_for_vllm "Qwen3.5-35B-A3B"
-run_benchmark "$MODEL2" "$OUT_DIR/ko_bench_500_35b_a3b.json"
+run_benchmark "$MODEL1" "$OUT_DIR/ko_bench_500_35b_a3b.json"
 
-# --- Model 3: Qwen3.5-27B ---
-MODEL3="Qwen/Qwen3.5-27B"
+# --- Model 2: Qwen3.5-27B ---
+MODEL2="Qwen/Qwen3.5-27B"
 echo ""
-echo "[3/3] $MODEL3"
+echo "[2/2] $MODEL2"
 bash "$VLLM_DIR/start-27b.sh"
 wait_for_vllm "Qwen3.5-27B"
-run_benchmark "$MODEL3" "$OUT_DIR/ko_bench_500_27b.json"
+run_benchmark "$MODEL2" "$OUT_DIR/ko_bench_500_27b.json"
 
 echo ""
 echo "============================================"
 echo "  벤치마크 완료!"
 echo "  결과 파일:"
-echo "    $OUT_DIR/ko_bench_500_opus_distilled.json"
 echo "    $OUT_DIR/ko_bench_500_35b_a3b.json"
 echo "    $OUT_DIR/ko_bench_500_27b.json"
 echo "============================================"
