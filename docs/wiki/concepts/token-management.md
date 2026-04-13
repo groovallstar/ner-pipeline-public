@@ -8,57 +8,11 @@ Claude Code, Codex, Gemini 같은 도구 사용 시 응답 지연, 규칙 망각
 
 ---
 
-## 이 프로젝트에 적용하기
-
-이 문서는 `ner_pipeline` 프로젝트에 맞춰 각 전략의 적용 방법을 구체적으로 안내한다.
-
----
-
 ## 1. `.claudeignore`로 불필요한 파일 차단
 
 가장 높은 ROI를 가진 단일 조치. **30~40% 절감** 가능.
 
-프로젝트 루트에 `.claudeignore` 파일을 생성한다:
-
-```
-# 빌드/캐시
-__pycache__/
-*.pyc
-.pytest_cache/
-*.egg-info/
-dist/
-build/
-
-# 모델 가중치/데이터 (대용량)
-*.bin
-*.safetensors
-*.onnx
-*.pt
-*.pth
-*.ckpt
-
-# 로그/DB
-*.log
-*.db
-*.sqlite
-
-# 환경/시크릿
-.env*
-
-# 미디어
-*.png
-*.jpg
-*.gif
-*.mp4
-
-# Docker 볼륨/임시
-docker/ollama/
-docker/vllm/
-
-# IDE
-.vscode/
-.idea/
-```
+프로젝트 루트에 `.claudeignore` 파일을 생성하여 빌드 산출물, 모델 가중치, 로그, 미디어 파일, Docker 볼륨, IDE 설정 등 컨텍스트에 도움이 되지 않는 파일을 차단한다.
 
 **핵심**: 절약이 아니라 도움 안 되는 정보를 차단하는 것.
 
@@ -66,15 +20,7 @@ docker/vllm/
 
 ## 2. `tasks.md` 분할로 인덱스 구조 도입
 
-현재 프로젝트에는 openspec 하위에 변경 단위별 tasks.md가 이미 분리되어 있다:
-
-```
-openspec/changes/
-└── archive/
-    └── 2026-04-10-add-bio-dataset-spec-registry/tasks.md
-```
-
-완료된 변경은 archive로 이동하는 패턴을 따르고 있다. 추가로 고려할 점:
+큰 단일 태스크 파일 대신 변경 단위별로 tasks.md를 분리하고 완료된 것은 archive로 이동한다. 추가로 고려할 점:
 
 - 각 tasks.md에 현재 상태 요약을 상단에 두어 전체를 읽지 않아도 진행 상황을 파악할 수 있게 한다
 - archive 디렉토리를 활용하여 완료된 작업을 격리한다
@@ -114,17 +60,6 @@ openspec/changes/
 완료 조건: <작업 완료 기준>
 ```
 
-**이 프로젝트 적용 예시:**
-
-```markdown
-목표: Ollama NER 라벨러 파이프라인 구현
-수정한 파일: src/labelers/ollama_labeler.py, tests/test_labeler.py
-확인한 사실: Ollama API는 /api/generate 엔드포인트 사용, JSON 모드 지원
-실패한 시도: LangChain ChatOllama의 structured output이 한국어에서 불안정
-다음 작업: 직접 Ollama API 호출 방식으로 전환
-완료 조건: 한국어 NER 라벨링 정확도 85% 이상
-```
-
 ---
 
 ## 5. Plan mode 먼저 거친 후 구현
@@ -137,8 +72,6 @@ openspec/changes/
 3. 불필요한 범위 제거
 4. 그 후 구현
 
-**이 프로젝트 적용:** openspec의 proposal → design → tasks 흐름이 이미 Plan mode 역할을 한다. 새 기능 구현 시 반드시 이 흐름을 따른다.
-
 **절감 효과: 20~30%**
 
 ---
@@ -146,13 +79,13 @@ openspec/changes/
 ## 6. `CLAUDE.md` 계층 구조로 반복 설명 외부화
 
 ```
-ner_pipeline/
-├── CLAUDE.md              # 프로젝트 전체 (현재 존재)
-├── src/
+<project-root>/
+├── CLAUDE.md              # 프로젝트 전체
+├── <source-dir>/
 │   └── CLAUDE.md          # 소스 코드 컨벤션
-├── docker/
-│   └── CLAUDE.md          # Docker 환경 상세
-└── tests/
+├── <infra-dir>/
+│   └── CLAUDE.md          # 인프라/환경 상세
+└── <tests-dir>/
     └── CLAUDE.md          # 테스트 전략/실행 방법
 ```
 
@@ -169,17 +102,6 @@ ner_pipeline/
 
 ## 7. Skills로 "항상 로드"를 "필요시 로드"로 변경
 
-현재 `.claude/skills/`에 이미 스킬 구조가 있다:
-
-```
-.claude/skills/
-├── omc-reference/
-├── openspec-apply-change/
-├── openspec-archive-change/
-├── openspec-explore/
-└── openspec-propose/
-```
-
 **3단계 Progressive Disclosure:**
 
 | 단계 | 로드 시점 | 내용 |
@@ -187,10 +109,6 @@ ner_pipeline/
 | YAML frontmatter | 항상 | 스킬 이름, 설명, 트리거 |
 | `SKILL.md` 본문 | 관련성 판단 시 | 실행 절차, 규칙 |
 | `references/` | 필요시만 | 상세 체크리스트, 정책 문서 |
-
-**추가 스킬 후보:**
-- `ner-evaluation/`: NER 평가 메트릭(seqeval, bert-score) 실행 절차
-- `data-pipeline/`: 데이터 수집 → 전처리 → 라벨링 파이프라인 절차
 
 **실측 성과:** 입력 토큰 26% 감소, 평균 성공률 +16.2%p 향상
 
@@ -215,13 +133,13 @@ ner_pipeline/
 
 **안 되는 방식:**
 ```
-"전체 src/ 디렉토리를 보고 알아서 수정해줘"
+"전체 소스 디렉토리를 보고 알아서 수정해줘"
 ```
 
 **올바른 방식:**
 ```
-"src/labelers/web_crawler.py의 fetch_article 함수에서
-타임아웃 에러가 발생한다. 관련 코드를 확인하고 수정해줘"
+"<module>/<file>.py의 <function> 함수에서 타임아웃 에러가
+발생한다. 관련 코드를 확인하고 수정해줘"
 ```
 
 1. 먼저 검색으로 관련 파일/심볼을 찾고
@@ -234,12 +152,7 @@ ner_pipeline/
 
 ## 10. MCP 서버 활성화 자체가 비용
 
-활성화된 서버와 도구가 많을수록 컨텍스트와 시스템 지시문이 증가한다.
-
-**이 프로젝트 적용:**
-- 현재 작업에 필요한 MCP 서버만 활성화
-- NER 파이프라인 개발 시 불필요한 서버는 비활성화
-- `.claude/settings.json`에서 필요시만 토글
+활성화된 서버와 도구가 많을수록 컨텍스트와 시스템 지시문이 증가한다. 현재 작업에 필요한 MCP 서버만 활성화하고, 불필요한 서버는 비활성화한다.
 
 **본질**: "많이 연결"이 아니라 **"필요할 때만 연결"**.
 
@@ -247,11 +160,13 @@ ner_pipeline/
 
 ## 11. 도구별 역할 분리
 
-| 도구 | 강점 | 이 프로젝트에서의 역할 |
-|------|------|------------------------|
-| Claude Code | 복잡한 추론, 디버깅 | NER 파이프라인 설계/구현, 버그 수정 |
-| Gemini CLI | 긴 컨텍스트 분석 | 대규모 데이터셋 구조 분석, 논문 리뷰 |
-| Codex | 큰 컨텍스트 지원 | 코드베이스 전체 맵핑 |
+AI 도구마다 강점이 다르므로 역할을 분리한다:
+
+| 도구 유형 | 강점 | 활용 |
+|-----------|------|------|
+| 추론 집중형 (예: Claude Code) | 복잡한 추론, 디버깅 | 설계/구현, 버그 수정 |
+| 긴 컨텍스트형 (예: Gemini CLI) | 대량 텍스트 처리 | 데이터셋 분석, 문서 리뷰 |
+| 코드베이스 전체 지원형 (예: Codex) | 큰 컨텍스트 | 코드베이스 전체 맵핑 |
 
 **전략**: 코드베이스 맵핑은 긴 컨텍스트 도구에, 실제 수정은 짧고 집중된 세션으로.
 
@@ -270,29 +185,6 @@ ner_pipeline/
 
 ---
 
-## 적용 우선순위
-
-### 1단계: 즉시 적용
-
-- [x] `.claudeignore` 생성 → 빌드 산출물, 모델 가중치, 로그 차단
-- [x] `/clear`와 `/compact` 습관화
-- [x] HANDOFF.md 템플릿 도입
-
-### 2단계: 이번 주 안에
-
-- [x] `CLAUDE.md` 슬림화 및 계층 구조 도입 (루트 + src/ + docker/ + tests/)
-- [ ] Plan mode (openspec 흐름) 일관 적용
-- [ ] 반복 절차의 skill 승격 (NER 평가, 데이터 파이프라인)
-
-### 3단계: 장기 구조 투자
-
-- [ ] 서브에이전트 격리 패턴 정착
-- [ ] 검색 기반 컨텍스트 주입 습관화
-- [ ] MCP 서버 최소화 운영
-- [ ] 도구별 역할 분리 체계화
-
----
-
 ## 핵심 원칙
 
 > "모델에게 많은 것을 보여주지 말고, 지금 필요한 것만 정확히 보여줘라."
@@ -304,3 +196,9 @@ ner_pipeline/
 > "좋은 바이브 코더는 긴 프롬프트를 쓰는 사람이 아니라, 컨텍스트를 설계하는 사람이다."
 
 토큰을 아끼는 팀이 생산성이 높은 이유는 돈을 적게 써서가 아니라, **모델이 헷갈릴 여지를 줄였기 때문**이다.
+
+---
+
+## 출처
+
+- `sources/jeong-2026-vibe-coding-token-management.md` — 원문 요약 및 11가지 전략 상세

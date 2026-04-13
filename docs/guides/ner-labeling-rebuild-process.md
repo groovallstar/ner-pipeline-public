@@ -1,7 +1,7 @@
-# 한국어 NER 라벨링 파이프라인 재구축 프로세스
+# NER 라벨링 파이프라인 재구축 프로세스
 
 > 기준 코드 시점: 2026-04-09 (develop 브랜치)
-> 관련 문서: `docs/wiki/entities/languages/korean-ner.md` (설계 의사결정 상세)
+> 관련 문서: `docs/entities/languages/korean-ner.md` (설계 의사결정 상세 — 예: 한국어)
 
 ## 목차
 
@@ -25,10 +25,10 @@
 | 단계 | 이름 | 핵심 산출물 | 주요 코드 |
 |------|------|------------|-----------|
 | 1 | 데이터셋 선정 및 준비 | `List[NERRecord]` | `src/labelers/dataset_loader.py` |
-| 2 | 엔티티 타입 정의 | 태그 목록 + 정의 문서 | `src/labelers/ko/ner_prompts.py:11` |
-| 3 | 프롬프트 설계 | 프롬프트 템플릿 (규칙 + 예시 + 출력 형식) | `src/labelers/ko/ner_prompts.py` |
-| 4 | LLM 선정 및 설정 | LLM 인스턴스 (모델, temperature, JSON mode) | `src/labelers/ko/ollama_ner_labeler.py:89-109` |
-| 5 | 파싱 및 후처리 | spans 리스트 + BIO 태그 | `src/labelers/ko/ollama_ner_labeler.py:42-85, 199-224` |
+| 2 | 엔티티 타입 정의 | 태그 목록 + 정의 문서 | 예: `src/labelers/ko/ner_prompts.py:11` |
+| 3 | 프롬프트 설계 | 프롬프트 템플릿 (규칙 + 예시 + 출력 형식) | 예: `src/labelers/ko/ner_prompts.py` |
+| 4 | LLM 선정 및 설정 | LLM 인스턴스 (모델, temperature, JSON mode) | 예: `src/labelers/ko/ollama_ner_labeler.py:89-109` |
+| 5 | 파싱 및 후처리 | spans 리스트 + BIO 태그 | 예: `src/labelers/ko/ollama_ner_labeler.py:42-85, 199-224` |
 | 6 | 평가 파이프라인 구축 | 메트릭 리포트 (F1, Precision, Recall) | `src/evaluators/metrics.py`, `src/evaluators/benchmark_runner.py` |
 | 7 | 반복 개선 | 개선된 프롬프트/설정 | (Step 2~6 반복) |
 
@@ -81,32 +81,37 @@ Step 7: 반복 개선 ───────────────────�
 ### 출력
 
 - `List[NERRecord]` — `{tokens, ner_tags, id, sentence?}` 형태
-- 토큰화 방식 이해 (예: KLUE NER은 음절 단위)
+- 토큰화 방식 이해 (대상 언어/데이터셋에 따라 다름)
 
 ### 작업 내용
 
 1. **데이터셋 선택**: 목적에 맞는 NER 데이터셋을 선정한다
-   - 현재 한국어: KLUE NER (6 엔티티 타입, 음절 토큰화)
+   - 예시 — 한국어 파이프라인의 경우: KLUE NER (6 엔티티 타입, 음절 토큰화)
    - HuggingFace에서 로딩하거나 JSONL로 사전 export
 2. **로딩 경로 확인**: `DatasetLoader.load()` (`src/labelers/dataset_loader.py:35-62`)
-   - JSONL 폴백 경로: `/data/ner/klue/validation.jsonl` (파일 존재 시 우선 사용)
-   - HuggingFace 경로: `load_dataset("klue", "ner", split="validation")`
-3. **토큰화 방식 파악**: KLUE NER은 음절(syllable) 단위 토큰화
-   - 각 한글 음절이 하나의 토큰: `["경", "찰", "은"]`
-   - 단어 사이 공백은 빈 문자열 토큰: `["경", "찰", "은", " ", "박", ...]`
+   - JSONL 폴백 경로: 데이터셋별로 지정 (예: `/data/ner/klue/validation.jsonl`)
+   - HuggingFace 경로: 예) `load_dataset("klue", "ner", split="validation")`
+3. **토큰화 방식 파악**: 대상 언어/데이터셋에 따라 토큰화 단위가 다르다
+
+   > **언어별 주의사항**: 토큰화 방식은 대상 언어와 데이터셋에 따라 달라진다. 이후 단계(특히 Step 5의 BIO 변환)는 이 방식에 맞춰 구현해야 한다.
+
+   - 예시 — 한국어(KLUE NER): 음절(syllable) 단위 토큰화
+     - 각 한글 음절이 하나의 토큰: `["경", "찰", "은"]`
+     - 단어 사이 공백은 빈 문자열 토큰: `["경", "찰", "은", " ", "박", ...]`
+
 4. **ClassLabel 변환 확인**: HuggingFace 정수 라벨 → 문자열 태그 자동 변환 (`dataset_loader.py:83-99`)
 5. **`sentence` 필드 보존 확인**: 원본 문장이 있으면 그대로 사용 (`dataset_loader.py:102-104`)
 
 ### 체크포인트
 
-- [ ] `DatasetLoader.load("klue", "ner")` 호출 시 `List[NERRecord]`가 반환되는가
-- [ ] 반환된 record의 `tokens`가 예상 토큰화 방식(음절 단위)인가
+- [ ] `DatasetLoader.load(...)` 호출 시 `List[NERRecord]`가 반환되는가
+- [ ] 반환된 record의 `tokens`가 예상 토큰화 방식인가
 - [ ] `ner_tags`가 문자열 태그(`"B-PS"`, `"O"` 등)인가 (정수가 아닌)
 - [ ] `sentence` 필드가 존재하고, 원본 문장을 담고 있는가
 - [ ] `max_samples` 파라미터로 샘플 수 제한이 정상 동작하는가
 
 ```python
-# 체크포인트 검증 코드
+# 체크포인트 검증 코드 (예시 — 한국어 파이프라인의 경우)
 from labelers.dataset_loader import DatasetLoader
 loader = DatasetLoader()
 records = loader.load("klue", "ner", max_samples=5)
@@ -121,7 +126,7 @@ for r in records:
 |------|------|------|
 | `DatasetNotFoundError` | HuggingFace 접근 불가 / 데이터셋명 오류 | JSONL 폴백 파일 준비 |
 | `ner_tags`가 정수 리스트 | ClassLabel 변환 누락 | `dataset_loader.py`의 ClassLabel 변환 로직 확인 |
-| `tokens`가 어절 단위 | 데이터셋이 다른 토큰화 사용 | 토큰화 방식에 맞게 이후 단계 조정 필요 |
+| `tokens`가 예상과 다른 단위 | 데이터셋이 다른 토큰화 사용 | 토큰화 방식에 맞게 이후 단계 조정 필요 |
 | `sentence` 필드 없음 | 데이터셋에 원본 문장 미포함 | `TagAligner.reconstruct_text()` 폴백 사용 |
 
 ### 롤백 조건
@@ -147,11 +152,16 @@ for r in records:
 
 ### 작업 내용
 
-1. **태그 목록 정의**: `DEFAULT_ENTITY_TYPES` (`src/labelers/ko/ner_prompts.py:11`)
+1. **태그 목록 정의**: 언어/데이터셋별 `DEFAULT_ENTITY_TYPES` 상수로 관리
+
+   예시 — 한국어 파이프라인의 경우 (`src/labelers/ko/ner_prompts.py:11`):
    ```python
    DEFAULT_ENTITY_TYPES = ["PS", "LC", "OG", "DT", "TI", "QT"]
    ```
+
 2. **각 태그의 의미와 범위를 명확히 문서화**:
+
+   예시 — 한국어(KLUE NER) 태그 정의:
 
    | 태그 | 의미 | 범위 | 경계 사례 |
    |------|------|------|-----------|
@@ -163,16 +173,20 @@ for r in records:
    | QT | 수량 | 숫자+단위, 금액, 비율, 순서 | "첫번째" → QT |
 
 3. **태그 정규화 매핑 정의**: LLM이 다른 형식으로 출력할 수 있으므로 정규화 필요
+
+   예시 — 한국어 파이프라인의 경우:
    ```
    PER → PS,  LOC → LC,  ORG → OG
    DATE → DT, TIME → TI, QUANTITY → QT
    ```
    코드: `normalize_tag()` (`src/labelers/tag_aligner.py:44-59`)
 
+   > 다른 언어를 추가할 때는 해당 데이터셋의 태그 체계에 맞는 정규화 매핑을 별도로 정의한다.
+
 ### 체크포인트
 
 - [ ] 데이터셋의 모든 태그가 정의 목록에 포함되어 있는가
-- [ ] 각 태그의 경계 사례가 문서화되어 있는가 (예: "경찰"은 OG인가?)
+- [ ] 각 태그의 경계 사례가 문서화되어 있는가
 - [ ] 태그 정규화 매핑이 LLM이 출력할 수 있는 변형을 모두 커버하는가
 - [ ] gold 데이터에서 각 태그의 분포(빈도)를 확인했는가
 
@@ -193,7 +207,7 @@ print(tag_counts)
 |------|------|------|
 | 특정 엔티티 F1이 극도로 낮음 | 해당 태그의 정의가 모호 | 정의를 구체화하고 프롬프트에 반영 |
 | LLM이 정의에 없는 태그 출력 | 태그 목록이 불완전 | 정규화 매핑 추가 또는 프롬프트에서 명시적 제한 |
-| 태그 간 혼동 빈번 | 태그 경계가 불명확 | 경계 사례 규칙을 추가 (예: PS vs OG 구분) |
+| 태그 간 혼동 빈번 | 태그 경계가 불명확 | 경계 사례 규칙을 추가 |
 
 ### 롤백 조건
 
@@ -214,7 +228,7 @@ print(tag_counts)
 ### 출력
 
 - 프롬프트 템플릿 (시스템 프롬프트 + 규칙 + Few-shot 예시 + 출력 형식)
-- 코드: `src/labelers/ko/ner_prompts.py`
+- 예시 — 한국어 파이프라인의 경우: `src/labelers/ko/ner_prompts.py`
 
 ### 작업 내용
 
@@ -226,7 +240,9 @@ print(tag_counts)
    | BATCH | 다중 문장 배치 | `BATCH_PROMPT_TEMPLATE` |
    | SYSTEM+USER | OpenAI 채팅 형식 | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` |
 
-2. **핵심 라벨링 규칙 작성** (`ner_prompts.py:50-57`):
+2. **핵심 라벨링 규칙 작성**:
+
+   예시 — 한국어 파이프라인의 경우 (`ner_prompts.py:50-57`):
    - 조사 제외 규칙 (은/는/이/가/을/를 등)
    - 접미사 처리 ("씨"/"님" 제외, "김모" → "김"만 추출)
    - 복합 개체명 묶기 ("지난19일" → DT)
@@ -235,7 +251,11 @@ print(tag_counts)
    - 출력 형식 제한 (JSON 배열만)
    - 빈 결과 처리 (`[]` 반환)
 
-3. **Few-shot 예시 설계** (`ner_prompts.py:59-79`): 각 예시가 서로 다른 엣지 케이스를 커버하도록 구성
+   > **언어별 주의사항**: 조사 처리, 접미사 규칙, 복합어 묶기 등 언어형태론 관련 규칙은 대상 언어의 특성에 따라 달라진다. 각 언어별 라벨링 규칙은 해당 언어의 언어학적 특성과 데이터셋 가이드라인을 기반으로 작성해야 한다.
+
+3. **Few-shot 예시 설계**: 각 예시가 서로 다른 엣지 케이스를 커버하도록 구성
+
+   예시 — 한국어 파이프라인의 경우 (`ner_prompts.py:59-79`):
 
    | 예시 | 커버하는 엣지 케이스 |
    |------|---------------------|
@@ -257,7 +277,7 @@ print(tag_counts)
 - [ ] 3~5개 샘플에 대해 수동으로 결과를 검증했는가
 
 ```python
-# 체크포인트 검증 코드: 프롬프트 수동 테스트
+# 체크포인트 검증 코드: 프롬프트 수동 테스트 (예시 — 한국어 파이프라인의 경우)
 from labelers.ko.ner_prompts import SINGLE_PROMPT_TEMPLATE
 test_sentence = "삼성전자는 어제 서울에서 신제품을 발표했다."
 prompt = SINGLE_PROMPT_TEMPLATE.format(sentence=test_sentence)
@@ -269,10 +289,10 @@ print(prompt)
 
 | 증상 | 원인 | 조치 |
 |------|------|------|
-| 조사가 엔티티에 포함됨 | 조사 제외 규칙 부족 | 규칙 1번 강화, 예시 추가 |
-| 복합 개체명이 분리됨 | 묶기 규칙 부족 | 규칙 3번 강화, 해당 패턴 예시 추가 |
-| 사건명/작품명이 추출됨 | 제외 규칙 부족 | 규칙 5번에 예시 추가 |
-| LLM이 JSON이 아닌 텍스트 출력 | 형식 지시 부족 | 규칙 6번 강화, "JSON 배열만 출력" 반복 명시 |
+| 조사/어미가 엔티티에 포함됨 | 언어 형태소 제외 규칙 부족 | 해당 언어의 규칙 강화, 예시 추가 |
+| 복합 개체명이 분리됨 | 묶기 규칙 부족 | 묶기 규칙 강화, 해당 패턴 예시 추가 |
+| 사건명/작품명이 추출됨 | 제외 규칙 부족 | 제외 규칙에 예시 추가 |
+| LLM이 JSON이 아닌 텍스트 출력 | 형식 지시 부족 | 형식 규칙 강화, "JSON 배열만 출력" 반복 명시 |
 | 특정 패턴 일관성 없음 | 해당 패턴의 Few-shot 부재 | 해당 패턴을 커버하는 예시 추가 |
 
 ### 롤백 조건
@@ -301,15 +321,19 @@ print(prompt)
 
 1. **백엔드 선택**: 3개 백엔드 중 선택
 
+   예시 — 한국어 파이프라인의 경우:
+
    | 백엔드 | 클래스 | 파일 | 특징 |
    |--------|--------|------|------|
    | Ollama | `OllamaNERLabeler` | `ko/ollama_ner_labeler.py` | 동기 처리, ChatOllama |
    | vLLM | `VllmNERLabeler` | `ko/vllm_ner_labeler.py` | async 동시성 (`concurrency` 파라미터) |
    | OpenAI | `OpenAINERLabeler` | `ko/openai_ner_labeler.py` | system/user 채팅 형식 |
 
+   새 언어를 추가할 때는 동일한 백엔드 구조를 해당 언어 디렉토리(`src/labelers/<lang>/`) 아래에 구현한다.
+
 2. **핵심 설정값**:
    ```python
-   # ollama_ner_labeler.py:89-109
+   # 예시 — 한국어 파이프라인의 경우 (ollama_ner_labeler.py:89-109)
    temperature=0       # 결정적 출력 (NER은 창의적 변형 불필요)
    format="json"       # 유효한 JSON 출력 강제
    think=False          # thinking 토큰이 파싱 방해하지 않도록
@@ -327,7 +351,7 @@ print(prompt)
 - [ ] 5개 샘플에 대해 라벨러 호출이 정상 동작하는가
 
 ```python
-# 체크포인트 검증 코드
+# 체크포인트 검증 코드 (예시 — 한국어 파이프라인의 경우)
 from labelers.ko.ollama_ner_labeler import OllamaNERLabeler
 labeler = OllamaNERLabeler(model="Qwen/Qwen3.5-27B")
 result = labeler.label_spans("삼성전자는 어제 서울에서 신제품을 발표했다.")
@@ -349,7 +373,7 @@ print(result)
 
 이 단계로 돌아와야 하는 경우:
 - JSON 파싱 실패율이 높아 Step 5에서 해결 불가능할 때 (모델 또는 format 설정 변경)
-- 모델의 한국어 NER 능력이 근본적으로 부족할 때 (다른 모델로 교체)
+- 모델의 대상 언어 NER 능력이 근본적으로 부족할 때 (다른 모델로 교체)
 - 처리 속도가 요구사항을 충족하지 못할 때
 
 ---
@@ -368,22 +392,24 @@ print(result)
 ### 작업 내용
 
 1. **JSON 파싱 구현**: 두 가지 파싱 경로
-   - **인라인 파싱** (`ollama_ner_labeler.py:199-224`): `json.loads()` + 다양한 형태 처리 (list, dict, 래퍼)
+   - **인라인 파싱** (예: `ollama_ner_labeler.py:199-224`): `json.loads()` + 다양한 형태 처리 (list, dict, 래퍼)
    - **공통 파싱** (`labeler_base.py:10-34`): `<think>` 태그 제거, markdown fence 내 JSON 추출 등
 
 2. **배치 실패 폴백**: 배치 파싱 실패 시 개별 문장 단위 재시도
    ```python
-   # ollama_ner_labeler.py:196-197
+   # 예시 — 한국어 파이프라인의 경우 (ollama_ner_labeler.py:196-197)
    except (json.JSONDecodeError, Exception) as e:
        return [self._call_llm(s) for s in sentences]  # 개별 폴백
    ```
 
-3. **spans → BIO 변환** (`ollama_ner_labeler.py:42-85`): 2단계 매칭 전략
+3. **spans → BIO 변환**: 토큰 리스트에서 span을 BIO 태그로 매핑 (2단계 매칭 전략)
    - 1단계 — Exact match: 토큰 리스트에서 span 토큰의 연속 일치
-   - 2단계 — Substring match: 조사 부착 등으로 exact match 실패 시 부분 일치
+   - 2단계 — Substring match: 형태소 결합 등으로 exact match 실패 시 부분 일치
+
+   > **언어별 주의사항**: BIO 변환의 매칭 전략은 언어의 토큰화 방식에 따라 달라진다. 예를 들어 한국어(음절 단위)의 경우 조사 부착 토큰을 위한 substring match가 필요하다 (`spans_to_syllable_bio()`, `tag_aligner.py:222-296`). 다른 언어는 해당 언어의 토큰화 방식에 맞는 매칭 전략을 구현해야 한다.
 
 4. **태그 정규화**: `normalize_tag()` (`tag_aligner.py:44-59`)
-   - `PER→PS`, `LOC→LC`, `ORG→OG`, `DATE→DT`, `TIME→TI`, `QUANTITY→QT`
+   - 예시 — 한국어: `PER→PS`, `LOC→LC`, `ORG→OG`, `DATE→DT`, `TIME→TI`, `QUANTITY→QT`
 
 ### 체크포인트
 
@@ -391,11 +417,11 @@ print(result)
 - [ ] 비표준 형식 (단일 객체, 래퍼 dict)도 처리되는가
 - [ ] `<think>` 태그, markdown fence가 포함된 응답도 파싱되는가
 - [ ] 배치 실패 시 개별 폴백이 동작하는가
-- [ ] spans → BIO 변환에서 조사 부착 토큰이 올바르게 매칭되는가
+- [ ] spans → BIO 변환에서 대상 언어의 토큰 경계가 올바르게 매칭되는가
 - [ ] 태그 정규화가 모든 변형을 커버하는가
 
 ```python
-# 체크포인트 검증 코드: spans→BIO 변환 확인
+# 체크포인트 검증 코드: spans→BIO 변환 확인 (예시 — 한국어 파이프라인의 경우)
 tokens = ["삼", "성", "전", "자", "는", " ", "어", "제"]
 spans = [{"text": "삼성전자", "type": "OG"}, {"text": "어제", "type": "DT"}]
 bio = labeler._spans_to_bio(tokens, spans)
@@ -409,7 +435,7 @@ print(list(zip(tokens, bio)))
 |------|------|------|
 | `json.JSONDecodeError` 빈번 | LLM이 비유효 JSON 출력 | Step 4 (JSON mode 설정) 또는 파싱 폴백 강화 |
 | spans는 맞지만 BIO가 틀림 | span→BIO 매칭 실패 | 매칭 전략 확인 (exact → substring 2단계) |
-| 조사가 엔티티에 포함된 BIO | LLM이 조사 포함 span 출력 | Step 3 (프롬프트 규칙) 조사 제외 규칙 강화 |
+| 형태소/조사가 엔티티에 포함된 BIO | LLM이 형태소 포함 span 출력 | Step 3 (프롬프트 규칙) 형태소 제외 규칙 강화 |
 | 빈 결과가 많음 | 파싱 에러로 빈 리스트 반환 | 에러 로깅 추가, 파싱 로직 디버깅 |
 
 ### 롤백 조건
@@ -431,12 +457,13 @@ print(list(zip(tokens, bio)))
 ### 출력
 
 - 메트릭 리포트: 엔티티 타입별 F1/Precision/Recall + 전체 평균
-- JSON 결과 파일 (`results/ko_bench_*.json`)
+- JSON 결과 파일 (예: `results/ko_bench_*.json`)
 
 ### 작업 내용
 
 1. **평가 진입점 설정**: `src/evaluators/__main__.py`
    ```bash
+   # 예시 — 한국어 파이프라인의 경우
    PYTHONPATH=src python -m evaluators --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
    ```
 
@@ -444,14 +471,14 @@ print(list(zip(tokens, bio)))
    - 텍스트 재구성 (`sentence` 필드 또는 `reconstruct_text()`)
    - gold spans 추출: `extract_spans_from_bio()` (`tag_aligner.py:94-130`)
    - LLM 라벨링: `labeler.label_spans(text)`
-   - 음절 BIO 변환: `spans_to_syllable_bio()` (`tag_aligner.py:222-296`)
+   - BIO 변환: 언어별 토큰화 방식에 맞는 변환 함수 사용 (예: `spans_to_syllable_bio()`, `tag_aligner.py:222-296`)
 
 3. **4종 메트릭 구현**: `MetricsCalculator` (`src/evaluators/metrics.py`)
 
    | 메트릭 | 역할 | 우선순위 |
    |--------|------|----------|
    | Span Match (exact/relaxed) | 엔티티 단위 직접 비교 | **Primary** |
-   | seqeval | 음절 BIO 기반 F1 | Secondary |
+   | seqeval | BIO 기반 F1 | Secondary |
    | Character Span F1 | 문자 수준 span 매칭 | Secondary |
    | BERTScore | 의미적 유사도 | Optional |
 
@@ -466,7 +493,7 @@ print(list(zip(tokens, bio)))
 - [ ] JSON 결과 파일이 정상 생성되는가
 
 ```bash
-# 체크포인트 검증: 소량 샘플로 빠르게 확인
+# 체크포인트 검증: 소량 샘플로 빠르게 확인 (예시 — 한국어 파이프라인의 경우)
 PYTHONPATH=src python -m evaluators --lang ko \
     --models "vllm:Qwen/Qwen3.5-27B" \
     --max-samples 10
@@ -476,7 +503,7 @@ PYTHONPATH=src python -m evaluators --lang ko \
 
 | 증상 | 원인 | 조치 |
 |------|------|------|
-| Span Match와 seqeval 차이가 큼 | BIO 변환(Step 5) 정렬 문제 | `spans_to_syllable_bio()` 로직 점검 |
+| Span Match와 seqeval 차이가 큼 | BIO 변환(Step 5) 정렬 문제 | BIO 변환 함수 로직 점검 |
 | 모든 메트릭이 0 | 파싱 완전 실패 또는 매칭 로직 오류 | Step 5 파싱 출력 확인 |
 | BERTScore 계산 실패 | BERT 모델 로딩 문제 | `--no-bertscore` 플래그로 우회 |
 | 결과 JSON 미생성 | 경로 오류 | `results/` 디렉토리 존재 확인 |
@@ -554,7 +581,7 @@ F1이 전체적으로 낮음
     │   │       └── 전반적 누락? → Step 4: 모델 변경 또는 Step 3: Few-shot 예시 추가
     │   │
     │   └── NO (Span Match는 양호, seqeval만 낮음)
-    │       └── → Step 5: spans→BIO 변환 로직 점검 (spans_to_syllable_bio)
+    │       └── → Step 5: spans→BIO 변환 로직 점검
     │
     └── 모든 메트릭이 0에 가까운가?
         ├── JSON 파싱 에러 로그 확인

@@ -1,9 +1,6 @@
-# 한국어 NER — BIO 태깅 및 Span 추출 과정
+# BIO 태깅 및 Span 추출 과정
 
-> 작성 일자: 2026-04-10
-> 목적: 한국어 NER 파이프라인에서 사용되는 토큰화 단위(음절/어절/형태소), BIO 태그 체계, Span 표현, 그리고 BIO ↔ Span 변환 알고리즘을 정리한다.
-> 관련 코드: `src/labelers/tag_aligner.py`, `src/labelers/ko/ner_prompts.py`
-> 데이터셋 목록은 별도 문서 `docs/wiki/entities/datasets/korean-ner-datasets.md` 참조.
+> 목적: NER에서 사용되는 토큰화 단위(음절/어절/형태소), BIO 태그 체계, Span 표현, BIO ↔ Span 변환 알고리즘을 정리한다.
 
 ## 목차
 
@@ -18,17 +15,11 @@
 
 ### 1.1 결론
 
-LLM 라벨링 검증에서는 **Gold 데이터의 토큰 단위(음절/어절/형태소)가 본질적으로 중요하지 않다**. 현재 `src/labelers/tag_aligner.py`는 이미 양쪽(음절/어절)을 모두 처리하도록 구현되어 있다.
+LLM 라벨링 검증에서는 **Gold 데이터의 토큰 단위(음절/어절/형태소)가 본질적으로 중요하지 않다**. span 기반 BIO 변환기는 두 형식(음절/어절)을 모두 처리할 수 있도록 구현 가능하다.
 
 ### 1.2 왜 span 형식인가 (프롬프트 설계 선택)
 
-LLM이 span 리스트를 출력하는 것은 LLM의 본질적 특성이 아니라 **프롬프트가 그렇게 요청하도록 설계되었기 때문**이다. `src/labelers/ko/ner_prompts.py`의 `SINGLE_PROMPT_TEMPLATE`은 다음 세 지점에서 형식을 고정한다.
-
-- `src/labelers/ko/ner_prompts.py:15` — `"텍스트에서 개체명을 찾아 JSON 배열로만 반환하세요."`
-- `src/labelers/ko/ner_prompts.py:56` — `"JSON 배열만 출력, 다른 설명 금지"`
-- `src/labelers/ko/ner_prompts.py:60-79` — 8개 few-shot 예시 전부 `[{"text": ..., "type": ...}]` 형식으로 제시
-
-LLM은 이 few-shot 패턴을 모방(in-context learning)하여 같은 JSON span 구조로 응답한다. BIO가 아니라 span을 요청한 설계 근거는 다음 4가지이다.
+LLM이 span 리스트를 출력하는 것은 LLM의 본질적 특성이 아니라 **프롬프트가 그렇게 요청하도록 설계되었기 때문**이다. 프롬프트 템플릿은 JSON 배열 형식과 few-shot 예시를 통해 출력 형식을 고정한다. LLM은 이 few-shot 패턴을 모방(in-context learning)하여 같은 JSON span 구조로 응답한다. BIO가 아니라 span을 요청한 설계 근거는 다음 4가지이다.
 
 1. **토큰화 독립성** — BIO를 요청하려면 먼저 "어떤 토큰 단위로 쪼갤지"를 합의해야 한다. LLM은 음절/어절/형태소 중 무엇으로 쪼갤지 불안정하고, gold 토큰과의 정렬도 어렵다. Span은 "원문의 어느 부분이 엔티티인가"만 답하므로 토큰화 단위 자체가 필요 없다.
 
@@ -37,26 +28,6 @@ LLM은 이 few-shot 패턴을 모방(in-context learning)하여 같은 JSON span
 3. **파싱 안정성** — JSON 배열은 파싱 실패 시 즉시 감지되고 재시도·복구가 가능하다. BIO 열은 토큰 수 불일치, `I-` 태그 누락·타입 드리프트 같은 조용한 정렬 오류가 발생하기 쉽다.
 
 4. **자연스러운 출력 패턴** — 대형 LLM은 "이름 있는 것들을 뽑아달라"는 자연어 task에 span 리스트로 답하는 패턴에 이미 훈련되어 있어, BIO 열 출력보다 오류율이 낮고 few-shot만으로도 형식이 안정적으로 재현된다.
-
-### 1.3 현재 코드가 이미 지원하는 증거
-
-`src/labelers/tag_aligner.py:94-130` 의 `extract_spans_from_bio`:
-
-```python
-def extract_spans_from_bio(tokens, tags, lang="ko"):
-    # Detect token level: if any token is pure whitespace, it's syllable-level
-    has_space_tokens = any(t.strip() == "" for t in tokens)
-    joiner = "" if has_space_tokens else " "
-    ...
-```
-
-- KLUE(음절 + 공백 토큰) → `joiner=""` → `['대','한','민','국']` → `"대한민국"`
-- WikiANN(어절) → `joiner=" "` → `['대한민국']` → `"대한민국"`
-
-동일 함수가 두 형식 모두 span으로 정확히 역변환한다.
-
-`src/labelers/tag_aligner.py:222-296` 의 `spans_to_syllable_bio`:
-- LLM span을 원문 character offset으로 매핑하므로 gold 토큰 단위와 무관하게 동작한다.
 
 ---
 
@@ -123,7 +94,7 @@ BIO는 `토큰화 단위 × 엔티티 타입`의 교차이므로 같은 엔티�
 LLM 출력  →  span [{"text":"서울특별시",   "type":"LC"}]
 ```
 
-BIO → span 역변환 함수: `src/labelers/tag_aligner.py:94` `extract_spans_from_bio`
+BIO → span 역변환은 공백 토큰 유무로 토큰 단위를 자동 감지하는 함수(아래 §4.1 알고리즘)로 구현 가능하다.
 
 ### 3.3 한 줄 요약
 
@@ -136,7 +107,7 @@ BIO → span 역변환 함수: `src/labelers/tag_aligner.py:94` `extract_spans_f
 
 ## 4. 토큰 단위별 Span 추출 과정
 
-`src/labelers/tag_aligner.py:94-130` `extract_spans_from_bio`는 공백 토큰 유무로 토큰 단위를 자동 감지한 뒤 BIO 태그를 하나의 span으로 병합한다. 세 가지 단위별로 단계를 구체화한다.
+`extract_spans_from_bio`는 공백 토큰 유무로 토큰 단위를 자동 감지한 뒤 BIO 태그를 하나의 span으로 병합한다. 세 가지 단위별로 단계를 구체화한다.
 
 ### 4.1 공통 알고리즘
 
@@ -269,8 +240,9 @@ tags   = ['B_PS','I','B_PS','B_LC','B_LC']
 
 ---
 
-## 참고 코드
+## 출처
 
-- `src/labelers/tag_aligner.py` — BIO ↔ Span 변환, 태그 정규화
-- `src/labelers/ko/ner_prompts.py` — LLM 프롬프트 (span JSON 형식 지정)
-- `src/labelers/dataset_loader.py` — HuggingFace 데이터셋 로딩
+- `sources/ramshaw-marcus-1995-bio-tagging.md` — BIO/IOB 태그 스킴의 원조
+- `sources/park-2021-klue.md` — 음절 단위 NER (KLUE) 사례
+- `sources/pan-2017-wikiann.md` — 어절 단위 NER (WikiANN) 사례
+- `sources/kmou-ner-dataset.md` — 형태소 단위 + 비표준 BIO (KMOU) 사례
