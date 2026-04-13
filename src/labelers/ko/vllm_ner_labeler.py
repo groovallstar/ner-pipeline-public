@@ -131,7 +131,7 @@ class VllmNERLabeler:
 
     def __init__(
         self,
-        base_url: str = "http://vllm-server:8081/v1",
+        base_url: str = "http://localhost:8081/v1",
         model: str = "Qwen/Qwen3.5-27B",
         entity_types: Optional[List[str]] = None,
         max_tokens: int = 4096,
