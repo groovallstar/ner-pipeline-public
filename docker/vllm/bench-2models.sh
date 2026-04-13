@@ -35,7 +35,7 @@ run_benchmark() {
     local output="$2"
     echo "  벤치마크 시작: $model (${MAX_SAMPLES} samples)"
     cd "$BENCH_DIR"
-    python -m evaluators --lang ko \
+    python -m llm_eval --lang ko \
         --models "vllm:${model}" \
         --max-samples "$MAX_SAMPLES" \
         --vllm-url "$VLLM_URL" \

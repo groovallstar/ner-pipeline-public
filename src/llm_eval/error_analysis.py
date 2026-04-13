@@ -1,7 +1,7 @@
 """Per-sentence error analysis: extract FN/FP patterns from NER benchmark.
 
 Usage:
-    python -m evaluators.error_analysis \
+    python -m llm_eval.error_analysis \
         --models vllm:Qwen/Qwen3.5-27B \
         --max-samples 50 \
         --output results/error_analysis.json
@@ -281,7 +281,7 @@ def run_error_analysis(args) -> dict:
     print(f"  Loaded {len(gold_records)} records")
 
     # Create labeler
-    from evaluators.__main__ import _create_labeler, _load_env
+    from llm_eval.__main__ import _create_labeler, _load_env
     _load_env()
     backend, labeler = _create_labeler(args.models[0], args)
 

@@ -407,7 +407,7 @@ verify_prompt = (
 **코드:** `src/evaluators/__main__.py`
 
 ```bash
-PYTHONPATH=src python -m evaluators --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+PYTHONPATH=src python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 ```
 
 CLI가 수행하는 흐름:

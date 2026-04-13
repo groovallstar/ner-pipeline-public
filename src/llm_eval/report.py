@@ -5,19 +5,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-from evaluators.benchmark_runner import BenchmarkResult
+from llm_eval.benchmark_runner import BenchmarkResult
 
 
 class ReportGenerator:
     """Generate benchmark reports from results."""
 
-    def __init__(self, results: List[BenchmarkResult]) -> None:
+    def __init__(self, results: List[BenchmarkResult], lang: str = "ko") -> None:
         self.results = results
+        self.lang = lang
 
     def print_table(self) -> None:
         """Print a formatted CLI table of benchmark results."""
         if not self.results:
             print("No results to display.")
+            return
+
+        # Offset-span mode (ja): only span_f1 is populated
+        if all(not r.metrics.get("span_match") and r.metrics.get("span_f1", {}).get("overall") for r in self.results):
+            self._print_offset_span_table()
             return
 
         has_bertscore = any(r.metrics.get("bertscore") for r in self.results)
@@ -79,7 +85,7 @@ class ReportGenerator:
         headers = ["Model", "F1", "Prec", "Recall"]
         if has_bertscore:
             headers.append("BERT-F1")
-        headers.extend(["Speed (s/s)", "Tok/s", "Out Tok/s", "Tokens", "Samples", "Errors"])
+        headers.extend(["TPS", "Sec/Sample", "Out Tok/s", "Tokens", "Samples", "Errors"])
 
         rows = []
         for r in self.results:
@@ -95,8 +101,8 @@ class ReportGenerator:
                 row.append(f"{bs.get('f1', 0):.4f}")
             total_tokens = r.latency.get("total_tokens", 0)
             row.extend([
-                f"{r.latency.get('samples_per_second', 0):.2f}",
                 f"{r.latency.get('tokens_per_second', 0):.1f}",
+                f"{r.latency.get('avg_per_sample', 0):.3f}",
                 f"{r.latency.get('output_tokens_per_second', 0):.1f}",
                 f"{total_tokens:,}",
                 str(r.num_samples),
@@ -104,6 +110,42 @@ class ReportGenerator:
             ])
             rows.append(row)
         self._print_rows(headers, rows)
+
+    def _print_offset_span_table(self) -> None:
+        """Print ja-style char-offset span F1 table."""
+        title = "JAPANESE NER" if self.lang == "ja" else "NER"
+        print("\n" + "=" * 70)
+        print(f"  {title} — SPAN-LEVEL EVALUATION (Character Offset)")
+        print("=" * 70)
+        headers = ["Model", "F1", "Precision", "Recall", "TPS", "Sec/Sample", "Samples", "Errors"]
+        rows = []
+        for r in self.results:
+            overall = r.metrics.get("span_f1", {}).get("overall", {})
+            rows.append([
+                f"[{r.backend}] {r.model_name}",
+                f"{overall.get('f1', 0):.4f}",
+                f"{overall.get('precision', 0):.4f}",
+                f"{overall.get('recall', 0):.4f}",
+                f"{r.latency.get('tokens_per_second', 0):.1f}",
+                f"{r.latency.get('avg_per_sample', 0):.3f}",
+                str(r.num_samples),
+                str(r.errors),
+            ])
+        self._print_rows(headers, rows)
+        for r in self.results:
+            per_entity = r.metrics.get("span_f1", {}).get("per_entity", {})
+            if per_entity:
+                print(f"  [{r.backend}] {r.model_name} — Per-Entity Breakdown:")
+                e_headers = ["Entity", "F1", "Precision", "Recall", "Support"]
+                e_rows = [
+                    [entity,
+                     f"{per_entity[entity].get('f1', 0):.4f}",
+                     f"{per_entity[entity].get('precision', 0):.4f}",
+                     f"{per_entity[entity].get('recall', 0):.4f}",
+                     str(per_entity[entity].get('support', 0))]
+                    for entity in sorted(per_entity.keys())
+                ]
+                self._print_rows(e_headers, e_rows, indent=4)
 
     @staticmethod
     def _print_rows(headers: List[str], rows: List[List[str]], indent: int = 0) -> None:
@@ -135,6 +177,7 @@ class ReportGenerator:
         """Convert results to a serializable dict."""
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "language": self.lang,
             "num_models": len(self.results),
             "results": [
                 {

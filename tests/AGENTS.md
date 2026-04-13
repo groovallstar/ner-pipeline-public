@@ -29,7 +29,7 @@ pytest-based unit tests for core NER pipeline components: span matching logic (J
 ## Dependencies
 
 ### Internal
-- `evaluators.metrics` (MetricsCalculator)
+- `metrics.bio_metrics` (MetricsCalculator)
 - `labelers.ja.span_matcher`
 
 ### External

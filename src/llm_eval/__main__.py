@@ -1,7 +1,7 @@
-"""CLI entrypoint: python -m evaluators.benchmark
+"""CLI entrypoint: python -m llm_eval.benchmark
 
 Usage:
-    python -m evaluators.benchmark \
+    python -m llm_eval.benchmark \
         --models ollama:qwen3.5:27b vllm:Qwen/Qwen3.5-9B hf:model-name openai:gpt-4o-mini \
         --max-samples 100 \
         --output results/benchmark.json
@@ -13,8 +13,8 @@ import os
 import sys
 
 from labelers.dataset_loader import DatasetLoader  # noqa: direct import avoids bs4 dep in labelers.__init__
-from evaluators.benchmark_runner import BenchmarkRunner
-from evaluators.report import ReportGenerator
+from llm_eval.benchmark_runner import BenchmarkRunner
+from llm_eval.report import ReportGenerator
 
 
 def _load_env():
@@ -60,7 +60,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
         return _create_labeler_vi(backend, model_name, args)
 
     if backend == "ollama":
-        from labelers.ollama_ner_labeler import OllamaNERLabeler
+        from labelers.ko.ollama_ner_labeler import OllamaNERLabeler
         return backend, OllamaNERLabeler(
             model=model_name,
             base_url=args.ollama_url,
@@ -68,7 +68,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
             batch_size=args.batch_size,
         )
     elif backend == "vllm":
-        from labelers.vllm_ner_labeler import VllmNERLabeler
+        from labelers.ko.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
             model=model_name,
@@ -76,7 +76,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
             thinking=getattr(args, "thinking", False),
         )
     elif backend == "openai":
-        from labelers.openai_ner_labeler import OpenAINERLabeler
+        from labelers.ko.openai_ner_labeler import OpenAINERLabeler
         return backend, OpenAINERLabeler(model=model_name)
     elif backend == "hf":
         from labelers.hf_ner_labeler import HFNERLabeler
@@ -143,7 +143,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="NER Benchmark: evaluate labeling quality and speed",
-        prog="python -m evaluators.benchmark",
+        prog="python -m llm_eval.benchmark",
     )
     parser.add_argument(
         "--models", nargs="+", required=True,
@@ -180,87 +180,43 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
+    _run_benchmark(args)
+
+
+def _load_gold(args):
+    """Load gold records per language."""
     if args.lang == "ja":
-        _run_japanese(args)
-    elif args.lang == "vi":
-        _run_vietnamese(args)
-    else:
-        _run_korean(args)
-
-
-def _run_korean(args):
-    """Run Korean NER benchmark (existing behavior)."""
+        from labelers.ja.dataset_loader import JapaneseDatasetLoader
+        print(f"Loading gold data: {args.dataset} [{args.split}]")
+        loader = JapaneseDatasetLoader()
+        return loader.load(name=args.dataset, split=args.split, max_samples=args.max_samples)
+    if args.lang == "vi":
+        print(f"Loading gold data: {args.dataset} (vi) [{args.split}]")
+        return DatasetLoader().load(
+            args.dataset, config="vi", split=args.split, max_samples=args.max_samples,
+        )
     print(f"Loading gold data: {args.dataset}/{args.config} [{args.split}]")
-    loader = DatasetLoader()
-    gold_records = loader.load(args.dataset, config=args.config, split=args.split, max_samples=args.max_samples)
-    print(f"  Loaded {len(gold_records)} records")
-
-    runner = BenchmarkRunner(gold_records, compute_bertscore=not args.no_bertscore, lang="ko")
-
-    for spec in args.models:
-        try:
-            backend, labeler = _create_labeler(spec, args, lang="ko")
-            display_name = spec.split(":", 1)[1] if ":" in spec else spec
-            runner.add_labeler(display_name, backend, labeler)
-            print(f"  Added: [{backend}] {display_name}")
-        except Exception as e:
-            print(f"  ERROR creating labeler for '{spec}': {e}", file=sys.stderr)
-            continue
-
-    results = runner.run()
-
-    report = ReportGenerator(results)
-    report.print_table()
-
-    if args.output:
-        report.save_json(args.output)
-
-
-def _run_japanese(args):
-    """Run Japanese NER benchmark using span-based evaluation."""
-    from labelers.ja.dataset_loader import JapaneseDatasetLoader
-    from evaluators.ja_benchmark_runner import JaBenchmarkRunner, JaReportGenerator
-
-    print(f"Loading gold data: {args.dataset} [{args.split}]")
-    loader = JapaneseDatasetLoader()
-    gold_records = loader.load(name=args.dataset, split=args.split, max_samples=args.max_samples)
-    print(f"  Loaded {len(gold_records)} records")
-
-    runner = JaBenchmarkRunner(gold_records)
-
-    for spec in args.models:
-        try:
-            backend, labeler = _create_labeler(spec, args, lang="ja")
-            display_name = spec.split(":", 1)[1] if ":" in spec else spec
-            runner.add_labeler(display_name, backend, labeler)
-            print(f"  Added: [{backend}] {display_name}")
-        except Exception as e:
-            print(f"  ERROR creating labeler for '{spec}': {e}", file=sys.stderr)
-            continue
-
-    results = runner.run()
-
-    report = JaReportGenerator(results)
-    report.print_table()
-
-    if args.output:
-        report.save_json(args.output)
-
-
-def _run_vietnamese(args):
-    """Run Vietnamese NER benchmark using BIO-based evaluation (same as Korean)."""
-    print(f"Loading gold data: {args.dataset} (vi) [{args.split}]")
-    loader = DatasetLoader()
-    gold_records = loader.load(
-        args.dataset, config="vi", split=args.split, max_samples=args.max_samples,
+    return DatasetLoader().load(
+        args.dataset, config=args.config, split=args.split, max_samples=args.max_samples,
     )
+
+
+def _run_benchmark(args):
+    """Unified benchmark runner: dispatches by lang via eval_mode."""
+    gold_records = _load_gold(args)
     print(f"  Loaded {len(gold_records)} records")
 
-    runner = BenchmarkRunner(gold_records, compute_bertscore=not args.no_bertscore, lang="vi")
+    eval_mode = "offset_span" if args.lang == "ja" else "bio"
+    runner = BenchmarkRunner(
+        gold_records,
+        compute_bertscore=not args.no_bertscore,
+        lang=args.lang,
+        eval_mode=eval_mode,
+    )
 
     for spec in args.models:
         try:
-            backend, labeler = _create_labeler(spec, args, lang="vi")
+            backend, labeler = _create_labeler(spec, args, lang=args.lang)
             display_name = spec.split(":", 1)[1] if ":" in spec else spec
             runner.add_labeler(display_name, backend, labeler)
             print(f"  Added: [{backend}] {display_name}")
@@ -269,10 +225,8 @@ def _run_vietnamese(args):
             continue
 
     results = runner.run()
-
-    report = ReportGenerator(results)
+    report = ReportGenerator(results, lang=args.lang)
     report.print_table()
-
     if args.output:
         report.save_json(args.output)
 

@@ -18,7 +18,7 @@ LLM NER 라벨링 결과를 gold 데이터와 비교하여 span 수준 메트릭
 ```python
 from labelers.bio_dataset import load
 from labelers.ko.vllm_ner_labeler import VllmNERLabeler
-from evaluators.span_evaluator import evaluate
+from llm_eval.span_evaluator import evaluate
 
 gold = load("klue", "validation", max_samples=500)
 labeler = VllmNERLabeler(

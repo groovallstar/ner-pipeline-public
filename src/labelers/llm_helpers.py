@@ -44,26 +44,10 @@ def split_sentences(text: str, lang: str = "ko") -> List[str]:
 def parse_spans(raw: str) -> List[dict]:
     """Extract JSON span list from LLM output. Returns [] on failure.
 
-    Delegates to `labeler_base.parse_json_response` for the core parse, then
-    applies a `[...]` regex fallback if the primary parse returns [].
+    Thin alias around `labeler_base.parse_json_response`, which already handles
+    <think> blocks, bare arrays, and `{"entities": [...]}` wrappers.
     """
-    # parse_json_response already handles <think>, bare arrays, wrapped dicts.
-    result = parse_json_response(raw)
-    if result:
-        return result
-
-    # Fallback: extract first [..] substring
-    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-    match = re.search(r"\[.*?\]", cleaned, re.DOTALL)
-    if match:
-        try:
-            import json
-            data = json.loads(match.group())
-            if isinstance(data, list):
-                return data
-        except Exception:  # noqa: BLE001
-            pass
-    return []
+    return parse_json_response(raw)
 
 
 def spans_to_bio(tokens: List[str], spans: List[dict]) -> List[str]:

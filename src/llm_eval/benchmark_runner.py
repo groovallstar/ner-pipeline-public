@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional
 from tqdm import tqdm
 
 from labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
-from evaluators.metrics import MetricsCalculator
+from metrics.bio_metrics import MetricsCalculator
+from metrics.span_metrics import compute_offset_span_f1
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +34,14 @@ class BenchmarkRunner:
         max_samples: Optional[int] = None,
         compute_bertscore: bool = True,
         lang: str = "ko",
+        eval_mode: str = "bio",
     ) -> None:
         if max_samples is not None:
             gold_records = gold_records[:max_samples]
         self.gold_records = gold_records
         self.compute_bertscore = compute_bertscore
         self.lang = lang
+        self.eval_mode = eval_mode  # "bio" (ko/vi) or "offset_span" (ja)
         self._labelers: List[tuple] = []  # (name, backend, labeler)
 
     def add_labeler(self, name: str, backend: str, labeler: Any) -> None:
@@ -51,9 +54,62 @@ class BenchmarkRunner:
             print(f"Benchmarking: [{backend}] {name}")
             print(f"  Samples: {len(self.gold_records)}")
             print(f"{'='*60}")
-            result = self._run_single(name, backend, labeler)
+            if self.eval_mode == "offset_span":
+                result = self._run_offset_span(name, backend, labeler)
+            else:
+                result = self._run_single(name, backend, labeler)
             results.append(result)
         return results
+
+    def _run_offset_span(self, name: str, backend: str, labeler: Any) -> BenchmarkResult:
+        """Span F1 path using char offsets (ja). Records: {text, gold_spans}."""
+        from labelers.ja.span_matcher import match_spans
+
+        gold_spans_all: List[List[dict]] = []
+        pred_spans_all: List[List[dict]] = []
+        errors = 0
+
+        t_start = time.time()
+        pbar = tqdm(self.gold_records, desc=f"[{backend}] {name}", unit="sample")
+
+        for i, record in enumerate(pbar):
+            text = record["text"]
+            gold_spans = record["gold_spans"]
+            try:
+                raw_spans = labeler.label_spans(text)
+                pred_spans = match_spans(text, raw_spans)
+            except Exception as e:
+                logger.warning("Labeling failed for sample %d: %s", i, e)
+                errors += 1
+                continue
+            gold_spans_all.append(gold_spans)
+            pred_spans_all.append(pred_spans)
+            pbar.set_postfix(errors=errors)
+
+        pbar.close()
+        t_total = time.time() - t_start
+
+        span_f1 = compute_offset_span_f1(gold_spans_all, pred_spans_all)
+        metrics = {"span_f1": span_f1}
+        num_evaluated = len(gold_spans_all)
+
+        prompt_tokens = getattr(labeler, "total_prompt_tokens", 0)
+        completion_tokens = getattr(labeler, "total_completion_tokens", 0)
+        total_tokens = prompt_tokens + completion_tokens
+        latency = {
+            "total_seconds": round(t_total, 2),
+            "samples_per_second": round(num_evaluated / t_total, 4) if t_total > 0 else 0,
+            "avg_per_sample": round(t_total / num_evaluated, 4) if num_evaluated > 0 else 0,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "tokens_per_second": round(total_tokens / t_total, 2) if t_total > 0 else 0,
+            "output_tokens_per_second": round(completion_tokens / t_total, 2) if t_total > 0 else 0,
+        }
+        return BenchmarkResult(
+            model_name=name, backend=backend, metrics=metrics,
+            latency=latency, num_samples=num_evaluated, errors=errors,
+        )
 
     def _run_single(self, name: str, backend: str, labeler: Any) -> BenchmarkResult:
         gold_tags_all = []
@@ -127,7 +183,7 @@ class BenchmarkRunner:
             # Update progress bar with running stats
             elapsed = time.time() - t_start
             speed = (i + 1) / elapsed if elapsed > 0 else 0
-            pbar.set_postfix(speed=f"{speed:.1f}s/s", errors=errors)
+            pbar.set_postfix(errors=errors)
 
         pbar.close()
         t_total = time.time() - t_start
