@@ -21,7 +21,7 @@ LangChain 기반 다국어 Named Entity Recognition(NER) 파이프라인. 멀티
 src/
 ├── labelers/              # NER 라벨링 모듈
 │   ├── ko/                # 한국어 라벨러 (ollama, vllm, openai)
-│   ├── ja/                # 일본어 라벨러 + enhanced_labeler (two-pass 검증)
+│   ├── ja/                # 일본어 라벨러 (ollama, vllm, openai)
 │   ├── dataset_loader.py  # HuggingFace 데이터셋 로딩
 │   └── labeler_base.py    # 라벨러 베이스 클래스
 └── evaluators/            # 벤치마크 CLI 및 평가 모듈
@@ -59,17 +59,6 @@ PYTHONPATH=src python -m llm_eval --lang ko \
     --models "vllm:Qwen/Qwen3.5-27B" \
     --max-samples 500 \
     --vllm-url "http://localhost:8081/v1"
-```
-
-### Two-Pass 검증 (일본어)
-
-```python
-from labelers.ja.vllm_ner_labeler import VllmNERLabeler
-from labelers.ja.enhanced_labeler import EnhancedLabeler
-
-base = VllmNERLabeler(base_url="http://localhost:8081/v1", model="Qwen/Qwen3.5-27B")
-labeler = EnhancedLabeler(base, two_pass=True)
-spans = labeler.label_spans("テキスト入力")
 ```
 
 ### 테스트

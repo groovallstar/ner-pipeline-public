@@ -338,45 +338,6 @@ _SUFFIXES = ("氏", "さん", "君", "ちゃん", "様")
 - 텍스트 길이가 조사/접미사보다 긴 경우에만 제거 (1글자 엔티티 보호)
 - 조사와 접미사는 각각 최대 1개씩만 제거
 
-### 4.7 EnhancedLabeler -- 자기 일관성 투표 및 2패스 검증
-
-**코드:** `EnhancedLabeler` (`src/labelers/ja/enhanced_labeler.py:14-152`)
-
-일본어 파이프라인에만 존재하는 고급 라벨링 래퍼. 기본 라벨러(`label_spans()` 메서드를 가진 모든 라벨러)를 감싸서 두 가지 기법을 적용한다:
-
-**자기 일관성 투표 (Self-Consistency Voting)** (`enhanced_labeler.py:50-78`):
-
-```python
-# voting_rounds 횟수만큼 반복 추론
-for _ in range(self.voting_rounds):
-    spans = self.base.label_spans(text)
-    round_entities.add((text, type))  # (텍스트, 타입) 튜플로 정규화
-
-# 과반수 이상 등장한 엔티티만 유지
-threshold = self.voting_rounds / 2
-winners = [e for e, count in counter.items() if count > threshold]
-```
-
-- `voting_rounds=1`이면 비활성화 (단일 추론)
-- 다수결 원칙: 전체 라운드의 50% 초과 등장해야 채택
-
-**2패스 검증 (Two-Pass Verification)** (`enhanced_labeler.py:80-116`):
-
-```python
-verify_prompt = (
-    f"以下のテキストから抽出された固有表現が正しいか検証してください。\n"
-    f"正しいものだけをJSON配列で返してください。\n\n"
-    f"テキスト: {text}\n"
-    f"抽出された固有表現: {entities_str}\n\n"
-    f"正しい固有表現のみ出力（JSON配列）:"
-)
-```
-
-- 1패스에서 추출된 엔티티를 2패스에서 LLM에게 검증 요청
-- 올바른 엔티티만 JSON 배열로 반환하도록 요청 (false positive 필터링)
-- 검증 실패 시 원래 span을 그대로 반환 (폴백)
-- Ollama와 vLLM 백엔드 모두 지원 (`_call_llm` 또는 `_chat` 메서드 자동 감지, line 99-108)
-
 ### 백엔드 변형
 
 동일 인터페이스(`label()`, `label_spans()`)로 3개 백엔드를 지원한다:
@@ -396,7 +357,6 @@ verify_prompt = (
 | 3단계 매칭 (exact -> 공백 제거 -> 조사 제거) | 일본어 조사/공백 문제를 단계적으로 해결하여 매칭률 극대화 |
 | 길이 역순 매칭 | "東京タワー"와 "東京"이 모두 있을 때, 긴 엔티티를 먼저 매칭하여 부분 문자열 충돌 방지 |
 | `consumed` 집합으로 중복 방지 | 동일 문자 범위에 여러 엔티티가 매칭되는 것을 원천 차단 |
-| EnhancedLabeler를 래퍼로 구현 | 기존 라벨러를 수정하지 않고 투표/검증 기능을 선택적으로 추가 가능 |
 
 ---
 
@@ -532,7 +492,6 @@ f1 = 2 * precision * recall / (precision + recall)
 | **평가 메트릭** | Span Match + seqeval + Character Span F1 + BERTScore (4종) | Offset Span F1 (1종) |
 | **평가 라이브러리** | seqeval, bert-score 의존 | 자체 구현 (`ja_metrics.py`), 외부 의존 없음 |
 | **TagAligner** | 필수 (음절 BIO 변환) | 미사용 |
-| **EnhancedLabeler** | 없음 | 있음 (자기 일관성 투표 + 2패스 검증) |
 | **주요 모듈** | `dataset_loader.py`, `labelers/tag_aligner.py`, `metrics.py`, `benchmark_runner.py` | `ja/dataset_loader.py`, `ja/span_matcher.py`, `ja_metrics.py`, `ja_benchmark_runner.py` |
 
 ---
@@ -551,6 +510,5 @@ f1 = 2 * precision * recall / (precision + recall)
 | 6 | 라벨링 | `match_spans()` 별도 모듈 | LLM 출력(위치 없음)과 gold(위치 있음) 간 독립적 브릿지 | BIO 변환 후 비교 (변환 노이즈) |
 | 7 | 라벨링 | 길이 역순 + consumed 추적 | 부분 문자열 충돌 및 중복 매칭 방지 | 출현 순서대로 매칭 (충돌 위험) |
 | 8 | 라벨링 | 조사 제거 폴백 (3단계 매칭) | 일본어 조사 부착 문제를 단계적으로 해결 | exact match만 (매칭률 저하) |
-| 9 | 라벨링 | EnhancedLabeler 래퍼 패턴 | 기존 라벨러 무변경으로 투표/검증 기능 추가 | 각 라벨러에 직접 구현 (코드 중복) |
-| 10 | 평가 | Offset Span F1 단일 메트릭 | BIO 변환 불필요, 평가 파이프라인 단순화 | 다중 메트릭 (불필요한 복잡도) |
-| 11 | 평가 | seqeval/BERTScore 미사용 | BIO 태그가 없으므로 적용 불가/불필요 | BIO 변환 후 seqeval (변환 노이즈 유입) |
+| 9 | 평가 | Offset Span F1 단일 메트릭 | BIO 변환 불필요, 평가 파이프라인 단순화 | 다중 메트릭 (불필요한 복잡도) |
+| 10 | 평가 | seqeval/BERTScore 미사용 | BIO 태그가 없으므로 적용 불가/불필요 | BIO 변환 후 seqeval (변환 노이즈 유입) |

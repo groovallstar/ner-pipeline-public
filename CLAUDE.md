@@ -22,7 +22,7 @@
 src/
 ├── labelers/          # NER 라벨링 모듈
 │   ├── ko/            # 한국어 (ollama, vllm, openai)
-│   ├── ja/            # 일본어 (ollama, vllm, openai, enhanced_labeler)
+│   ├── ja/            # 일본어 (ollama, vllm, openai)
 │   ├── dataset_loader.py
 │   ├── labeler_base.py
 │   ├── tag_aligner.py    # BIO 태그 정렬/정규화/span 추출
