@@ -75,9 +75,9 @@ class BaseOpenAILabeler:
         if current_batch:
             batches.append(current_batch)
 
-        print(
-            f"[TIMER]   sentences: {len(sentences)} (non-empty: {len(non_empty)}, "
-            f"batches: {len(batches)}, max_tokens/batch: {self.max_tokens_per_batch})"
+        logger.info(
+            "[TIMER]   sentences: %d (non-empty: %d, batches: %d, max_tokens/batch: %d)",
+            len(sentences), len(non_empty), len(batches), self.max_tokens_per_batch,
         )
 
         records: List[Optional[dict]] = [None] * len(sentences)
@@ -88,9 +88,9 @@ class BaseOpenAILabeler:
             batch_spans = self._call_api_batch([s for _, s in batch])
             t_e = time.time()
             entity_counts = [len(spans) for spans in batch_spans]
-            print(
-                f"[TIMER]   batch [{b_idx+1:2d}/{len(batches)}] {t_e-t_s:.2f}s "
-                f" sentences={len(batch)}  entities={entity_counts}"
+            logger.info(
+                "[TIMER]   batch [%2d/%d] %.2fs  sentences=%d  entities=%s",
+                b_idx + 1, len(batches), t_e - t_s, len(batch), entity_counts,
             )
 
             for (orig_idx, sentence), spans in zip(batch, batch_spans):
@@ -104,7 +104,7 @@ class BaseOpenAILabeler:
             if records[i] is None:
                 records[i] = {"tokens": sentence.split(), "ner_tags": [], "id": str(i)}
 
-        print(f"[TIMER]   label total: {time.time()-t_label_start:.2f}s")
+        logger.info("[TIMER]   label total: %.2fs", time.time() - t_label_start)
         return [r for r in records if r and r["tokens"]]  # type: ignore[misc]
 
     def label_spans(self, text: str) -> List[dict]:

@@ -63,9 +63,9 @@ class BaseOllamaLabeler:
         """텍스트를 라벨링한다. 문장당 하나의 NERRecord 리스트를 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [(i, s) for i, s in enumerate(sentences) if s.split()]
-        print(
-            f"[TIMER]   sentences: {len(sentences)} (non-empty: {len(non_empty)}, "
-            f"batch_size: {self.batch_size})"
+        logger.info(
+            "[TIMER]   sentences: %d (non-empty: %d, batch_size: %d)",
+            len(sentences), len(non_empty), self.batch_size,
         )
 
         records: List[dict] = [None] * len(sentences)  # type: ignore[list-item]
@@ -78,9 +78,9 @@ class BaseOllamaLabeler:
             batch_spans = self._call_llm_batch([s for _, s in batch])
             t_e = time.time()
             entity_counts = [len(spans) for spans in batch_spans]
-            print(
-                f"[TIMER]   batch [{b+1:2d}/{n_batches}] {t_e-t_s:.2f}s "
-                f" sentences={len(batch)}  entities={entity_counts}"
+            logger.info(
+                "[TIMER]   batch [%2d/%d] %.2fs  sentences=%d  entities=%s",
+                b + 1, n_batches, t_e - t_s, len(batch), entity_counts,
             )
 
             for (orig_idx, sentence), spans in zip(batch, batch_spans):
@@ -94,7 +94,7 @@ class BaseOllamaLabeler:
             if records[i] is None:
                 records[i] = {"tokens": sentence.split(), "ner_tags": [], "id": str(i)}
 
-        print(f"[TIMER]   label total: {time.time()-t_label_start:.2f}s")
+        logger.info("[TIMER]   label total: %.2fs", time.time() - t_label_start)
         return [r for r in records if r["tokens"]]
 
     def label_spans(self, text: str) -> List[dict]:
