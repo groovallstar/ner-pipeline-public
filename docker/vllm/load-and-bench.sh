@@ -25,7 +25,7 @@ echo "=========================================="
 echo ""
 echo "[1/4] 모델 다운로드 중..."
 cd "$PROJECT_DIR"
-PYTHONPATH=src .venv/bin/python -c "
+.venv/bin/python -c "
 from huggingface_hub import snapshot_download
 snapshot_download('$MODEL', cache_dir='/work/.huggingface')
 print('Download complete')
@@ -78,7 +78,7 @@ done
 echo ""
 echo "[4/4] 벤치마크 실행 중..."
 cd "$PROJECT_DIR"
-PYTHONPATH=src .venv/bin/python -m llm_eval.error_analysis \
+.venv/bin/python -m llm_eval.error_analysis \
   --models "vllm:$MODEL" \
   --vllm-url "$VLLM_URL" \
   --max-samples 50 \

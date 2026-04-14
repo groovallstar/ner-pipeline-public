@@ -52,10 +52,10 @@ docs/                  # 문서 (상세: docs/schema.md)
 
 ```bash
 # 일본어
-PYTHONPATH=src python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 
 # 한국어
-PYTHONPATH=src python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
+python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
 ```
 
 ## Development Protocol (The 3 Rules)

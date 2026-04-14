@@ -115,7 +115,7 @@ Stockmark NER(일본어)처럼 raw text + char offset span 포맷인 데이터�
 
 ## 테스트 케이스
 
-실행: `PYTHONPATH=src pytest tests/test_bio_dataset.py -v`
+실행: `pytest tests/test_bio_dataset.py -v`
 
 ### 단위 테스트 (21개, 캐시 독립)
 

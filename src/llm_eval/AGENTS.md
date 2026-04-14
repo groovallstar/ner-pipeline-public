@@ -35,7 +35,7 @@ Benchmark orchestration and metrics computation package. Provides CLI entrypoint
 - Benchmarks require running LLM servers or OpenAI API key
 
 ### Common Patterns
-- CLI: `PYTHONPATH=src python -m llm_eval --lang ja|ko --models "backend:model" --max-samples N`
+- CLI: `python -m llm_eval --lang ja|ko --models "backend:model" --max-samples N`
 - Model spec format: `backend:model_name` (e.g., `vllm:Qwen/Qwen3.5-27B`, `ollama:qwen3.5:27b`)
 
 ## Dependencies

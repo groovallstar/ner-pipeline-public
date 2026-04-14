@@ -39,9 +39,9 @@ Multilingual Named Entity Recognition (NER) pipeline built on LangChain with mul
 - Active development on `develop` branch; `main` is the PR target
 
 ### Testing Requirements
-- Run: `PYTHONPATH=src pytest tests/ -v`
+- Run: `pytest tests/ -v`
 - Lint: `ruff check`
-- Benchmarks: `PYTHONPATH=src python -m llm_eval --lang ja|ko --models "backend:model" --max-samples N`
+- Benchmarks: `python -m llm_eval --lang ja|ko --models "backend:model" --max-samples N`
 
 ### Common Patterns
 - LLM labelers share a common interface: `label(text)`, `label_spans(text)`, `label_records(records)`

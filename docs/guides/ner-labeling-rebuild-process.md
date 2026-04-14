@@ -464,7 +464,7 @@ print(list(zip(tokens, bio)))
 1. **평가 진입점 설정**: `src/evaluators/__main__.py`
    ```bash
    # 예시 — 한국어 파이프라인의 경우
-   PYTHONPATH=src python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
+   python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
    ```
 
 2. **평가 흐름 구현**: `BenchmarkRunner._run_single()` (`benchmark_runner.py:58-186`)
@@ -494,7 +494,7 @@ print(list(zip(tokens, bio)))
 
 ```bash
 # 체크포인트 검증: 소량 샘플로 빠르게 확인 (예시 — 한국어 파이프라인의 경우)
-PYTHONPATH=src python -m llm_eval --lang ko \
+python -m llm_eval --lang ko \
     --models "vllm:Qwen/Qwen3.5-27B" \
     --max-samples 10
 ```

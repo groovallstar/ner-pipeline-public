@@ -3,7 +3,7 @@
 ## 실행
 
 ```bash
-PYTHONPATH=src pytest tests/ -v
+pytest tests/ -v
 ```
 
 ## 테스트 프레임워크

@@ -67,7 +67,7 @@ echo "  vLLM URL:    ${VLLM_URL}"
 echo "  Concurrency: ${CONCURRENCY}"
 echo ""
 
-PYTHONPATH=src python3 -c "
+python3 -c "
 from labelers.bio_dataset import load
 from labelers.ko.vllm_ner_labeler import VllmNERLabeler
 from llm_eval.span_evaluator import evaluate

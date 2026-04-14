@@ -367,7 +367,7 @@ _SUFFIXES = ("氏", "さん", "君", "ちゃん", "様")
 **코드:** `src/evaluators/__main__.py`
 
 ```bash
-PYTHONPATH=src python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 ```
 
 CLI가 수행하는 흐름:

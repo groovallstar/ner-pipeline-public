@@ -136,7 +136,7 @@ KLUE NER validation 500건, Qwen3.5-35B-A3B (vLLM):
 
 ## 테스트 케이스
 
-실행: `PYTHONPATH=src pytest tests/test_span_evaluator.py -v`
+실행: `pytest tests/test_span_evaluator.py -v`
 
 | 테스트 | 검증 내용 |
 |--------|-----------|

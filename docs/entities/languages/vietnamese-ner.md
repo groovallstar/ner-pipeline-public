@@ -370,7 +370,7 @@ def _create_labeler_vi(backend: str, model_name: str, args):
 **코드:** `_run_vietnamese()` (`src/evaluators/__main__.py:250-277`)
 
 ```bash
-PYTHONPATH=src python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 ```
 
 CLI가 수행하는 흐름:
@@ -455,7 +455,7 @@ joiner = "" if has_space_tokens else " "  # WikiANN: " " (word-level)
 
 ```bash
 # 베트남어 벤치마크 실행 (예시)
-PYTHONPATH=src python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200 --output results/vi_bench_200_27b.json
+python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200 --output results/vi_bench_200_27b.json
 ```
 
 ### 왜 이렇게 설계했는가

@@ -17,7 +17,7 @@ pytest-based unit tests for core NER pipeline components: span matching logic (J
 ## For AI Agents
 
 ### Working In This Directory
-- Run: `PYTHONPATH=src pytest tests/ -v`
+- Run: `pytest tests/ -v`
 - `test_span_matcher.py` imports from `labelers.ja.span_matcher`
 - `test_span_f1.py` uses hardcoded `sys.path.insert(0, "/work/git/ner_pipeline/src")` — only works in dev container
 - Test coverage is minimal: no tests for labelers, dataset loading, or classifier

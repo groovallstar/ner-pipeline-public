@@ -363,7 +363,7 @@ if all(sp in tokens[i + j] or tokens[i + j] in sp for j, sp in enumerate(span_to
 **코드:** `_run_korean()` (`src/evaluators/__main__.py:191-217`)
 
 ```bash
-PYTHONPATH=src python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
+python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
 ```
 
 CLI가 수행하는 흐름:
