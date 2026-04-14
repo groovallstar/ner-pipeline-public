@@ -80,3 +80,6 @@ docker/dev/config/.env
 *.pth
 *.bin
 *.safetensors
+
+results/
+data/

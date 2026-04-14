@@ -1,8 +1,7 @@
-"""Tests for evaluators.span_evaluator module."""
+"""Tests for llm_eval.span_evaluator module."""
 
-import pytest
 
-from evaluators.span_evaluator import evaluate
+from llm_eval.span_evaluator import evaluate
 
 
 class MockLabeler:
@@ -144,3 +143,125 @@ class TestEvaluate:
         per_entity = result["exact"]["per_entity"]
         assert per_entity["OG"]["f1"] == 1.0  # 2/2 correct
         assert per_entity["PS"]["f1"] == 0.0  # 0/1 correct
+
+
+class TestCollectDiffs:
+    """Tests for collect_diffs option in evaluate()."""
+
+    def test_diffs_not_returned_by_default(self):
+        """Without collect_diffs, result has no 'diffs' key."""
+        labeler = MockLabeler({})
+        result = evaluate([], labeler, show_progress=False)
+        assert "diffs" not in result
+
+    def test_diffs_returned_when_enabled(self):
+        """With collect_diffs=True, result includes 'diffs' list."""
+        spans = [{"text": "서울", "type": "LC"}]
+        rec = _make_record("0", [], [], spans, "서울에서")
+        labeler = MockLabeler({"서울에서": spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        assert "diffs" in result
+        assert isinstance(result["diffs"], list)
+        assert len(result["diffs"]) == 1
+
+    def test_diff_record_structure(self):
+        """Each diff entry has required fields."""
+        gold_spans = [{"text": "경찰", "type": "OG"}]
+        pred_spans = [{"text": "경찰", "type": "OG"}]
+        rec = _make_record("r1", [], [], gold_spans, "경찰이")
+        labeler = MockLabeler({"경찰이": pred_spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert diff["id"] == "r1"
+        assert diff["sentence"] == "경찰이"
+        assert "gold_spans" in diff
+        assert "pred_spans" in diff
+        assert "false_negatives" in diff
+        assert "false_positives" in diff
+        assert "boundary_errors" in diff
+
+    def test_perfect_match_no_errors(self):
+        """All spans match exactly → empty FN/FP/boundary lists."""
+        spans = [{"text": "경찰", "type": "OG"}, {"text": "서울", "type": "LC"}]
+        rec = _make_record("0", [], [], spans, "경찰 서울")
+        labeler = MockLabeler({"경찰 서울": spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert diff["false_negatives"] == []
+        assert diff["false_positives"] == []
+        assert diff["boundary_errors"] == []
+
+    def test_false_negative_detection(self):
+        """Gold span not in pred → false_negative."""
+        gold_spans = [
+            {"text": "경찰", "type": "OG"},
+            {"text": "김철수", "type": "PS"},
+        ]
+        pred_spans = [{"text": "경찰", "type": "OG"}]
+        rec = _make_record("0", [], [], gold_spans, "경찰 김철수")
+        labeler = MockLabeler({"경찰 김철수": pred_spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert len(diff["false_negatives"]) == 1
+        assert diff["false_negatives"][0] == {"text": "김철수", "type": "PS"}
+
+    def test_false_positive_detection(self):
+        """Pred span not in gold → false_positive."""
+        gold_spans = [{"text": "경찰", "type": "OG"}]
+        pred_spans = [
+            {"text": "경찰", "type": "OG"},
+            {"text": "서울", "type": "LC"},
+        ]
+        rec = _make_record("0", [], [], gold_spans, "경찰 서울")
+        labeler = MockLabeler({"경찰 서울": pred_spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert len(diff["false_positives"]) == 1
+        assert diff["false_positives"][0] == {"text": "서울", "type": "LC"}
+
+    def test_boundary_error_detection(self):
+        """Relaxed match but not exact → boundary_error."""
+        gold_spans = [{"text": "박", "type": "PS"}]
+        pred_spans = [{"text": "박씨", "type": "PS"}]
+        rec = _make_record("0", [], [], gold_spans, "박씨가")
+        labeler = MockLabeler({"박씨가": pred_spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert len(diff["boundary_errors"]) == 1
+        assert diff["boundary_errors"][0]["gold"] == {"text": "박", "type": "PS"}
+        assert diff["boundary_errors"][0]["pred"] == {"text": "박씨", "type": "PS"}
+
+    def test_type_mismatch_is_fn_and_fp(self):
+        """Same text but different type → FN for gold type + FP for pred type."""
+        gold_spans = [{"text": "한국", "type": "LC"}]
+        pred_spans = [{"text": "한국", "type": "OG"}]
+        rec = _make_record("0", [], [], gold_spans, "한국이")
+        labeler = MockLabeler({"한국이": pred_spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert len(diff["false_negatives"]) == 1
+        assert diff["false_negatives"][0] == {"text": "한국", "type": "LC"}
+        assert len(diff["false_positives"]) == 1
+        assert diff["false_positives"][0] == {"text": "한국", "type": "OG"}
+
+    def test_space_normalization_in_diffs(self):
+        """Space-normalized exact match → no errors."""
+        gold_spans = [{"text": "지난19일", "type": "DT"}]
+        pred_spans = [{"text": "지난 19일", "type": "DT"}]
+        rec = _make_record("0", [], [], gold_spans, "지난19일에")
+        labeler = MockLabeler({"지난19일에": pred_spans})
+        result = evaluate([rec], labeler, collect_diffs=True, show_progress=False)
+        diff = result["diffs"][0]
+        assert diff["false_negatives"] == []
+        assert diff["false_positives"] == []
+        assert diff["boundary_errors"] == []
+
+    def test_labeler_error_excluded_from_diffs(self):
+        """Records with labeler errors don't appear in diffs."""
+        spans = [{"text": "서울", "type": "LC"}]
+        rec_ok = _make_record("0", [], [], spans, "서울에서")
+        rec_err = _make_record("1", [], [], [{"text": "경찰", "type": "OG"}], "경찰이")
+        labeler = ErrorLabeler(error_texts={"경찰이"}, fallback_spans=spans)
+        result = evaluate([rec_ok, rec_err], labeler, collect_diffs=True, show_progress=False)
+        assert len(result["diffs"]) == 1
+        assert result["diffs"][0]["id"] == "0"

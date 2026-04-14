@@ -189,7 +189,7 @@ class TestLoadFromJsonl:
 
         # Monkey-patch the JSONL path to point to tmp_path
         import labelers.bio_dataset as bio_mod
-        original_load = bio_mod.load
+        _original_load = bio_mod.load  # noqa: F841 (kept for potential teardown)
 
         def patched_load(spec_name, split, max_samples=None):
             from pathlib import Path
@@ -279,7 +279,7 @@ class TestSmokeKMOU:
         for r in records:
             assert set(r.keys()) == {"id", "tokens", "bio_tags", "spans", "sentence"}
             for tag in r["bio_tags"]:
-                assert tag != "I", f"bare 'I' tag found — normalization failed"
+                assert tag != "I", "bare 'I' tag found — normalization failed"
                 assert "_" not in tag or tag == "O", f"underscore tag found: {tag}"
             assert r["sentence"] == " ".join(r["tokens"])
 
