@@ -8,7 +8,7 @@ from datasets.exceptions import DatasetNotFoundError as HFDatasetNotFoundError
 
 
 class NERRecord(dict):
-    """Standard NER record: tokens, ner_tags, id."""
+    """표준 NER 레코드: tokens, ner_tags, id."""
     tokens: List[str]
     ner_tags: List[str]
     id: str
@@ -18,7 +18,7 @@ class DatasetNotFoundError(Exception):
     pass
 
 
-# Columns differ across datasets; defaults cover most cases.
+# 데이터셋마다 컬럼명이 다르다. 기본값은 대부분의 경우를 커버한다.
 DATASET_COLUMN_MAP: dict[str, dict[str, str]] = {
     "klue": {"tokens": "tokens", "ner_tags": "ner_tags"},
     "kmounlp/NER": {"tokens": "words", "ner_tags": "ner"},
@@ -26,7 +26,9 @@ DATASET_COLUMN_MAP: dict[str, dict[str, str]] = {
 _DEFAULT_COLUMN_MAP = {"tokens": "tokens", "ner_tags": "ner_tags"}
 
 
-class DatasetLoader:
+class HFTokenDatasetLoader:
+    """HF 데이터셋에서 BIO 태그 (tokens/ner_tags) 형식 레코드를 로드한다."""
+
     def __init__(self, cache_dir: Optional[str] = None) -> None:
         self.cache_dir = cache_dir or os.environ.get(
             "HF_DATASETS_CACHE", "/work/.huggingface/datasets"
@@ -34,12 +36,14 @@ class DatasetLoader:
 
     def load(
         self,
-        name: str,
+        name: Optional[str] = None,
         config: Optional[str] = None,
         split: str = "train",
         max_samples: Optional[int] = None,
     ) -> List[dict]:
-        # Try JSONL fallback first (avoids Python 3.13 + datasets incompatibility)
+        if name is None:
+            raise ValueError("HFTokenDatasetLoader.load requires 'name'")
+        # JSONL 폴백을 먼저 시도한다 (Python 3.13 + datasets 비호환성 회피)
         jsonl_path = Path("/data/ner") / name.replace("/", "_") / f"{split}.jsonl"
         if jsonl_path.exists():
             return self._load_jsonl(jsonl_path, max_samples)
@@ -63,7 +67,7 @@ class DatasetLoader:
 
     @staticmethod
     def _load_jsonl(path: Path, max_samples: Optional[int] = None) -> List[dict]:
-        """Load pre-exported JSONL records."""
+        """사전 내보낸 JSONL 레코드를 로드한다."""
         records = []
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -79,7 +83,7 @@ class DatasetLoader:
         tokens_col = col_map["tokens"]
         tags_col = col_map["ner_tags"]
 
-        # Detect ClassLabel feature for automatic int → str conversion
+        # 정수 → 문자열 자동 변환을 위해 ClassLabel 피처를 감지한다
         features = hf_dataset.features
         tag_feature = features.get(tags_col)
         label_feature = None
@@ -99,12 +103,16 @@ class DatasetLoader:
                 ner_tags = [str(t) for t in raw_tags]
 
             record = {"tokens": tokens, "ner_tags": ner_tags, "id": str(i)}
-            # Preserve original sentence if available (e.g. KLUE NER)
+            # 원문 sentence가 있으면 보존한다 (예: KLUE NER)
             if "sentence" in row:
                 record["sentence"] = row["sentence"]
             records.append(record)
 
         return records
+
+
+# 하위 호환 별칭 (리팩터 이전 이름).
+DatasetLoader = HFTokenDatasetLoader
 
 
 if __name__ == "__main__":
