@@ -4,6 +4,14 @@
 
 현재 주요 모듈 경로는 `src/labelers/`이며, 새 모듈은 `src/` 하위에 추가한다.
 
+### augmenters/
+
+학습 데이터 증강 모듈. 상세: `src/augmenters/AGENTS.md`.
+
+| 서브모듈 | 역할 |
+|---------|------|
+| `pii/` | 합성 PII 주입기 — 기존 NER 데이터셋에 PII 엔티티를 삽입하고 span을 재계산하여 통합 학습 데이터셋 생성 (`python -m augmenters.pii`) |
+
 ### labelers/
 
 | 파일 | 역할 |
