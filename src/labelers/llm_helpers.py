@@ -22,7 +22,9 @@ def split_sentences(text: str, lang: str = "ko") -> List[str]:
         lang: 언어 힌트. "ja"이면 일본어 구두점(。！？)을 분리 집합에 추가한다.
     """
     if lang == "ja":
-        pattern = r'(?<=[.!?。！？])\s*|\n+'
+        # 일본어 구두점(。！？)은 공백 없이 분리, ASCII .!?는 공백이 뒤따를 때만 분리
+        # (예: "gmail.com"처럼 도메인·URL 내부의 점을 보호)
+        pattern = r'(?<=[。！？])\s*|(?<=[.!?])\s+|\n+'
     else:
         pattern = r'(?<=[.!?])\s+|\n+'
     parts = re.split(pattern, text.strip())

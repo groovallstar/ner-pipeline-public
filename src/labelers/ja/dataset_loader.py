@@ -6,11 +6,12 @@
 
 분할 전략: train 분할만 존재하므로 train_test_split(test_size=0.2, seed=42) 사용.
 """
+import json
+import os
+from pathlib import Path
 from typing import List, Optional
 
 from datasets import load_dataset
-
-import os
 
 
 class JapaneseDatasetLoader:
@@ -59,6 +60,45 @@ class JapaneseDatasetLoader:
             selected = selected.select(range(min(max_samples, len(selected))))
 
         return self._to_records(selected)
+
+    @staticmethod
+    def load_local(
+        path: str, max_samples: Optional[int] = None
+    ) -> List[dict]:
+        """로컬 JSONL 파일(PII 주입 결과 등)을 load()와 동일한 스키마로 읽는다.
+
+        입력 스키마: {text, entities:[{label,start_char,end_char,text}]}
+        출력 스키마: {id, text, gold_spans:[{text,type,start,end}]}
+        """
+        records: List[dict] = []
+        p = Path(path)
+        with open(p, encoding='utf-8') as f:
+            for i, line in enumerate(f):
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                text = data['text']
+                gold_spans = []
+                for ent in data.get('entities', []):
+                    gold_spans.append({
+                        'text': ent.get('text', ''),
+                        'type': ent.get('label', ent.get('type', '')),
+                        'start': int(ent.get(
+                            'start_char', ent.get('start', 0)
+                        )),
+                        'end': int(ent.get(
+                            'end_char', ent.get('end', 0)
+                        )),
+                    })
+                records.append({
+                    'id': str(data.get('id', i)),
+                    'text': text,
+                    'gold_spans': gold_spans,
+                })
+                if max_samples is not None and len(records) >= max_samples:
+                    break
+        return records
 
     @staticmethod
     def _to_records(dataset) -> List[dict]:
