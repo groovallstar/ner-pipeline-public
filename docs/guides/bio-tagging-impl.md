@@ -44,13 +44,3 @@ def extract_spans_from_bio(tokens, tags, lang="ko"):
 
 `src/labelers/tag_aligner.py:222-296` 의 `spans_to_syllable_bio`:
 - LLM span을 원문 character offset으로 매핑하므로 gold 토큰 단위와 무관하게 동작한다.
-
----
-
-## BIO 변환기 엣지 케이스 — 데이터셋 참조
-
-- `docs/wiki/concepts/bio-tagging.md` §4.2 — KLUE 음절 단위 사례
-- `docs/wiki/concepts/bio-tagging.md` §4.3 — WikiANN 어절 단위 사례
-- `docs/wiki/concepts/bio-tagging.md` §4.4 — KMOU 형태소 단위 + 비표준 BIO 사례
-
-KMOU 처리 전처리 요구사항: `I → I-<직전 B의 타입>`으로 치환하는 전처리가 로더에서 선행되어야 한다 (`src/labelers/dataset_loader.py` 로더 구현 참조).
