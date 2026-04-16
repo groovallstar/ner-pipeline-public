@@ -1,9 +1,9 @@
-"""BIO token-sequence NER dataset spec registry, loader, and span extractor.
+"""BIO 토큰 시퀀스 NER 데이터셋 스펙 레지스트리, 로더, span 추출기.
 
-Implements the tokenization-unit × BIO-variant × span extraction process
-documented in docs/ko/bio-span-process.md §2~§4.
+docs/ko/bio-span-process.md §2~§4에 문서화된
+토큰화 단위 × BIO 변형 × span 추출 처리 과정을 구현한다.
 
-Public API:
+공개 API:
     TokenUnit, DatasetSpec, REGISTRY,
     DatasetNotFoundError,
     normalize_bio_variant, extract_spans, load
@@ -21,29 +21,29 @@ from datasets.exceptions import DatasetNotFoundError as HFDatasetNotFoundError
 
 
 class DatasetNotFoundError(Exception):
-    """Raised when a dataset spec is not in the REGISTRY or HF load fails."""
+    """데이터셋 스펙이 REGISTRY에 없거나 HF 로드에 실패할 때 발생한다."""
 
 
 class TokenUnit(str, Enum):
-    """Tokenization granularity of a NER dataset."""
-    SYLLABLE = "syllable"   # KLUE: character-level with explicit space tokens
-    WORD = "word"           # WikiANN-style: whitespace-split words
-    MORPHEME = "morpheme"   # KMOU/Stockmark: morphological analysis units
+    """NER 데이터셋의 토큰화 단위."""
+    SYLLABLE = "syllable"   # KLUE: 명시적 공백 토큰을 포함한 음절 수준
+    WORD = "word"           # WikiANN 방식: 공백 분리 단어
+    MORPHEME = "morpheme"   # KMOU/Stockmark: 형태소 분석 단위
 
 
 @dataclass(frozen=True)
 class DatasetSpec:
-    """Immutable metadata for a BIO token-sequence NER dataset."""
-    name: str               # HuggingFace dataset name
-    lang: str               # language code (e.g. "ko")
+    """BIO 토큰 시퀀스 NER 데이터셋의 불변 메타데이터."""
+    name: str               # HuggingFace 데이터셋 이름
+    lang: str               # 언어 코드 (예: "ko")
     unit: TokenUnit
     bio_variant: str        # "iob2" | "kmou_i_alone"
-    joiner: str             # token joiner for span text reconstruction
-    config: Optional[str] = None  # HF datasets config name
+    joiner: str             # span 텍스트 재구성용 토큰 결합자
+    config: Optional[str] = None  # HF datasets 설정 이름
 
 
 # ---------------------------------------------------------------------------
-# Registry — initial entries: Korean only
+# 레지스트리 — 초기 항목: 한국어 전용
 # ---------------------------------------------------------------------------
 
 REGISTRY: dict[str, DatasetSpec] = {
@@ -55,9 +55,9 @@ REGISTRY: dict[str, DatasetSpec] = {
         joiner="",
         config="ner",
     ),
-    # nlp-kmu/kor_ner is the HF-cached version of github.com/kmounlp/NER.
-    # Morpheme-level tokens (particles split from stems).
-    # ClassLabel names: ["I", "O", "B_OG", "B_TI", "B_LC", "B_DT", "B_PS"]
+    # nlp-kmu/kor_ner는 github.com/kmounlp/NER의 HF 캐시 버전이다.
+    # 형태소 수준 토큰(어간에서 조사 분리).
+    # ClassLabel 이름: ["I", "O", "B_OG", "B_TI", "B_LC", "B_DT", "B_PS"]
     "nlp-kmu/kor_ner": DatasetSpec(
         name="nlp-kmu/kor_ner",
         lang="ko",
@@ -70,15 +70,15 @@ REGISTRY: dict[str, DatasetSpec] = {
 
 
 # ---------------------------------------------------------------------------
-# BIO variant normalization
+# BIO 변형 정규화
 # ---------------------------------------------------------------------------
 
 def normalize_bio_variant(tags: List[str], variant: str) -> List[str]:
-    """Convert dataset-specific BIO tags to standard IOB2.
+    """데이터셋별 BIO 태그를 표준 IOB2로 변환한다.
 
-    Supported variants:
-        "iob2"          — identity (already standard)
-        "kmou_i_alone"  — B_TYPE → B-TYPE, standalone I → I-{prev_type}
+    지원 변형:
+        "iob2"          — 항등 변환 (이미 표준)
+        "kmou_i_alone"  — B_TYPE → B-TYPE, 단독 I → I-{prev_type}
     """
     if variant == "iob2":
         return list(tags)
@@ -113,7 +113,7 @@ def normalize_bio_variant(tags: List[str], variant: str) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
-# Span extraction from IOB2 tags
+# IOB2 태그에서 span 추출
 # ---------------------------------------------------------------------------
 
 def extract_spans(
@@ -121,15 +121,15 @@ def extract_spans(
     bio_tags: List[str],
     joiner: str,
 ) -> List[dict]:
-    """Extract entity spans from IOB2-tagged token sequence.
+    """IOB2 태그가 붙은 토큰 시퀀스에서 엔티티 span을 추출한다.
 
     Args:
-        tokens: Token list (may contain whitespace-only tokens for syllable-level).
-        bio_tags: IOB2 tags aligned 1:1 with tokens.
-        joiner: String used to join tokens within a span ("" for syllable, " " for word/morpheme).
+        tokens: 토큰 리스트 (음절 수준의 경우 공백만 있는 토큰 포함 가능).
+        bio_tags: 토큰과 1:1로 정렬된 IOB2 태그.
+        joiner: span 내 토큰 결합 문자열 (음절은 "", 단어/형태소는 " ").
 
     Returns:
-        List of {"text": str, "type": str} dicts.
+        {"text": str, "type": str} 딕셔너리의 리스트.
     """
     spans: List[dict] = []
     current_chars: List[str] = []
@@ -137,24 +137,24 @@ def extract_spans(
 
     for tok, tag in zip(tokens, bio_tags):
         if tag.startswith("B-"):
-            # Flush any in-progress span
+            # 진행 중인 span을 플러시한다
             if current_chars and current_type:
                 spans.append({"text": joiner.join(current_chars), "type": current_type})
-            # Start new span
+            # 새 span 시작
             current_type = tag[2:]
             current_chars = [tok] if tok.strip() else []
         elif tag.startswith("I-") and current_type and tag[2:] == current_type:
-            # Continue current span
+            # 현재 span을 이어간다
             if tok.strip():
                 current_chars.append(tok)
         else:
-            # O or mismatching I-: flush and reset
+            # O 또는 타입 불일치 I-: 플러시 후 초기화
             if current_chars and current_type:
                 spans.append({"text": joiner.join(current_chars), "type": current_type})
             current_chars = []
             current_type = ""
 
-    # Flush trailing span
+    # 마지막 span 플러시
     if current_chars and current_type:
         spans.append({"text": joiner.join(current_chars), "type": current_type})
 
@@ -162,7 +162,7 @@ def extract_spans(
 
 
 # ---------------------------------------------------------------------------
-# End-to-end loader
+# 엔드투엔드 로더
 # ---------------------------------------------------------------------------
 
 def load(
@@ -170,26 +170,26 @@ def load(
     split: str,
     max_samples: Optional[int] = None,
 ) -> List[dict]:
-    """Load a BIO NER dataset end-to-end: HF load → IOB2 normalize → span extract.
+    """BIO NER 데이터셋을 엔드투엔드로 로드한다: HF 로드 → IOB2 정규화 → span 추출.
 
     Args:
-        spec_name: Key in REGISTRY (e.g. "klue", "nlp-kmu/kor_ner").
-        split: Dataset split (e.g. "train", "validation", "test").
-        max_samples: Limit the number of records returned.
+        spec_name: REGISTRY의 키 (예: "klue", "nlp-kmu/kor_ner").
+        split: 데이터셋 분할 (예: "train", "validation", "test").
+        max_samples: 반환할 레코드 수 제한.
 
     Returns:
-        List of records: {"id": str, "tokens": list[str], "bio_tags": list[str],
-                          "spans": list[{"text": str, "type": str}]}
+        레코드 리스트: {"id": str, "tokens": list[str], "bio_tags": list[str],
+                        "spans": list[{"text": str, "type": str}]}
 
     Raises:
-        DatasetNotFoundError: If spec_name is not in REGISTRY or HF load fails.
+        DatasetNotFoundError: spec_name이 REGISTRY에 없거나 HF 로드에 실패한 경우.
     """
     try:
         spec = REGISTRY[spec_name]
     except KeyError:
         raise DatasetNotFoundError(f"unknown spec: {spec_name!r}")
 
-    # Try JSONL fallback first (avoids Python 3.13 + datasets incompatibility)
+    # JSONL 폴백을 먼저 시도한다 (Python 3.13 + datasets 비호환성 회피)
     jsonl_path = Path("/data/ner") / spec.name.replace("/", "_") / f"{split}.jsonl"
     if jsonl_path.exists():
         return _load_from_jsonl(jsonl_path, spec, max_samples)
@@ -210,7 +210,7 @@ def load(
     if max_samples is not None:
         hf_dataset = hf_dataset.select(range(min(max_samples, len(hf_dataset))))
 
-    # Detect ClassLabel for int → str conversion
+    # 정수 → 문자열 변환을 위해 ClassLabel을 감지한다
     features = hf_dataset.features
     tag_feature = features.get("ner_tags")
     label_feature = None
@@ -224,7 +224,7 @@ def load(
         tokens = list(row["tokens"])
         raw_tags = row["ner_tags"]
 
-        # Decode int tags to strings via ClassLabel when available
+        # ClassLabel이 있을 때 정수 태그를 문자열로 디코딩한다
         if label_feature is not None and isinstance(label_feature, ClassLabel):
             raw_tags_str = [label_feature.int2str(t) for t in raw_tags]
         else:
@@ -238,6 +238,7 @@ def load(
             "tokens": tokens,
             "bio_tags": bio_tags,
             "spans": spans,
+            "sentence": spec.joiner.join(tokens),
         })
 
     return records
@@ -248,7 +249,7 @@ def _load_from_jsonl(
     spec: DatasetSpec,
     max_samples: Optional[int],
 ) -> List[dict]:
-    """Load pre-exported JSONL records and apply BIO normalization + span extraction."""
+    """사전 내보낸 JSONL 레코드를 로드하고 BIO 정규화 + span 추출을 적용한다."""
     raw_records: List[dict] = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -270,6 +271,7 @@ def _load_from_jsonl(
             "tokens": tokens,
             "bio_tags": bio_tags,
             "spans": spans,
+            "sentence": spec.joiner.join(tokens),
         })
 
     return records

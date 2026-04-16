@@ -1,4 +1,4 @@
-"""HuggingFace token-classification NER labeler for benchmark baseline."""
+"""벤치마크 베이스라인용 HuggingFace 토큰 분류 NER 라벨러."""
 
 import logging
 from typing import List, Optional
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class HFNERLabeler:
-    """Wraps a HuggingFace token-classification model for NER inference."""
+    """NER 추론을 위해 HuggingFace 토큰 분류 모델을 래핑한다."""
 
     def __init__(
         self,
@@ -38,12 +38,12 @@ class HFNERLabeler:
             aggregation_strategy="none",
         )
 
-        # Build label normalization map from model config
+        # 모델 설정에서 레이블 정규화 맵을 구성한다
         self._id2label = self._model.config.id2label
         logger.info("Loaded HF model %s with labels: %s", model_name, list(self._id2label.values()))
 
     def label(self, text: str) -> List[dict]:
-        """Label text, returning NERRecords compatible with benchmark runner."""
+        """텍스트를 라벨링하여 벤치마크 러너와 호환되는 NERRecord를 반환한다."""
         tokens = text.split()
         if not tokens:
             return []
@@ -51,38 +51,38 @@ class HFNERLabeler:
         return [{"tokens": tokens, "ner_tags": bio_tags, "id": "0"}]
 
     def label_sentence(self, tokens: List[str]) -> List[str]:
-        """Label pre-tokenized tokens, returning BIO tags aligned to input tokens.
+        """사전 토큰화된 토큰을 라벨링하여 입력 토큰에 정렬된 BIO 태그를 반환한다.
 
-        Uses the HF pipeline on reconstructed text, then maps subword predictions
-        back to the original token boundaries via character offsets.
+        재구성된 텍스트에 HF 파이프라인을 적용한 후, 문자 오프셋을 통해
+        서브워드 예측을 원래 토큰 경계에 매핑한다.
         """
         text = " ".join(tokens)
         return self._predict_and_align(text, tokens)
 
     def label_syllables(self, text: str, syllable_tokens: List[str]) -> List[str]:
-        """Label text and align predictions to KLUE-style syllable tokens.
+        """텍스트를 라벨링하여 KLUE 방식 음절 토큰에 예측을 정렬한다.
 
         Args:
-            text: Original sentence text (word-segmented, no entity annotations).
-            syllable_tokens: KLUE syllable tokens (including space tokens).
+            text: 원문 문장 텍스트 (단어 분절, 엔티티 어노테이션 없음).
+            syllable_tokens: KLUE 음절 토큰 (공백 토큰 포함).
 
         Returns:
-            BIO tags aligned to syllable_tokens.
+            syllable_tokens에 정렬된 BIO 태그.
         """
         return self._predict_and_align(text, syllable_tokens)
 
     def _predict_and_align(self, text: str, tokens: List[str]) -> List[str]:
-        """Run HF pipeline and align predictions to arbitrary token grid via char offsets."""
+        """HF 파이프라인을 실행하고 문자 오프셋을 통해 임의 토큰 그리드에 예측을 정렬한다."""
         if not text.strip():
             return ["O"] * len(tokens)
 
         raw_preds = self._pipe(text)
 
-        # Build char→token index map from the original text
-        # For syllable tokens, we need to map against the original text character positions
+        # 원문 텍스트에서 문자 → 토큰 인덱스 맵을 구성한다
+        # 음절 토큰의 경우 원문 문자 위치에 대해 매핑해야 한다
         char_to_tok = self._build_char_map(text, tokens)
 
-        # Map subword predictions to token-level tags
+        # 서브워드 예측을 토큰 수준 태그로 매핑한다
         token_tags = ["O"] * len(tokens)
         token_scores = [0.0] * len(tokens)
 
@@ -102,7 +102,7 @@ class HFNERLabeler:
                     token_scores[tok_idx] = score
                     token_tags[tok_idx] = normalize_tag(entity_label, lang=self.lang)
 
-        # Fix B/I continuity: consecutive same-entity tokens should be I- after first B-
+        # B/I 연속성 보정: 연속된 동일 엔티티 토큰은 첫 B- 이후 I-여야 한다
         prev_entity = None
         for i in range(len(token_tags)):
             tag = token_tags[i]
@@ -122,25 +122,25 @@ class HFNERLabeler:
 
     @staticmethod
     def _build_char_map(text: str, tokens: List[str]) -> dict:
-        """Build character-position to token-index map.
+        """문자 위치에서 토큰 인덱스로의 맵을 구성한다.
 
-        Handles both word-level tokens (split by space) and KLUE syllable tokens
-        by greedily matching each token against the text.
+        각 토큰을 텍스트에 탐욕적으로 매핑하여 단어 수준 토큰과
+        KLUE 음절 토큰을 모두 처리한다.
         """
         char_to_tok = {}
         text_pos = 0
 
         for tok_idx, tok in enumerate(tokens):
             if tok.strip() == "":
-                # Space token: skip one space character in text
+                # 공백 토큰: 텍스트에서 공백 문자 하나를 건너뛴다
                 if text_pos < len(text) and text[text_pos] == " ":
                     text_pos += 1
                 continue
 
-            # Find this token in text starting from current position
+            # 현재 위치부터 텍스트에서 이 토큰을 찾는다
             found = text.find(tok, text_pos)
             if found == -1:
-                # Try single character match for syllable tokens
+                # 음절 토큰을 위해 단일 문자 매칭을 시도한다
                 if len(tok) == 1 and text_pos < len(text):
                     if text[text_pos] == tok:
                         char_to_tok[text_pos] = tok_idx

@@ -49,6 +49,12 @@ bash docker/vllm/logs.sh
 
 포트 11434. 모델은 `/data/.ollama/`에 캐시.
 
+## 이미지 Pull 규칙
+
+- `:latest` 태그 사용 금지. 항상 명시된 버전 태그로 pin 한다 (예: `python:3.12.7-slim`, `pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel`).
+- 최신 이미지를 받아야 할 때는 Docker Hub/GHCR에서 **최신 안정 버전 태그를 확인한 뒤 그 버전을 명시**한다.
+- 이유: `:latest`는 빌드 재현성을 깨고, 무인지 업그레이드로 회귀·환경 불일치를 유발한다.
+
 ## 환경 변수
 
 - `HF_DATASETS_CACHE=/work/.huggingface/`

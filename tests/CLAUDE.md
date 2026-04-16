@@ -3,7 +3,7 @@
 ## 실행
 
 ```bash
-PYTHONPATH=src pytest tests/ -v
+pytest tests/ -v
 ```
 
 ## 테스트 프레임워크
@@ -15,7 +15,7 @@ PYTHONPATH=src pytest tests/ -v
 
 - 단위 테스트: 개별 labeler, span_matcher, metrics 함수
 - 통합 테스트: 데이터셋 로딩 → 라벨링 → 평가 파이프라인
-- 벤치마크: `python -m evaluators` CLI로 실행 (tests/ 외부)
+- 벤치마크: `python -m llm_eval` CLI로 실행 (tests/ 외부)
 
 ## 주의사항
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # 모델 다운로드 → vLLM 로드 → 벤치마크 실행 자동화
 # 사용법: bash load-and-bench.sh <모델명> [벤치마크 출력 파일명]
-# 예시:  bash load-and-bench.sh Jackrong/Qwen3.5-35B-A3B-Claude-4.6-Opus-Reasoning-Distilled
+# 예시:  bash load-and-bench.sh Qwen/Qwen3.5-35B-A3B
 
 set -e
 
@@ -25,7 +25,7 @@ echo "=========================================="
 echo ""
 echo "[1/4] 모델 다운로드 중..."
 cd "$PROJECT_DIR"
-PYTHONPATH=src .venv/bin/python -c "
+.venv/bin/python -c "
 from huggingface_hub import snapshot_download
 snapshot_download('$MODEL', cache_dir='/work/.huggingface')
 print('Download complete')
@@ -78,7 +78,7 @@ done
 echo ""
 echo "[4/4] 벤치마크 실행 중..."
 cd "$PROJECT_DIR"
-PYTHONPATH=src .venv/bin/python -m evaluators.error_analysis \
+.venv/bin/python -m llm_eval.error_analysis \
   --models "vllm:$MODEL" \
   --vllm-url "$VLLM_URL" \
   --max-samples 50 \

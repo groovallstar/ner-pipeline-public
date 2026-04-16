@@ -1,6 +1,6 @@
 services:
   ollama:
-    image: ollama/ollama:0.19.0
+    image: ollama/ollama:0.20.6
     container_name: ollama-server
     env_file:
       - ./config/.env
