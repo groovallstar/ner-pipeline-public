@@ -1,0 +1,93 @@
+# docs/issues/ — 이슈 문서 보관소
+
+GitHub Issues의 계획·결과 스냅샷을 누적 보관하는 디렉토리다. 실시간 협의·승인 기록은 GitHub Issue 본문·댓글이 **단일 출처(single source of truth)**이고, 이 디렉토리는 기능 설계·구현 히스토리를 **영구 보존**하는 용도로만 쓴다.
+
+운영 전반 규칙은 프로젝트 루트 `CLAUDE.md` → "이슈 관리" 섹션 참조.
+
+## 디렉토리 구조
+
+```
+docs/issues/
+├── README.md                          # 이 파일 (규칙·템플릿)
+└── issue-{번호}-{슬러그}/
+    ├── plan.md                        # 구현 계획 (3~6단계 체크박스)
+    └── report.md                      # 최종 결과 보고서
+```
+
+- `{번호}`: GitHub Issue 번호 (gh가 부여한 자동 채번 값)
+- `{슬러그}`: kebab-case 영문 요약 — 브랜치 슬러그와 동일하게 맞춘다. 예) `vi-crawler`, `ja-pii-verify`, `span-evaluator-fix`
+
+## 작성 시점
+
+| 파일 | 작성 시점 | 커밋 대상 브랜치 |
+|---|---|---|
+| `plan.md` | 3단계(구현 계획 승인) 직후 | `feat/issue-{N}-slug` |
+| `report.md` | 5단계(마무리)에서 PR 생성 직전 | `feat/issue-{N}-slug` |
+
+`plan.md`는 Issue 본문/댓글 내용을 복사·정리해 저장한다. Issue 쪽 체크박스가 바뀌어도 `plan.md`는 **승인 시점 스냅샷**으로 남기는 것이 원칙이다.
+
+## plan.md 템플릿
+
+```markdown
+# issue-{N}: {제목}
+
+- Issue: https://github.com/groovallstar/ner_pipeline/issues/{N}
+- 브랜치: `feat/issue-{N}-{슬러그}`
+- 승인일: YYYY-MM-DD
+
+## 목적
+<!-- 왜 이 작업이 필요한가 -->
+
+## 범위
+- 포함:
+- 제외:
+
+## 성공 기준
+- [ ] 테스트:
+- [ ] 문서 갱신:
+- [ ] 메트릭/검증:
+
+## 구현 단계 (3~6)
+- [ ] 1.
+- [ ] 2.
+- [ ] 3.
+
+## 위험·의존성
+<!-- 외부 서비스, 데이터, 백엔드 가용성 등 -->
+```
+
+## report.md 템플릿
+
+```markdown
+# issue-{N} 결과 보고서
+
+- Issue: https://github.com/groovallstar/ner_pipeline/issues/{N}
+- PR: https://github.com/groovallstar/ner_pipeline/pull/{PR번호}
+- 브랜치: `feat/issue-{N}-{슬러그}`
+- 완료일: YYYY-MM-DD
+
+## 변경 요약
+<!-- 무엇을 어떻게 바꿨는가 — 3~5줄 -->
+
+## 구현 결과 (계획 대비)
+- [x] 1. ... (완료)
+- [x] 2. ... (완료)
+- [ ] 3. ... (보류·이월 시 사유 명시)
+
+## 검증
+- 테스트: 명령어 / 결과 (pass·fail, 관련 파일)
+- 메트릭(해당 시): F1 / latency / throughput — 변경 전후 비교
+- 리뷰어 확인 사항:
+
+## 관련 커밋
+- `<hash>`:
+- `<hash>`:
+
+## 후속 작업·알려진 한계
+<!-- 분리된 이슈 번호 또는 TODO -->
+```
+
+## 주의
+
+- `docs/issues/`는 **보관용**이다. 구현 전략이 변하면 Issue 쪽을 먼저 갱신하고, 필요 시 `plan.md`를 추가 커밋(`refs #N`)으로 수정한다.
+- 타 `docs/` 폴더와 역할이 겹치지 않게 한다. 이 폴더는 **이슈별 히스토리**만 담고, 도메인 지식·실행 가이드·엔티티 스펙 등은 해당 폴더에 맡긴다. 전체 구조는 루트 `CLAUDE.md`의 디렉토리 트리 참조.
