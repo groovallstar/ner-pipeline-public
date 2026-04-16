@@ -64,10 +64,20 @@ class BaseVllmLabeler:
         sentences = split_sentences(text, lang=self.lang)
         return asyncio.run(self._label_sentences(sentences, id_offset=0))
 
-    def label_spans(self, text: str) -> List[dict]:
-        """BIO 변환 없이 원시 엔티티 span을 반환한다."""
-        sentences = split_sentences(text, lang=self.lang)
-        non_empty = [s for s in sentences if s.strip()]
+    def label_spans(self, text: str, split: bool = True) -> List[dict]:
+        """BIO 변환 없이 원시 엔티티 span을 반환한다.
+
+        Args:
+            text: 입력 텍스트.
+            split: True이면 문장 분리 후 각 문장을 독립 LLM 호출로 처리
+                (벤치마크 기본). False이면 전체 텍스트를 단일 프롬프트로
+                전달하여 문맥을 유지 (검증 용도 권장).
+        """
+        if split:
+            sentences = split_sentences(text, lang=self.lang)
+            non_empty = [s for s in sentences if s.strip()]
+        else:
+            non_empty = [text] if text.strip() else []
 
         async def _get_spans():
             tasks = [self._chat(s) for s in non_empty]

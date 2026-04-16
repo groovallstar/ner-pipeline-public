@@ -39,6 +39,40 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--pii-max', type=int, default=3,
                    help='Max PII injected per sample (truncates density)')
     p.add_argument('--seed', type=int, default=42)
+
+    # 주입 모드
+    p.add_argument(
+        '--mode', choices=['suffix', 'llm'], default='suffix',
+        help='Injection mode: suffix (rule-based) or llm (natural)',
+    )
+    p.add_argument(
+        '--llm-concurrency', type=int, default=16,
+        help='Max concurrent LLM requests for --mode llm',
+    )
+
+    # 교차 검증 옵션
+    p.add_argument(
+        '--verify', choices=['off', 'vllm'], default='off',
+        help='Cross-verify injected entities via LLM',
+    )
+    p.add_argument(
+        '--verify-policy',
+        choices=['drop_span', 'drop_record', 'keep_all'],
+        default='drop_span',
+        help='Policy for unconfirmed entities (default: drop_span)',
+    )
+    p.add_argument(
+        '--vllm-url', type=str, default='http://localhost:8081/v1',
+        help='vLLM server URL for verification',
+    )
+    p.add_argument(
+        '--vllm-model', type=str, default='Qwen/Qwen3.5-27B',
+        help='vLLM model name for verification',
+    )
+    p.add_argument(
+        '--verify-concurrency', type=int, default=32,
+        help='Max concurrent requests to vLLM during verification',
+    )
     return p
 
 
@@ -88,17 +122,83 @@ def main(argv: list[str] | None = None) -> int:
     records = _load_records(args)
     logger.info('Loaded %d records', len(records))
 
-    injector = PIIInjector(cfg)
-
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     injected = []
-    with open(out_path, 'w', encoding='utf-8') as f:
-        for rec in injector.inject_dataset(records):
-            f.write(json.dumps(rec.to_dict(), ensure_ascii=False) + '\n')
+    if args.mode == 'llm':
+        from augmenters.pii.llm_injector import LLMInjector, VllmClient
+        client = VllmClient(
+            base_url=args.vllm_url,
+            model=args.vllm_model,
+            concurrency=args.llm_concurrency,
+        )
+        density = _truncate_density(cfg.density, args.pii_max)
+        llm_injector = LLMInjector(
+            client=client,
+            lang=args.lang,
+            seed=args.seed,
+            density=density,
+        )
+        logger.info(
+            'LLM injection mode (model=%s)', args.vllm_model,
+        )
+        for rec in llm_injector.inject_dataset(records):
             injected.append(rec)
+    else:
+        injector = PIIInjector(cfg)
+        for rec in injector.inject_dataset(records):
+            injected.append(rec)
+
+    with open(out_path, 'w', encoding='utf-8') as f:
+        for rec in injected:
+            f.write(
+                json.dumps(rec.to_dict(), ensure_ascii=False)
+                + '\n'
+            )
     logger.info('Wrote %d records to %s', len(injected), out_path)
+
+    # 교차 검증
+    if args.verify == 'vllm':
+        from augmenters.pii.verifier import PIIVerifier, VerifyPolicy
+        from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+        labeler = VllmNERLabeler(
+            base_url=args.vllm_url,
+            model=args.vllm_model,
+            concurrency=args.verify_concurrency,
+        )
+        policy = VerifyPolicy(args.verify_policy)
+        verifier = PIIVerifier(labeler, policy=policy)
+        logger.info(
+            'Verifying %d records (policy=%s, model=%s)',
+            len(injected), policy.value, args.vllm_model,
+        )
+        injected, verify_report = verifier.verify_dataset(injected)
+        logger.info(
+            'Verification done: confirmed=%d missed=%d '
+            'conflict=%d dropped=%d kept=%d',
+            verify_report['confirmed_count'],
+            verify_report['missed_count'],
+            verify_report['conflict_count'],
+            verify_report['dropped_count'],
+            verify_report['kept_count'],
+        )
+        # 검증 후 JSONL 재작성
+        with open(out_path, 'w', encoding='utf-8') as f:
+            for rec in injected:
+                f.write(
+                    json.dumps(rec.to_dict(), ensure_ascii=False)
+                    + '\n'
+                )
+        logger.info('Rewrote %d verified records to %s',
+                     len(injected), out_path)
+        # 검증 리포트 저장
+        verify_path = out_path.with_name(
+            out_path.stem + '.verify.json'
+        )
+        with open(verify_path, 'w', encoding='utf-8') as f:
+            json.dump(verify_report, f, ensure_ascii=False, indent=2)
+        logger.info('Wrote verify report to %s', verify_path)
 
     stats = compute_stats(injected)
     stats_path = out_path.with_name(out_path.stem + '.stats.json')
