@@ -63,11 +63,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         '--vllm-url', type=str, default='http://localhost:8081/v1',
-        help='vLLM server URL for verification',
+        help='Default vLLM URL (fallback for inject/verify)',
     )
     p.add_argument(
         '--vllm-model', type=str, default='Qwen/Qwen3.5-27B',
-        help='vLLM model name for verification',
+        help='Default vLLM model (fallback for inject/verify)',
+    )
+    p.add_argument(
+        '--inject-url', type=str, default=None,
+        help='LLM injection vLLM URL (overrides --vllm-url)',
+    )
+    p.add_argument(
+        '--inject-model', type=str, default=None,
+        help='LLM injection model name (overrides --vllm-model)',
+    )
+    p.add_argument(
+        '--verify-url', type=str, default=None,
+        help='Cross-verification vLLM URL (overrides --vllm-url)',
+    )
+    p.add_argument(
+        '--verify-model', type=str, default=None,
+        help='Cross-verification model name (overrides --vllm-model)',
     )
     p.add_argument(
         '--verify-concurrency', type=int, default=32,
@@ -128,9 +144,11 @@ def main(argv: list[str] | None = None) -> int:
     injected = []
     if args.mode == 'llm':
         from augmenters.pii.llm_injector import LLMInjector, VllmClient
+        inject_url = args.inject_url or args.vllm_url
+        inject_model = args.inject_model or args.vllm_model
         client = VllmClient(
-            base_url=args.vllm_url,
-            model=args.vllm_model,
+            base_url=inject_url,
+            model=inject_model,
             concurrency=args.llm_concurrency,
         )
         density = _truncate_density(cfg.density, args.pii_max)
@@ -141,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
             density=density,
         )
         logger.info(
-            'LLM injection mode (model=%s)', args.vllm_model,
+            'LLM injection mode (model=%s url=%s)', inject_model, inject_url,
         )
         for rec in llm_injector.inject_dataset(records):
             injected.append(rec)
@@ -162,16 +180,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.verify == 'vllm':
         from augmenters.pii.verifier import PIIVerifier, VerifyPolicy
         from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+        verify_url = args.verify_url or args.vllm_url
+        verify_model = args.verify_model or args.vllm_model
         labeler = VllmNERLabeler(
-            base_url=args.vllm_url,
-            model=args.vllm_model,
+            base_url=verify_url,
+            model=verify_model,
             concurrency=args.verify_concurrency,
         )
         policy = VerifyPolicy(args.verify_policy)
         verifier = PIIVerifier(labeler, policy=policy)
         logger.info(
-            'Verifying %d records (policy=%s, model=%s)',
-            len(injected), policy.value, args.vllm_model,
+            'Verifying %d records (policy=%s, model=%s, url=%s)',
+            len(injected), policy.value, verify_model, verify_url,
         )
         injected, verify_report = verifier.verify_dataset(injected)
         logger.info(

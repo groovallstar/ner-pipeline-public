@@ -55,6 +55,7 @@ class BaseOpenAILabeler:
         self._semaphore = asyncio.Semaphore(concurrency)
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
+        self._reasoning_effort = os.environ.get('OPENAI_REASONING_EFFORT')
 
     def label(self, text: str) -> List[dict]:
         """텍스트를 라벨링한다. 문장당 하나의 NERRecord 리스트를 반환한다."""
@@ -108,21 +109,22 @@ class BaseOpenAILabeler:
         return [r for r in records if r and r["tokens"]]  # type: ignore[misc]
 
     def label_spans(self, text: str) -> List[dict]:
-        """BIO 변환 없이 원시 엔티티 span을 반환한다 (비동기 병렬 처리)."""
+        """BIO 변환 없이 원시 엔티티 span을 반환한다 (동기 래퍼)."""
+        return asyncio.run(self.alabel_spans(text))
+
+    async def alabel_spans(self, text: str) -> List[dict]:
+        """label_spans의 async 버전. 외부 event loop 내에서 호출 가능."""
         sentences = split_sentences(text, lang=self.lang)
         non_empty = [s for s in sentences if s.split()]
         batches = self._make_batches(non_empty)
 
-        async def _run():
-            tasks = [self._call_api_batch_async(batch) for batch in batches]
-            results = await asyncio.gather(*tasks)
-            all_spans = []
-            for batch_spans in results:
-                for spans in batch_spans:
-                    all_spans.extend(spans)
-            return all_spans
-
-        return asyncio.run(_run())
+        tasks = [self._call_api_batch_async(batch) for batch in batches]
+        results = await asyncio.gather(*tasks)
+        all_spans = []
+        for batch_spans in results:
+            for spans in batch_spans:
+                all_spans.extend(spans)
+        return all_spans
 
     def _make_batches(self, sentences: List[str]) -> List[List[str]]:
         batches = []
@@ -158,6 +160,10 @@ class BaseOpenAILabeler:
     def _call_api_batch_sync(self, sentences: List[str]) -> str:
         sentences_str = "\n".join(f"{i}: {s}" for i, s in enumerate(sentences))
         prompt = self._user_prompt_template.format(sentences=sentences_str)
+        extra = (
+            {'reasoning_effort': self._reasoning_effort}
+            if self._reasoning_effort else {}
+        )
         try:
             response = self._client.chat.completions.create(
                 model=self.model,
@@ -167,6 +173,7 @@ class BaseOpenAILabeler:
                 ],
                 response_format={"type": "json_object"},
                 temperature=1,
+                **extra,
             )
             if response.usage:
                 self.total_prompt_tokens += response.usage.prompt_tokens or 0
@@ -179,6 +186,10 @@ class BaseOpenAILabeler:
     async def _call_api_batch_async(self, sentences: List[str]) -> List[List[dict]]:
         sentences_str = "\n".join(f"{i}: {s}" for i, s in enumerate(sentences))
         prompt = self._user_prompt_template.format(sentences=sentences_str)
+        extra = (
+            {'reasoning_effort': self._reasoning_effort}
+            if self._reasoning_effort else {}
+        )
         async with self._semaphore:
             try:
                 response = await self._async_client.chat.completions.create(
@@ -189,6 +200,7 @@ class BaseOpenAILabeler:
                     ],
                     response_format={"type": "json_object"},
                     temperature=1,
+                    **extra,
                 )
                 if response.usage:
                     self.total_prompt_tokens += response.usage.prompt_tokens or 0

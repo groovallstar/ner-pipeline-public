@@ -151,6 +151,7 @@ def main():
     )
     parser.add_argument("--lang", default="ko", choices=["ko", "ja", "vi"], help="Language (default: ko)")
     parser.add_argument("--dataset", default=None, help="Dataset name (default: klue for ko, stockmark for ja)")
+    parser.add_argument("--local-file", default=None, help="Local JSONL gold file (e.g. PII-injected dataset); ja only")
     parser.add_argument("--config", default="ner", help="Dataset config (default: ner)")
     parser.add_argument("--split", default=None, help="Dataset split (default: validation for ko, test for ja)")
     parser.add_argument("--max-samples", type=int, default=None, help="Limit number of samples")
@@ -187,6 +188,11 @@ def _load_gold(args):
     """언어별 gold 레코드를 로드한다."""
     if args.lang == "ja":
         from labelers.ja.dataset_loader import JapaneseDatasetLoader
+        if args.local_file:
+            print(f"Loading gold data (local): {args.local_file}")
+            return JapaneseDatasetLoader.load_local(
+                args.local_file, max_samples=args.max_samples,
+            )
         print(f"Loading gold data: {args.dataset} [{args.split}]")
         loader = JapaneseDatasetLoader()
         return loader.load(name=args.dataset, split=args.split, max_samples=args.max_samples)
@@ -212,6 +218,7 @@ def _run_benchmark(args):
         compute_bertscore=not args.no_bertscore,
         lang=args.lang,
         eval_mode=eval_mode,
+        sample_concurrency=args.concurrency,
     )
 
     for spec in args.models:

@@ -1,5 +1,6 @@
 """NER 벤치마크를 조율한다: gold 데이터 로드 -> 라벨러 실행 -> 평가."""
 
+import asyncio
 import logging
 import re
 import time
@@ -35,6 +36,7 @@ class BenchmarkRunner:
         compute_bertscore: bool = True,
         lang: str = "ko",
         eval_mode: str = "bio",
+        sample_concurrency: int = 32,
     ) -> None:
         if max_samples is not None:
             gold_records = gold_records[:max_samples]
@@ -42,6 +44,7 @@ class BenchmarkRunner:
         self.compute_bertscore = compute_bertscore
         self.lang = lang
         self.eval_mode = eval_mode  # "bio" (ko/vi) 또는 "offset_span" (ja)
+        self.sample_concurrency = sample_concurrency  # offset_span 경로의 sample 단위 병렬도
         self._labelers: List[tuple] = []  # (name, backend, labeler)
 
     def add_labeler(self, name: str, backend: str, labeler: Any) -> None:
@@ -63,31 +66,51 @@ class BenchmarkRunner:
 
     def _run_offset_span(self, name: str, backend: str, labeler: Any) -> BenchmarkResult:
         """문자 오프셋을 사용하는 Span F1 경로 (ja). 레코드 형식: {text, gold_spans}."""
+        return asyncio.run(self._run_offset_span_async(name, backend, labeler))
+
+    async def _run_offset_span_async(
+        self, name: str, backend: str, labeler: Any
+    ) -> BenchmarkResult:
+        """sample 단위 concurrency로 병렬 라벨링한다."""
         from labelers.ja.span_matcher import match_spans
 
-        gold_spans_all: List[List[dict]] = []
-        pred_spans_all: List[List[dict]] = []
-        errors = 0
+        sem = asyncio.Semaphore(self.sample_concurrency)
+
+        has_async = hasattr(labeler, "alabel_spans")
+
+        async def process_one(idx: int, record: dict):
+            async with sem:
+                text = record["text"]
+                try:
+                    if has_async:
+                        raw_spans = await labeler.alabel_spans(text)
+                    else:
+                        raw_spans = await asyncio.to_thread(labeler.label_spans, text)
+                    pred_spans = match_spans(text, raw_spans)
+                    return idx, record["gold_spans"], pred_spans, None
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Labeling failed for sample %d: %s", idx, e)
+                    return idx, None, None, e
 
         t_start = time.time()
-        pbar = tqdm(self.gold_records, desc=f"[{backend}] {name}", unit="sample")
+        tasks = [process_one(i, r) for i, r in enumerate(self.gold_records)]
 
-        for i, record in enumerate(pbar):
-            text = record["text"]
-            gold_spans = record["gold_spans"]
-            try:
-                raw_spans = labeler.label_spans(text)
-                pred_spans = match_spans(text, raw_spans)
-            except Exception as e:
-                logger.warning("Labeling failed for sample %d: %s", i, e)
+        results: List[tuple] = [None] * len(tasks)  # type: ignore[list-item]
+        errors = 0
+        pbar = tqdm(total=len(tasks), desc=f"[{backend}] {name}", unit="sample")
+        for coro in asyncio.as_completed(tasks):
+            idx, gold, pred, err = await coro
+            if err is not None:
                 errors += 1
-                continue
-            gold_spans_all.append(gold_spans)
-            pred_spans_all.append(pred_spans)
+            else:
+                results[idx] = (gold, pred)
+            pbar.update(1)
             pbar.set_postfix(errors=errors)
-
         pbar.close()
         t_total = time.time() - t_start
+
+        gold_spans_all: List[List[dict]] = [r[0] for r in results if r is not None]
+        pred_spans_all: List[List[dict]] = [r[1] for r in results if r is not None]
 
         span_f1 = compute_offset_span_f1(gold_spans_all, pred_spans_all)
         metrics = {"span_f1": span_f1}
