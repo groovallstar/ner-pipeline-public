@@ -24,7 +24,7 @@
   - `src/augmenters/pii/__main__.py` 주입/검증 LLM 분리 CLI
     (`--inject-url/model`, `--verify-url/model`)
   - Stockmark 원본 1000샘플 × 9개 모델, Stockmark+PII 993샘플 × 8개 모델 측정
-  - 리포트 2종 `docs/entities/languages/japanese-ner-*-2026-04.md`
+  - 리포트 2종 `docs/reports/japanese-ner-*-2026-04.md`
 - 제외:
   - 원시 벤치 JSON (`results/`가 gitignore 대상) — 로컬 보관
   - PII 데이터셋 JSONL (`data/`가 gitignore 대상) — 로컬 보관, 생성 명령만 리포트에 기록
@@ -33,7 +33,7 @@
 ## 성공 기준
 
 - [x] 테스트: 기존 pytest 회귀 없음
-- [x] 문서 갱신: `docs/entities/languages/` 리포트 2종 추가
+- [x] 문서 갱신: `docs/reports/` 리포트 2종 추가
 - [x] 메트릭: gpt-5-mini 1000샘플 측정 1시간 이하 달성
   (2:25:56 → 0:34:20, 4.25배 가속)
 
@@ -46,7 +46,7 @@
 - [x] 3. `augmenters.pii` inject/verify URL·model 분리 CLI
 - [x] 4. Stockmark 원본 9개 모델 × 1000샘플 측정
 - [x] 5. Stockmark+PII 8개 모델 × 993샘플 측정
-- [x] 6. 리포트 2종 작성 후 `docs/entities/languages/` 이동
+- [x] 6. 리포트 2종 작성 후 `docs/reports/` 이동
 
 ## 위험·의존성
 

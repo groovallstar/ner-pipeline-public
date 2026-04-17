@@ -13,7 +13,7 @@
 - `augmenters.pii` CLI에 `--inject-url/model`, `--verify-url/model` 분리
   인자를 추가해 주입 모델과 교차 검증 모델을 독립적으로 지정할 수 있음
 - Stockmark 원본 1000샘플 × 9개 모델, Stockmark+PII 993샘플 × 8개 모델을
-  측정하고 `docs/entities/languages/`에 리포트 2종 정착
+  측정하고 `docs/reports/`에 리포트 2종 정착
 
 ## 구현 결과 (계획 대비)
 
@@ -22,7 +22,7 @@
 - [x] 3. `augmenters.pii` inject/verify LLM 분리 CLI (완료)
 - [x] 4. Stockmark 원본 9개 측정 (완료)
 - [x] 5. Stockmark+PII 8개 측정 (완료)
-- [x] 6. 리포트 `docs/entities/languages/` 이동 (완료)
+- [x] 6. 리포트 `docs/reports/` 이동 (완료)
 
 ## 검증
 
@@ -40,7 +40,7 @@
 - 리뷰어 확인 사항:
   - 원시 벤치 JSON은 `results/`(gitignore 대상)에 로컬 보관, 커밋하지 않음
   - PII 데이터셋 JSONL은 `data/`(gitignore 대상)에 로컬 보관, 재현 명령은
-    `docs/entities/languages/japanese-ner-pii-benchmark-2026-04.md` 상단 기재
+    `docs/reports/japanese-ner-pii-benchmark-2026-04.md` 상단 기재
 
 ## 관련 커밋
 

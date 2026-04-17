@@ -55,9 +55,10 @@ results/               # 벤치마크 결과 JSON + 리포트
 tests/                 # 테스트 (상세: tests/CLAUDE.md)
 docs/                  # 문서 (상세: docs/wiki/schema.md)
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식
-│   ├── entities/      # 언어·엔티티·데이터셋 스펙
-│   ├── guides/        # 실행 가이드 + 코드 구현 맵
-│   └── issues/        # 이슈별 계획/보고서 히스토리
+│   ├── specs/         # 엔티티·데이터셋 스펙, 코딩 컨벤션, 설계 문서, 템플릿
+│   ├── manual/        # 프로젝트 기술 개념·구조·API·실행 가이드
+│   ├── reports/       # 자유 형식 벤치마크·실험 리포트 (GitHub Issue 무관)
+│   └── issues/        # GitHub Issue별 plan/report 스냅샷
 ```
 
 ## 주요 CLI 엔트리포인트
@@ -95,7 +96,7 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 - 함수·클래스·모듈 docstring, 인라인 `#` 주석: **한국어**
 - 문자열 리터럴: **홑따옴표(`'`) 기본**, escape 필요 시 `"` 허용
 - 한 줄 **79자 이내**, 함수 사이는 **한 줄만** 비운다, trailing whitespace 금지
-- 상세 규칙 및 예시: `docs/guides/coding-conventions.md`
+- 상세 규칙 및 예시: `docs/specs/coding-conventions.md`
 
 ## 커밋 컨벤션
 
@@ -104,7 +105,7 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 
 ## Wiki 운영
 
-`docs/wiki/` 운영 규칙·트리거 키워드·배치 기준은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임한다. 코드 변경 후에는 `docs/guides/` 하위의 관련 구현 맵(`base_labelers.md`, `bio-*`, `span-evaluator.md` 등)도 최신 상태인지 확인한다.
+`docs/wiki/` 운영 규칙·트리거 키워드·배치 기준은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임한다. 코드 변경 후에는 `docs/manual/` 하위의 관련 구현 맵(`base-labelers.md`, `bio-*`, `span-evaluator.md` 등)도 최신 상태인지 확인한다.
 
 ## 이슈 관리
 
@@ -113,7 +114,7 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 - 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>` (`.github/ISSUE_TEMPLATE/` 템플릿 사용 권장)
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
 - 커밋 메시지: 기존 컨벤션(한국어 제목 + `type(스코프):` 접두사) 유지, 본문 끝에 `refs #12` 참조. 최종 PR 또는 마지막 커밋에는 `closes #12`로 이슈 종결.
-- **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도.
+- **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도. 이슈와 무관한 자유 형식 벤치마크·실험 리포트는 `docs/reports/`에 둔다.
 
 ### 이슈 문서 구조
 

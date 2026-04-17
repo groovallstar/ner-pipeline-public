@@ -6,7 +6,7 @@ labels: [docs]
 ---
 
 ## 대상
-<!-- 수정·신설할 문서 경로. 예: docs/wiki/concepts/xxx.md, docs/guides/yyy.md -->
+<!-- 수정·신설할 문서 경로. 예: docs/wiki/concepts/xxx.md, docs/manual/yyy.md, docs/specs/yyy.md -->
 
 ## 변경 내용
 -
