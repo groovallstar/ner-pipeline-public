@@ -433,36 +433,6 @@ f1 = 2 * precision * recall / (precision + recall)
 | TagAligner 필요 | 예 | 아니오 |
 | relaxed matching | 예 (부분 겹침 허용) | 아니오 (exact only) |
 
-### 결과 출력
-
-**코드:** `JaReportGenerator` (`src/evaluators/ja_benchmark_runner.py:124-224`)
-
-- CLI 테이블: 모델별 F1/Precision/Recall + 속도 + 토큰 사용량
-- Per-entity breakdown: 8개 엔티티 타입별 개별 성능
-- JSON 파일: `results/ja_benchmark_*.json`
-
-```json
-{
-  "timestamp": "2026-04-09T...",
-  "language": "ja",
-  "results": [{
-    "model_name": "Qwen/Qwen3.5-27B",
-    "backend": "vllm",
-    "metrics": {
-      "span_f1": {
-        "overall": {"f1": 0.72, "precision": 0.75, "recall": 0.69, "support": 1234},
-        "per_entity": {
-          "人名": {"f1": 0.85, ...},
-          "法人名": {"f1": 0.70, ...},
-          ...
-        }
-      }
-    },
-    "latency": {"total_seconds": 180.5, "samples_per_second": 1.11}
-  }]
-}
-```
-
 ### 왜 이렇게 설계했는가
 
 | 결정 | 이유 |

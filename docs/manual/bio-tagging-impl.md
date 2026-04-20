@@ -18,8 +18,8 @@
 `src/labelers/ko/ner_prompts.py`의 `SINGLE_PROMPT_TEMPLATE`은 다음 세 지점에서 형식을 고정한다:
 
 - `src/labelers/ko/ner_prompts.py:15` — `"텍스트에서 개체명을 찾아 JSON 배열로만 반환하세요."`
-- `src/labelers/ko/ner_prompts.py:56` — `"JSON 배열만 출력, 다른 설명 금지"`
-- `src/labelers/ko/ner_prompts.py:60-79` — 8개 few-shot 예시 전부 `[{"text": ..., "type": ...}]` 형식으로 제시
+- `src/labelers/ko/ner_prompts.py:64` — `"JSON 배열만 출력, 다른 설명 금지"`
+- `src/labelers/ko/ner_prompts.py:68-84` — few-shot 예시 전부 `[{"text": ..., "type": ...}]` 형식으로 제시
 
 ---
 
@@ -42,5 +42,5 @@ def extract_spans_from_bio(tokens, tags, lang="ko"):
 
 ## `spans_to_syllable_bio` — 코드 위치
 
-`src/labelers/tag_aligner.py:222-296` 의 `spans_to_syllable_bio`:
+`src/labelers/tag_aligner.py:221-295` 의 `spans_to_syllable_bio`:
 - LLM span을 원문 character offset으로 매핑하므로 gold 토큰 단위와 무관하게 동작한다.

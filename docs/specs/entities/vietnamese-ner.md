@@ -3,7 +3,6 @@
 > 기준 코드 시점: 2026-04-09 (develop 브랜치)
 > 대상 데이터셋: WikiANN Vietnamese (3 엔티티 타입: PER, LOC, ORG)
 > 대상 코드: `src/labelers/vi/`, `src/evaluators/`, `src/labelers/dataset_loader.py`
-> 벤치마크 상태: **미실행** — 코드 구현 완료, 벤치마크 결과 없음
 
 ## 목차
 
@@ -447,17 +446,6 @@ joiner = "" if has_space_tokens else " "  # WikiANN: " " (word-level)
 | **Character Span F1** | 문자 수준 span 매칭 | |
 | **BERTScore** | 의미적 유사도 기반 평가 | Optional (`--no-bertscore`) |
 
-### 벤치마크 상태
-
-> **주의**: 베트남어 NER 파이프라인은 코드 구현이 완료되었으나, 아직 벤치마크가 실행되지 않았다. 한국어 파이프라인에는 `results/` 디렉토리에 벤치마크 결과 JSON이 존재하지만, 베트남어 결과는 없다.
-
-예상 실행 명령:
-
-```bash
-# 베트남어 벤치마크 실행 (예시)
-python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200 --output results/vi_bench_200_27b.json
-```
-
 ### 왜 이렇게 설계했는가
 
 | 결정 | 이유 |
@@ -486,7 +474,6 @@ python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200 
 | **Few-shot 예시** | 7개 | 3개 |
 | **핵심 언어 특성** | 조사 부착, 음절 토큰화 | 성조 부호(dấu), 다중 단어 이름 |
 | **평가 러너** | `BenchmarkRunner` (lang="ko") | `BenchmarkRunner` (lang="vi") — 동일 클래스 |
-| **벤치마크 결과** | 있음 (`results/ko_*.json`) | **없음** (미실행) |
 
 ---
 

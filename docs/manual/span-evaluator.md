@@ -2,7 +2,7 @@
 
 LLM NER 라벨링 결과를 gold 데이터와 비교하여 span 수준 메트릭을 산출하는 평가 모듈.
 
-- 소스: `src/evaluators/span_evaluator.py`
+- 소스: `src/llm_eval/span_evaluator.py`
 - 테스트: `tests/test_span_evaluator.py`
 
 ## 배경
@@ -115,24 +115,6 @@ evaluate(gold_records, labeler)
             ↓
         {exact, relaxed, counts, latency}
 ```
-
-## 벤치마크 결과 예시
-
-KLUE NER validation 500건, Qwen3.5-35B-A3B (vLLM):
-
-| 메트릭 | Precision | Recall | F1 |
-|--------|-----------|--------|-----|
-| Exact Match | 0.7743 | 0.6986 | 0.7345 |
-| Relaxed Match | 0.8533 | 0.7698 | 0.8094 |
-
-| 엔티티 | P | R | F1 | 건수 |
-|---------|------|------|------|------|
-| PS | 0.95 | 0.75 | 0.84 | 447 |
-| TI | 0.86 | 0.91 | 0.89 | 47 |
-| QT | 0.83 | 0.73 | 0.78 | 315 |
-| DT | 0.75 | 0.70 | 0.72 | 220 |
-| OG | 0.63 | 0.63 | 0.63 | 196 |
-| LC | 0.50 | 0.52 | 0.51 | 165 |
 
 ## 테스트 케이스
 

@@ -67,32 +67,6 @@ python -m llm_eval --lang ko \
 pytest tests/ -v
 ```
 
-## 벤치마크 결과
-
-### 일본어 (Stockmark, 200 샘플)
-
-| 모델 | F1 | Precision | Recall |
-|------|------|-----------|--------|
-| vLLM Qwen3.5-27B + 2pass | **0.849** | 0.849 | 0.849 |
-| vLLM Qwen3.5-35B-A3B + 2pass | 0.811 | 0.812 | 0.810 |
-| OpenAI gpt-5-mini + 2pass | 0.794 | 0.781 | 0.808 |
-| Ollama qwen3.5:27b (v3) | 0.819 | 0.753 | 0.801 |
-
-### 한국어 (KLUE, 500 샘플)
-
-| 모델 | F1 | Precision | Recall |
-|------|------|-----------|--------|
-| vLLM Qwen3.5-27B | **0.656** | 0.669 | 0.643 |
-| vLLM Qwen3.5-35B-A3B | 0.626 | 0.662 | 0.593 |
-
-자세한 벤치마크 결과는 [results/BENCHMARK_REPORT.md](results/BENCHMARK_REPORT.md) 참조.
-
-## 성능 개선 기법
-
-- **프롬프트 튜닝** — 에러 분석 → 혼동 패턴 발견 → 규칙/few-shot 추가 (일본어 F1 +6.9%p)
-- **Two-Pass 검증** — 1차 추출 + 2차 LLM 검증으로 precision 향상 (+1~2%p)
-- **Span Matcher 개선** — 공백 정규화, 조사/접미사 제거 폴백
-
 ## 주요 의존성
 
 - LangChain + OpenAI / Ollama / HuggingFace

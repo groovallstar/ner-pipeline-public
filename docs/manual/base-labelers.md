@@ -53,3 +53,7 @@ OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrenc
 
 모든 서브클래스는 `__init__`만 오버라이드하며 `super().__init__(..., lang=<lang>,
 <prompt kwargs>)`로 언어팩을 주입한다 (AC13 드리프트 가드 참조).
+
+> vi(베트남어) 라벨러(`labelers.vi.{vllm,ollama,openai}_ner_labeler`)는 현재 Base*를
+> 상속받지 않는 독립 구현이다. 추후 공통 베이스로 통합 예정이며, 그 전까지는 위
+> 표에서 제외한다.
