@@ -118,21 +118,21 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 
 ### 이슈 문서 구조
 
-이슈별로 `docs/issues/issue-{번호}-{슬러그}/` 디렉토리를 만든다. 상세 규칙과 템플릿은 `docs/issues/README.md` 참조.
+이슈별로 `docs/issues/issue-{번호}-{슬러그}.md` 단일 파일을 만든다. 상세 규칙과 템플릿은 `docs/issues/README.md` 참조.
 
 ```
-docs/issues/issue-12-vi-crawler/
-├── plan.md     # 구현 계획 (하위 작업 3~6개 체크박스)
-└── report.md   # 최종 결과 보고서 (완료 후 작성)
+docs/issues/
+├── README.md
+└── issue-12-vi-crawler.md   # 계획 + 구현 결과 통합 단일 파일
 ```
 
-- `plan.md`는 Issue 본문/댓글과 동일 내용을 복사·정리해 저장 (단일 출처는 Issue, `docs/issues/`는 스냅샷)
-- `report.md`는 머지 직전 작성 — 변경 요약, 검증 결과, 관련 커밋/PR 링크 포함
+- 계획 단계(3단계)에서는 파일에 기록만 하고 **커밋하지 않는다.** 사용자가 로컬에서 직접 읽어가며 진행한다.
+- 구현 완료(5단계) 후 같은 파일에 결과·검증 섹션을 추가하고, 계획→구현 흐름이 정합적인지 확인한 뒤 **이때 최초 커밋**한다.
 
 ### 이슈 진행 절차 (경량 5단계, 승인 1회)
 
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
-3. **구현 계획 수립 → 승인 요청**: 하위 작업 3~6개를 Issue 본문의 체크박스로 분해하고, 동일 내용을 `docs/issues/issue-{N}-{slug}/plan.md`에 저장
+3. **구현 계획 수립 → 승인 요청**: 하위 작업 3~6개를 Issue 본문의 체크박스로 분해하고, 동일 내용을 `docs/issues/issue-{N}-{slug}.md`의 계획 섹션에 기록 (**커밋하지 않음**)
 4. **구현 & 원자 커밋**: 하위 작업 단위로 커밋, 각 커밋 본문에 `refs #N`
-5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → `docs/issues/.../report.md` 작성 → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
+5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → `docs/issues/issue-{N}-{slug}.md`에 구현 결과·검증 섹션 추가 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
