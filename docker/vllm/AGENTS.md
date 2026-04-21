@@ -15,7 +15,6 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 | `start-27b.sh` | Start Qwen3.5-27B: tensor_parallel=2, GPUs 1,2, port 8081 |
 | `start-35b-a3b.sh` | Start Qwen3.5-35B-A3B (MoE, 3B active) |
 | `start-122b-a10b-gptq.sh` | Start Qwen3.5-122B-A10B-GPTQ-Int4 with quantization flags |
-| `bench-2models.sh` | Sequential 2-model Korean NER benchmark with readiness polling |
 | `load-and-bench.sh` | Single-model pipeline: download, swap, restart, benchmark |
 | `stop.sh` | Stop vLLM container |
 | `logs.sh` | Tail vLLM logs |
@@ -25,13 +24,11 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 ### Working In This Directory
 - Start scripts export env vars then call docker compose — they do NOT modify config/.env (exception: `load-and-bench.sh` uses `sed -i`)
 - `load-and-bench.sh` has hardcoded Docker network IP (`172.22.0.2:8081`) — breaks if network topology changes
-- `bench-2models.sh` runs 35B-A3B and 27B sequentially
 - `--default-chat-template-kwargs '{"enable_thinking": false}'` in docker-compose.yml disables Qwen3's reasoning mode
 - Readiness check: poll `curl -s $URL/models | grep $MODEL_NAME`
 
 ### Testing Requirements
-- `bench-2models.sh` accepts MAX_SAMPLES as first argument (default 500)
-- Results saved to `results/ko_bench_500_*.json`
+- `load-and-bench.sh` runs `llm_eval.error_analysis` on 50 samples by default
 
 ## Dependencies
 

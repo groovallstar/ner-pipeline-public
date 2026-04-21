@@ -64,20 +64,31 @@ class BaseVllmLabeler:
         sentences = split_sentences(text, lang=self.lang)
         return asyncio.run(self._label_sentences(sentences, id_offset=0))
 
-    def label_spans(self, text: str) -> List[dict]:
-        """BIO 변환 없이 원시 엔티티 span을 반환한다."""
-        sentences = split_sentences(text, lang=self.lang)
-        non_empty = [s for s in sentences if s.strip()]
+    def label_spans(self, text: str, split: bool = True) -> List[dict]:
+        """BIO 변환 없이 원시 엔티티 span을 반환한다 (동기 래퍼).
 
-        async def _get_spans():
-            tasks = [self._chat(s) for s in non_empty]
-            raw_results = await asyncio.gather(*tasks)
-            all_spans = []
-            for raw in raw_results:
-                all_spans.extend(parse_spans(raw))
-            return all_spans
+        Args:
+            text: 입력 텍스트.
+            split: True이면 문장 분리 후 각 문장을 독립 LLM 호출로 처리
+                (벤치마크 기본). False이면 전체 텍스트를 단일 프롬프트로
+                전달하여 문맥을 유지 (검증 용도 권장).
+        """
+        return asyncio.run(self.alabel_spans(text, split=split))
 
-        return asyncio.run(_get_spans())
+    async def alabel_spans(self, text: str, split: bool = True) -> List[dict]:
+        """label_spans의 async 버전. 외부 event loop 내에서 호출 가능."""
+        if split:
+            sentences = split_sentences(text, lang=self.lang)
+            non_empty = [s for s in sentences if s.strip()]
+        else:
+            non_empty = [text] if text.strip() else []
+
+        tasks = [self._chat(s) for s in non_empty]
+        raw_results = await asyncio.gather(*tasks)
+        all_spans = []
+        for raw in raw_results:
+            all_spans.extend(parse_spans(raw))
+        return all_spans
 
     def label_records(self, records: List[dict]) -> List[dict]:
         """원시 텍스트 레코드 리스트를 병렬로 라벨링한다.

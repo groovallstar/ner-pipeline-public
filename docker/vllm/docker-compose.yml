@@ -1,7 +1,7 @@
 services:
   vllm:
-    image: vllm/vllm-openai:v0.19.0
-    container_name: vllm-server
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.19.0}
+    container_name: ${VLLM_CONTAINER:-vllm-server}
     env_file:
       - ./config/.env
     environment:

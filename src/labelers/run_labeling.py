@@ -7,7 +7,7 @@
         --lang ja \
         --model vllm:Qwen/Qwen3.5-27B \
         --max-samples 500 \
-        --output predictions/ja-vllm-27b.jsonl
+        --output results/predictions/ja-vllm-27b.jsonl
 """
 import argparse
 import json

@@ -34,9 +34,12 @@ dependencies = [
     # Vector store
     "pymilvus",
     # Web crawling
-    "beautifulsoup4",
+    "beautifulsoup4>=4.12,<5",
     "requests",
-    "lxml",
+    "lxml>=5.2,<6",
+    "feedparser>=6.0,<7",
+    # Korean sentence splitter
+    "kiwipiepy>=0.18,<1",
     # Utilities
     "langdetect",
     "tavily-python",
@@ -49,6 +52,7 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 packages = [
+    "src/augmenters",
     "src/classifier",
     "src/labelers",
     "src/llm_eval",
