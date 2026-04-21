@@ -55,9 +55,10 @@ results/               # 벤치마크 결과 JSON + 리포트
 tests/                 # 테스트 (상세: tests/CLAUDE.md)
 docs/                  # 문서 (상세: docs/wiki/schema.md)
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식
-│   ├── entities/      # 언어·엔티티·데이터셋 스펙
-│   ├── guides/        # 실행 가이드 + 코드 구현 맵
-│   └── issues/        # 이슈별 계획/보고서 히스토리
+│   ├── specs/         # 엔티티·데이터셋 스펙, 코딩 컨벤션, 설계 문서, 템플릿
+│   ├── manual/        # 프로젝트 기술 개념·구조·API·실행 가이드
+│   ├── reports/       # 자유 형식 벤치마크·실험 리포트 (GitHub Issue 무관)
+│   └── issues/        # GitHub Issue별 plan/report 스냅샷
 ```
 
 ## 주요 CLI 엔트리포인트
@@ -95,7 +96,7 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 - 함수·클래스·모듈 docstring, 인라인 `#` 주석: **한국어**
 - 문자열 리터럴: **홑따옴표(`'`) 기본**, escape 필요 시 `"` 허용
 - 한 줄 **79자 이내**, 함수 사이는 **한 줄만** 비운다, trailing whitespace 금지
-- 상세 규칙 및 예시: `docs/guides/coding-conventions.md`
+- 상세 규칙 및 예시: `docs/specs/coding-conventions.md`
 
 ## 커밋 컨벤션
 
@@ -104,7 +105,7 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 
 ## Wiki 운영
 
-`docs/wiki/` 운영 규칙·트리거 키워드·배치 기준은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임한다. 코드 변경 후에는 `docs/guides/` 하위의 관련 구현 맵(`base_labelers.md`, `bio-*`, `span-evaluator.md` 등)도 최신 상태인지 확인한다.
+`docs/wiki/` 운영 규칙·트리거 키워드·배치 기준은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임한다. 코드 변경 후에는 `docs/manual/` 하위의 관련 구현 맵(`base-labelers.md`, `bio-*`, `span-evaluator.md` 등)도 최신 상태인지 확인한다.
 
 ## 이슈 관리
 
@@ -113,25 +114,25 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 - 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>` (`.github/ISSUE_TEMPLATE/` 템플릿 사용 권장)
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
 - 커밋 메시지: 기존 컨벤션(한국어 제목 + `type(스코프):` 접두사) 유지, 본문 끝에 `refs #12` 참조. 최종 PR 또는 마지막 커밋에는 `closes #12`로 이슈 종결.
-- **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도.
+- **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도. 이슈와 무관한 자유 형식 벤치마크·실험 리포트는 `docs/reports/`에 둔다.
 
 ### 이슈 문서 구조
 
-이슈별로 `docs/issues/issue-{번호}-{슬러그}/` 디렉토리를 만든다. 상세 규칙과 템플릿은 `docs/issues/README.md` 참조.
+이슈별로 `docs/issues/issue-{번호}-{슬러그}.md` 단일 파일을 만든다. 상세 규칙과 템플릿은 `docs/issues/README.md` 참조.
 
 ```
-docs/issues/issue-12-vi-crawler/
-├── plan.md     # 구현 계획 (하위 작업 3~6개 체크박스)
-└── report.md   # 최종 결과 보고서 (완료 후 작성)
+docs/issues/
+├── README.md
+└── issue-12-vi-crawler.md   # 계획 + 구현 결과 통합 단일 파일
 ```
 
-- `plan.md`는 Issue 본문/댓글과 동일 내용을 복사·정리해 저장 (단일 출처는 Issue, `docs/issues/`는 스냅샷)
-- `report.md`는 머지 직전 작성 — 변경 요약, 검증 결과, 관련 커밋/PR 링크 포함
+- 계획 단계(3단계)에서는 파일에 기록만 하고 **커밋하지 않는다.** 사용자가 로컬에서 직접 읽어가며 진행한다.
+- 구현 완료(5단계) 후 같은 파일에 결과·검증 섹션을 추가하고, 계획→구현 흐름이 정합적인지 확인한 뒤 **이때 최초 커밋**한다.
 
 ### 이슈 진행 절차 (경량 5단계, 승인 1회)
 
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
-3. **구현 계획 수립 → 승인 요청**: 하위 작업 3~6개를 Issue 본문의 체크박스로 분해하고, 동일 내용을 `docs/issues/issue-{N}-{slug}/plan.md`에 저장
+3. **구현 계획 수립 → 승인 요청**: 하위 작업 3~6개를 Issue 본문의 체크박스로 분해하고, 동일 내용을 `docs/issues/issue-{N}-{slug}.md`의 계획 섹션에 기록 (**커밋하지 않음**)
 4. **구현 & 원자 커밋**: 하위 작업 단위로 커밋, 각 커밋 본문에 `refs #N`
-5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → `docs/issues/.../report.md` 작성 → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
+5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → `docs/issues/issue-{N}-{slug}.md`에 구현 결과·검증 섹션 추가 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인

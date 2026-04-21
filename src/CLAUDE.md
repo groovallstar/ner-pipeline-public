@@ -41,7 +41,7 @@
 - 패키지 관리자: **UV** (`uv pip install`)
 - 타입 힌트 사용 (typing 모듈)
 - 로깅: `logging` 표준 라이브러리
-- **주석/문서 언어**: print/log/예외 메시지·argparse help는 영문, docstring·인라인 주석은 한국어 (상세: `docs/guides/coding-conventions.md`)
+- **주석/문서 언어**: print/log/예외 메시지·argparse help는 영문, docstring·인라인 주석은 한국어 (상세: `docs/specs/coding-conventions.md`)
 - 문자열 리터럴은 **홑따옴표(`'`)** 를 기본으로 쓴다 (escape 필요 시 `"` 허용)
 - 한 줄은 **79자 이내**로 유지 (초과 시 줄바꿈으로 가독성 확보)
 - 메서드·함수 사이는 **한 줄만 비운다** (연속 빈 줄 금지)

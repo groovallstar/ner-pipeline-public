@@ -434,29 +434,6 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
 - **Exact**: gold span과 predicted span의 text와 type이 정확히 일치
 - **Relaxed**: text가 부분적으로 겹치면 매칭 (type은 일치해야 함)
 
-### 결과 출력
-
-**코드:** `ReportGenerator` (`src/evaluators/report.py`)
-
-- CLI 테이블: entity type별 F1/Precision/Recall + 전체 평균
-- JSON 파일: `results/ko_bench_500_27b.json` 형태로 저장
-
-```json
-{
-  "timestamp": "2026-04-06T10:15:31+00:00",
-  "results": [{
-    "model_name": "Qwen/Qwen3.5-27B",
-    "metrics": {
-      "span_match": {"exact": {"overall": {"f1": 0.7789}}, "relaxed": {...}},
-      "overall": {"f1": 0.6557},        // seqeval
-      "span_f1": {"overall": {"f1": 0.6557}},
-      "bertscore": {...}
-    },
-    "latency": {"total_seconds": 1745.85, "avg_per_sample": 3.5923}
-  }]
-}
-```
-
 ### 왜 이렇게 설계했는가
 
 | 결정 | 이유 |
