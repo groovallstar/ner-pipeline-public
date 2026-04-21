@@ -83,3 +83,4 @@ docker/dev/config/.env
 
 results/
 data/
+data/ner/raw/

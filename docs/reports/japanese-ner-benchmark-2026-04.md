@@ -1,5 +1,7 @@
 # Stockmark NER 벤치마크 리포트
 
+> 연작 배경·선정 기준은 [japanese-pii-model-selection-2026-04.md](japanese-pii-model-selection-2026-04.md) 참조. 본 리포트는 **PII 주입 전 원본 엔티티 8종에 대한 기반선** 측정이다.
+
 **측정일**: 2026-04-16
 **데이터셋**: `stockmark/ner-wikipedia-dataset` (test split, 1000 samples, PII 주입 없음)
 **평가지표**: 문자 오프셋 Span F1  

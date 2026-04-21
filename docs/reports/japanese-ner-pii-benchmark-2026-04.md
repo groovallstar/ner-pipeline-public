@@ -1,5 +1,7 @@
 # Stockmark + PII 혼합 NER 벤치마크 리포트
 
+> 연작 배경·선정 기준은 [japanese-pii-model-selection-2026-04.md](japanese-pii-model-selection-2026-04.md) 참조. 본 리포트는 **주입 대상 태스크 자체(Stockmark 8종 + PII 6종)의 최종 품질** 측정이다.
+
 **측정일**: 2026-04-17
 **데이터셋**: `data/pii/stockmark_pii_1000.jsonl` (993 samples, Stockmark + PII 혼합)  
 **데이터 생성**: gemma-4-26B-A4B-it-AWQ-4bit 주입 + Qwen3.5-27B-AWQ 교차 검증, policy=drop_span  
