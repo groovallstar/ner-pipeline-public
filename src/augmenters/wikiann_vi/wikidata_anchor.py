@@ -42,7 +42,8 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     # 人名
     'Q5': '人名',            # human
     'Q215627': '人名',       # person
-    'Q95074': '人名',        # fictional character (대략 人名)
+    'Q95074': '人名',        # fictional character
+    'Q15632617': '人名',     # fictional human
 
     # 地名 (자연·행정)
     'Q6256': '地名',         # country
@@ -71,6 +72,12 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q486972': '地名',       # human settlement (generic)
     'Q7376585': '地名',      # rural commune (Việt Nam xã)
     'Q7275': '地名',         # state
+    'Q35657': '地名',        # U.S. state
+    'Q484170': '地名',       # commune of France
+    'Q1615742': '地名',      # province of China
+    'Q2824648': '地名',      # province of Vietnam
+    'Q1289426': '地名',      # county of China
+    'Q24764': '地名',        # municipality of the Philippines
 
     # 施設名 (물리적 개별 건축물·교통시설)
     'Q41176': '施設名',      # building
@@ -88,6 +95,7 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q210272': '施設名',     # temple / pagoda
     'Q33506': '施設名',      # museum
     'Q7075': '施設名',       # library
+    'Q22806': '施設名',      # national library
     'Q24354': '施設名',      # theatre
     'Q483110': '施設名',     # stadium
     'Q12876': '施設名',      # tunnel
@@ -100,6 +108,7 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q4830453': '法人名',    # business
     'Q783794': '法人名',     # company
     'Q891723': '法人名',     # public company
+    'Q219577': '法人名',     # holding company
     'Q18388277': '法人名',   # technology company
     'Q1002697': '法人名',    # periodical
     'Q11032': '法人名',      # newspaper
@@ -128,6 +137,8 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q15416': '製品名',      # television program
     'Q5398426': '製品名',    # television series
     'Q3405677': '製品名',    # automobile model
+    'Q105543609': '製品名',  # musical work / composition
+    'Q21198342': '製品名',   # manga series
 
     # イベント名 (일회성 사건·전쟁·조약)
     'Q1190554': 'イベント名', # occurrence (event)
@@ -141,6 +152,7 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q2761147': 'イベント名',  # military operation
     'Q131569': 'イベント名',   # treaty
     'Q1407217': 'イベント名',  # national sports competition (일회 대회)
+    'Q27020041': 'イベント名', # sports season
 
     # 政治的組織名 (정당·정부·군·국제기구)
     'Q7278': '政治的組織名',       # political party
@@ -155,6 +167,10 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q41487': '政治的組織名',      # national assembly
     'Q35798': '政治的組織名',      # court
     'Q28083049': '政治的組織名',   # national intelligence agency
+    'Q61883': '政治的組織名',      # air force
+    'Q4508': '政治的組織名',       # navy
+    'Q772547': '政治的組織名',     # armed forces
+    'Q15925165': '政治的組織名',   # specific intl organization (e.g. IOM)
 
     # その他の組織名 (대학·스포츠·협회)
     'Q3918': 'その他の組織名',     # university
@@ -168,6 +184,11 @@ WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
     'Q476028': 'その他の組織名',   # association football club
     'Q13406463': 'その他の組織名', # sports league
     'Q15991290': 'その他の組織名', # sports season / league
+    'Q215380': 'その他の組織名',   # musical group / band
+    'Q1478443': 'その他の組織名',  # football federation
+    'Q135408445': 'その他の組織名',# men's national football team
+    'Q15991303': 'その他の組織名', # association football league
+    'Q2178147': 'その他の組織名',  # trade association
 }
 
 
