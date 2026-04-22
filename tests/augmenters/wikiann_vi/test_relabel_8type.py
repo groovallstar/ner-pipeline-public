@@ -1,5 +1,6 @@
 """WikiANN-vi relabel_8type 단위 테스트 (LLM 호출 없는 부분만)."""
 from augmenters.wikiann_vi.relabel_8type import (
+    Relabeler,
     match_offsets,
     parse_spans,
 )
@@ -123,3 +124,49 @@ class TestMatchOffsets:
         assert [r['text'] for r in result] == [
             'Đảng Cộng sản Việt Nam', 'Bộ Giáo dục',
         ]
+
+
+class TestRelabelerBatchParse:
+    def test_parse_batch_dict(self):
+        raw = (
+            '{"0": [{"text": "Hà Nội", "type": "地名"}], '
+            '"1": [{"text": "Samsung", "type": "法人名"}]}'
+        )
+        result = Relabeler._parse_batch(raw)
+        assert 0 in result and 1 in result
+        assert result[0] == [{'text': 'Hà Nội', 'type': '地名'}]
+        assert result[1] == [{'text': 'Samsung', 'type': '法人名'}]
+
+    def test_parse_batch_with_think(self):
+        raw = (
+            '<think>processing</think>\n'
+            '{"0": [{"text": "x", "type": "人名"}], "2": []}'
+        )
+        result = Relabeler._parse_batch(raw)
+        assert result.get(0) == [{'text': 'x', 'type': '人名'}]
+        assert result.get(2) == []
+
+    def test_parse_batch_regex_fallback(self):
+        raw = 'The output is: {"0": [{"text": "a", "type": "b"}]} end.'
+        result = Relabeler._parse_batch(raw)
+        assert 0 in result
+        assert result[0] == [{'text': 'a', 'type': 'b'}]
+
+    def test_parse_batch_invalid(self):
+        assert Relabeler._parse_batch('') == {}
+        assert Relabeler._parse_batch('not json') == {}
+        # 리스트 형태는 SINGLE 포맷이므로 BATCH 파싱에서는 빈 dict
+        assert Relabeler._parse_batch('[1,2,3]') == {}
+
+    def test_parse_batch_skips_non_int_keys(self):
+        raw = '{"abc": [{"text": "x", "type": "y"}], "0": []}'
+        result = Relabeler._parse_batch(raw)
+        assert 'abc' not in result
+        assert 0 in result
+        assert result[0] == []
+
+    def test_build_batch_format(self):
+        r = Relabeler(batch_size=3)
+        prompt = r._build_batch(['câu 1', 'câu 2'])
+        assert '0: câu 1' in prompt
+        assert '1: câu 2' in prompt

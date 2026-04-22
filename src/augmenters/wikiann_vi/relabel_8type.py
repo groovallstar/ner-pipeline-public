@@ -15,7 +15,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from openai import AsyncOpenAI
 
@@ -106,7 +106,11 @@ def match_offsets(text: str, spans: List[dict]) -> List[dict]:
 
 
 class Relabeler:
-    """vLLM OpenAI 호환 엔드포인트로 WikiANN-vi 레코드를 8종으로 재라벨."""
+    """vLLM OpenAI 호환 엔드포인트로 WikiANN-vi 레코드를 8종으로 재라벨.
+
+    batch_size > 1일 때는 여러 레코드를 BATCH_PROMPT_TEMPLATE로 묶어 호출해
+    프롬프트 오버헤드를 줄인다. 파싱 실패 시 해당 배치는 SINGLE 폴백.
+    """
 
     def __init__(
         self,
@@ -116,11 +120,13 @@ class Relabeler:
         max_tokens: int = 2048,
         concurrency: int = 16,
         timeout: float = 120.0,
+        batch_size: int = 1,
     ) -> None:
         self.base_url = base_url
         self.model = model
         self.entity_types = entity_types or DEFAULT_ENTITY_TYPES
         self.max_tokens = max_tokens
+        self.batch_size = max(1, int(batch_size))
         self._semaphore = asyncio.Semaphore(concurrency)
         self._client = AsyncOpenAI(
             base_url=base_url, api_key='none', timeout=timeout,
@@ -128,8 +134,8 @@ class Relabeler:
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
         logger.info(
-            'Relabeler ready: %s @ %s (concurrency=%d)',
-            model, base_url, concurrency,
+            'Relabeler ready: %s @ %s (concurrency=%d batch_size=%d)',
+            model, base_url, concurrency, self.batch_size,
         )
 
     def _build_single(self, sentence: str) -> str:
@@ -137,6 +143,44 @@ class Relabeler:
             entity_types=format_entity_types(self.entity_types),
             sentence=sentence,
         )
+
+    def _build_batch(self, sentences: List[str]) -> str:
+        numbered = '\n'.join(f'{i}: {s}' for i, s in enumerate(sentences))
+        return BATCH_PROMPT_TEMPLATE.format(
+            entity_types=format_entity_types(self.entity_types),
+            sentences=numbered,
+        )
+
+    @staticmethod
+    def _parse_batch(raw: str) -> Dict[int, List[dict]]:
+        """BATCH 응답에서 {idx: [spans]} 딕셔너리를 추출.
+
+        실패 시 빈 dict 반환. 호출부는 SINGLE 폴백으로 처리.
+        """
+        cleaned = re.sub(
+            r'<think>.*?</think>', '', raw, flags=re.DOTALL,
+        ).strip()
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError:
+            match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+            if not match:
+                return {}
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError:
+                return {}
+        if not isinstance(data, dict):
+            return {}
+        result: Dict[int, List[dict]] = {}
+        for k, v in data.items():
+            try:
+                idx = int(k)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(v, list):
+                result[idx] = v
+        return result
 
     async def _chat(self, prompt: str) -> str:
         async with self._semaphore:
@@ -184,10 +228,76 @@ class Relabeler:
             'relabel_model': self.model,
         }
 
+    async def _relabel_batch(
+        self, batch: List[dict],
+    ) -> List[dict]:
+        """N개 레코드를 BATCH 프롬프트로 한 번에 호출. 실패 시 SINGLE 폴백."""
+        non_empty = [
+            (i, r) for i, r in enumerate(batch)
+            if (r.get('text') or '').strip()
+        ]
+        if not non_empty:
+            return [
+                {**r, 'gold_spans_8type': [], 'relabel_model': self.model}
+                for r in batch
+            ]
+
+        sentences = [r['text'] for _, r in non_empty]
+        prompt = self._build_batch(sentences)
+        try:
+            raw = await self._chat(prompt)
+        except Exception as exc:
+            logger.warning('Batch failed, falling back to single: %s', exc)
+            return await asyncio.gather(
+                *[self._relabel_one(r) for r in batch]
+            )
+
+        parsed = self._parse_batch(raw)
+        if not parsed:
+            logger.warning('Batch parse failed, falling back to single')
+            return await asyncio.gather(
+                *[self._relabel_one(r) for r in batch]
+            )
+
+        # 원래 배치 순서대로 결과 조립
+        results: List[dict] = [None] * len(batch)  # type: ignore
+        for slot, (orig_i, rec) in enumerate(non_empty):
+            spans = parsed.get(slot, [])
+            offset_spans = match_offsets(rec['text'], spans)
+            results[orig_i] = {
+                **rec,
+                'gold_spans_8type': offset_spans,
+                'relabel_model': self.model,
+            }
+        # 빈 텍스트 레코드 채우기
+        for i, rec in enumerate(batch):
+            if results[i] is None:
+                results[i] = {
+                    **rec,
+                    'gold_spans_8type': [],
+                    'relabel_model': self.model,
+                }
+        return results
+
     async def relabel(self, records: List[dict]) -> List[dict]:
-        """레코드 리스트를 concurrency 제한 하에 병렬 재라벨한다."""
-        tasks = [self._relabel_one(r) for r in records]
-        return await asyncio.gather(*tasks)
+        """레코드 리스트를 concurrency 제한 하에 병렬 재라벨한다.
+
+        batch_size > 1일 때는 BATCH 프롬프트로 그룹화해 호출 수를 줄인다.
+        """
+        if self.batch_size <= 1:
+            tasks = [self._relabel_one(r) for r in records]
+            return await asyncio.gather(*tasks)
+
+        groups = [
+            records[i: i + self.batch_size]
+            for i in range(0, len(records), self.batch_size)
+        ]
+        tasks = [self._relabel_batch(g) for g in groups]
+        grouped_results = await asyncio.gather(*tasks)
+        flat: List[dict] = []
+        for g in grouped_results:
+            flat.extend(g)
+        return flat
 
     def relabel_sync(self, records: List[dict]) -> List[dict]:
         return asyncio.run(self.relabel(records))

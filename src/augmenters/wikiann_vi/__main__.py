@@ -58,6 +58,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help='Parallel LLM request limit',
     )
     parser.add_argument(
+        '--batch-size', type=int, default=1,
+        help='Group N records per BATCH prompt call (1=SINGLE)',
+    )
+    parser.add_argument(
         '--max-tokens', type=int, default=2048,
         help='max_tokens per LLM completion',
     )
@@ -125,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         max_tokens=args.max_tokens,
         concurrency=args.concurrency,
         timeout=args.timeout,
+        batch_size=args.batch_size,
     )
 
     print(
