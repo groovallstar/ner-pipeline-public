@@ -2,10 +2,8 @@
 
 > 대상 이슈: #10 `feat/issue-10-vi-ner-8type-relabel`
 > 스펙: `docs/specs/entities/vietnamese-ner-8types.md`
-> 데이터 범위: WikiANN-vi test split
->   - Cross-model kappa: 앞 1000 샘플 (Gemma + Qwen)
->   - 빈도·Wikidata 앵커: 전체 10000 샘플 (Gemma)
-> 실행일: 2026-04-21
+> 데이터 범위: WikiANN-vi test split (전체 10,000 샘플, 두 모델 재라벨)
+> 실행일: 2026-04-21 ~ 2026-04-22
 
 ## 1. 요약
 
@@ -13,9 +11,11 @@ WikiANN-vi(3종: PER/LOC/ORG) 데이터셋을 Stockmark 8종 스키마로 재라
 파이프라인을 구축하고, 두 가지 독립 검증(Cross-model Cohen's kappa + Wikidata
 P31 앵커)으로 신뢰도를 정량화했다. 핵심 지표:
 
-- **Cross-model κ = 0.6620** (1K, Gemma vs Qwen) — Landis-Koch "substantial"
-- **동일 offset 타입 일치율 97.06%** — 두 LLM이 같은 span을 엔티티로 보면
-  타입 선택은 거의 합의. kappa 하락 주원인은 coverage(엔티티로 볼지) 차이
+- **Cross-model κ = 0.6571** (10K, Gemma vs Qwen) — Landis-Koch "substantial".
+  1K 표본(κ=0.6620)과 거의 동일해 대표성 검증됨
+- **동일 offset 타입 일치율 97.91%** (10K) — 두 LLM이 같은 span을 엔티티로
+  보면 타입 선택은 거의 합의. kappa 하락 주원인은 coverage(엔티티로 볼지)
+  차이
 - **Wikidata 앵커 일치율 95.12%** (10K, 134 Q-ID 매핑 후 6858건 매핑) —
   독립 silver 대비 재라벨 타입이 강하게 정합. 매핑 확장으로 政治的組織名
   0.54 → 0.72, イベント名 0.62 → 0.70 개선
@@ -46,11 +46,14 @@ CLI:
 - Cross-model kappa: `python -m augmenters.wikiann_vi.kappa`
 - Wikidata 앵커: `python -m augmenters.wikiann_vi.wikidata_anchor`
 
-산출물(`data/wikiann_vi_relabel/`, gitignore):
-- `gemma_8type.jsonl` (1K, 318KB), `qwen_8type.jsonl` (1K, 303KB)
-- `gemma_8type_full.jsonl` (10K, 3.2MB)
-- `kappa_gemma_vs_qwen.json`, `anchor_gemma.json` (1K),
-  `anchor_gemma_full.json` (10K), `wikidata_cache.json`
+### 최종 산출물 (`data/wikiann_vi_relabel/`, gitignore)
+
+| 파일 | 크기 | 설명 |
+|---|---|---|
+| `vi_wikiann_8type_recall.jsonl` | 4.9 MB | **최종 데이터셋** — Gemma/Qwen 10K 재라벨을 recall 정책으로 병합. 10,000 records, 11,437 span (high 8,996 + medium_recall 2,441) |
+
+중간 산출물(모델별 JSONL·kappa·anchor JSON)은 최종 병합 파일 생성 후 제거.
+재생성은 §13 재현 명령어로 가능.
 
 ## 3. 타입 분포
 
@@ -92,27 +95,32 @@ CLI:
 
 10K에서 소요 1519s (25분), 프롬프트 토큰 13.5M, 완료 토큰 285K, 에러 0건.
 
-## 4. Cross-model Cohen's kappa (1K)
+## 4. Cross-model Cohen's kappa
 
-| 지표 | 값 |
-|---|---:|
-| Paired spans (A∪B offsets) | 1214 |
-| Observed agreement `po` | 0.7331 |
-| Chance agreement `pe` | 0.2104 |
-| **Cohen's κ** | **0.6620** |
+1K와 10K 모두 측정. 10K가 최종 신뢰 대상이지만 1K 대표성 검증 차원에서
+병기한다.
 
-Landis-Koch 해석(0.61–0.80) **"substantial agreement"**.
+| 지표 | 1K | 10K |
+|---|---:|---:|
+| Records | 1,000 | 10,000 |
+| Paired spans (A∪B offsets) | 1,214 | 12,315 |
+| Observed agreement `po` | 0.7331 | 0.7305 |
+| Chance agreement `pe` | 0.2104 | 0.2140 |
+| **Cohen's κ** | **0.6620** | **0.6571** |
+
+Landis-Koch 해석(0.61–0.80) **"substantial agreement"**. 10K kappa가 1K와
+오차 0.5% 이내로 일치하여 **1K 표본이 전체 분포를 대표**한다는 것이 검증됨.
 
 ### 4.1 핵심 분석: coverage vs type 이중 구조
 
-| 지표 | 값 |
-|---|---:|
-| Gemma span 수 | 1152 |
-| Qwen span 수 | 979 |
-| 동일 offset에 둘 다 라벨 (교집합) | 917 |
-| Gemma만 라벨 | 235 |
-| Qwen만 라벨 | 62 |
-| **동일 offset 내 타입 일치율** | **890/917 = 97.06%** |
+| 지표 | 1K | 10K |
+|---|---:|---:|
+| Gemma span 수 | 1,152 | 11,629 |
+| Qwen span 수 | 979 | 9,874 |
+| 동일 offset 교집합 | 917 | 9,188 |
+| Gemma only | 235 | 2,441 |
+| Qwen only | 62 | 686 |
+| **동일 offset 타입 일치율** | **97.06%** | **97.91%** |
 
 혼동 행렬 상위 off-diagonal 10건 중 8건이 `X → O` 또는 `O → X` ("한쪽만
 라벨"). 실제 타입 간 cross-confusion은 `地名 → 政治的組織名 5건`,
@@ -345,6 +353,33 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
   P31이 확인된 건만 사용하는 것이 보수적
 - Low 계층 없음 (v1의 Low 두 타입은 매핑 확장으로 Mid로 상승)
 
+### 10.3 최종 데이터셋: confidence 태그 병합
+
+두 모델 재라벨 결과를 span 단위 confidence 태그를 붙여 단일 파일로 병합
+(`src/augmenters/wikiann_vi/merge_confidence.py`).
+
+4가지 confidence 카테고리:
+
+| confidence | source | 10K 건수 | 의미 |
+|---|---|---:|---|
+| `high` | `both` | 8,996 | Gemma·Qwen이 동일 offset + 동일 타입 라벨 |
+| `conflict` | `both_disagree` | 192 | 동일 offset인데 타입 불일치 |
+| `medium_recall` | `gemma_only` | 2,441 | Gemma만 라벨(Qwen skip) |
+| `medium_prec` | `qwen_only` | 686 | Qwen만 라벨(Gemma skip) |
+
+4가지 병합 정책 제공:
+
+| 정책 | span 수 (10K) | 용도 |
+|---|---:|---|
+| `recall` (**채택**) | **11,437** | Gemma 관대함 + 합의 span. conflict 제외 |
+| `precision` | 9,682 | Qwen 보수적 + 합의 span |
+| `high_only` | 8,996 | 최고신뢰 subset (gold-like) |
+| `full` | 12,315 | 전수. 학습 시 confidence 가중치 적용 |
+
+**본 이슈 최종 채택**은 `recall` 정책. 이유: BERT 파인튜닝 시 엔티티 밀도를
+최대화하고, 타입 혼동 스팬(192건)만 제외해 노이즈를 걸러낸다. 학습 코드에서
+`if span['confidence'] == 'high'` 한 줄로 보수 모드 전환 가능.
+
 ### 10.3 매핑 테이블 확장 (본 이슈에서 실행)
 
 `WIKIDATA_TO_STOCKMARK`를 80종 → **134종으로 확장**해 mapped 5724 → 6858
@@ -392,36 +427,38 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 ## 13. 재현
 
 ```bash
-# 1) 1K 재라벨 (각 모델)
-python -m augmenters.wikiann_vi \
-    --max-samples 1000 --concurrency 16 \
-    --base-url http://localhost:8081/v1 \
-    --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --output data/wikiann_vi_relabel/gemma_8type.jsonl
-python -m augmenters.wikiann_vi \
-    --max-samples 1000 --concurrency 16 \
-    --base-url http://localhost:8082/v1 \
-    --model cyankiwi/Qwen3.5-27B-AWQ-4bit \
-    --output data/wikiann_vi_relabel/qwen_8type.jsonl
-
-# 2) Cross-model kappa (1K)
-python -m augmenters.wikiann_vi.kappa \
-    --a data/wikiann_vi_relabel/gemma_8type.jsonl \
-    --b data/wikiann_vi_relabel/qwen_8type.jsonl \
-    --json-out data/wikiann_vi_relabel/kappa_gemma_vs_qwen.json
-
-# 3) 10K 재라벨 (Gemma)
+# 1) 10K 전체 재라벨 — Gemma (primary)
 python -m augmenters.wikiann_vi \
     --max-samples 10000 --concurrency 16 \
     --base-url http://localhost:8081/v1 \
     --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
     --output data/wikiann_vi_relabel/gemma_8type_full.jsonl
 
-# 4) Wikidata 앵커 검증 (10K)
+# 2) 10K 전체 재라벨 — Qwen (validator, ~2h)
+python -m augmenters.wikiann_vi \
+    --max-samples 10000 --concurrency 16 \
+    --base-url http://localhost:8082/v1 \
+    --model cyankiwi/Qwen3.5-27B-AWQ-4bit \
+    --output data/wikiann_vi_relabel/qwen_8type_full.jsonl
+
+# 3) Cross-model kappa (10K)
+python -m augmenters.wikiann_vi.kappa \
+    --a data/wikiann_vi_relabel/gemma_8type_full.jsonl \
+    --b data/wikiann_vi_relabel/qwen_8type_full.jsonl \
+    --json-out data/wikiann_vi_relabel/kappa_gemma_vs_qwen_full.json
+
+# 4) Wikidata 앵커 검증 (10K, Gemma 기준)
 python -m augmenters.wikiann_vi.wikidata_anchor \
     --input data/wikiann_vi_relabel/gemma_8type_full.jsonl \
     --cache data/wikiann_vi_relabel/wikidata_cache.json \
     --json-out data/wikiann_vi_relabel/anchor_gemma_full.json
+
+# 5) 최종 병합 — recall 정책으로 단일 파일 생성
+python -m augmenters.wikiann_vi.merge_confidence \
+    --gemma data/wikiann_vi_relabel/gemma_8type_full.jsonl \
+    --qwen data/wikiann_vi_relabel/qwen_8type_full.jsonl \
+    --policy recall \
+    --output data/wikiann_vi_relabel/vi_wikiann_8type_recall.jsonl
 ```
 
 ## 14. 관련 커밋·문서
