@@ -6,9 +6,6 @@
 
 - 소스: `src/augmenters/{wikiann_vi,pii}/`
 - 파생 데이터: `data/stockmark/`, `data/wikiann_vi/`, `data/pii/`
-- 도입 이슈: #13 (2026-04-22)
-- 재설계: #17 Phase 1 (2026-04-23) — `ADDRESS` 제거(→ `LOC` 흡수), `DOB` →
-  `DAT` 개명·의미 확장(모든 날짜)으로 14종 → 13종
 
 ## 배경
 
@@ -48,9 +45,7 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 |---|---|---|---|
 | `DAT` | 날짜 | 연도·월·일·기간·상대날짜·시대·요일. 출생일·사건일·이적일·일반 표기 구분 없이 **모든 날짜**를 포괄 | 1985年4月3日, 2016年1月29日, 어제, ngày 15 tháng 3 |
 
-`DAT`는 #17 Phase 1에서 도입되었다. 이전 `DOB`(출생일만)를 개명·확장해 PII
-전용에서 일반 NER 타입으로 이동했다. `augmenters/pii` 주입기는 여전히 합성
-날짜 값을 `DAT` 라벨로 생성한다.
+`augmenters/pii` 주입기는 합성 날짜 값을 `DAT` 라벨로 생성한다.
 
 ### PII 4종
 
@@ -61,10 +56,9 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 | `ID_NUM` | 개인 식별 번호 | 주민등록번호·마이넘버·사원번호 등 개인 식별 숫자열 | 284257239645, 123-45-6789 |
 | `CREDIT_CARD` | 신용카드 번호 | 13~19자리 카드 번호 (공백·하이픈 구분자 허용) | 4065 0551 3022 4539 |
 
-> 이전 `ADDRESS`는 #17 Phase 1에서 제거되었다. `augmenters/pii`의
-> `generate_address()` 함수는 유지되지만, 생성된 주소 값은 전부 `LOC`로
-> 병합되어 학습 데이터에 반영된다 (`DEFAULT_MERGE_RULES`에
-> `'ADDRESS': 'LOC'` 무조건 병합 규칙 추가).
+> `augmenters/pii`의 `generate_address()` 함수가 주소 문자열을 생성하지만,
+> 출력 라벨은 `DEFAULT_MERGE_RULES`의 `'ADDRESS': 'LOC'` 무조건 병합 규칙에
+> 의해 전부 `LOC`로 변환되어 학습 데이터에 반영된다.
 
 ## 경계 규칙 (요약)
 
@@ -94,8 +88,8 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 |---|---|---|---|
 | `人名` | `PER` | `EMAIL` | `EMAIL` (그대로) |
 | `法人名` | `CORP` | `PHONE` | `PHONE` (그대로) |
-| `地名` | `LOC` | `ADDRESS` | **`LOC`** (병합 규칙으로 흡수, #17 Phase 1) |
-| `施設名` | `FAC` | `DOB` | **`DAT`** (일반 날짜로 확장, #17 Phase 1) |
+| `地名` | `LOC` | `ADDRESS` | **`LOC`** (병합 규칙으로 흡수) |
+| `施設名` | `FAC` | `DOB` | **`DAT`** (일반 날짜) |
 | `製品名` | `PROD` | `ID_NUMBER` | **`ID_NUM`** |
 | `イベント名` | `EVT` | `CREDIT_CARD` | `CREDIT_CARD` (그대로) |
 | `政治的組織名` | `POL` | | |
@@ -119,22 +113,13 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
     (134 Q-ID)
   - `augmenters/pii/` 프롬프트·verifier·generators
   - `src/labelers/ja/ner_prompts.py` — JA 라벨러의 PII 프롬프트가 canonical을
-    직접 사용 (#17 Phase 1에서 ADDRESS 제거·DOB→DAT 반영)
+    직접 사용
 
 - **적용 제외** (후속 처리 예정):
   - `src/llm_eval/**`, `src/classifier/**`
   - `src/labelers/vi/ner_prompts.py`의 WikiANN 3종(`PER/LOC/ORG`) — 본
-    canonical과 철자 겹치지만 스키마 context가 다르므로 별도 관리. VI
-    정합은 #17 Phase 2에서 일괄 수행
+    canonical과 철자 겹치지만 스키마 context가 다르므로 별도 관리 (VI
+    라벨러 확장 작업에서 일괄 정합 예정)
   - `src/labelers/ko/**`, `docs/manual/data/korean-*.md` — 국문 데이터는
     미사용
 
-## 변경 이력
-
-- 2026-04-22 도입 (이슈 #13). 이전 JA 원문 라벨 → 영문 축약 14종으로 통일.
-- 2026-04-23 PII 스키마 재설계 (이슈 #17 Phase 1, JA 한정). `ADDRESS` 제거(→
-  `LOC` 흡수), `DOB` → `DAT` 개명·의미 확장(모든 날짜). 14종 → 13종.
-- 2026-04-23 VI 측 PII 생성기 정합 (이슈 #17 Phase 2). `generators/vi.py`의
-  `generate_dob` → `generate_dat` 개명, `generate_pii` 디스패치에서 JA/VI
-  공통 진입점 단순화(getattr 폴백 제거). `labelers/vi/ner_prompts.py` 전면
-  Stockmark 정합은 VI 라벨러 확장 작업(별도 이슈)에서 일괄 처리.
