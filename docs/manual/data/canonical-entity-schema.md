@@ -133,5 +133,8 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 
 - 2026-04-22 도입 (이슈 #13). 이전 JA 원문 라벨 → 영문 축약 14종으로 통일.
 - 2026-04-23 PII 스키마 재설계 (이슈 #17 Phase 1, JA 한정). `ADDRESS` 제거(→
-  `LOC` 흡수), `DOB` → `DAT` 개명·의미 확장(모든 날짜). 14종 → 13종. VI
-  라벨러·프롬프트 정합은 Phase 2에서 일괄 처리.
+  `LOC` 흡수), `DOB` → `DAT` 개명·의미 확장(모든 날짜). 14종 → 13종.
+- 2026-04-23 VI 측 PII 생성기 정합 (이슈 #17 Phase 2). `generators/vi.py`의
+  `generate_dob` → `generate_dat` 개명, `generate_pii` 디스패치에서 JA/VI
+  공통 진입점 단순화(getattr 폴백 제거). `labelers/vi/ner_prompts.py` 전면
+  Stockmark 정합은 VI 라벨러 확장 작업(별도 이슈)에서 일괄 처리.

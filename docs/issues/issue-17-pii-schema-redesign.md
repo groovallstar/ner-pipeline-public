@@ -1,12 +1,15 @@
 # issue-17: PII 스키마 재설계 — ADDRESS → LOC 흡수, DOB → DAT 개명·의미 확장
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/17
-- PR (Phase 1): (머지 직전 채움)
-- PR (Phase 2): (후속)
-- 브랜치 (Phase 1): `feat/issue-17-pii-schema-redesign`
-- 브랜치 (Phase 2): `feat/issue-17-pii-schema-vi` (후속, Phase 1 머지 후 분기)
+- PR: (머지 직전 채움, `closes #17`)
+- 브랜치: `feat/issue-17-pii-schema-redesign` (Phase 1 + Phase 2 통합)
 - 승인일: 2026-04-23
-- 완료일: -
+- 완료일: 2026-04-23
+
+> **운영 변경** (2026-04-23): 사용자 지시로 Phase 2(VI 측 PII 정합, 좁은
+> 범위)를 Phase 1과 동일 브랜치에 이어서 작업하고 **단일 PR로 통합**한다.
+> VI 라벨러 전면 Stockmark 정합(`labelers/vi/ner_prompts.py` 3종 → 13종
+> 확장)은 VI 라벨러 확장 작업(별도 이슈)에서 처리.
 
 ## 목적
 
@@ -105,27 +108,57 @@
 
 ---
 
-## Phase 2 — VI (후속 개요)
+## Phase 2 — VI (좁은 범위)
 
-Phase 1 PR 머지 후 새 브랜치(`feat/issue-17-pii-schema-vi`)로 분기해 진행한다. VI 라벨러 전면 확장(3종 → Stockmark 동형) 작업과 동기화가 필요하므로, Phase 2 착수 전 해당 작업 일정 확인.
+Phase 1과 동일 브랜치에서 이어서 처리. 어정쩡한 중간 상태를 피하기 위해
+`labelers/vi/ner_prompts.py` 3종 → 13종 전면 확장은 VI 라벨러 확장 작업
+(별도 이슈)에 위임하고, 본 Phase 2는 PII 주입 내부 코드 정합에만 집중.
 
-### 범위 개요
+### 범위
 
-- `src/labelers/vi/ner_prompts.py` — Stockmark 체계(8 NER + PII 5종: NAME/PHONE/DAT/ID_NUM/CREDIT_CARD)로 확장. DAT 포함
-- `src/augmenters/wikiann_vi/prompts.py` — DAT 추가 처리 (필요 시)
-- `src/augmenters/pii/generators/vi.py` — `generate_dob` → `generate_dat`, `generate_address` 유지
-- `docs/manual/data/vietnamese-ner-8types.md` — PII 관련 참조 정합
-- `data/pii/` — VI PII 주입 생성 시점 확인
+#### 포함
+- `src/augmenters/pii/generators/vi.py` — `generate_dob` → `generate_dat`
+  개명 + docstring
+- `src/augmenters/pii/generators/base.py` — Phase 1에서 임시로 두었던
+  `getattr(mod, 'generate_dat', …or generate_dob)` 폴백 제거, `mod.generate_dat`
+  단순 호출로 복원
+- `docs/manual/data/canonical-entity-schema.md` — 변경 이력에 Phase 2 완료 기록
+- `src/augmenters/AGENTS.md` — VI Phase 2 호환 주석 제거
 
-### 성공 기준 (개요)
+#### 제외 (별도 이슈)
+- `src/labelers/vi/ner_prompts.py` — 3종 유지 (VI 라벨러 확장 작업에서 일괄
+  13종화)
+- `src/augmenters/wikiann_vi/prompts.py` — 8종 재라벨 프롬프트, PII 무관
+- `docs/manual/data/vietnamese-ner-8types.md` — PII 관련 직접 참조 없음 확인
+- `data/pii/` VI 파일 — 아직 존재하지 않음
 
-- Phase 2 PR 시점에 확정. Phase 1과 동일한 "canonical 13종", "`pytest`·`ruff` 통과" 기준에 VI 라벨러 테스트 추가
+### 성공 기준
+
+- [x] `generate_dat`가 JA/VI 모두 존재해 `generate_pii(label='DAT')`가
+  언어별 분기 없이 동작
+- [x] `pytest` 통과 (Phase 1과 동일 203건)
+- [x] `ruff check src/augmenters/` 통과
+
+### Phase 2 구현 결과 (계획 대비)
+
+- [x] `generators/vi.py` `generate_dob` → `generate_dat` 개명 + docstring
+- [x] `generators/base.py` DAT dispatch 단순화 (폴백 제거)
+- [x] `augmenters/AGENTS.md` VI 호환 주석 제거
+- [x] `canonical-entity-schema.md` 변경 이력에 Phase 2 완료 반영
+
+### Phase 2 검증
+
+- **테스트**: `python -m pytest tests/ -q` → **203 passed** (Phase 1 이후
+  변동 없음 — getattr 폴백 제거가 동작에 영향 없음 확인)
+- **Lint**: `ruff check src/augmenters/` → **All checks passed**
+- **호환성**: VI PII 주입 데이터는 아직 생성 전이므로 마이그레이션 불필요.
+  JA 쪽은 Phase 1에서 이미 치환 완료
 
 ---
 
 ## 후속 복귀
 
-- **이슈 #17 Phase 2 PR 머지 후 #16 (CORP/POL/FAC/ORG 경계 정비) 재개**
+- **이슈 #17 PR 머지 후 #16 (CORP/POL/FAC/ORG 경계 정비) 재개**
 
 ---
 

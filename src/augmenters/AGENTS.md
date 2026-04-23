@@ -45,7 +45,7 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 | `loaders.py` | Stockmark / 임의 JSONL / HF Hub → `Record` 어댑터 모음 |
 | `generators/base.py` | `PIIGenerator` Protocol, `get_generator(lang)` factory, 공용 유틸 |
 | `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일). #17 Phase 1에서 `generate_dob` → `generate_dat` 개명 |
-| `generators/vi.py` | 베트남어 PII 생성기 (`generate_dob` 잔존 — #17 Phase 2에서 `generate_dat`로 개명 예정, 현재는 `generate_pii` 디스패치가 getattr 폴백으로 호환) |
+| `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜/ID/이메일). #17 Phase 2에서 `generate_dob` → `generate_dat` 개명 완료 |
 
 #### 라벨 스키마
 - **내부 PII 토큰**(생성·병합 전): `NAME`, `PHONE`, `ADDRESS`, `DAT`,
