@@ -29,10 +29,10 @@ def is_simple_place(address_text: str) -> bool:
 def apply_label_merge(entity: Entity, rules: dict[str, str]) -> Entity:
     """단일 엔티티에 병합 규칙을 적용한 새 엔티티를 반환한다.
 
-    `ADDRESS → 地名` 규칙은 단일 토큰 주소에만 적용된다.
+    `ADDRESS → LOC` 규칙은 단일 토큰 주소에만 적용된다.
     """
     new_label = rules.get(entity.label, entity.label)
-    if entity.label == 'ADDRESS' and rules.get('ADDRESS') == '地名':
+    if entity.label == 'ADDRESS' and rules.get('ADDRESS') == 'LOC':
         if not is_simple_place(entity.text):
             new_label = 'ADDRESS'
     if new_label == entity.label:
@@ -57,7 +57,7 @@ _JA_CONNECTORS: dict[str, str] = {
     'PHONE': '連絡先：{v}。',
     'ADDRESS': '住所：{v}。',
     'DOB': '生年月日：{v}。',
-    'ID_NUMBER': 'ID番号：{v}。',
+    'ID_NUM': 'ID番号：{v}。',
     'EMAIL': 'メール：{v}。',
     'CREDIT_CARD': 'カード番号：{v}。',
 }
@@ -67,7 +67,7 @@ _VI_CONNECTORS: dict[str, str] = {
     'PHONE': ' SĐT: {v}.',
     'ADDRESS': ' Địa chỉ: {v}.',
     'DOB': ' Ngày sinh: {v}.',
-    'ID_NUMBER': ' CCCD: {v}.',
+    'ID_NUM': ' CCCD: {v}.',
     'EMAIL': ' Email: {v}.',
     'CREDIT_CARD': ' Thẻ: {v}.',
 }
@@ -141,7 +141,7 @@ class PIIInjector:
                 text=value,
             ))
 
-        # 라벨 병합 규칙 적용 (NAME -> 人名 등).
+        # 라벨 병합 규칙 적용 (NAME -> PER 등).
         merged = merge_entities(new_entities, self.config.label_merge_rules)
 
         # 오프셋 검증 (실패 시 ValueError).

@@ -4,7 +4,7 @@
 1. 재라벨 JSONL의 엔티티 표면형을 unique set으로 수집
 2. vi.wikipedia.org/w/api.php로 페이지 → Q-ID 조회 (batch ≤ 50)
 3. www.wikidata.org/w/api.php로 Q-ID → P31(instance of) claim 조회 (batch ≤ 50)
-4. P31 Q-ID를 Stockmark 8종으로 매핑 (`WIKIDATA_TO_STOCKMARK` 테이블)
+4. P31 Q-ID를 canonical 8종으로 매핑 (`WIKIDATA_TO_CANONICAL` 테이블)
 5. 재라벨 타입 vs Wikidata 추론 타입 일치율 집계
 
 네트워크·캐시 제약:
@@ -12,8 +12,8 @@
 - 결과를 JSON 파일로 캐시해 재실행 시 재호출 방지
 - 네트워크 실패는 개별 엔티티 단위로 소프트 폴백 (reason='network')
 
-이슈 #10 4단계 구현. 상세 기준: `docs/specs/entities/vietnamese-ner-8types.md`
-§5.2 두 번째 검증 레이어.
+상세 기준: `docs/manual/canonical-entity-schema.md`,
+`docs/specs/entities/vietnamese-ner-8types.md` §5.2 두 번째 검증 레이어.
 """
 import argparse
 import json
@@ -30,165 +30,164 @@ logger = logging.getLogger(__name__)
 
 _VI_WIKI_API = 'https://vi.wikipedia.org/w/api.php'
 _WIKIDATA_API = 'https://www.wikidata.org/w/api.php'
-_UA = 'ner_pipeline/issue-10 (research; https://github.com/groovallstar/ner_pipeline)'
+_UA = 'ner_pipeline/issue-13 (research; https://github.com/groovallstar/ner_pipeline)'
 _BATCH = 50
 _SLEEP = 0.2
 
 
-# Wikidata Q-ID → Stockmark 8종 (수작업 curated, 주요 케이스).
+# Wikidata Q-ID → canonical 8종 (수작업 curated, 주요 케이스).
 # 본 테이블에 없는 Q-ID는 '미매핑(unmapped)'으로 집계되며, 리포트에 상위
 # unmapped Q-ID가 기록돼 후속 확장의 판단 근거가 된다.
-WIKIDATA_TO_STOCKMARK: Dict[str, str] = {
-    # 人名
-    'Q5': '人名',            # human
-    'Q215627': '人名',       # person
-    'Q95074': '人名',        # fictional character
-    'Q15632617': '人名',     # fictional human
+WIKIDATA_TO_CANONICAL: Dict[str, str] = {
+    # PER
+    'Q5': 'PER',             # human
+    'Q215627': 'PER',        # person
+    'Q95074': 'PER',         # fictional character
+    'Q15632617': 'PER',      # fictional human
 
-    # 地名 (자연·행정)
-    'Q6256': '地名',         # country
-    'Q3024240': '地名',      # historical country
-    'Q515': '地名',          # city
-    'Q15284': '地名',        # municipality
-    'Q3957': '地名',         # town
-    'Q532': '地名',          # village
-    'Q5119': '地名',         # capital city
-    'Q82794': '地名',        # geographic region
-    'Q1549591': '地名',      # big city
-    'Q2074737': '地名',      # state of Vietnam (tỉnh)
-    'Q17366755': '地名',     # administrative territorial entity (Việt Nam)
-    'Q4022': '地名',         # river
-    'Q8502': '地名',         # mountain
-    'Q46831': '地名',        # mountain range
-    'Q165': '地名',          # sea
-    'Q23397': '地名',        # lake
-    'Q23442': '地名',        # island
-    'Q33837': '地名',        # archipelago
-    'Q39816': '地名',        # valley
-    'Q39594': '地名',        # bay (vịnh)
-    'Q124734': '地名',       # strait
-    'Q34876': '地名',        # cape
-    'Q3250511': '地名',      # gulf
-    'Q486972': '地名',       # human settlement (generic)
-    'Q7376585': '地名',      # rural commune (Việt Nam xã)
-    'Q7275': '地名',         # state
-    'Q35657': '地名',        # U.S. state
-    'Q484170': '地名',       # commune of France
-    'Q1615742': '地名',      # province of China
-    'Q2824648': '地名',      # province of Vietnam
-    'Q1289426': '地名',      # county of China
-    'Q24764': '地名',        # municipality of the Philippines
+    # LOC (자연·행정)
+    'Q6256': 'LOC',          # country
+    'Q3024240': 'LOC',       # historical country
+    'Q515': 'LOC',           # city
+    'Q15284': 'LOC',         # municipality
+    'Q3957': 'LOC',          # town
+    'Q532': 'LOC',           # village
+    'Q5119': 'LOC',          # capital city
+    'Q82794': 'LOC',         # geographic region
+    'Q1549591': 'LOC',       # big city
+    'Q2074737': 'LOC',       # state of Vietnam (tỉnh)
+    'Q17366755': 'LOC',      # administrative territorial entity (Việt Nam)
+    'Q4022': 'LOC',          # river
+    'Q8502': 'LOC',          # mountain
+    'Q46831': 'LOC',         # mountain range
+    'Q165': 'LOC',           # sea
+    'Q23397': 'LOC',         # lake
+    'Q23442': 'LOC',         # island
+    'Q33837': 'LOC',         # archipelago
+    'Q39816': 'LOC',         # valley
+    'Q39594': 'LOC',         # bay (vịnh)
+    'Q124734': 'LOC',        # strait
+    'Q34876': 'LOC',         # cape
+    'Q3250511': 'LOC',       # gulf
+    'Q486972': 'LOC',        # human settlement (generic)
+    'Q7376585': 'LOC',       # rural commune (Việt Nam xã)
+    'Q7275': 'LOC',          # state
+    'Q35657': 'LOC',         # U.S. state
+    'Q484170': 'LOC',        # commune of France
+    'Q1615742': 'LOC',       # province of China
+    'Q2824648': 'LOC',       # province of Vietnam
+    'Q1289426': 'LOC',       # county of China
+    'Q24764': 'LOC',         # municipality of the Philippines
 
-    # 施設名 (물리적 개별 건축물·교통시설)
-    'Q41176': '施設名',      # building
-    'Q811979': '施設名',     # architectural structure
-    'Q16917': '施設名',      # hospital
-    'Q1248784': '施設名',    # airport
-    'Q55488': '施設名',      # railway station
-    'Q124757': '施設名',     # bus station
-    'Q3914': '施設名',       # school (초·중·고)
-    'Q159334': '施設名',     # secondary school
-    'Q9842': '施設名',       # primary school
-    'Q44613': '施設名',      # monastery
-    'Q24398318': '施設名',   # religious building
-    'Q16970': '施設名',      # church building
-    'Q210272': '施設名',     # temple / pagoda
-    'Q33506': '施設名',      # museum
-    'Q7075': '施設名',       # library
-    'Q22806': '施設名',      # national library
-    'Q24354': '施設名',      # theatre
-    'Q483110': '施設名',     # stadium
-    'Q12876': '施設名',      # tunnel
-    'Q12280': '施設名',      # bridge
-    'Q57821': '施設名',      # fortification
-    'Q23413': '施設名',      # castle
-    'Q105731': '施設名',     # tower
+    # FAC (물리적 개별 건축물·교통시설)
+    'Q41176': 'FAC',         # building
+    'Q811979': 'FAC',        # architectural structure
+    'Q16917': 'FAC',         # hospital
+    'Q1248784': 'FAC',       # airport
+    'Q55488': 'FAC',         # railway station
+    'Q124757': 'FAC',        # bus station
+    'Q3914': 'FAC',          # school (초·중·고)
+    'Q159334': 'FAC',        # secondary school
+    'Q9842': 'FAC',          # primary school
+    'Q44613': 'FAC',         # monastery
+    'Q24398318': 'FAC',      # religious building
+    'Q16970': 'FAC',         # church building
+    'Q210272': 'FAC',        # temple / pagoda
+    'Q33506': 'FAC',         # museum
+    'Q7075': 'FAC',          # library
+    'Q22806': 'FAC',         # national library
+    'Q24354': 'FAC',         # theatre
+    'Q483110': 'FAC',        # stadium
+    'Q12876': 'FAC',         # tunnel
+    'Q12280': 'FAC',         # bridge
+    'Q57821': 'FAC',         # fortification
+    'Q23413': 'FAC',         # castle
+    'Q105731': 'FAC',        # tower
 
-    # 法人名 (영리 법인·기업·방송·운송 회사)
-    'Q4830453': '法人名',    # business
-    'Q783794': '法人名',     # company
-    'Q891723': '法人名',     # public company
-    'Q219577': '法人名',     # holding company
-    'Q18388277': '法人名',   # technology company
-    'Q1002697': '法人名',    # periodical
-    'Q11032': '法人名',      # newspaper
-    'Q1616075': '法人名',    # television station
-    'Q14350': '法人名',      # radio station
-    'Q2085381': '法人名',    # publisher
-    'Q270791': '法人名',     # state-owned enterprise
-    'Q43229': '法人名',      # organization (약 fallback; organization이
-                             # 더 구체 타입 없을 때)
-    'Q46970': '法人名',      # airline
-    'Q249556': '法人名',     # railway company
-    'Q11229656': '法人名',   # bank
+    # CORP (영리 법인·기업·방송·운송 회사)
+    'Q4830453': 'CORP',      # business
+    'Q783794': 'CORP',       # company
+    'Q891723': 'CORP',       # public company
+    'Q219577': 'CORP',       # holding company
+    'Q18388277': 'CORP',     # technology company
+    'Q1002697': 'CORP',      # periodical
+    'Q11032': 'CORP',        # newspaper
+    'Q1616075': 'CORP',      # television station
+    'Q14350': 'CORP',        # radio station
+    'Q2085381': 'CORP',      # publisher
+    'Q270791': 'CORP',       # state-owned enterprise
+    'Q43229': 'CORP',        # organization (약 fallback; 더 구체 없는 경우)
+    'Q46970': 'CORP',        # airline
+    'Q249556': 'CORP',       # railway company
+    'Q11229656': 'CORP',     # bank
 
-    # 製品名 (물건·작품·소프트웨어)
-    'Q2424752': '製品名',    # product
-    'Q7397': '製品名',       # software
-    'Q9143': '製品名',       # programming language
-    'Q17155032': '製品名',   # phone
-    'Q11424': '製品名',      # film
-    'Q7889': '製品名',       # video game
-    'Q571': '製品名',        # book
-    'Q8261': '製品名',       # novel
-    'Q482994': '製品名',     # album
-    'Q134556': '製品名',     # single (music)
-    'Q7725634': '製品名',    # literary work
-    'Q15416': '製品名',      # television program
-    'Q5398426': '製品名',    # television series
-    'Q3405677': '製品名',    # automobile model
-    'Q105543609': '製品名',  # musical work / composition
-    'Q21198342': '製品名',   # manga series
+    # PROD (물건·작품·소프트웨어)
+    'Q2424752': 'PROD',      # product
+    'Q7397': 'PROD',         # software
+    'Q9143': 'PROD',         # programming language
+    'Q17155032': 'PROD',     # phone
+    'Q11424': 'PROD',        # film
+    'Q7889': 'PROD',         # video game
+    'Q571': 'PROD',          # book
+    'Q8261': 'PROD',         # novel
+    'Q482994': 'PROD',       # album
+    'Q134556': 'PROD',       # single (music)
+    'Q7725634': 'PROD',      # literary work
+    'Q15416': 'PROD',        # television program
+    'Q5398426': 'PROD',      # television series
+    'Q3405677': 'PROD',      # automobile model
+    'Q105543609': 'PROD',    # musical work / composition
+    'Q21198342': 'PROD',     # manga series
 
-    # イベント名 (일회성 사건·전쟁·조약)
-    'Q1190554': 'イベント名', # occurrence (event)
-    'Q178561': 'イベント名',  # battle
-    'Q198': 'イベント名',     # war
-    'Q625994': 'イベント名',  # conference
-    'Q1775415': 'イベント名', # festival
-    'Q175331': 'イベント名',  # demonstration
-    'Q350604': 'イベント名',  # armed conflict
-    'Q13418847': 'イベント名', # historical event
-    'Q2761147': 'イベント名',  # military operation
-    'Q131569': 'イベント名',   # treaty
-    'Q1407217': 'イベント名',  # national sports competition (일회 대회)
-    'Q27020041': 'イベント名', # sports season
+    # EVT (일회성 사건·전쟁·조약)
+    'Q1190554': 'EVT',       # occurrence (event)
+    'Q178561': 'EVT',        # battle
+    'Q198': 'EVT',           # war
+    'Q625994': 'EVT',        # conference
+    'Q1775415': 'EVT',       # festival
+    'Q175331': 'EVT',        # demonstration
+    'Q350604': 'EVT',        # armed conflict
+    'Q13418847': 'EVT',      # historical event
+    'Q2761147': 'EVT',       # military operation
+    'Q131569': 'EVT',        # treaty
+    'Q1407217': 'EVT',       # national sports competition (일회 대회)
+    'Q27020041': 'EVT',      # sports season
 
-    # 政治的組織名 (정당·정부·군·국제기구)
-    'Q7278': '政治的組織名',       # political party
-    'Q327333': '政治的組織名',     # government agency
-    'Q7210356': '政治的組織名',    # political organization
-    'Q183061': '政治的組織名',     # cabinet
-    'Q8719': '政治的組織名',       # military
-    'Q749622': '政治的組織名',     # armed forces
-    'Q610311': '政治的組織名',     # military unit
-    'Q484652': '政治的組織名',     # international organization
-    'Q1463313': '政治的組織名',    # intergovernmental organization
-    'Q41487': '政治的組織名',      # national assembly
-    'Q35798': '政治的組織名',      # court
-    'Q28083049': '政治的組織名',   # national intelligence agency
-    'Q61883': '政治的組織名',      # air force
-    'Q4508': '政治的組織名',       # navy
-    'Q772547': '政治的組織名',     # armed forces
-    'Q15925165': '政治的組織名',   # specific intl organization (e.g. IOM)
+    # POL (정당·정부·군·국제기구)
+    'Q7278': 'POL',          # political party
+    'Q327333': 'POL',        # government agency
+    'Q7210356': 'POL',       # political organization
+    'Q183061': 'POL',        # cabinet
+    'Q8719': 'POL',          # military
+    'Q749622': 'POL',        # armed forces
+    'Q610311': 'POL',        # military unit
+    'Q484652': 'POL',        # international organization
+    'Q1463313': 'POL',       # intergovernmental organization
+    'Q41487': 'POL',         # national assembly
+    'Q35798': 'POL',         # court
+    'Q28083049': 'POL',      # national intelligence agency
+    'Q61883': 'POL',         # air force
+    'Q4508': 'POL',          # navy
+    'Q772547': 'POL',        # armed forces
+    'Q15925165': 'POL',      # specific intl organization (e.g. IOM)
 
-    # その他の組織名 (대학·스포츠·협회)
-    'Q3918': 'その他の組織名',     # university
-    'Q38723': 'その他の組織名',    # higher education institution
-    'Q875538': 'その他の組織名',   # public university
-    'Q2385804': 'その他の組織名',  # educational institution
-    'Q748019': 'その他の組織名',   # scientific society
-    'Q955824': 'その他の組織名',   # learned society
-    'Q4438121': 'その他の組織名',  # sports organization
-    'Q847017': 'その他の組織名',   # sports club
-    'Q476028': 'その他の組織名',   # association football club
-    'Q13406463': 'その他の組織名', # sports league
-    'Q15991290': 'その他の組織名', # sports season / league
-    'Q215380': 'その他の組織名',   # musical group / band
-    'Q1478443': 'その他の組織名',  # football federation
-    'Q135408445': 'その他の組織名',# men's national football team
-    'Q15991303': 'その他の組織名', # association football league
-    'Q2178147': 'その他の組織名',  # trade association
+    # ORG (대학·스포츠·협회)
+    'Q3918': 'ORG',          # university
+    'Q38723': 'ORG',         # higher education institution
+    'Q875538': 'ORG',        # public university
+    'Q2385804': 'ORG',       # educational institution
+    'Q748019': 'ORG',        # scientific society
+    'Q955824': 'ORG',        # learned society
+    'Q4438121': 'ORG',       # sports organization
+    'Q847017': 'ORG',        # sports club
+    'Q476028': 'ORG',        # association football club
+    'Q13406463': 'ORG',      # sports league
+    'Q15991290': 'ORG',      # sports season / league
+    'Q215380': 'ORG',        # musical group / band
+    'Q1478443': 'ORG',       # football federation
+    'Q135408445': 'ORG',     # men's national football team
+    'Q15991303': 'ORG',      # association football league
+    'Q2178147': 'ORG',       # trade association
 }
 
 
@@ -318,9 +317,9 @@ def fetch_p31(
 
 
 def anchor_type(p31_qids: List[str]) -> Optional[str]:
-    """P31 Q-ID 리스트에서 Stockmark 8종을 결정한다. 매핑 0건이면 None."""
+    """P31 Q-ID 리스트에서 canonical 8종을 결정한다. 매핑 0건이면 None."""
     for qid in p31_qids:
-        tgt = WIKIDATA_TO_STOCKMARK.get(qid)
+        tgt = WIKIDATA_TO_CANONICAL.get(qid)
         if tgt:
             return tgt
     return None
@@ -468,7 +467,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help='Field holding 8-type spans',
     )
     p.add_argument(
-        '--cache', default='data/wikiann_vi_relabel/wikidata_cache.json',
+        '--cache', default='data/wikiann_vi/wikidata_cache.json',
         help='JSON cache file for API responses',
     )
     p.add_argument(

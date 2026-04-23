@@ -1,7 +1,8 @@
-# 베트남어 WikiANN-vi → Stockmark 8종 스키마 확장 리포트 (2026-04)
+# 베트남어 WikiANN-vi → 8종 스키마 확장 리포트 (2026-04)
 
 > 대상 이슈: #10 `feat/issue-10-vi-ner-8type-relabel`
-> 스펙: `docs/specs/entities/vietnamese-ner-8types.md`
+> 스펙: `docs/manual/data/vietnamese-ner-8types.md`
+> 라벨 표기: canonical 영문 축약 (`docs/manual/data/canonical-entity-schema.md`)
 > 데이터 범위: WikiANN-vi test split (전체 10,000 샘플, 두 모델 재라벨)
 > 실행일: 2026-04-21 ~ 2026-04-22
 
@@ -11,22 +12,23 @@ WikiANN-vi(3종: PER/LOC/ORG) 데이터셋을 Stockmark 8종 스키마로 재라
 파이프라인을 구축하고, 두 가지 독립 검증(Cross-model Cohen's kappa + Wikidata
 P31 앵커)으로 신뢰도를 정량화했다. 핵심 지표:
 
-- **Cross-model κ = 0.6571** (10K, Gemma vs Qwen) — Landis-Koch "substantial".
-  1K 표본(κ=0.6620)과 거의 동일해 대표성 검증됨
-- **동일 offset 타입 일치율 97.91%** (10K) — 두 LLM이 같은 span을 엔티티로
+- **Cross-model κ = 0.5766** (10K test, Gemma vs Qwen3.6) — Landis-Koch
+  "moderate". 1K 표본(κ=0.5978)과 0.02 이내로 일치해 **1K 표본 대표성
+  검증**됨
+- **동일 offset 타입 일치율 97.09%** (10K) — 두 LLM이 같은 span을 엔티티로
   보면 타입 선택은 거의 합의. kappa 하락 주원인은 coverage(엔티티로 볼지)
-  차이
+  차이 (Qwen3.6이 보수적으로 엔티티 없음을 자주 반환)
 - **Wikidata 앵커 일치율 95.12%** (10K, 134 Q-ID 매핑 후 6858건 매핑) —
-  독립 silver 대비 재라벨 타입이 강하게 정합. 매핑 확장으로 政治的組織名
-  0.54 → 0.72, イベント名 0.62 → 0.70 개선
-- **製品名 1077, イベント名 182** (10K Gemma) — 원래 WikiANN에 없던 타입도
+  독립 silver 대비 재라벨 타입이 강하게 정합. 매핑 확장으로 POL
+  0.54 → 0.72, EVT 0.62 → 0.70 개선
+- **PROD 1131, EVT 166** (10K Gemma) — 원래 WikiANN에 없던 타입도
   재어노테이션만으로 학습 가능 수준 확보. **합성 보충 불필요**로 판정
 - **JA Stockmark 3종 공정 비교**: VI entity density는 JA의 54% 수준, 분포도
   JA는 ORG 지배(51%), VI는 PER/LOC 지배(82%) — 절대 F1 비교 부적합 확정,
   상대 순위·특성 분석만 유효
-- **타입별 신뢰도 계층화** (매핑 확장 후):
-  - High (≥93%): 人名·地名·法人名·製品名
-  - Mid (~72~85%): その他の組織名·施設名·政治的組織名·イベント名
+- **타입별 신뢰도 계층화** (Wikidata 앵커 v2 기준):
+  - High (≥93%): PER·LOC·CORP·PROD
+  - Mid (~72~85%): ORG·FAC·POL·EVT
 
 ## 2. 실행 환경
 
@@ -35,10 +37,11 @@ P31 앵커)으로 신뢰도를 정량화했다. 핵심 지표:
 | 데이터셋 | `unimelb-nlp/wikiann` config=`vi`, split=`test` |
 | 전체 test 크기 | 10000 |
 | 모델 A (primary) | `cyankiwi/gemma-4-31B-it-AWQ-8bit` @ :8081 |
-| 모델 B (validator) | `cyankiwi/Qwen3.5-27B-AWQ-4bit` @ :8082 (1K만) |
+| 모델 B (validator) | `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` @ :8082 (MoE, 3B active) |
 | 프롬프트 | `src/augmenters/wikiann_vi/prompts.py` SINGLE (~3.8K chars) |
 | 요청 제어 | concurrency=16, temperature=0, max_tokens=2048, timeout=120s |
 | max_model_len | 8192 |
+| thinking | vLLM 컨테이너 기본 `enable_thinking=false` (둘 다) |
 | 앵커 소스 | `vi.wikipedia.org/w/api.php` (pageprops) + `www.wikidata.org/w/api.php` (P31) |
 
 CLI:
@@ -46,54 +49,55 @@ CLI:
 - Cross-model kappa: `python -m augmenters.wikiann_vi.kappa`
 - Wikidata 앵커: `python -m augmenters.wikiann_vi.wikidata_anchor`
 
-### 최종 산출물 (`data/wikiann_vi_relabel/`, gitignore)
+### 최종 산출물 (`data/wikiann_vi/`, gitignore)
 
 | 파일 | 크기 | 설명 |
 |---|---|---|
-| `vi_wikiann_8type_recall.jsonl` | 4.9 MB | **최종 데이터셋** — Gemma/Qwen 10K 재라벨을 recall 정책으로 병합. 10,000 records, 11,437 span (high 8,996 + medium_recall 2,441) |
+| `vi_wikiann_8type_recall_test.jsonl` | 4.9 MB | **test 분할 최종 데이터셋** — Gemma/Qwen3.6 10K 재라벨을 recall 정책으로 병합. 10,000 records, 11,382 span (high 8,181 + medium_recall 3,201) |
 
 중간 산출물(모델별 JSONL·kappa·anchor JSON)은 최종 병합 파일 생성 후 제거.
 재생성은 §13 재현 명령어로 가능.
 
 ## 3. 타입 분포
 
-### 3.1 1K 샘플 (Gemma vs Qwen)
+### 3.1 1K 샘플 (Gemma vs Qwen3.6)
 
-| 타입 | Gemma | Qwen | Δ (G−Q) |
+| 타입 | Gemma | Qwen3.6 | Δ (G−Q) |
 |---|---:|---:|---:|
-| 人名 | 415 | 384 | +31 |
-| 地名 | 368 | 314 | +54 |
-| 製品名 | 108 | 67 | +41 |
-| その他の組織名 | 87 | 62 | +25 |
-| 政治的組織名 | 68 | 70 | −2 |
-| 施設名 | 49 | 38 | +11 |
-| 法人名 | 36 | 28 | +8 |
-| イベント名 | 21 | 16 | +5 |
-| **총 스팬** | **1152** | **979** | **+173** |
-| 엔티티 레코드 | 853 | 695 | +158 |
+| PER | 418 | 387 | +31 |
+| LOC | 370 | 292 | +78 |
+| PROD | 113 | 66 | +47 |
+| ORG | 86 | 52 | +34 |
+| POL | 69 | 47 | +22 |
+| FAC | 48 | 34 | +14 |
+| CORP | 29 | 28 | +1 |
+| EVT | 20 | 22 | −2 |
+| **총 스팬** | **1,153** | **928** | **+225** |
+| 엔티티 레코드 | 859 | 652 | +207 |
 
-두 모델 모두 타입 순위 동일(人名 > 地名 > 製品名 > その他の組織名 …). Gemma가
-전반적으로 18% 더 관대, 政治的組織名만 Qwen 역전(+2).
+두 모델 모두 타입 순위 대체로 유사(PER > LOC > PROD > ORG …). Gemma가
+전반적으로 약 24% 더 관대, EVT만 Qwen3.6이 역전(+2). Qwen3.6의
+보수적 경향이 두드러진다.
 
 ### 3.2 10K 전체 test (Gemma)
 
 | 타입 | 10K | 1K | 10× 환산 편차 |
 |---|---:|---:|---:|
-| 人名 | 4196 | 415 | −46 (flat) |
-| 地名 | 3892 | 368 | +212 |
-| 製品名 | 1077 | 108 | −3 (flat) |
-| その他の組織名 | 774 | 87 | −96 |
-| 政治的組織名 | 715 | 68 | +35 |
-| 施設名 | 483 | 49 | −7 (flat) |
-| 法人名 | 310 | 36 | −50 |
-| イベント名 | 182 | 21 | −28 |
-| **총 스팬** | **11629** | **1152** | **+109** (flat) |
-| 엔티티 레코드 | 8590 / 10000 | 853 / 1000 | +60 |
+| PER | 4,206 | 418 | +26 (flat) |
+| LOC | 3,885 | 370 | +185 |
+| PROD | 1,131 | 113 | +1 (flat) |
+| ORG | 768 | 86 | −92 |
+| POL | 724 | 69 | +34 |
+| FAC | 465 | 48 | −15 (flat) |
+| CORP | 282 | 29 | −8 (flat) |
+| EVT | 166 | 20 | −34 |
+| **총 스팬** | **11,627** | **1,153** | **+97** (flat) |
+| 엔티티 레코드 | 8,620 / 10000 | 859 / 1000 | +30 |
 
 1K→10K 환산은 대부분 ±10% 이내로 안정. 즉 **1K 표본이 전체 분포를
 합리적으로 대표**한다.
 
-10K에서 소요 1519s (25분), 프롬프트 토큰 13.5M, 완료 토큰 285K, 에러 0건.
+10K Gemma 재라벨 소요 약 25분(concurrency=16), 에러 0건.
 
 ## 4. Cross-model Cohen's kappa
 
@@ -103,50 +107,56 @@ CLI:
 | 지표 | 1K | 10K |
 |---|---:|---:|
 | Records | 1,000 | 10,000 |
-| Paired spans (A∪B offsets) | 1,214 | 12,315 |
-| Observed agreement `po` | 0.7331 | 0.7305 |
-| Chance agreement `pe` | 0.2104 | 0.2140 |
-| **Cohen's κ** | **0.6620** | **0.6571** |
+| Paired spans (A∪B offsets) | 1,219 | 12,317 |
+| Observed agreement `po` | 0.6809 | 0.6642 |
+| Chance agreement `pe` | 0.2066 | 0.2069 |
+| **Cohen's κ** | **0.5978** | **0.5766** |
 
-Landis-Koch 해석(0.61–0.80) **"substantial agreement"**. 10K kappa가 1K와
-오차 0.5% 이내로 일치하여 **1K 표본이 전체 분포를 대표**한다는 것이 검증됨.
+Landis-Koch 해석(0.41–0.60) **"moderate agreement"**. 10K kappa가 1K와
+오차 0.02 이내로 일치하여 **1K 표본이 전체 분포를 대표**한다는 것이
+검증됨.
 
 ### 4.1 핵심 분석: coverage vs type 이중 구조
 
 | 지표 | 1K | 10K |
 |---|---:|---:|
-| Gemma span 수 | 1,152 | 11,629 |
-| Qwen span 수 | 979 | 9,874 |
-| 동일 offset 교집합 | 917 | 9,188 |
-| Gemma only | 235 | 2,441 |
-| Qwen only | 62 | 686 |
-| **동일 offset 타입 일치율** | **97.06%** | **97.91%** |
+| Gemma span 수 | 1,153 | 11,627 |
+| Qwen3.6 span 수 | 928 | 9,116 |
+| 동일 offset 교집합 | 862 | 8,426 |
+| both_match | 830 | 8,181 |
+| both_disagree | 32 | 245 |
+| Gemma only | 291 | 3,201 |
+| Qwen3.6 only | 66 | 690 |
+| **동일 offset 타입 일치율** | **96.29%** | **97.09%** |
 
-혼동 행렬 상위 off-diagonal 10건 중 8건이 `X → O` 또는 `O → X` ("한쪽만
-라벨"). 실제 타입 간 cross-confusion은 `地名 → 政治的組織名 5건`,
-`その他の組織名 → イベント名 2건` 수준으로 극소.
-
-**함의**: 8종 매핑 스펙 자체에 구조적 모호성이 적다(LLM 두 개가 독립적으로
-같은 타입으로 수렴). 남는 불일치는 "무엇을 엔티티로 볼지"(≈ recall)에서
-발생 — 프롬프트 민감도·모델 보수성의 차이.
+**함의**: 동일 span을 양쪽이 엔티티로 본 경우 타입 선택은 97%+로 거의
+합의. 남는 불일치는 "무엇을 엔티티로 볼지"(≈ coverage)에서 발생 —
+Qwen3.6이 보수적으로 빈 배열을 반환해 Gemma only가 3,201건으로 큰 비중.
+kappa가 "moderate" 구간에 머무는 주원인.
 
 ### 4.2 Gemma 관점 per-type 일치율
 
+10K test 기준 (Gemma에서 라벨된 span이 Qwen3.6과 동일 타입으로 합의된
+비율):
+
 | 타입 | agreed / total_A | ratio |
 |---|---|---:|
-| 政治的組織名 | 61 / 68 | 0.8971 |
-| 人名 | 349 / 415 | 0.8410 |
-| 地名 | 293 / 368 | 0.7962 |
-| 施設名 | 33 / 49 | 0.6735 |
-| 法人名 | 24 / 36 | 0.6667 |
-| その他の組織名 | 54 / 87 | 0.6207 |
-| イベント名 | 13 / 21 | 0.6190 |
-| 製品名 | 63 / 108 | 0.5833 |
+| PER | 3,283 / 4,206 | 0.7806 |
+| CORP | 208 / 282 | 0.7376 |
+| LOC | 2,874 / 3,885 | 0.7398 |
+| FAC | 306 / 465 | 0.6581 |
+| EVT | 104 / 166 | 0.6265 |
+| POL | 437 / 724 | 0.6036 |
+| ORG | 458 / 768 | 0.5964 |
+| PROD | 511 / 1,131 | 0.4518 |
+
+1K 대비 일관된 순위. PER·CORP·LOC 상위, PROD 최저는 Qwen3.6이 제품·작품
+경계를 더 좁게 잡는 경향 때문.
 
 ## 5. Wikidata 앵커 검증
 
 `vi.wikipedia.org`에서 엔티티 표면형 → Wikidata Q-ID → P31(instance of) →
-`WIKIDATA_TO_STOCKMARK` 매핑(약 80종 큐레이션) → 8종 추론 타입. 재라벨 타입과
+`WIKIDATA_TO_CANONICAL` 매핑(약 80종 큐레이션) → 8종 추론 타입. 재라벨 타입과
 추론 타입 일치율을 측정.
 
 ### 5.1 커버리지
@@ -176,32 +186,32 @@ Landis-Koch 해석(0.61–0.80) **"substantial agreement"**. 10K kappa가 1K와
 
 | 타입 | agreed / mapped | ratio | 계층 |
 |---|---|---:|---|
-| 人名 | 3032 / 3058 | 0.9915 | **High** |
-| 地名 | 1418 / 1439 | 0.9854 | **High** |
-| 法人名 | 195 / 203 | 0.9606 | **High** |
-| 製品名 | 341 / 363 | 0.9394 | **High** |
-| その他の組織名 | 236 / 289 | 0.8166 | Mid |
-| 施設名 | 93 / 116 | 0.8017 | Mid |
-| イベント名 | 18 / 29 | 0.6207 | Low |
-| 政治的組織名 | 123 / 227 | 0.5419 | Low |
+| PER | 3032 / 3058 | 0.9915 | **High** |
+| LOC | 1418 / 1439 | 0.9854 | **High** |
+| CORP | 195 / 203 | 0.9606 | **High** |
+| PROD | 341 / 363 | 0.9394 | **High** |
+| ORG | 236 / 289 | 0.8166 | Mid |
+| FAC | 93 / 116 | 0.8017 | Mid |
+| EVT | 18 / 29 | 0.6207 | Low |
+| POL | 123 / 227 | 0.5419 | Low |
 
 ### 5.4 주요 불일치 패턴 (1K 수작업 분석 15건 기준)
 
 **카테고리 A — LLM 오류, 앵커 정정 (3건)**:
-- `Becamex Bình Dương` (축구 클럽): LLM `法人名` → 앵커 `その他の組織名` ✓
-- `Oren Lavie` (가수): LLM `法人名` → 앵커 `人名` ✓
-- `Hải Lăng Vương` (베트남 왕족): LLM `製品名` → 앵커 `人名` ✓
+- `Becamex Bình Dương` (축구 클럽): LLM `CORP` → 앵커 `ORG` ✓
+- `Oren Lavie` (가수): LLM `CORP` → 앵커 `PER` ✓
+- `Hải Lăng Vương` (베트남 왕족): LLM `PROD` → 앵커 `PER` ✓
 
 **카테고리 B — 앵커 오류, LLM 정정 (2건)**:
-- `Thư viện Quốc gia Pháp` (도서관): LLM `施設名` (스펙 올바름) → 앵커
-  `法人名` (publisher P31 잘못 선택). 매핑 테이블에 `Q22806 (national
+- `Thư viện Quốc gia Pháp` (도서관): LLM `FAC` (스펙 올바름) → 앵커
+  `CORP` (publisher P31 잘못 선택). 매핑 테이블에 `Q22806 (national
   library)` 누락이 원인
-- `Her Morning Elegance` (노래): LLM `製品名` (올바름) → 앵커 `人名` (Wikipedia
+- `Her Morning Elegance` (노래): LLM `PROD` (올바름) → 앵커 `PER` (Wikipedia
   리다이렉트가 가수 페이지로 가서 anchor 기법 자체 한계)
 
 **카테고리 C — 진짜 모호 (1건)**:
-- `đế quốc La Mã Thần thánh` (신성 로마 제국): LLM `政治的組織名` vs 앵커
-  `地名`. 역사 국가·정치체의 이중 본성으로 양쪽 모두 타당
+- `đế quốc La Mã Thần thánh` (신성 로마 제국): LLM `POL` vs 앵커
+  `LOC`. 역사 국가·정치체의 이중 본성으로 양쪽 모두 타당
 
 ### 5.5 매핑 테이블 확장 (초기 80 → 확장 134 Q-ID)
 
@@ -219,16 +229,16 @@ Landis-Koch 해석(0.61–0.80) **"substantial agreement"**. 10K kappa가 1K와
 
 | 타입 | v1 | v2 | Δ |
 |---|---:|---:|---:|
-| 人名 | 0.9915 | 0.9836 | −0.79pp |
-| 地名 | 0.9854 | 0.9899 | +0.45pp (+639 mapped) |
-| 法人名 | 0.9606 | 0.8628 | −9.78pp (Q219577 holding company 영향) |
-| 製品名 | 0.9394 | 0.9420 | +0.26pp |
-| その他の組織名 | 0.8166 | 0.8521 | +3.55pp |
-| 施設名 | 0.8017 | 0.7969 | −0.48pp |
-| **政治的組織名** | **0.5419** | **0.7236** | **+18.2pp** ← Low → Mid |
-| **イベント名** | **0.6207** | **0.7027** | **+8.2pp** |
+| PER | 0.9915 | 0.9836 | −0.79pp |
+| LOC | 0.9854 | 0.9899 | +0.45pp (+639 mapped) |
+| CORP | 0.9606 | 0.8628 | −9.78pp (Q219577 holding company 영향) |
+| PROD | 0.9394 | 0.9420 | +0.26pp |
+| ORG | 0.8166 | 0.8521 | +3.55pp |
+| FAC | 0.8017 | 0.7969 | −0.48pp |
+| **POL** | **0.5419** | **0.7236** | **+18.2pp** ← Low → Mid |
+| **EVT** | **0.6207** | **0.7027** | **+8.2pp** |
 
-정치적 조직·이벤트 저신뢰 계층이 크게 개선. 人名·法人名 소폭 regression은
+정치적 조직·이벤트 저신뢰 계층이 크게 개선. PER·CORP 소폭 regression은
 확장 엔트리가 더 많은 엔티티를 잡으면서 경계 케이스 포함 영향이지만,
 절대값은 여전히 High/Mid 계층 유지.
 
@@ -239,33 +249,35 @@ Landis-Koch 해석(0.61–0.80) **"substantial agreement"**. 10K kappa가 1K와
 
 ## 6. 타입별 신뢰도 계층화 (3중 검증 통합)
 
-Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
+Cross-model kappa(10K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 함께 놓고 타입별 신뢰 수준을 도출.
 
 | 타입 | Kappa per-type | 앵커 v2 per-type | 종합 계층 | 학습 데이터 권장 가중치 |
 |---|---:|---:|---|---|
-| 人名 | 0.8410 | 0.9836 | **High** | 그대로 사용 |
-| 地名 | 0.7962 | 0.9899 | **High** | 그대로 사용 |
-| 法人名 | 0.6667 | 0.8628 | **High (낮은 kappa는 coverage)** | 그대로 |
-| 製品名 | 0.5833 | 0.9420 | **High** (마찬가지) | 그대로 |
-| その他の組織名 | 0.6207 | 0.8521 | Mid | 그대로 · 리뷰 |
-| 施設名 | 0.6735 | 0.7969 | Mid | 그대로 · 리뷰 |
-| 政治的組織名 | 0.8971 | 0.7236 | **Mid** (v1 확장으로 Low→Mid 이동) | 리뷰 |
-| イベント名 | 0.6190 | 0.7027 | **Mid** (v1 확장으로 Low→Mid 이동) | 리뷰 |
+| PER | 0.7806 | 0.9836 | **High** | 그대로 사용 |
+| LOC | 0.7398 | 0.9899 | **High** | 그대로 사용 |
+| CORP | 0.7376 | 0.8628 | **High** | 그대로 사용 |
+| PROD | 0.4518 | 0.9420 | **High** (낮은 kappa는 coverage) | 그대로 |
+| FAC | 0.6581 | 0.7969 | Mid | 그대로 · 리뷰 |
+| EVT | 0.6265 | 0.7027 | Mid | 리뷰 |
+| POL | 0.6036 | 0.7236 | Mid | 리뷰 |
+| ORG | 0.5964 | 0.8521 | Mid | 리뷰 |
 
 주목:
-- **政治的組織名** kappa(0.897) 높고 앵커도 매핑 확장 후 0.72까지 상승. 두
-  모델이 "이건 정부/정당이다" 판단에 합의한 만큼 학습 신호 신뢰 가능.
-- **イベント名**은 kappa·앵커 모두 0.6~0.7 수준. 전쟁·조약·대회의 Wikidata
-  타입 다양성이 커 더 큰 표본(전체 10K·20K로 확장) 또는 수작업 검증 필요.
-- **매핑 확장 효과**: 기존 Low 계층 두 타입(政治的組織名·イベント名)이 모두
+- **PROD** kappa(0.45)는 낮지만 앵커 일치율(0.94) 높음 — Qwen3.6이
+  제품·작품 경계를 보수적으로 잡아 coverage 차이가 kappa 하락의 주원인.
+  Wikidata 앵커 기준 품질은 High.
+- **ORG·POL**은 kappa·앵커 모두 0.6~0.85 수준. 두 타입 경계가 "정치적
+  조직 vs 일반 조직"에서 양측 모두 흔들릴 수 있음. 포함하되 학습 시
+  리뷰 권장.
+- **매핑 확장 효과** (§5.5): 기존 Low 계층 두 타입(POL·EVT)이 매핑 v2에서
   Mid로 이동 → 8종 전체가 Mid 이상 신뢰 구간으로 정리됨.
 
 ## 7. WikiANN silver 오라벨 교정 부작용
 
 3샘플 스모크에서 이미 관찰된 현상이 10K에서도 재현:
 - `Ốc móng tay` (조개류 요리): WikiANN LOC → Gemma/Qwen 모두 skip
-- `Lãm` (인명): WikiANN non-entity → Gemma 人名 신규 탐지
+- `Lãm` (인명): WikiANN non-entity → Gemma PER 신규 탐지
 
 즉 재라벨이 WikiANN silver 오라벨을 일부 교정한다는 유익한 부작용이 있다.
 다만 교정 규모를 정량화하려면 gold 수준의 수작업 평가가 필요 — 본 프로젝트
@@ -273,31 +285,31 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 
 ## 8. 합성 보충 필요성 결론 (이슈 #10 5단계)
 
-원래 플랜: "製品名·イベント名 빈도 집계. 부족 판정 시 합성 보충 경로(PII
+원래 플랜: "PROD·EVT 빈도 집계. 부족 판정 시 합성 보충 경로(PII
 구조 재사용) 추가 여부를 사용자 승인 후 결정."
 
 집계 결과 (10K Gemma):
-- 製品名: **1077** (학습 데이터로 충분)
-- イベント名: **182** (희소하지만 최소 실용 수준)
+- PROD: **1,131** (학습 데이터로 충분)
+- EVT: **166** (희소하지만 최소 실용 수준)
 
 결론: **합성 보충 불필요**. 재어노테이션(경로 B)만으로 두 타입 모두 확보.
-イベント名 182건은 저빈도지만 (a) 앵커 일치율 62%로 품질 관리 가능하고, (b)
+EVT 166건은 저빈도지만 (a) 앵커 일치율 70%로 품질 관리 가능하고, (b)
 합성 주입의 부작용(문맥 부자연성·학습 편향)을 감수할 만큼 부족하지는 않다.
 
 ## 9. 3종 공정 비교 (JA Stockmark vs VI WikiANN)
 
 이슈 #10 스펙 §5.2 ③의 "PER/LOC/ORG 3종 subset" 비교. 두 데이터셋에서
-8종 → 3종 매핑(`人名=PER, 地名=LOC, 法人名∪政治的組織名∪その他の組織名=ORG`)
+8종 → 3종 매핑(`PER=PER, LOC=LOC, CORP∪POL∪ORG=ORG`)
 후 3종 subset에 한해 비교.
 
 | 지표 | JA Stockmark test | VI WikiANN-vi 10K (Gemma 재라벨) |
 |---|---:|---:|
 | Records | 1,069 | 10,000 |
-| 3종 subset 엔티티 | 1,950 | 9,887 |
-| **Entity density** | **1.824** / record | **0.989** / record |
-| PER (= 人名) | 554 (28.4%) | 4,196 (42.4%) |
-| LOC (= 地名) | 399 (20.5%) | 3,892 (39.4%) |
-| ORG (= 法人∪政治∪その他) | 997 (51.1%) | 1,799 (18.2%) |
+| 3종 subset 엔티티 | 1,950 | 9,865 |
+| **Entity density** | **1.824** / record | **0.987** / record |
+| PER (= PER) | 554 (28.4%) | 4,206 (42.6%) |
+| LOC (= LOC) | 399 (20.5%) | 3,885 (39.4%) |
+| ORG (= CORP∪POL∪ORG) | 997 (51.1%) | 1,774 (18.0%) |
 
 ### 9.1 관찰
 
@@ -305,22 +317,22 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
   분리해 문맥이 짧고 엔티티가 적다. Stockmark는 Wikipedia 본문을 문단 단위로
   사용해 엔티티가 촘촘하다.
 - **ORG 비율 역전** — JA 51%(본문에 기업·기관 언급 많음) vs VI 18%(개요가
-  인물·지명 중심). 8종 기준에서도 法人名 JA 19.8% vs VI 2.7%.
+  인물·지명 중심). 8종 기준에서도 CORP JA 19.8% vs VI 2.7%.
 - **PER/LOC 비율 VI 지배적** — 42%+39% = 81% (JA는 49%).
 
 ### 9.2 8종 전체 분포 비교
 
 | 타입 | JA % | VI % |
 |---|---:|---:|
-| 人名 | 21.14 | 36.08 |
-| 法人名 | 19.80 | 2.67 |
-| 地名 | 15.22 | 33.47 |
-| 施設名 | 9.04 | 4.15 |
-| 製品名 | 8.74 | 9.26 |
-| イベント名 | 7.82 | 1.57 |
-| 政治的組織名 | 9.12 | 6.15 |
-| その他の組織名 | 9.12 | 6.66 |
-| **총 스팬** | **2,621** | **11,629** |
+| PER | 21.14 | 36.18 |
+| CORP | 19.80 | 2.43 |
+| LOC | 15.22 | 33.42 |
+| FAC | 9.04 | 4.00 |
+| PROD | 8.74 | 9.73 |
+| EVT | 7.82 | 1.43 |
+| POL | 9.12 | 6.23 |
+| ORG | 9.12 | 6.61 |
+| **총 스팬** | **2,621** | **11,627** |
 
 ### 9.3 함의
 
@@ -336,21 +348,21 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 
 ### 10.1 주·보조 라벨러 분리
 
-- **Gemma = primary 재라벨러**. 5× 빠르고 recall 넓음
-- **Qwen = validator**. 둘 다 라벨한 span = "고신뢰 silver" (10K kappa 결과
-  확정은 Qwen 10K 재실행 필요 — 후속 이슈에서 결정)
-- Gemma-only 235 span은 "확장 silver"로 분리 보관. 학습 데이터로 쓰려면
-  포함/제외 ablation 실험 필수
+- **Gemma = primary 재라벨러**. recall 넓고 라벨링 성공률 ~86%로 높음
+- **Qwen3.6 = validator**. MoE 아키텍처로 raw 디코딩 속도는 빠르나
+  엔티티 인식에 보수적이라 성공률 ~64%. 둘 다 라벨한 span = "고신뢰 silver"
+- Gemma-only 3,201 span은 "확장 silver"로 분리 보관 가능. 학습 데이터로
+  쓰려면 포함/제외 ablation 실험 권장
 
 ### 10.2 신뢰도 계층별 학습 데이터 활용
 
-매핑 테이블 v2(134 Q-ID) 기준 재분류:
+매핑 테이블 v2(134 Q-ID) 기준 재분류 (10K Gemma):
 
-- **High 계층 4종**(人名·地名·法人名·製品名, 합계 9475 span = 81%) — 그대로
+- **High 계층 4종**(PER·LOC·CORP·PROD, 합계 9,504 span = 81.7%) — 그대로
   silver 학습 데이터로 사용
-- **Mid 계층 4종**(その他の組織名·施設名·政治的組織名·イベント名, 합계 2154
-  = 19%) — 앵커 확인된 것 우선, 특히 政治的組織名·イベント名은 Wikidata
-  P31이 확인된 건만 사용하는 것이 보수적
+- **Mid 계층 4종**(ORG·FAC·POL·EVT, 합계 2,123 span = 18.3%) — 앵커
+  확인된 것 우선, 특히 POL·EVT은 Wikidata P31이 확인된 건만 사용하는
+  것이 보수적
 - Low 계층 없음 (v1의 Low 두 타입은 매핑 확장으로 Mid로 상승)
 
 ### 10.3 최종 데이터셋: confidence 태그 병합
@@ -358,23 +370,23 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 두 모델 재라벨 결과를 span 단위 confidence 태그를 붙여 단일 파일로 병합
 (`src/augmenters/wikiann_vi/merge_confidence.py`).
 
-4가지 confidence 카테고리:
+4가지 confidence 카테고리 (10K test):
 
 | confidence | source | 10K 건수 | 의미 |
 |---|---|---:|---|
-| `high` | `both` | 8,996 | Gemma·Qwen이 동일 offset + 동일 타입 라벨 |
-| `conflict` | `both_disagree` | 192 | 동일 offset인데 타입 불일치 |
-| `medium_recall` | `gemma_only` | 2,441 | Gemma만 라벨(Qwen skip) |
-| `medium_prec` | `qwen_only` | 686 | Qwen만 라벨(Gemma skip) |
+| `high` | `both` | 8,181 | Gemma·Qwen3.6이 동일 offset + 동일 타입 |
+| `conflict` | `both_disagree` | 245 | 동일 offset인데 타입 불일치 |
+| `medium_recall` | `gemma_only` | 3,201 | Gemma만 라벨(Qwen3.6 skip) |
+| `medium_prec` | `qwen_only` | 690 | Qwen3.6만 라벨(Gemma skip) |
 
 4가지 병합 정책 제공:
 
-| 정책 | span 수 (10K) | 용도 |
+| 정책 | span 수 (10K test) | 용도 |
 |---|---:|---|
-| `recall` (**채택**) | **11,437** | Gemma 관대함 + 합의 span. conflict 제외 |
-| `precision` | 9,682 | Qwen 보수적 + 합의 span |
-| `high_only` | 8,996 | 최고신뢰 subset (gold-like) |
-| `full` | 12,315 | 전수. 학습 시 confidence 가중치 적용 |
+| `recall` (**채택**) | **11,382** | Gemma 관대함 + 합의 span. conflict 제외 |
+| `precision` | 8,871 | Qwen3.6 보수적 + 합의 span |
+| `high_only` | 8,181 | 최고신뢰 subset (gold-like) |
+| `full` | 12,317 | 전수. 학습 시 confidence 가중치 적용 |
 
 **본 이슈 최종 채택**은 `recall` 정책. 이유: BERT 파인튜닝 시 엔티티 밀도를
 최대화하고, 타입 혼동 스팬(192건)만 제외해 노이즈를 걸러낸다. 학습 코드에서
@@ -382,8 +394,8 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 
 ### 10.3 매핑 테이블 확장 (본 이슈에서 실행)
 
-`WIKIDATA_TO_STOCKMARK`를 80종 → **134종으로 확장**해 mapped 5724 → 6858
-(+20%), 政治的組織名 0.54 → **0.72** (+18.2pp), イベント名 0.62 → **0.70**
+`WIKIDATA_TO_CANONICAL`를 80종 → **134종으로 확장**해 mapped 5724 → 6858
+(+20%), POL 0.54 → **0.72** (+18.2pp), EVT 0.62 → **0.70**
 (+8.2pp) 개선. 상세는 §5.5.
 
 남은 상위 unmapped (각 20건 내외): Q190752·Q6465·Q34442 등 지역·세부
@@ -394,9 +406,10 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 - **이중 silver**: WikiANN(자동) + LLM 재라벨(자동)의 누적 silver. Stockmark
   gold와 F1 절대값 비교는 본 범위 밖이며, 수작업 gold 검증도 본 프로젝트
   제약상 수행 불가
-- **Qwen 10K 미수행**: 5× 속도 차이로 10K kappa 재측정은 ~2h. 1K 결과가
-  분포를 잘 대표한다는 전제로 1K kappa 채택. 후속에서 Qwen 10K 실행 가능
-- **매핑 테이블 제한**: 80종 수작업 큐레이션. 매핑 미수록 엔티티는 anchor
+- **Qwen3.6 보수적 coverage**: Qwen3.6의 엔티티 미탐지(skip) 비율이 높아
+  Gemma-only span이 3,201건으로 kappa가 "moderate" 구간에 머문다.
+  동일 offset 타입 일치율(97%)은 높으므로 타입 스펙 자체는 견고
+- **매핑 테이블 제한**: 134종 큐레이션. 매핑 미수록 엔티티는 anchor
   검증에서 제외되어 공정한 coverage 해석에 주의 필요
 - **Wikipedia 리다이렉트 위험**: 예: `Her Morning Elegance`(노래) → `Oren
   Lavie`(가수) 리다이렉트로 anchor 타입이 왜곡될 수 있음 — 전체 대비 비율은
@@ -406,21 +419,20 @@ Cross-model kappa(1K, Gemma 관점 per-type) + Wikidata 앵커(10K, per-type)를
 
 본 이슈 범위:
 - [x] 1. VI loader·라벨러 이전 (`labelers/vi/`)
-- [x] 2. 8종 매핑 스펙 확정 (`docs/specs/entities/vietnamese-ner-8types.md`)
-- [x] 3. 경로 B 재라벨 + 1K cross-model kappa (§4)
+- [x] 2. 8종 매핑 스펙 확정 (`docs/manual/data/vietnamese-ner-8types.md`)
+- [x] 3. 경로 B 재라벨 + 10K cross-model kappa (§4)
 - [x] 4. Wikipedia 인터링크 → Wikidata P31 앵커 1K + 10K (§5)
-- [x] 5. 전체 10K 재라벨 + 製品名·イベント名 빈도 집계 → **합성 보충
+- [x] 5. 전체 10K 재라벨 + PROD·EVT 빈도 집계 → **합성 보충
       불필요** (§3.2, §8)
 - [x] 6. 3중 검증 통합 리포트 (본 문서, §6)
 
 본 이슈에서 함께 수행한 추가 작업:
-- [x] A1. `WIKIDATA_TO_STOCKMARK` 확장 80→134 Q-ID (§5.5)
+- [x] A1. `WIKIDATA_TO_CANONICAL` 확장 80→134 Q-ID (§5.5)
 - [x] A3. JA Stockmark vs VI 3종 공정 비교 (§9)
 - [x] A4. BATCH 프롬프트 지원 추가 (벤치 결과 현 구성에서 SINGLE과 동속도)
 
 향후 후속 이슈 후보(본 범위 밖):
-- [ ] Qwen 10K 재실행 + 10K kappa 재계산 (1K kappa 대표성 검증)
-- [ ] `WIKIDATA_TO_STOCKMARK` 추가 확장 (현 134 → ~200 diminishing return)
+- [ ] `WIKIDATA_TO_CANONICAL` 추가 확장 (현 134 → ~200 diminishing return)
 - [ ] BERT 파인튜닝 (VI 8종 학습 + 평가)
 - [ ] JA 8종 vs VI 8종 통합 멀티링구얼 벤치 러너
 
@@ -432,38 +444,81 @@ python -m augmenters.wikiann_vi \
     --max-samples 10000 --concurrency 16 \
     --base-url http://localhost:8081/v1 \
     --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --output data/wikiann_vi_relabel/gemma_8type_full.jsonl
+    --output data/wikiann_vi/gemma_8type_full.jsonl
 
-# 2) 10K 전체 재라벨 — Qwen (validator, ~2h)
+# 2) 10K 전체 재라벨 — Qwen3.6 (validator, ~23분)
 python -m augmenters.wikiann_vi \
     --max-samples 10000 --concurrency 16 \
     --base-url http://localhost:8082/v1 \
-    --model cyankiwi/Qwen3.5-27B-AWQ-4bit \
-    --output data/wikiann_vi_relabel/qwen_8type_full.jsonl
+    --model cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit \
+    --output data/wikiann_vi/qwen_8type_full.jsonl
 
 # 3) Cross-model kappa (10K)
 python -m augmenters.wikiann_vi.kappa \
-    --a data/wikiann_vi_relabel/gemma_8type_full.jsonl \
-    --b data/wikiann_vi_relabel/qwen_8type_full.jsonl \
-    --json-out data/wikiann_vi_relabel/kappa_gemma_vs_qwen_full.json
+    --a data/wikiann_vi/gemma_8type_full.jsonl \
+    --b data/wikiann_vi/qwen_8type_full.jsonl \
+    --json-out data/wikiann_vi/kappa_gemma_vs_qwen_full.json
 
 # 4) Wikidata 앵커 검증 (10K, Gemma 기준)
 python -m augmenters.wikiann_vi.wikidata_anchor \
-    --input data/wikiann_vi_relabel/gemma_8type_full.jsonl \
-    --cache data/wikiann_vi_relabel/wikidata_cache.json \
-    --json-out data/wikiann_vi_relabel/anchor_gemma_full.json
+    --input data/wikiann_vi/gemma_8type_full.jsonl \
+    --cache data/wikiann_vi/wikidata_cache.json \
+    --json-out data/wikiann_vi/anchor_gemma_full.json
 
 # 5) 최종 병합 — recall 정책으로 단일 파일 생성
 python -m augmenters.wikiann_vi.merge_confidence \
-    --gemma data/wikiann_vi_relabel/gemma_8type_full.jsonl \
-    --qwen data/wikiann_vi_relabel/qwen_8type_full.jsonl \
+    --gemma data/wikiann_vi/gemma_8type_full.jsonl \
+    --qwen data/wikiann_vi/qwen_8type_full.jsonl \
     --policy recall \
-    --output data/wikiann_vi_relabel/vi_wikiann_8type_recall.jsonl
+    --output data/wikiann_vi/vi_wikiann_8type_recall_test.jsonl
+```
+
+## 13a. train·validation 스플릿 확장 (2026-04-22)
+
+본 리포트 §3~§12는 `test` 스플릿 10K를 대상으로 한 벤치마크다. 학습용
+데이터셋 확보를 위해 동일 파이프라인으로 **train(20K) + validation(10K)**
+스플릿도 재라벨했다. 모델·프롬프트·concurrency 설정은 §2와 동일.
+
+### 13a.1 재라벨 결과
+
+**Gemma (primary) — 라벨링 성공률 ~86%, 에러 0건**
+
+| 스플릿 | 레코드 | 성공 | 총 스팬 | PER | LOC | PROD | ORG | POL | FAC | CORP | EVT |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| train (20K) | 20,000 | 17,282 | 23,203 | 8,195 | 7,935 | 2,204 | 1,585 | 1,453 | 912 | 601 | 318 |
+| validation (10K) | 10,000 | 8,602 | 11,454 | 4,078 | 3,921 | 1,091 | 746 | 777 | 418 | 280 | 143 |
+
+**Qwen3.6 (validator) — 성공률 ~64%, 에러 0건**
+
+| 스플릿 | 레코드 | 성공 | 총 스팬 | PER | LOC | PROD | ORG | POL | FAC | CORP | EVT |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| train (20K) | 20,000 | 12,871 | 18,152 | 7,137 | 6,251 | 1,182 | 1,171 | 936 | 711 | 491 | 273 |
+| validation (10K) | 10,000 | 6,357 | 8,946 | 3,589 | 3,027 | 597 | 543 | 502 | 326 | 240 | 122 |
+
+### 13a.2 Recall 병합 · Cross-model kappa
+
+| 스플릿 | recall 병합 스팬 | κ | p_o | p_e | 페어 |
+|---|---:|---:|---:|---:|---:|
+| train | 22,649 | 0.5879 | 0.6727 | 0.2057 | 24,393 |
+| validation | 11,179 | 0.5733 | 0.6613 | 0.2062 | 12,114 |
+| test (§4 재수록) | 11,382 | 0.5766 | 0.6642 | 0.2069 | 12,317 |
+
+세 스플릿 kappa가 0.57~0.59 범위로 일관됨 — coverage 패턴이 분할 간
+동질적임을 확인.
+
+### 13a.3 산출물
+
+```
+data/wikiann_vi/
+├── gemma_8type_{train,validation,test}.jsonl
+├── qwen_8type_{train,validation,test}.jsonl
+├── vi_wikiann_8type_recall_{train,validation,test}.jsonl
+└── kappa_{train,validation,test}.json
 ```
 
 ## 14. 관련 커밋·문서
 
-- 스펙: `docs/specs/entities/vietnamese-ner-8types.md`
+- 스펙: `docs/manual/data/vietnamese-ner-8types.md`
 - 이슈 플랜: `docs/issues/issue-10-vi-ner-8type-relabel.md`
 - 구현:
   - `src/labelers/vi/dataset_loader.py` (offset span loader)

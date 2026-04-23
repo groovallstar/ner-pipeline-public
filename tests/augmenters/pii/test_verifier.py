@@ -1,13 +1,11 @@
 """PIIVerifier 단위 테스트 — TDD red phase."""
 from __future__ import annotations
 
-import pytest
 
 from augmenters.pii.schema import Entity, Record
 from augmenters.pii.verifier import (
     PIIVerifier,
     VerifyPolicy,
-    VerifyResult,
 )
 
 
@@ -42,11 +40,11 @@ class TestVerifySingleRecord:
         """골드와 예측이 완전 일치하면 모두 confirmed."""
         gold = [
             _ent('PHONE', 10, 23, '090-1234-5678'),
-            _ent('人名', 0, 4, '山田太郎'),
+            _ent('PER', 0, 4, '山田太郎'),
         ]
         preds = [
             {'text': '090-1234-5678', 'type': 'PHONE'},
-            {'text': '山田太郎', 'type': '人名'},
+            {'text': '山田太郎', 'type': 'PER'},
         ]
         rec = _rec('山田太郎の連絡先：090-1234-5678。', gold)
         v = PIIVerifier(FakeLabeler(preds), policy=VerifyPolicy.DROP_SPAN)
@@ -77,8 +75,8 @@ class TestVerifySingleRecord:
 
     def test_conflict_label_mismatch(self):
         """텍스트는 같지만 라벨이 다르면 conflict."""
-        gold = [_ent('地名', 0, 3, '東京都')]
-        preds = [{'text': '東京都', 'type': '施設名'}]
+        gold = [_ent('LOC', 0, 3, '東京都')]
+        preds = [{'text': '東京都', 'type': 'FAC'}]
         rec = _rec('東京都にある施設。', gold)
         v = PIIVerifier(FakeLabeler(preds), policy=VerifyPolicy.DROP_SPAN)
         result = v.verify(rec)
@@ -86,8 +84,8 @@ class TestVerifySingleRecord:
         assert len(result.confirmed) == 0
         assert len(result.conflicts) == 1
         gold_ent, pred_type = result.conflicts[0]
-        assert gold_ent.label == '地名'
-        assert pred_type == '施設名'
+        assert gold_ent.label == 'LOC'
+        assert pred_type == 'FAC'
 
     def test_no_gold_entities(self):
         """골드 엔티티가 없으면 빈 결과."""
@@ -122,11 +120,11 @@ class TestDropSpanPolicy:
 
     def test_removes_conflict_span(self):
         gold = [
-            _ent('地名', 0, 3, '東京都'),
+            _ent('LOC', 0, 3, '東京都'),
             _ent('PHONE', 10, 23, '090-1234-5678'),
         ]
         preds = [
-            {'text': '東京都', 'type': '施設名'},
+            {'text': '東京都', 'type': 'FAC'},
             {'text': '090-1234-5678', 'type': 'PHONE'},
         ]
         rec = _rec('東京都の連絡先：090-1234-5678。', gold)

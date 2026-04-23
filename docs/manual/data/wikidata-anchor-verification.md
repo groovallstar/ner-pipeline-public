@@ -12,7 +12,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 중요 원칙:
 - **검증은 라벨을 바꾸지 않는다.** 통계(일치율·per-type agreement)와 불일치 샘플을 리포트로 남길 뿐, 원본 JSONL은 불변이다.
-- **매핑된 엔티티만 집계된다.** Wikipedia에 페이지가 없거나 P31이 비어 있거나 `WIKIDATA_TO_STOCKMARK` 테이블에 없는 Q-ID는 검증에서 제외된다 (10K에서 약 49%만 검증 가능).
+- **매핑된 엔티티만 집계된다.** Wikipedia에 페이지가 없거나 P31이 비어 있거나 `WIKIDATA_TO_CANONICAL` 테이블에 없는 Q-ID는 검증에서 제외된다 (10K에서 약 49%만 검증 가능).
 
 ## 전체 파이프라인
 
@@ -23,8 +23,8 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
             └─ Q-ID
                  └─ [2] www.wikidata.org/w/api.php (wbgetentities)
                       └─ P31 Q-ID 리스트
-                           └─ [3] WIKIDATA_TO_STOCKMARK 테이블
-                                └─ Stockmark 8종 추론 타입
+                           └─ [3] WIKIDATA_TO_CANONICAL 테이블
+                                └─ canonical 8종 추론 타입
                                      └─ [4] LLM 라벨과 비교
                                           └─ 일치율·per-type agreement 집계
 ```
@@ -62,11 +62,11 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 `anchor_type(p31_qids)` (`wikidata_anchor.py:320`)
 
-- `WIKIDATA_TO_STOCKMARK` 수작업 큐레이션 테이블에서 조회 (현재 134개 Q-ID, `wikidata_anchor.py:41`)
+- `WIKIDATA_TO_CANONICAL` 수작업 큐레이션 테이블에서 조회 (현재 134개 Q-ID, `wikidata_anchor.py:41`)
 - P31 리스트를 **순차 스캔해 첫 매칭**을 반환. 여러 P31 중 하나라도 8종에 매핑되면 그 타입 채택
-- 테이블은 타입 섹션별로 구성: 人名 / 地名 / 施設名 / 法人名 / 製品名 / イベント名 / 政治的組織名 / その他の組織名
+- 테이블은 타입 섹션별로 구성: PER / LOC / FAC / CORP / PROD / EVT / POL / ORG
 
-예: `['Q5119', 'Q515'] → '地名'` (Q515=city가 테이블에 있음).
+예: `['Q5119', 'Q515'] → 'LOC'` (Q515=city가 테이블에 있음).
 
 **테이블 확장 정책**: 상위 빈도 unmapped Q-ID를 리포트에 남겨 후속 이슈에서 수작업 추가. 메타/비엔티티(`Q4167410` disambiguation, `Q16521` taxon 등)는 의도적으로 미매핑.
 
@@ -89,7 +89,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 ## 캐시 설계
 
-- 캐시 파일: `data/wikiann_vi_relabel/wikidata_cache.json` (기본값, `--cache`로 변경 가능)
+- 캐시 파일: `data/wikiann_vi/wikidata_cache.json` (기본값, `--cache`로 변경 가능)
 - 스키마: `{'qid': {표면형: Q-ID}, 'p31': {Q-ID: [P31, ...]}}`
 - 실행 시 캐시에 없는 항목만 새로 네트워크 호출. 매핑 테이블(3단계)은 코드에 내장되어 있어 테이블 확장 후 재실행해도 네트워크 재호출 없이 재집계 가능 → 10K 앵커 재측정(v1→v2)이 분 단위로 가능
 
@@ -100,9 +100,9 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 ```bash
 # 10K 재라벨 결과에 대한 앵커 검증
 python -m augmenters.wikiann_vi.wikidata_anchor \
-    --input data/wikiann_vi_relabel/gemma_8type_full.jsonl \
-    --cache data/wikiann_vi_relabel/wikidata_cache.json \
-    --json-out data/wikiann_vi_relabel/anchor_gemma_full.json
+    --input data/wikiann_vi/gemma_8type_full.jsonl \
+    --cache data/wikiann_vi/wikidata_cache.json \
+    --json-out data/wikiann_vi/anchor_gemma_full.json
 ```
 
 표준 출력 예:
@@ -116,8 +116,8 @@ With P31 claims    : 9134
 Mapped to 8-type   : 6858
 Agreement          : 6524 / 6858 = 0.9512
 Per-type agreement:
-  人名: 3017/3068 = 0.9836
-  地名: ...
+  PER: 3017/3068 = 0.9836
+  LOC: ...
 Top unmapped P31 Q-IDs (to consider for table expansion):
   Q190752: 23
   ...
@@ -136,13 +136,13 @@ Top unmapped P31 Q-IDs (to consider for table expansion):
 ## 한계와 주의
 
 1. **커버리지 50%** — Wikipedia 등재가 없는 개별 인물명·세부 지명·제품 인스턴스는 검증 불가. 따라서 "앵커 일치율"은 매핑 가능한 부분집합의 지표이지 전체 품질은 아니다.
-2. **수작업 매핑 테이블** — `WIKIDATA_TO_STOCKMARK` 134종은 사람이 고른 큐레이션. 누락된 세부 타입(예: `Q22806 national library`가 없으면 `法人名 publisher`로 잘못 매핑)이 체계적 에러를 만든다. 리포트 §5.4 카테고리 B 참조.
-3. **리다이렉트 왜곡** — Wikipedia 리다이렉트가 다른 개념으로 연결되면 엉뚱한 Q-ID가 할당된다. 예: `'Her Morning Elegance'`(노래) → `'Oren Lavie'`(가수) 리다이렉트로 anchor 타입이 人名으로 잡힘.
+2. **수작업 매핑 테이블** — `WIKIDATA_TO_CANONICAL` 134종은 사람이 고른 큐레이션. 누락된 세부 타입(예: `Q22806 national library`가 없으면 `CORP publisher`로 잘못 매핑)이 체계적 에러를 만든다. 리포트 §5.4 카테고리 B 참조.
+3. **리다이렉트 왜곡** — Wikipedia 리다이렉트가 다른 개념으로 연결되면 엉뚱한 Q-ID가 할당된다. 예: `'Her Morning Elegance'`(노래) → `'Oren Lavie'`(가수) 리다이렉트로 anchor 타입이 PER으로 잡힘.
 4. **P31 복수 해석** — 역사적 정치체가 `city` 와 `former country` 를 모두 가지면 테이블 스캔 순서에 따라 타입이 갈린다(첫 매칭 규칙). 진짜 모호 케이스는 불일치로 기록되지만 실제로는 양쪽 모두 타당할 수 있다.
 5. **네트워크 의존** — 1K 엔티티 전체 조회는 신규 실행 시 수 분 소요. 실패는 `reason='network'` 로 소프트 폴백되며 재실행으로 채운다.
 
 ## 관련 문서
 
-- 스펙: `docs/specs/entities/vietnamese-ner-8types.md` §5.2 (두 번째 검증 레이어)
+- 스펙: `docs/manual/data/vietnamese-ner-8types.md` §5.2 (두 번째 검증 레이어)
 - 이슈: `docs/issues/issue-10-vi-ner-8type-relabel.md`
 - 리포트: `docs/reports/vietnamese-ner-schema-expansion-2026-04.md` §5, §5.5

@@ -61,7 +61,7 @@ class TestExtractSpans:
         spans = extract_spans(text, pii_values=pii, original_entities=[])
 
         pii_spans = {s.label: s for s in spans}
-        # NAME → 人名 병합은 별도 단계이므로 여기서는 원래 라벨 유지
+        # NAME → PER 병합은 별도 단계이므로 여기서는 원래 라벨 유지
         assert pii_spans['NAME'].text == '山田太郎'
         assert text[pii_spans['NAME'].start_char:pii_spans['NAME'].end_char] == '山田太郎'
         assert pii_spans['PHONE'].text == '090-1234-5678'
@@ -70,25 +70,25 @@ class TestExtractSpans:
     def test_original_entity_found(self):
         """원본 엔티티 텍스트가 생성 텍스트에 있으면 새 offset 추출."""
         text = '創業にはミツカンも出資した。担当は山田太郎です。'
-        original = [_ent('法人名', 4, 8, 'ミツカン')]
+        original = [_ent('CORP', 4, 8, 'ミツカン')]
         pii = {'NAME': '山田太郎'}
         spans = extract_spans(text, pii_values=pii, original_entities=original)
 
         labels = {s.label: s for s in spans}
         assert 'NAME' in labels
-        assert '法人名' in labels
-        assert labels['法人名'].text == 'ミツカン'
-        assert text[labels['法人名'].start_char:labels['法人名'].end_char] == 'ミツカン'
+        assert 'CORP' in labels
+        assert labels['CORP'].text == 'ミツカン'
+        assert text[labels['CORP'].start_char:labels['CORP'].end_char] == 'ミツカン'
 
     def test_original_entity_missing_is_dropped(self):
         """원본 엔티티가 생성 텍스트에 없으면 drop."""
         text = '山田太郎が窓口です。'
-        original = [_ent('法人名', 0, 4, 'ミツカン')]
+        original = [_ent('CORP', 0, 4, 'ミツカン')]
         pii = {'NAME': '山田太郎'}
         spans = extract_spans(text, pii_values=pii, original_entities=original)
 
         labels = [s.label for s in spans]
-        assert '法人名' not in labels
+        assert 'CORP' not in labels
         assert 'NAME' in labels
 
     def test_pii_value_missing_raises(self):
@@ -101,7 +101,7 @@ class TestExtractSpans:
     def test_duplicate_text_uses_distinct_offsets(self):
         """동일 텍스트가 여러 번 나타나면 각각 다른 offset."""
         text = '山田太郎と山田太郎が来た。'
-        original = [_ent('人名', 0, 4, '山田太郎')]
+        original = [_ent('PER', 0, 4, '山田太郎')]
         pii = {'NAME': '山田太郎'}
         spans = extract_spans(text, pii_values=pii, original_entities=original)
 
@@ -146,7 +146,7 @@ class TestLLMInjector:
     def test_inject_returns_valid_record(self):
         original = _rec(
             '創業にはミツカンも出資した。',
-            [_ent('法人名', 4, 8, 'ミツカン')],
+            [_ent('CORP', 4, 8, 'ミツカン')],
         )
         fake = FakeLLMClient('創業にはミツカンも出資した。')
         injector = LLMInjector(
@@ -161,14 +161,14 @@ class TestLLMInjector:
         for ent in result.entities:
             assert result.text[ent.start_char:ent.end_char] == ent.text
         # PII 2개 주입됨 (NAME은 인명으로 병합)
-        pii_labels = {'人名', 'PHONE'}
+        pii_labels = {'PER', 'PHONE'}
         injected = [e for e in result.entities if e.label in pii_labels]
         assert len(injected) == 2
 
     def test_inject_preserves_original_entities(self):
         original = _rec(
             '東京都にある施設。',
-            [_ent('地名', 0, 3, '東京都')],
+            [_ent('LOC', 0, 3, '東京都')],
         )
         fake = FakeLLMClient('東京都にある施設。')
         injector = LLMInjector(
@@ -179,12 +179,12 @@ class TestLLMInjector:
         result = injector.inject(original)
 
         labels = {e.label for e in result.entities}
-        assert '地名' in labels
-        # NAME → 人名 병합 적용됨
-        assert '人名' in labels
+        assert 'LOC' in labels
+        # NAME → PER 병합 적용됨
+        assert 'PER' in labels
 
     def test_inject_applies_name_merge_rule(self):
-        """NAME 라벨은 inject() 결과에서 人名으로 병합되어야 한다."""
+        """NAME 라벨은 inject() 결과에서 PER로 병합되어야 한다."""
         original = _rec('テスト文。', [])
         fake = FakeLLMClient('テスト文。')
         injector = LLMInjector(
@@ -194,14 +194,14 @@ class TestLLMInjector:
         )
         result = injector.inject(original)
         labels = {e.label for e in result.entities}
-        assert '人名' in labels
+        assert 'PER' in labels
         assert 'NAME' not in labels
 
     def test_inject_with_zero_pii(self):
         """density에서 0이 선택되면 PII 없이 원본 반환."""
         original = _rec(
             '普通の文章。',
-            [_ent('地名', 0, 2, '普通')],
+            [_ent('LOC', 0, 2, '普通')],
         )
         fake = FakeLLMClient('普通の文章。')
         injector = LLMInjector(

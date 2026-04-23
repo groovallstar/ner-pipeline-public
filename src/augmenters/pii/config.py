@@ -9,9 +9,9 @@ Lang = Literal['ja', 'vi']
 DEFAULT_DENSITY: dict[int, float] = {0: 0.2, 1: 0.4, 2: 0.3, 3: 0.1}
 DEFAULT_PII_LABELS: list[str] = [
     'NAME', 'PHONE', 'ADDRESS', 'DOB',
-    'ID_NUMBER', 'EMAIL', 'CREDIT_CARD',
+    'ID_NUM', 'EMAIL', 'CREDIT_CARD',
 ]
-DEFAULT_MERGE_RULES: dict[str, str] = {'NAME': '人名'}
+DEFAULT_MERGE_RULES: dict[str, str] = {'NAME': 'PER'}
 
 
 @dataclass

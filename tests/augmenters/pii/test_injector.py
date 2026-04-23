@@ -11,8 +11,8 @@ from augmenters.pii.schema import Entity, Record
 def _make_record() -> Record:
     text = '山田太郎は東京都に住んでいる'
     ents = [
-        Entity(label='人名', start_char=0, end_char=4, text='山田太郎'),
-        Entity(label='地名', start_char=5, end_char=8, text='東京都'),
+        Entity(label='PER', start_char=0, end_char=4, text='山田太郎'),
+        Entity(label='LOC', start_char=5, end_char=8, text='東京都'),
     ]
     return Record(text=text, entities=ents, id='r1')
 
@@ -82,5 +82,5 @@ def test_label_merge_name_to_jinmei():
     inj = PIIInjector(cfg)
     out = inj.inject(Record(text='テスト', entities=[]))
     labels = [e.label for e in out.entities]
-    assert '人名' in labels
+    assert 'PER' in labels
     assert 'NAME' not in labels
