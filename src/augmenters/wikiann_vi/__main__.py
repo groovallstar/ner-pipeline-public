@@ -1,4 +1,4 @@
-"""WikiANN-vi → Stockmark 8종 재라벨 CLI.
+"""WikiANN-vi → canonical 8종 재라벨 CLI.
 
 사용 예::
 
@@ -6,7 +6,7 @@
         --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
         --base-url http://localhost:8081/v1 \
         --split test --max-samples 1000 \
-        --output data/wikiann_vi_relabel/gemma_8type.jsonl
+        --output data/wikiann_vi/gemma_8type.jsonl
 
 JSONL 출력 스키마(레코드별):
     {id, text, gold_spans, gold_spans_8type, relabel_model}
@@ -26,7 +26,7 @@ from labelers.vi.dataset_loader import VietnameseDatasetLoader
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='python -m augmenters.wikiann_vi',
-        description='Relabel WikiANN-vi to Stockmark 8-type schema',
+        description='Relabel WikiANN-vi to canonical 8-type schema',
     )
     parser.add_argument(
         '--hf-name', default='unimelb-nlp/wikiann',

@@ -1,6 +1,6 @@
 """Wikidata 앵커 유틸 단위 테스트 (네트워크 없는 부분만)."""
 from augmenters.wikiann_vi.wikidata_anchor import (
-    WIKIDATA_TO_STOCKMARK,
+    WIKIDATA_TO_CANONICAL,
     _iter_entities,
     _resolve_title,
     anchor_type,
@@ -9,12 +9,12 @@ from augmenters.wikiann_vi.wikidata_anchor import (
 
 class TestAnchorType:
     def test_person(self):
-        assert anchor_type(['Q5']) == '人名'
-        assert anchor_type(['Q215627']) == '人名'
+        assert anchor_type(['Q5']) == 'PER'
+        assert anchor_type(['Q215627']) == 'PER'
 
     def test_city_priority(self):
         # 첫 매핑 가능한 P31이 우선 (Q515 = city)
-        assert anchor_type(['Q515', 'Q6256']) == '地名'
+        assert anchor_type(['Q515', 'Q6256']) == 'LOC'
 
     def test_unknown_returns_none(self):
         assert anchor_type(['Q999999999']) is None
@@ -22,21 +22,21 @@ class TestAnchorType:
 
     def test_falls_through_to_mapped(self):
         # 앞쪽 미매핑, 뒤쪽 매핑 있으면 뒤쪽 반환
-        assert anchor_type(['Q999999999', 'Q5']) == '人名'
+        assert anchor_type(['Q999999999', 'Q5']) == 'PER'
 
     def test_covers_all_8_types(self):
         """매핑 테이블이 8종 모두를 커버한다."""
-        values = set(WIKIDATA_TO_STOCKMARK.values())
+        values = set(WIKIDATA_TO_CANONICAL.values())
         assert values == {
-            '人名', '法人名', '地名', '施設名',
-            '製品名', 'イベント名', '政治的組織名', 'その他の組織名',
+            'PER', 'CORP', 'LOC', 'FAC',
+            'PROD', 'EVT', 'POL', 'ORG',
         }
 
     def test_no_duplicate_keys(self):
         # dict 생성 시 중복은 자동 제거되므로 이 테스트는 도메인 레벨이지만,
         # 실질 의미는 "각 타입에 최소 3개 이상 앵커 Q-ID가 있어야 강건하다"
         from collections import Counter
-        type_counts = Counter(WIKIDATA_TO_STOCKMARK.values())
+        type_counts = Counter(WIKIDATA_TO_CANONICAL.values())
         for t, c in type_counts.items():
             assert c >= 3, f'Type {t} has only {c} anchor Q-IDs'
 
@@ -72,8 +72,8 @@ class TestIterEntities:
             {
                 'id': '0', 'text': 't',
                 'gold_spans_8type': [
-                    {'text': 'Hà Nội', 'type': '地名'},
-                    {'text': 'Samsung', 'type': '法人名'},
+                    {'text': 'Hà Nội', 'type': 'LOC'},
+                    {'text': 'Samsung', 'type': 'CORP'},
                 ],
             },
             {
@@ -83,16 +83,16 @@ class TestIterEntities:
         ]
         out = list(_iter_entities(records, 'gold_spans_8type'))
         assert len(out) == 2
-        assert ('Hà Nội', '地名', '0') in out
-        assert ('Samsung', '法人名', '0') in out
+        assert ('Hà Nội', 'LOC', '0') in out
+        assert ('Samsung', 'CORP', '0') in out
 
     def test_skips_empty_fields(self):
         records = [{
             'id': '0', 'text': 't',
             'gold_spans_8type': [
-                {'text': '', 'type': '地名'},
+                {'text': '', 'type': 'LOC'},
                 {'text': 'Hà Nội', 'type': ''},
-                {'text': 'Samsung', 'type': '法人名'},
+                {'text': 'Samsung', 'type': 'CORP'},
             ],
         }]
         out = list(_iter_entities(records, 'gold_spans_8type'))

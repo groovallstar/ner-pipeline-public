@@ -41,7 +41,8 @@ src/
 │   └── span_metrics.py      # compute_offset_span_f1 등 span 레벨 메트릭
 ├── augmenters/        # 학습 데이터 증강 (상세: src/augmenters/AGENTS.md)
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
-│   └── crawlers/ko/   # 한국어 Yonhap RSS 크롤러 + NER 태깅
+│   ├── crawlers/ko/   # 한국어 Yonhap RSS 크롤러 + NER 태깅
+│   └── wikiann_vi/    # WikiANN-vi 8종 canonical 재라벨 + Wikidata 검증
 ├── classifier/        # BERT 토큰 분류 파인튜닝 (상세: src/classifier/AGENTS.md)
 │   ├── data_utils.py       # Stockmark 로딩, wordpiece/sentencepiece 정렬
 │   ├── train_eval.py       # HF Trainer, offset-span F1
@@ -53,36 +54,24 @@ docker/
 └── vllm/              # vLLM 서비스
 results/               # 벤치마크 결과 JSON + 리포트
 tests/                 # 테스트 (상세: tests/CLAUDE.md)
-docs/                  # 문서 (상세: docs/wiki/schema.md)
-│   ├── wiki/          # 프로젝트 독립적 도메인 지식
-│   ├── specs/         # 엔티티·데이터셋 스펙, 코딩 컨벤션, 설계 문서, 템플릿
-│   ├── manual/        # 프로젝트 기술 개념·구조·API·실행 가이드
+docs/                  # 문서
+│   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
+│   ├── specs/         # 개발 규약·템플릿 (코딩 컨벤션, 신규 저장소 템플릿)
+│   ├── manual/        # 프로젝트 구현 레퍼런스 (src/ 모듈 API·알고리즘 맵)
+│   │   └── data/      # 데이터 스키마·엔티티 정의·데이터셋 스펙·데이터 검증
 │   ├── reports/       # 자유 형식 벤치마크·실험 리포트 (GitHub Issue 무관)
 │   └── issues/        # GitHub Issue별 plan/report 스냅샷
 ```
 
 ## 주요 CLI 엔트리포인트
 
-```bash
-# LLM NER 벤치마크
-python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
-python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3.5-27B" --max-samples 500
+- `python -m llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
+- `python -m classifier` / `python -m classifier.pii_benchmark` — BERT 파인튜닝·평가
+- `python -m augmenters.pii` — 합성 PII 주입
+- `python -m augmenters.crawlers.ko` — 한국어 뉴스 크롤러 + NER 태깅
+- `python -m augmenters.wikiann_vi` — WikiANN-vi 8종 canonical 재라벨
 
-# BERT 파인튜닝 & 평가 (classifier)
-python -m classifier                        # Stockmark NER 기본 벤치마크
-python -m classifier.pii_benchmark          # PII 합성 데이터 기반 BERT 학습
-
-# PII 합성 주입 (augmenters.pii)
-python -m augmenters.pii --source stockmark --lang ja \
-    --output /data/ner/ja_stockmark_pii.jsonl --n-samples 1000 \
-    --mode llm --vllm-url http://localhost:8081/v1 \
-    --vllm-model Qwen/Qwen3.5-27B --verify vllm
-
-# 뉴스 크롤러 + NER 태깅 (augmenters.crawlers)
-python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
-    --output-dir data/ner/raw \
-    --vllm-base-url http://localhost:8081/v1 --model Qwen/Qwen3.5-27B
-```
+상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.
 
 ## 개발 3원칙
 
@@ -103,9 +92,24 @@ python -m augmenters.crawlers.ko --source yna --max-sentences 100 \
 - 제목·본문은 **한국어**로 작성
 - `type` 접두사만 영문 허용 (`feat`, `fix`, `chore`, `docs`, `build`, `refactor`, `test`)
 
-## Wiki 운영
+### 커밋 입도 (granularity)
 
-`docs/wiki/` 운영 규칙·트리거 키워드·배치 기준은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임한다. 코드 변경 후에는 `docs/manual/` 하위의 관련 구현 맵(`base-labelers.md`, `bio-*`, `span-evaluator.md` 등)도 최신 상태인지 확인한다.
+- **하위 작업 체크박스 ≠ 커밋 1개**: 이슈 계획의 체크박스는 *진행 추적 단위*이지 *커밋 단위*가 아니다. 동일 관심사·동일 모듈에서 발생한 변경은 체크박스가 여러 개여도 한 커밋으로 묶는다.
+- **파일 수 휴리스틱(3파일=2커밋, 5파일=3커밋 등) 금지**: `git-master` 에이전트 또는 OMC 기본 정책의 파일 수 기반 자동 분할은 이 프로젝트에서 비활성화한다. 분할 기준은 *관심사*와 *독립 revert 가능성*뿐이다.
+- **분할이 정당한 경우**(아래 중 하나라도 해당될 때만 분리):
+  - 서로 다른 모듈/패키지(`labelers/` vs `classifier/` vs `augmenters/` 등)에 걸친 변경
+  - 코드 변경과 무관한 대규모 문서 정리(라벨 영문화 일괄 치환 등)
+  - 의존성·빌드 설정 변경(`pyproject.toml`, `uv.lock`)이 코드 변경과 분리해도 빌드가 깨지지 않을 때
+  - 한 커밋이 ~500 LOC를 크게 넘고 의미 단위로 나뉠 수 있을 때
+- **합치는 것이 옳은 경우**:
+  - 같은 모듈의 로직 + 그에 딸린 테스트 + 그에 딸린 문서/스펙 갱신
+  - 오타 수정, 링크 채움 같은 수커밋(<5줄) — 다음 의미 있는 커밋에 squash 하거나 일과 종료 시 `docs:` 한 커밋으로 묶기
+  - 계획 단계의 체크박스 1·2·3이 모두 같은 함수/CLI 한 개를 만드는 데 필요했을 때
+
+## docs 운영
+
+- `docs/wiki/` 운영 규칙은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임.
+- 코드 변경 후 `docs/manual/`(구현 맵)과 `docs/manual/data/`(데이터 스키마) 최신화 확인.
 
 ## 이슈 관리
 
@@ -134,5 +138,5 @@ docs/issues/
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
 3. **구현 계획 수립 → 승인 요청**: 하위 작업 3~6개를 Issue 본문의 체크박스로 분해하고, 동일 내용을 `docs/issues/issue-{N}-{slug}.md`의 계획 섹션에 기록 (**커밋하지 않음**)
-4. **구현 & 원자 커밋**: 하위 작업 단위로 커밋, 각 커밋 본문에 `refs #N`
+4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조
 5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → `docs/issues/issue-{N}-{slug}.md`에 구현 결과·검증 섹션 추가 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인

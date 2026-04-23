@@ -1,4 +1,4 @@
-"""WikiANN-vi 문장을 Stockmark 8종 스키마로 재라벨하는 async 클라이언트.
+"""WikiANN-vi 문장을 canonical 8종 스키마로 재라벨하는 async 클라이언트.
 
 vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 8종 엔티티를 추출하고,
 원본 텍스트에서 문자 오프셋을 매칭해 `gold_spans_8type` 필드로 반환한다.
@@ -8,8 +8,8 @@ vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 8종 엔�
 - `match_offsets`: LLM 표면형 span을 원본 텍스트 오프셋에 매핑 (중복 안전 소비).
 - `Relabeler`: concurrency 제한 + usage 누적을 가진 async 재라벨러.
 
-이슈 #10 3단계 구현. 모호 사례 기준은
-`docs/specs/entities/vietnamese-ner-8types.md` 참조.
+canonical 라벨 정의는 `docs/manual/canonical-entity-schema.md`,
+모호 사례 기준은 `docs/specs/entities/vietnamese-ner-8types.md` 참조.
 """
 import asyncio
 import json

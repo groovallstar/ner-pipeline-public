@@ -8,35 +8,35 @@ from augmenters.wikiann_vi.relabel_8type import (
 
 class TestParseSpans:
     def test_plain_list(self):
-        raw = '[{"text": "Hà Nội", "type": "地名"}]'
-        assert parse_spans(raw) == [{'text': 'Hà Nội', 'type': '地名'}]
+        raw = '[{"text": "Hà Nội", "type": "LOC"}]'
+        assert parse_spans(raw) == [{'text': 'Hà Nội', 'type': 'LOC'}]
 
     def test_list_with_think_prefix(self):
         raw = (
             '<think>some reasoning here</think>'
-            '[{"text": "Samsung", "type": "法人名"}]'
+            '[{"text": "Samsung", "type": "CORP"}]'
         )
         assert parse_spans(raw) == [
-            {'text': 'Samsung', 'type': '法人名'},
+            {'text': 'Samsung', 'type': 'CORP'},
         ]
 
     def test_single_dict(self):
-        raw = '{"text": "Hồ Chí Minh", "type": "人名"}'
+        raw = '{"text": "Hồ Chí Minh", "type": "PER"}'
         assert parse_spans(raw) == [
-            {'text': 'Hồ Chí Minh', 'type': '人名'},
+            {'text': 'Hồ Chí Minh', 'type': 'PER'},
         ]
 
     def test_wrapped_dict(self):
-        raw = '{"entities": [{"text": "Hà Nội", "type": "地名"}]}'
-        assert parse_spans(raw) == [{'text': 'Hà Nội', 'type': '地名'}]
+        raw = '{"entities": [{"text": "Hà Nội", "type": "LOC"}]}'
+        assert parse_spans(raw) == [{'text': 'Hà Nội', 'type': 'LOC'}]
 
     def test_regex_fallback(self):
         raw = (
             'Here is the answer: [{"text": "Vịnh Hạ Long", '
-            '"type": "地名"}] end.'
+            '"type": "LOC"}] end.'
         )
         result = parse_spans(raw)
-        assert result == [{'text': 'Vịnh Hạ Long', 'type': '地名'}]
+        assert result == [{'text': 'Vịnh Hạ Long', 'type': 'LOC'}]
 
     def test_empty_or_invalid(self):
         assert parse_spans('') == []
@@ -51,13 +51,13 @@ class TestMatchOffsets:
     def test_basic_single_span(self):
         text = 'Hà Nội là thủ đô của Việt Nam.'
         spans = [
-            {'text': 'Hà Nội', 'type': '地名'},
-            {'text': 'Việt Nam', 'type': '地名'},
+            {'text': 'Hà Nội', 'type': 'LOC'},
+            {'text': 'Việt Nam', 'type': 'LOC'},
         ]
         result = match_offsets(text, spans)
         assert len(result) == 2
         assert result[0] == {
-            'text': 'Hà Nội', 'type': '地名', 'start': 0, 'end': 6,
+            'text': 'Hà Nội', 'type': 'LOC', 'start': 0, 'end': 6,
         }
         assert result[1]['text'] == 'Việt Nam'
         assert text[result[1]['start']:result[1]['end']] == 'Việt Nam'
@@ -66,8 +66,8 @@ class TestMatchOffsets:
         """동일 표면형이 두 번 나오면 각각 다른 오프셋 매칭."""
         text = 'Hà Nội và Hà Nội là cùng tên.'
         spans = [
-            {'text': 'Hà Nội', 'type': '地名'},
-            {'text': 'Hà Nội', 'type': '地名'},
+            {'text': 'Hà Nội', 'type': 'LOC'},
+            {'text': 'Hà Nội', 'type': 'LOC'},
         ]
         result = match_offsets(text, spans)
         assert len(result) == 2
@@ -78,10 +78,10 @@ class TestMatchOffsets:
         """긴 엔티티를 먼저 매칭해 부분 문자열 충돌을 방지한다."""
         text = 'Đại học Quốc gia Hà Nội tọa lạc tại Hà Nội.'
         spans = [
-            {'text': 'Hà Nội', 'type': '地名'},
+            {'text': 'Hà Nội', 'type': 'LOC'},
             {
                 'text': 'Đại học Quốc gia Hà Nội',
-                'type': 'その他の組織名',
+                'type': 'ORG',
             },
         ]
         result = match_offsets(text, spans)
@@ -94,7 +94,7 @@ class TestMatchOffsets:
 
     def test_not_found_dropped(self):
         text = 'Không có tên nào.'
-        spans = [{'text': 'Samsung', 'type': '法人名'}]
+        spans = [{'text': 'Samsung', 'type': 'CORP'}]
         assert match_offsets(text, spans) == []
 
     def test_empty_inputs(self):
@@ -105,9 +105,9 @@ class TestMatchOffsets:
     def test_missing_fields_skipped(self):
         text = 'Hà Nội.'
         spans = [
-            {'text': '', 'type': '地名'},
+            {'text': '', 'type': 'LOC'},
             {'text': 'Hà Nội', 'type': ''},
-            {'text': 'Hà Nội', 'type': '地名'},
+            {'text': 'Hà Nội', 'type': 'LOC'},
         ]
         result = match_offsets(text, spans)
         assert len(result) == 1
@@ -117,8 +117,8 @@ class TestMatchOffsets:
         """LLM 출력 원래 순서를 유지한다."""
         text = 'Đảng Cộng sản Việt Nam và Bộ Giáo dục hợp tác.'
         spans = [
-            {'text': 'Đảng Cộng sản Việt Nam', 'type': '政治的組織名'},
-            {'text': 'Bộ Giáo dục', 'type': '政治的組織名'},
+            {'text': 'Đảng Cộng sản Việt Nam', 'type': 'POL'},
+            {'text': 'Bộ Giáo dục', 'type': 'POL'},
         ]
         result = match_offsets(text, spans)
         assert [r['text'] for r in result] == [
@@ -129,21 +129,21 @@ class TestMatchOffsets:
 class TestRelabelerBatchParse:
     def test_parse_batch_dict(self):
         raw = (
-            '{"0": [{"text": "Hà Nội", "type": "地名"}], '
-            '"1": [{"text": "Samsung", "type": "法人名"}]}'
+            '{"0": [{"text": "Hà Nội", "type": "LOC"}], '
+            '"1": [{"text": "Samsung", "type": "CORP"}]}'
         )
         result = Relabeler._parse_batch(raw)
         assert 0 in result and 1 in result
-        assert result[0] == [{'text': 'Hà Nội', 'type': '地名'}]
-        assert result[1] == [{'text': 'Samsung', 'type': '法人名'}]
+        assert result[0] == [{'text': 'Hà Nội', 'type': 'LOC'}]
+        assert result[1] == [{'text': 'Samsung', 'type': 'CORP'}]
 
     def test_parse_batch_with_think(self):
         raw = (
             '<think>processing</think>\n'
-            '{"0": [{"text": "x", "type": "人名"}], "2": []}'
+            '{"0": [{"text": "x", "type": "PER"}], "2": []}'
         )
         result = Relabeler._parse_batch(raw)
-        assert result.get(0) == [{'text': 'x', 'type': '人名'}]
+        assert result.get(0) == [{'text': 'x', 'type': 'PER'}]
         assert result.get(2) == []
 
     def test_parse_batch_regex_fallback(self):

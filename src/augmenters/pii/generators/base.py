@@ -90,7 +90,7 @@ def generate_pii(
         return mod.generate_address(rng)
     if label == 'DOB':
         return mod.generate_dob(rng)
-    if label == 'ID_NUMBER':
+    if label == 'ID_NUM':
         return mod.generate_id_number(rng)
     if label == 'EMAIL':
         hint = mod.generate_name(rng)

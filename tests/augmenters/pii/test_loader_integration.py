@@ -14,9 +14,9 @@ def test_load_local_roundtrip(tmp_path: Path):
         Record(
             text='山田太郎は東京都に住んでいる',
             entities=[
-                Entity(label='人名', start_char=0, end_char=4,
+                Entity(label='PER', start_char=0, end_char=4,
                        text='山田太郎'),
-                Entity(label='地名', start_char=5, end_char=8,
+                Entity(label='LOC', start_char=5, end_char=8,
                        text='東京都'),
             ],
             id='r1',

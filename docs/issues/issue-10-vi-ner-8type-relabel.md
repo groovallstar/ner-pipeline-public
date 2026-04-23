@@ -31,7 +31,7 @@
     (endpoint http://localhost:8081/v1, `max_model_len=8192`).
   - 製品名·イベント名 빈도 측정 리포트 단계 — 부족 판정 시 후속 단계에서
     합성 보충 경로(PII 주입 구조 재사용) 투입 여부 결정.
-  - 8종 매핑 스펙 `docs/specs/entities/vietnamese-ner-8types.md`(신규) —
+  - 8종 매핑 스펙 `docs/manual/data/vietnamese-ner-8types.md`(신규) —
     PER→人名, LOC→地名/施設名, ORG→法人名/政治的組織名/その他の組織名
     분할 기준, 모호 사례(지명/시설 경계 등) 처리 규칙 포함.
   - 검증 레이어 3중 구성:
@@ -60,7 +60,7 @@
 
 - [ ] 1. #8에서 `src/labelers/vi/dataset_loader.py` · `labelers/vi/*`
       라벨러 이전 + BIO↔offset span 왕복 단위 테스트.
-- [ ] 2. 8종 매핑 스펙 확정 (`docs/specs/entities/vietnamese-ner-8types.md`).
+- [ ] 2. 8종 매핑 스펙 확정 (`docs/manual/data/vietnamese-ner-8types.md`).
       Stockmark 정의 재확인 + 베트남어 모호 사례 10건 수준 예시.
 - [ ] 3. 경로 B 재라벨 스크립트 구현 — `cyankiwi/gemma-4-31B-it-AWQ-8bit`로
       WikiANN-vi 재라벨, 모델 2종 이상 독립 실행해 kappa 측정.
@@ -89,7 +89,7 @@
 
 - 관련 이슈: #8 (범위 조정 대상, ③④⑤만 잔존) —
   `docs/issues/issue-8-vi-wikiann-pii-bench.md`
-- 선행 스펙: `docs/specs/entities/japanese-ner.md` (Stockmark 8종 정의)
+- 선행 스펙: `docs/manual/data/japanese-ner.md` (Stockmark 8종 정의)
 - 배경 조사: 본 세션 대화 로그 (멀티링구얼 NER 스키마 관행 서베이,
   베트남어 NER 데이터셋 서베이, Wikipedia 인터링크 검증 아이디어)
 
@@ -110,7 +110,7 @@ WikiANN-vi(3종: PER/LOC/ORG) 데이터셋을 일본어 Stockmark 8종 스키마
 
 - [x] 1. VI loader·라벨러 이전 — `labelers/vi/{dataset_loader,*_ner_labeler}.py`
       생성, BIO↔offset span 왕복 단위 테스트 11건 pass
-- [x] 2. 8종 매핑 스펙 확정 — `docs/specs/entities/vietnamese-ner-8types.md`
+- [x] 2. 8종 매핑 스펙 확정 — `docs/manual/data/vietnamese-ner-8types.md`
       191줄 작성, WikiANN 3종 → 8종 분할 규칙 + 모호 사례 10건
 - [x] 3. 경로 B 재라벨 스크립트 구현 — `src/augmenters/wikiann_vi/` 패키지
       신규(프롬프트·Relabeler·CLI·kappa·Wikidata 앵커), 단위 테스트 46건 pass.

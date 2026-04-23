@@ -35,3 +35,8 @@ docker/vllm/
 # IDE
 .vscode/
 .idea/
+
+# 데이터셋/벤치마크 산출물 (대용량)
+data/
+results/
+logs/

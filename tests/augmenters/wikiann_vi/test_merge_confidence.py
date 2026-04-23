@@ -14,26 +14,26 @@ def _span(text, type_, start, end):
 
 class TestCategorizeSpans:
     def test_both_agree(self):
-        a = [_span('X', '人名', 0, 1)]
-        b = [_span('X', '人名', 0, 1)]
+        a = [_span('X', 'PER', 0, 1)]
+        b = [_span('X', 'PER', 0, 1)]
         result = categorize_spans(a, b)
         assert len(result) == 1
         assert result[0]['confidence'] == 'high'
         assert result[0]['source'] == 'both'
 
     def test_both_disagree_type(self):
-        a = [_span('X', '法人名', 0, 1)]
-        b = [_span('X', 'その他の組織名', 0, 1)]
+        a = [_span('X', 'CORP', 0, 1)]
+        b = [_span('X', 'ORG', 0, 1)]
         result = categorize_spans(a, b)
         assert len(result) == 1
         assert result[0]['confidence'] == 'conflict'
         assert result[0]['source'] == 'both_disagree'
-        assert result[0]['type'] == '法人名'  # Gemma primary
-        assert result[0]['gemma_type'] == '法人名'
-        assert result[0]['qwen_type'] == 'その他の組織名'
+        assert result[0]['type'] == 'CORP'  # Gemma primary
+        assert result[0]['gemma_type'] == 'CORP'
+        assert result[0]['qwen_type'] == 'ORG'
 
     def test_gemma_only(self):
-        a = [_span('X', '人名', 0, 1)]
+        a = [_span('X', 'PER', 0, 1)]
         b = []
         result = categorize_spans(a, b)
         assert len(result) == 1
@@ -42,7 +42,7 @@ class TestCategorizeSpans:
 
     def test_qwen_only(self):
         a = []
-        b = [_span('X', '人名', 0, 1)]
+        b = [_span('X', 'PER', 0, 1)]
         result = categorize_spans(a, b)
         assert len(result) == 1
         assert result[0]['confidence'] == 'medium_prec'
@@ -50,14 +50,14 @@ class TestCategorizeSpans:
 
     def test_mixed(self):
         a = [
-            _span('A', '人名', 0, 1),       # both agree
-            _span('B', '法人名', 2, 3),     # disagree
-            _span('C', '地名', 4, 5),       # gemma_only
+            _span('A', 'PER', 0, 1),       # both agree
+            _span('B', 'CORP', 2, 3),     # disagree
+            _span('C', 'LOC', 4, 5),       # gemma_only
         ]
         b = [
-            _span('A', '人名', 0, 1),
-            _span('B', '地名', 2, 3),
-            _span('D', '地名', 6, 7),       # qwen_only
+            _span('A', 'PER', 0, 1),
+            _span('B', 'LOC', 2, 3),
+            _span('D', 'LOC', 6, 7),       # qwen_only
         ]
         result = categorize_spans(a, b)
         by_text = {r['text']: r for r in result}
@@ -67,8 +67,8 @@ class TestCategorizeSpans:
         assert by_text['D']['confidence'] == 'medium_prec'
 
     def test_sort_by_start(self):
-        a = [_span('Z', '地名', 10, 12)]
-        b = [_span('A', '人名', 0, 1)]
+        a = [_span('Z', 'LOC', 10, 12)]
+        b = [_span('A', 'PER', 0, 1)]
         result = categorize_spans(a, b)
         assert [r['text'] for r in result] == ['A', 'Z']
 
@@ -115,8 +115,8 @@ class TestMergeRecords:
         }
 
     def test_matched_ids(self):
-        gemma = [self._record('0', [_span('X', '人名', 0, 1)])]
-        qwen = [self._record('0', [_span('X', '人名', 0, 1)])]
+        gemma = [self._record('0', [_span('X', 'PER', 0, 1)])]
+        qwen = [self._record('0', [_span('X', 'PER', 0, 1)])]
         out = merge_records(gemma, qwen, policy='recall')
         assert len(out) == 1
         assert out[0]['merge_policy'] == 'recall'
@@ -124,14 +124,14 @@ class TestMergeRecords:
         assert 'gold_spans_8type' not in out[0]
 
     def test_policy_recall_drops_conflict(self):
-        gemma = [self._record('0', [_span('X', '法人名', 0, 1)])]
-        qwen = [self._record('0', [_span('X', '地名', 0, 1)])]
+        gemma = [self._record('0', [_span('X', 'CORP', 0, 1)])]
+        qwen = [self._record('0', [_span('X', 'LOC', 0, 1)])]
         out = merge_records(gemma, qwen, policy='recall')
         assert out[0]['gold_spans_8type_merged'] == []
 
     def test_disjoint_ids_drop(self):
-        gemma = [self._record('0', [_span('X', '人名', 0, 1)])]
-        qwen = [self._record('1', [_span('X', '人名', 0, 1)])]
+        gemma = [self._record('0', [_span('X', 'PER', 0, 1)])]
+        qwen = [self._record('1', [_span('X', 'PER', 0, 1)])]
         out = merge_records(gemma, qwen, policy='full')
         assert out == []
 

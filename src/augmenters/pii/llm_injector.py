@@ -241,7 +241,7 @@ class LLMInjector:
             pii_values=pii_values,
             original_entities=record.entities,
         )
-        # 라벨 병합 규칙 적용 (NAME → 人名 등) — verifier와 label 일치를 위해.
+        # 라벨 병합 규칙 적용 (NAME → PER 등) — verifier와 label 일치를 위해.
         merged = merge_entities(spans, self._merge_rules)
         return Record(text=generated, entities=merged, id=record.id)
 
