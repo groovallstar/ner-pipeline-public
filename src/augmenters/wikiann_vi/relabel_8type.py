@@ -8,8 +8,8 @@ vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 8종 엔�
 - `match_offsets`: LLM 표면형 span을 원본 텍스트 오프셋에 매핑 (중복 안전 소비).
 - `Relabeler`: concurrency 제한 + usage 누적을 가진 async 재라벨러.
 
-canonical 라벨 정의는 `docs/manual/canonical-entity-schema.md`,
-모호 사례 기준은 `docs/specs/entities/vietnamese-ner-8types.md` 참조.
+canonical 라벨 정의는 `docs/manual/data/canonical-entity-schema.md`,
+모호 사례 기준은 `docs/manual/data/vietnamese-ner-8types.md` 참조.
 """
 import asyncio
 import json
