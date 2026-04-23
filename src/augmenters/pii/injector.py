@@ -7,34 +7,20 @@ PII를 1~N개 주입하고, 원본 엔티티 오프셋과 신규 PII 오프셋�
 from __future__ import annotations
 
 import random
-import re
 from collections.abc import Iterable, Iterator
 
 from augmenters.pii.config import InjectionConfig
 from augmenters.pii.generators.base import generate_pii
 from augmenters.pii.schema import Entity, Record
 
-_SIMPLE_PLACE_SPLIT = re.compile(r'[\s,，、\-–—/\\·]+')
-
-
-def is_simple_place(address_text: str) -> bool:
-    """단일 토큰(구분자 없음)이면 simple place로 간주한다."""
-    text = address_text.strip()
-    if not text:
-        return False
-    parts = [p for p in _SIMPLE_PLACE_SPLIT.split(text) if p]
-    return len(parts) == 1
-
 
 def apply_label_merge(entity: Entity, rules: dict[str, str]) -> Entity:
     """단일 엔티티에 병합 규칙을 적용한 새 엔티티를 반환한다.
 
-    `ADDRESS → LOC` 규칙은 단일 토큰 주소에만 적용된다.
+    `NAME → PER`, `ADDRESS → LOC` 등 내부 생성 토큰을 canonical 라벨로
+    무조건 변환한다 (#17 Phase 1에서 `ADDRESS` 병합 조건부 로직 제거).
     """
     new_label = rules.get(entity.label, entity.label)
-    if entity.label == 'ADDRESS' and rules.get('ADDRESS') == 'LOC':
-        if not is_simple_place(entity.text):
-            new_label = 'ADDRESS'
     if new_label == entity.label:
         return entity
     return Entity(
@@ -56,7 +42,7 @@ _JA_CONNECTORS: dict[str, str] = {
     'NAME': '担当者：{v}。',
     'PHONE': '連絡先：{v}。',
     'ADDRESS': '住所：{v}。',
-    'DOB': '生年月日：{v}。',
+    'DAT': '日付：{v}。',
     'ID_NUM': 'ID番号：{v}。',
     'EMAIL': 'メール：{v}。',
     'CREDIT_CARD': 'カード番号：{v}。',
@@ -66,7 +52,7 @@ _VI_CONNECTORS: dict[str, str] = {
     'NAME': ' Liên hệ: {v}.',
     'PHONE': ' SĐT: {v}.',
     'ADDRESS': ' Địa chỉ: {v}.',
-    'DOB': ' Ngày sinh: {v}.',
+    'DAT': ' Ngày: {v}.',
     'ID_NUM': ' CCCD: {v}.',
     'EMAIL': ' Email: {v}.',
     'CREDIT_CARD': ' Thẻ: {v}.',

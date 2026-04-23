@@ -88,8 +88,18 @@ def generate_pii(
         return mod.generate_phone(rng)
     if label == 'ADDRESS':
         return mod.generate_address(rng)
-    if label == 'DOB':
-        return mod.generate_dob(rng)
+    if label == 'DAT':
+        # #17 Phase 1: JA 제너레이터는 `generate_dat`로 개명됨. VI는 Phase 2
+        # 에서 동일하게 개명 예정이며, 그전까지는 기존 `generate_dob`로 폴백.
+        fn = getattr(mod, 'generate_dat', None) or getattr(
+            mod, 'generate_dob', None,
+        )
+        if fn is None:
+            raise ValueError(
+                f'no date generator in {mod.__name__} '
+                f'(expected generate_dat or generate_dob)'
+            )
+        return fn(rng)
     if label == 'ID_NUM':
         return mod.generate_id_number(rng)
     if label == 'EMAIL':
