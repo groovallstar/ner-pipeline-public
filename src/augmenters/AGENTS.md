@@ -2,10 +2,11 @@
 
 학습 데이터 증강(augmentation) 모듈 모음.
 
-라벨 스키마는 canonical 영문 축약 14종
+라벨 스키마는 canonical 영문 축약 **13종**
 (`docs/manual/data/canonical-entity-schema.md`). NER 8종
-(`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`) + PII 6종
-(`EMAIL/PHONE/ADDRESS/DOB/ID_NUM/CREDIT_CARD`).
+(`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`) + 일반 날짜 1종(`DAT`) + PII 4종
+(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`). 이전 `ADDRESS`는 `LOC`로 흡수,
+`DOB`는 `DAT`로 개명·확장되었다 (#17 Phase 1).
 
 ## 서브 모듈
 
@@ -36,21 +37,23 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 |------|------|
 | `schema.py` | `Entity`, `Record` 공용 dataclass (labelers 호환) |
 | `config.py` | `InjectionConfig` (lang, density, pii_labels, label_merge_rules, seed) + `validate()` |
-| `injector.py` | `PIIInjector` — **suffix 모드**: 문장 끝 접미 삽입 + span 재계산. `apply_label_merge`/`merge_entities` 규칙 기반 병합(`NAME→PER`, 단일 지명 `ADDRESS→LOC`)도 제공 |
+| `injector.py` | `PIIInjector` — **suffix 모드**: 문장 끝 접미 삽입 + span 재계산. `apply_label_merge`/`merge_entities` 규칙 기반 병합(`NAME→PER`, `ADDRESS→LOC` 무조건)도 제공 |
 | `llm_injector.py` | `LLMInjector` + `VllmClient` — **llm 모드**: LLM이 PII를 자연스럽게 문중에 삽입, 생성 텍스트에서 string match로 span offset 추출 |
 | `stats.py` | 라벨별 빈도·커버리지·PII 없는 샘플 비율 리포트 |
 | `verifier.py` | `PIIVerifier` — LLM 교차 검증 (confirmed/missed/conflict 분류, drop_span/drop_record/keep_all 정책). 검증 시 `label_spans(split=False)` 로 호출하여 문맥 보존 |
 | `__main__.py` | `python -m augmenters.pii` CLI 엔트리포인트 (`--mode {suffix,llm}`, `--verify vllm` 교차 검증) |
 | `loaders.py` | Stockmark / 임의 JSONL / HF Hub → `Record` 어댑터 모음 |
 | `generators/base.py` | `PIIGenerator` Protocol, `get_generator(lang)` factory, 공용 유틸 |
-| `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/DOB/ID/이메일) |
-| `generators/vi.py` | 베트남어 PII 생성기 |
+| `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일). #17 Phase 1에서 `generate_dob` → `generate_dat` 개명 |
+| `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜/ID/이메일). #17 Phase 2에서 `generate_dob` → `generate_dat` 개명 완료 |
 
 #### 라벨 스키마
-- **내부 PII 토큰**(생성·병합 전): `NAME`, `PHONE`, `ADDRESS`, `DOB`,
-  `ID_NUM`, `EMAIL`, `CREDIT_CARD`
-- **병합 규칙**: `NAME → PER`, 단일 토큰 지명 `ADDRESS → LOC`
-- **최종 출력 라벨**: canonical 14종 (NER 8종 + PII 6종)
+- **내부 PII 토큰**(생성·병합 전): `NAME`, `PHONE`, `ADDRESS`, `DAT`,
+  `ID_NUM`, `EMAIL`, `CREDIT_CARD` (7종 — `ADDRESS`·`NAME`은 병합 대상)
+- **병합 규칙** (`DEFAULT_MERGE_RULES`): `NAME → PER`, `ADDRESS → LOC`
+  (둘 다 무조건 병합). 학습 데이터에는 `NAME`·`ADDRESS` 라벨이 존재하지
+  않는다
+- **최종 출력 라벨**: canonical 13종 (NER 8종 + `DAT` 1종 + PII 4종)
 
 #### 주입 밀도
 기본값 분포 `P(0)=0.2, P(1)=0.4, P(2)=0.3, P(3)=0.1` (문장당 PII 개수).

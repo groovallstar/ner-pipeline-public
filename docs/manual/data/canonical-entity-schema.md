@@ -1,11 +1,11 @@
 # Canonical Entity Schema (augmenters)
 
-`src/augmenters/` 하위에서 사용하는 통합 엔티티 라벨 공간. JA Stockmark 8종 +
-합성 PII 6종 = 14종을 **OntoNotes 관용 영문 축약**으로 표기한다.
+`src/augmenters/` 하위에서 사용하는 통합 엔티티 라벨 공간. NER 8종(Stockmark
+정렬) + 일반 날짜 1종(`DAT`) + 합성 PII 4종 = **13종**을 **OntoNotes 관용
+영문 축약**으로 표기한다.
 
 - 소스: `src/augmenters/{wikiann_vi,pii}/`
 - 파생 데이터: `data/stockmark/`, `data/wikiann_vi/`, `data/pii/`
-- 도입 이슈: #13 (2026-04-22)
 
 ## 배경
 
@@ -22,9 +22,9 @@
 본 스키마는 `augmenters/` 범위에 한정해 canonical을 영문 축약으로 통일한다.
 `labelers/`·`llm_eval/`·`classifier/`는 별도로 정리한다.
 
-## 14종 canonical 정의
+## 13종 canonical 정의
 
-### 8종 (Stockmark 정렬)
+### NER 8종 (Stockmark 정렬)
 
 | Label | 의미 | 정의 | 예시 |
 |---|---|---|---|
@@ -39,16 +39,26 @@
 
 WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 
-### PII 6종
+### 일반 날짜 1종
+
+| Label | 의미 | 정의 | 예시 |
+|---|---|---|---|
+| `DAT` | 날짜 | 연도·월·일·기간·상대날짜·시대·요일. 출생일·사건일·이적일·일반 표기 구분 없이 **모든 날짜**를 포괄 | 1985年4月3日, 2016年1月29日, 어제, ngày 15 tháng 3 |
+
+`augmenters/pii` 주입기는 합성 날짜 값을 `DAT` 라벨로 생성한다.
+
+### PII 4종
 
 | Label | 의미 | 정의 | 예시 |
 |---|---|---|---|
 | `EMAIL` | 이메일 주소 | `local@domain.TLD` 완전 형식 (TLD 포함) | taro@example.com |
 | `PHONE` | 전화번호 | 국내·국제 전화번호 (하이픈·공백·국가번호 허용) | 090-1234-5678, +81 80 1234 5678 |
-| `ADDRESS` | 개인 PII 주소 | 번지·건물명·층수까지 포함된 물리적 주소. 도·시 단독 표기는 `LOC` | 東京都千代田区1丁目2-3 ビル7F |
-| `DOB` | 생년월일 | 출생일 맥락(`生`, `出生`, `생년월일:` 등) 명시 시. 일반 연호·사건일은 제외 | 1985年4月3日, 1990-01-15 |
 | `ID_NUM` | 개인 식별 번호 | 주민등록번호·마이넘버·사원번호 등 개인 식별 숫자열 | 284257239645, 123-45-6789 |
 | `CREDIT_CARD` | 신용카드 번호 | 13~19자리 카드 번호 (공백·하이픈 구분자 허용) | 4065 0551 3022 4539 |
+
+> `augmenters/pii`의 `generate_address()` 함수가 주소 문자열을 생성하지만,
+> 출력 라벨은 `DEFAULT_MERGE_RULES`의 `'ADDRESS': 'LOC'` 무조건 병합 규칙에
+> 의해 전부 `LOC`로 변환되어 학습 데이터에 반영된다.
 
 ## 경계 규칙 (요약)
 
@@ -66,8 +76,8 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 | 스포츠 리그·팀 | `ORG` (이벤트 아님) | `ラ・リーガ`, `FCバルセロナ` → `ORG` |
 | 정부기관·군대 | `POL` | `財務省`, `米軍` → `POL` |
 | 행정 지명 복합체 | `LOC` 단일체 | `東京都千代田区`, `Thành phố Hồ Chí Minh` → `LOC` |
-| `ADDRESS` vs `LOC` | 번지·건물·층수 포함 시 `ADDRESS`, 아니면 `LOC` | `東京都千代田区` → `LOC`, `東京都千代田区1丁目2-3 ビル7F` → `ADDRESS` |
-| `DOB` vs 일반 연도 | `生年月日:`·`生`·`出生` 맥락 필수 | `1985年4月3日生` → `DOB`, `2016年1月29日移籍` → 연도 무시 |
+| 주소 (번지·건물·층수 포함) | `LOC` (PII 주입 시 `ADDRESS` 내부 토큰은 병합 규칙으로 `LOC` 변환) | `東京都千代田区1丁目2-3 ビル7F` → `LOC` |
+| `DAT` (모든 날짜) | 맥락 무관, 연·월·일·기간·상대날짜 전부 | `1985年4月3日`, `2016年1月29日`, `어제` → `DAT` |
 
 ## 원본 → canonical 매핑 (1회 적용)
 
@@ -78,8 +88,8 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
 |---|---|---|---|
 | `人名` | `PER` | `EMAIL` | `EMAIL` (그대로) |
 | `法人名` | `CORP` | `PHONE` | `PHONE` (그대로) |
-| `地名` | `LOC` | `ADDRESS` | `ADDRESS` (그대로) |
-| `施設名` | `FAC` | `DOB` | `DOB` (그대로) |
+| `地名` | `LOC` | `ADDRESS` | **`LOC`** (병합 규칙으로 흡수) |
+| `施設名` | `FAC` | `DOB` | **`DAT`** (일반 날짜) |
 | `製品名` | `PROD` | `ID_NUMBER` | **`ID_NUM`** |
 | `イベント名` | `EVT` | `CREDIT_CARD` | `CREDIT_CARD` (그대로) |
 | `政治的組織名` | `POL` | | |
@@ -102,12 +112,14 @@ WikiANN 3종(`PER/LOC/ORG`) 축소 비교 시: `CORP ∪ POL ∪ ORG → ORG`.
   - `augmenters/wikiann_vi/wikidata_anchor.py`의 `WIKIDATA_TO_CANONICAL`
     (134 Q-ID)
   - `augmenters/pii/` 프롬프트·verifier·generators
+  - `src/labelers/ja/ner_prompts.py` — JA 라벨러의 PII 프롬프트가 canonical을
+    직접 사용
 
 - **적용 제외** (후속 처리 예정):
-  - `src/labelers/**`, `src/llm_eval/**`, `src/classifier/**`
+  - `src/llm_eval/**`, `src/classifier/**`
   - `src/labelers/vi/ner_prompts.py`의 WikiANN 3종(`PER/LOC/ORG`) — 본
-    canonical과 철자 겹치지만 스키마 context가 다르므로 별도 관리
+    canonical과 철자 겹치지만 스키마 context가 다르므로 별도 관리 (VI
+    라벨러 확장 작업에서 일괄 정합 예정)
+  - `src/labelers/ko/**`, `docs/manual/data/korean-*.md` — 국문 데이터는
+    미사용
 
-## 변경 이력
-
-- 2026-04-22 도입 (이슈 #13). 이전 JA 원문 라벨 → 영문 축약 14종으로 통일.
