@@ -20,23 +20,24 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 
 ## Các loại thực thể ({entity_types})
 - PER: Tên người (họ và tên đầy đủ, họ, tên, biệt hiệu, nghệ danh). Loại trừ chức danh: "Ông", "Bà", "Chủ tịch", "Thủ tướng", "Tướng", "GS"
-- CORP: Doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, công ty đường sắt — tổ chức hoạt động thương mại
+- CORP: Doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, công ty đường sắt, **trường đại học (pháp nhân)** — tổ chức thương mại hoặc pháp nhân giáo dục
 - LOC: Quốc gia, tỉnh, thành phố, huyện, xã, sông, núi, biển, đảo, vịnh — địa danh tự nhiên hoặc hành chính
-- FAC: Công trình/tòa nhà cụ thể — chùa, nhà thờ, đền, lăng, ga, sân bay, cảng, bảo tàng, thư viện, nhà hát, công viên, cửa hàng, bệnh viện, trường tiểu học/THCS/THPT
+- FAC: Công trình/tòa nhà cụ thể — chùa, nhà thờ, đền, lăng, ga, sân bay, cảng, bảo tàng, thư viện, nhà hát, công viên, cửa hàng, bệnh viện, trường tiểu học/THCS/THPT, cơ sở phụ thuộc đại học (ký túc xá/khu giảng đường)
 - PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình (không bao gồm tên công ty, tên người, tên cơ sở)
 - EVT: Sự kiện một lần — giải đấu lớn, chiến tranh, hiệp ước, đại hội, cuộc cách mạng (không bao gồm giải đấu thường niên/câu lạc bộ)
 - POL: Đảng phái, bộ/cơ quan chính phủ ("Bộ/Cục/Sở/Ủy ban"), quân đội, tòa án, quốc hội, tổ chức quốc tế (Liên Hợp Quốc, ASEAN)
-- ORG: Trường đại học, giải đấu thể thao định kỳ, câu lạc bộ thể thao, hội, hiệp hội, liên đoàn — tổ chức không thuộc các loại trên
+- ORG: Giải đấu thể thao định kỳ, câu lạc bộ thể thao, hội, hiệp hội, liên đoàn, dàn nhạc giao hưởng, tổ chức trực thuộc đại học (câu lạc bộ/viện nghiên cứu) — tổ chức không thuộc các loại trên
 
 ## Thứ tự ưu tiên phân loại (áp dụng từ trên xuống khi phân vân)
 1. Chính phủ/Đảng/Quân đội/Tòa án/Quốc hội/Tổ chức quốc tế → POL
-2. Đại học/Giải đấu/CLB thể thao/Hiệp hội/Liên đoàn → ORG
-3. Chủ thể thương mại ("Công ty/Tập đoàn/Ngân hàng/Hãng/Đài truyền hình") → CORP
-4. Công trình vật lý cụ thể (chùa/nhà thờ/ga/sân bay/bảo tàng/bệnh viện/trường PT) → FAC
+2. Giải đấu/CLB thể thao/Hiệp hội/Liên đoàn/Tổ chức trực thuộc đại học → ORG
+3. **Trường đại học (pháp nhân)**/Chủ thể thương mại ("Công ty/Tập đoàn/Ngân hàng/Hãng/Đài truyền hình") → CORP
+4. Công trình vật lý cụ thể (chùa/nhà thờ/ga/sân bay/bảo tàng/bệnh viện/trường PT/cơ sở phụ thuộc đại học) → FAC
 5. Sản phẩm/tác phẩm/chương trình → PROD
 6. Sự kiện/chiến tranh/hiệp ước → EVT
 - Phán định "địa điểm vật lý vs hoạt động tổ chức" để phân biệt FAC và CORP/ORG
-- Trường đại học → ORG, nhưng trường tiểu học/THCS/THPT → FAC
+- **Trường đại học (pháp nhân bản thể) → CORP**, cơ sở phụ thuộc (ký túc xá/khu giảng đường) → FAC, tổ chức trực thuộc (câu lạc bộ/viện nghiên cứu) → ORG
+- Trường tiểu học/THCS/THPT → FAC
 - Bệnh viện là công trình → FAC (pháp nhân vận hành bệnh viện là CORP riêng)
 
 ## Quy tắc
@@ -51,7 +52,7 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 Đầu ra: [{{"text": "Hồ Chí Minh", "type": "PER"}}, {{"text": "Chùa Một Cột", "type": "FAC"}}, {{"text": "Hà Nội", "type": "LOC"}}]
 
 Đầu vào: Đảng Cộng sản Việt Nam và Bộ Giáo dục vừa ký kết hợp tác với Đại học Quốc gia Hà Nội.
-Đầu ra: [{{"text": "Đảng Cộng sản Việt Nam", "type": "POL"}}, {{"text": "Bộ Giáo dục", "type": "POL"}}, {{"text": "Đại học Quốc gia Hà Nội", "type": "ORG"}}]
+Đầu ra: [{{"text": "Đảng Cộng sản Việt Nam", "type": "POL"}}, {{"text": "Bộ Giáo dục", "type": "POL"}}, {{"text": "Đại học Quốc gia Hà Nội", "type": "CORP"}}]
 
 Đầu vào: Vietnam Airlines vận hành chuyến bay từ Sân bay Nội Bài đến Bệnh viện Bạch Mai chuyển bệnh nhân khẩn cấp.
 Đầu ra: [{{"text": "Vietnam Airlines", "type": "CORP"}}, {{"text": "Sân bay Nội Bài", "type": "FAC"}}, {{"text": "Bệnh viện Bạch Mai", "type": "FAC"}}]
@@ -77,18 +78,18 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ th
 
 ## Các loại thực thể ({entity_types})
 - PER: Tên người (không bao gồm chức danh "Ông/Bà/Chủ tịch/Thủ tướng")
-- CORP: Doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, công ty đường sắt
+- CORP: Doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, công ty đường sắt, **trường đại học (pháp nhân)**
 - LOC: Quốc gia, tỉnh, thành phố, huyện, xã, sông, núi, biển, đảo, vịnh
-- FAC: Công trình vật lý — chùa/nhà thờ/ga/sân bay/bảo tàng/bệnh viện/trường PT/cửa hàng
+- FAC: Công trình vật lý — chùa/nhà thờ/ga/sân bay/bảo tàng/bệnh viện/trường PT/cửa hàng/cơ sở phụ thuộc đại học
 - PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình
 - EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn
 - POL: Đảng, bộ/cục chính phủ, quân đội, tòa án, quốc hội, tổ chức quốc tế
-- ORG: Đại học, giải đấu thể thao định kỳ, CLB thể thao, hiệp hội, liên đoàn
+- ORG: Giải đấu thể thao định kỳ, CLB thể thao, hiệp hội, liên đoàn, dàn nhạc, tổ chức trực thuộc đại học
 
 ## Thứ tự ưu tiên (áp dụng từ trên xuống)
 1. Chính phủ/Đảng/Quân đội/Tòa án/Quốc hội → POL
-2. Đại học/CLB thể thao/Giải đấu định kỳ → ORG
-3. Chủ thể thương mại → CORP
+2. CLB thể thao/Giải đấu định kỳ/Hiệp hội → ORG
+3. **Trường đại học (pháp nhân)** / Chủ thể thương mại → CORP
 4. Công trình vật lý cụ thể (bao gồm bệnh viện, trường PT) → FAC
 5. Sản phẩm/tác phẩm → PROD
 6. Sự kiện/chiến tranh → EVT

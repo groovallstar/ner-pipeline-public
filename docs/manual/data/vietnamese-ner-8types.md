@@ -24,13 +24,13 @@ WikiANN-vi(3종: PER/LOC/ORG)를 일본어 Stockmark(8종)와 동일한 라벨 �
 | 태그 (canonical) | 의미 | 베트남어 설명 | 예시(VI) |
 |---|---|---|---|
 | `PER` | 인물 | Tên người (풀네임·성·이름·별명·예명) | Nguyễn Xuân Phúc, Hồ Chí Minh, Bác Hồ |
-| `CORP` | 법인 (기업·철도·방송사) | Công ty, tập đoàn, hãng hàng không, đài truyền hình, công ty đường sắt | Samsung, Vingroup, Vietnam Airlines, VTV, Đường sắt Việt Nam |
+| `CORP` | 법인 (기업·철도·방송사·**대학 법인 본체**) | Công ty, tập đoàn, hãng hàng không, đài truyền hình, công ty đường sắt, **trường đại học** | Samsung, Vingroup, Vietnam Airlines, VTV, Đường sắt Việt Nam, Đại học Quốc gia Hà Nội |
 | `LOC` | 지명 (국가·도시·자연지명) | Quốc gia, thành phố, tỉnh, huyện, sông, núi, biển, đảo — **자연지명·행정지명만** | Việt Nam, Hà Nội, Đà Nẵng, Sông Hồng, Vịnh Hạ Long |
-| `FAC` | 시설 (건물·역·공항·점포·병원·학교시설·사원·관광명소 등) | Tòa nhà, ga, sân bay, cửa hàng, bệnh viện, chùa, công trình du lịch | Chùa Một Cột, Sân bay Nội Bài, Bệnh viện Bạch Mai, Ga Hà Nội |
+| `FAC` | 시설 (건물·역·공항·점포·**병원**·초중고 학교·대학 부속 시설·사원·관광명소) | Tòa nhà, ga, sân bay, cửa hàng, bệnh viện, chùa, trường tiểu học/THCS/THPT, khu ký túc xá | Chùa Một Cột, Sân bay Nội Bài, Bệnh viện Bạch Mai, Ga Hà Nội |
 | `PROD` | 제품·서비스·소프트웨어·작품명 | Sản phẩm, dịch vụ, phần mềm, tác phẩm | iPhone 15, Honda Wave, VinFast VF8, Windows |
 | `EVT` | 행사·대회·사건·전쟁·조약 | Sự kiện, giải đấu, chiến tranh, hiệp ước | Chiến tranh Việt Nam, SEA Games, Hiệp định Paris |
 | `POL` | 정당·정부기관·국제기관·군대·재판소·의회 | Đảng phái, bộ/cơ quan chính phủ, tổ chức quốc tế, quân đội, tòa án, quốc hội | Đảng Cộng sản Việt Nam, Bộ Giáo dục, Quốc hội, Liên Hợp Quốc, Quân đội Nhân dân Việt Nam |
-| `ORG` | 스포츠리그·스포츠팀·대학·단체 등 기타 조직 | Giải đấu, đội thể thao, trường đại học, tổ chức xã hội | V.League, Hà Nội FC, Đại học Quốc gia Hà Nội, Hội Chữ thập đỏ |
+| `ORG` | 스포츠리그·스포츠팀·학회·협회·단체 등 기타 조직 (**대학 부속 조직 포함**) | Giải đấu, đội thể thao, hội, hiệp hội, tổ chức xã hội, câu lạc bộ học thuật | V.League, Hà Nội FC, Hội Chữ thập đỏ |
 
 ## 3. WikiANN 3종 → 8종 매핑 규칙
 
@@ -67,39 +67,43 @@ WikiANN ORG → CORP  OR  POL  OR  ORG  OR  FAC
 
 ### 3.4 ORG → CORP · POL · ORG · FAC
 
-**CORP** (기업·영리법인):
+**CORP** (기업·영리법인·**대학 법인 본체**):
 - Công ty, Tập đoàn, Ngân hàng, Hãng, Xí nghiệp, 공공법인(Vietnam Airlines,
-  EVN 등).
-- 예: Samsung, Vingroup, Vinamilk, Vietnam Airlines, VTV (방송국)
+  EVN 등), **Đại học / Trường Đại học / Học viện** (대학 법인 본체).
+- 예: Samsung, Vingroup, Vinamilk, Vietnam Airlines, VTV (방송국),
+  Đại học Quốc gia Hà Nội, Học viện Ngân hàng
 
 **POL** (정당·정부·군·사법·입법·국제기관):
 - Đảng, Bộ, Chính phủ, Ủy ban, Sở, Cục, Quốc hội, Tòa án, Quân đội,
-  Công an, Liên Hợp Quốc, ASEAN
+  Công an, Liên Hợp Quốc, ASEAN, Tổ chức Hiệp ước / Tổ chức Hợp tác
 - 예: Đảng Cộng sản Việt Nam, Bộ Giáo dục và Đào tạo, Quốc hội,
   Liên Hợp Quốc, Quân đội Nhân dân Việt Nam
 
-**ORG** (대학·스포츠·단체·리그):
-- Đại học/Trường, 스포츠 팀·리그, 재단, NGO, 협회
-- 예: Đại học Quốc gia Hà Nội, V.League, Hà Nội FC, Hội Chữ thập đỏ
+**ORG** (스포츠·단체·리그·대학 부속 조직):
+- 스포츠 팀·리그, 재단, NGO, 협회, 교향악단, 대학 부속 동아리·연구회
+- 예: V.League, Hà Nội FC, Hội Chữ thập đỏ, Dàn nhạc giao hưởng
 
-**FAC으로 이동** (WikiANN이 ORG로 라벨했지만 Stockmark 기준은 시설):
-- Bệnh viện (병원), 점포(cửa hàng) — Stockmark가 명시적으로 FAC로 분류.
-- 예: Bệnh viện Bạch Mai (WikiANN ORG → Stockmark FAC)
+**FAC** (병원·초중고·대학 부속 시설·점포):
+- Bệnh viện (병원 단일체), Trường THCS/THPT/Tiểu học, 점포(cửa hàng),
+  대학 부속 시설(ký túc xá, thư viện trường, khu giảng đường)
+- 예: Bệnh viện Bạch Mai, Ga Hà Nội, Sân bay Nội Bài
 - 주의: 종합병원을 운영하는 **법인**("Công ty TNHH Bệnh viện ...")이 나오면
   CORP, 병원 자체("Bệnh viện Bạch Mai")는 FAC.
 
-**경계 규칙**:
-1. "Đảng"/"Mặt trận"으로 시작 → POL
-2. "Bộ"/"Cục"/"Sở"/"Ủy ban"/"Tòa án"/"Quốc hội" → POL
-3. "Quân đội"/"Hải quân"/"Sư đoàn"/"Lữ đoàn"/"Công an" → POL
-4. "Đại học"/"Trường Đại học"/"Học viện"(대학만) → ORG.
-   단 초·중·고등학교(Trường THCS/THPT/Tiểu học)는 **FAC**
-   (일본어 Stockmark가 학교·캠퍼스는 FAC로 처리)
-5. "FC"/"Câu lạc bộ bóng đá"/리그명(V.League/J1 등) → ORG
-6. "Bệnh viện" (병원 단일체) → FAC
-7. 영리 기업 접두(Công ty/Tập đoàn/Ngân hàng/Hãng) → CORP
-8. 방송사(Đài truyền hình/Đài phát thanh/VTV/VTC) → CORP
-9. 국제기구(Liên Hợp Quốc/WTO/ASEAN/UNICEF) → POL
+**결정론적 접미사 우선순위** (모호하면 위에서 아래로 적용):
+
+1. POL: `Đảng`/`Mặt trận` / `Bộ`/`Cục`/`Sở`/`Ủy ban`/`Tòa án`/`Quốc hội` /
+   `Quân đội`/`Hải quân`/`Sư đoàn`/`Lữ đoàn`/`Công an` / `Chính phủ ~` /
+   `Tổ chức ~ Hiệp ước`/`Tổ chức Hợp tác ~` / 국제기구
+   (`Liên Hợp Quốc`/`WTO`/`ASEAN`/`UNICEF`)
+2. ORG: 스포츠 리그·팀(`FC`/`Câu lạc bộ bóng đá`/리그명) / 재단·NGO·협회·
+   교향악단 / 대학 부속 조직(동아리·연구회)
+3. CORP: `Đại học`/`Trường Đại học`/`Học viện` (대학 법인 본체) / 영리
+   기업 접두(`Công ty`/`Tập đoàn`/`Ngân hàng`/`Hãng`) / 방송사
+   (`Đài truyền hình`/`Đài phát thanh`/`VTV`/`VTC`) / `~ đường sắt`
+4. FAC: `Bệnh viện` (병원 단일체) / `Trường THCS`/`THPT`/`Tiểu học` (초·중·고)
+   / `Sân bay`/`Ga`/`Cảng` / `Chùa`/`Nhà thờ`/`Đền`/`Miếu`/`Lăng` /
+   `Bảo tàng`/`Thư viện`/`Nhà hát`/`Công viên` / 점포 / 대학 부속 시설
 
 ### 3.5 WikiANN에 존재하지 않는 타입: PROD · EVT
 
@@ -130,7 +134,7 @@ WikiANN의 라벨을 기준으로, canonical 8종에서의 최종 타입을 어�
 | 2 | `Vịnh Hạ Long` | LOC | `LOC` | 자연지명(만·해안). 관광명소여도 자연물은 LOC |
 | 3 | `Sân bay Nội Bài` | LOC | `FAC` | 공항. Stockmark는 공항을 명시적으로 FAC |
 | 4 | `Bệnh viện Bạch Mai` | ORG | `FAC` | 병원 단일체. Stockmark는 "○○病院"을 FAC (법인 운영체와 별도) |
-| 5 | `Đại học Quốc gia Hà Nội` | ORG | `ORG` | 대학은 Stockmark 기준 ORG (학교 건물이 아니라 조직체) |
+| 5 | `Đại học Quốc gia Hà Nội` | ORG | `CORP` | 대학 **법인 본체**는 Stockmark 실측 100% CORP. 부속 시설은 FAC, 부속 조직(동아리·연구회)만 ORG |
 | 6 | `V.League` | ORG | `ORG` | 스포츠 리그. Stockmark는 스포츠 리그를 ORG |
 | 7 | `Hà Nội FC` | ORG | `ORG` | 스포츠 팀. Stockmark는 스포츠 팀을 ORG |
 | 8 | `Đảng Cộng sản Việt Nam` | ORG | `POL` | 정당. Stockmark는 정당을 POL |
@@ -190,3 +194,7 @@ WikiANN의 라벨을 기준으로, canonical 8종에서의 최종 타입을 어�
 - 2026-04-21 초안. 이슈 #10 2단계 산출물.
 - 2026-04-22 (이슈 #13) 라벨 표기를 canonical 영문 축약(PER/CORP/LOC/FAC/
   PROD/EVT/POL/ORG)으로 통일. 본문·표·예시 일괄 치환.
+- 2026-04-24 (이슈 #16) 대학 법인 본체를 ORG → CORP로 재정렬. §2 엔티티
+  정의, §3.4 경계 규칙 및 결정론적 접미사 우선순위, §4 모호 사례 표의
+  `Đại học Quốc gia Hà Nội` 판정을 CORP로 변경. 근거는 Stockmark `〜大学`
+  115건 전수 오디트(100% CORP).
