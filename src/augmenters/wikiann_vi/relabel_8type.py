@@ -1,7 +1,9 @@
-"""WikiANN-vi 문장을 canonical 8종 스키마로 재라벨하는 async 클라이언트.
+"""WikiANN-vi 문장을 canonical 5종 스키마로 재라벨하는 async 클라이언트.
 
-vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 8종 엔티티를 추출하고,
+vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 5종 엔티티를 추출하고,
 원본 텍스트에서 문자 오프셋을 매칭해 `gold_spans_8type` 필드로 반환한다.
+파일·필드명의 `8type` 리터럴은 이슈 #21 축소 이후에도 데이터 호환성을 위해
+유지한다(의미는 canonical 5종 PER·LOC·ORG·PROD·EVT).
 
 주요 구성:
 - `parse_spans`: LLM 원문 출력에서 JSON span 리스트 추출 (think 제거·정규식 폴백).
@@ -106,7 +108,7 @@ def match_offsets(text: str, spans: List[dict]) -> List[dict]:
 
 
 class Relabeler:
-    """vLLM OpenAI 호환 엔드포인트로 WikiANN-vi 레코드를 8종으로 재라벨.
+    """vLLM OpenAI 호환 엔드포인트로 WikiANN-vi 레코드를 5종으로 재라벨.
 
     batch_size > 1일 때는 여러 레코드를 BATCH_PROMPT_TEMPLATE로 묶어 호출해
     프롬프트 오버헤드를 줄인다. 파싱 실패 시 해당 배치는 SINGLE 폴백.

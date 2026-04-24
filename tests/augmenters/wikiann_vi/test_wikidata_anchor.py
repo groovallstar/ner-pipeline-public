@@ -24,13 +24,10 @@ class TestAnchorType:
         # 앞쪽 미매핑, 뒤쪽 매핑 있으면 뒤쪽 반환
         assert anchor_type(['Q999999999', 'Q5']) == 'PER'
 
-    def test_covers_all_8_types(self):
-        """매핑 테이블이 8종 모두를 커버한다."""
+    def test_covers_all_5_types(self):
+        """매핑 테이블이 5종 모두를 커버한다 (축소 후 canonical 스키마)."""
         values = set(WIKIDATA_TO_CANONICAL.values())
-        assert values == {
-            'PER', 'CORP', 'LOC', 'FAC',
-            'PROD', 'EVT', 'POL', 'ORG',
-        }
+        assert values == {'PER', 'LOC', 'ORG', 'PROD', 'EVT'}
 
     def test_no_duplicate_keys(self):
         # dict 생성 시 중복은 자동 제거되므로 이 테스트는 도메인 레벨이지만,
@@ -73,7 +70,7 @@ class TestIterEntities:
                 'id': '0', 'text': 't',
                 'gold_spans_8type': [
                     {'text': 'Hà Nội', 'type': 'LOC'},
-                    {'text': 'Samsung', 'type': 'CORP'},
+                    {'text': 'Samsung', 'type': 'ORG'},
                 ],
             },
             {
@@ -84,7 +81,7 @@ class TestIterEntities:
         out = list(_iter_entities(records, 'gold_spans_8type'))
         assert len(out) == 2
         assert ('Hà Nội', 'LOC', '0') in out
-        assert ('Samsung', 'CORP', '0') in out
+        assert ('Samsung', 'ORG', '0') in out
 
     def test_skips_empty_fields(self):
         records = [{
@@ -92,7 +89,7 @@ class TestIterEntities:
             'gold_spans_8type': [
                 {'text': '', 'type': 'LOC'},
                 {'text': 'Hà Nội', 'type': ''},
-                {'text': 'Samsung', 'type': 'CORP'},
+                {'text': 'Samsung', 'type': 'ORG'},
             ],
         }]
         out = list(_iter_entities(records, 'gold_spans_8type'))

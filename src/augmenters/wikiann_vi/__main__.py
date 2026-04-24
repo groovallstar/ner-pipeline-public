@@ -1,4 +1,4 @@
-"""WikiANN-vi → canonical 8종 재라벨 CLI.
+"""WikiANN-vi → canonical 5종 재라벨 CLI.
 
 사용 예::
 
@@ -10,6 +10,9 @@
 
 JSONL 출력 스키마(레코드별):
     {id, text, gold_spans, gold_spans_8type, relabel_model}
+
+파일·필드의 ``8type`` 리터럴은 이슈 #21 축소 이후에도 데이터 호환성을 위해
+유지한다(의미는 canonical 5종: PER·LOC·ORG·PROD·EVT).
 """
 import argparse
 import json
@@ -26,7 +29,7 @@ from labelers.vi.dataset_loader import VietnameseDatasetLoader
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='python -m augmenters.wikiann_vi',
-        description='Relabel WikiANN-vi to canonical 8-type schema',
+        description='Relabel WikiANN-vi to canonical 5-type schema',
     )
     parser.add_argument(
         '--hf-name', default='unimelb-nlp/wikiann',
@@ -98,9 +101,9 @@ def _summarize(records: list[dict]) -> None:
 
     print('=== Relabel Summary ===')
     print(f'Total records: {total}')
-    print(f'Records with >=1 8-type span: {total - empty}')
+    print(f'Records with >=1 5-type span: {total - empty}')
     print(f'Records with relabel error: {error}')
-    print(f'Total 8-type spans: {sum(type_counter.values())}')
+    print(f'Total 5-type spans: {sum(type_counter.values())}')
     print('Per-type counts:')
     for type_name, count in type_counter.most_common():
         print(f'  {type_name}: {count}')

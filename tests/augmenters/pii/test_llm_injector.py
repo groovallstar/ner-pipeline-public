@@ -70,25 +70,25 @@ class TestExtractSpans:
     def test_original_entity_found(self):
         """원본 엔티티 텍스트가 생성 텍스트에 있으면 새 offset 추출."""
         text = '創業にはミツカンも出資した。担当は山田太郎です。'
-        original = [_ent('CORP', 4, 8, 'ミツカン')]
+        original = [_ent('ORG', 4, 8, 'ミツカン')]
         pii = {'NAME': '山田太郎'}
         spans = extract_spans(text, pii_values=pii, original_entities=original)
 
         labels = {s.label: s for s in spans}
         assert 'NAME' in labels
-        assert 'CORP' in labels
-        assert labels['CORP'].text == 'ミツカン'
-        assert text[labels['CORP'].start_char:labels['CORP'].end_char] == 'ミツカン'
+        assert 'ORG' in labels
+        assert labels['ORG'].text == 'ミツカン'
+        assert text[labels['ORG'].start_char:labels['ORG'].end_char] == 'ミツカン'
 
     def test_original_entity_missing_is_dropped(self):
         """원본 엔티티가 생성 텍스트에 없으면 drop."""
         text = '山田太郎が窓口です。'
-        original = [_ent('CORP', 0, 4, 'ミツカン')]
+        original = [_ent('ORG', 0, 4, 'ミツカン')]
         pii = {'NAME': '山田太郎'}
         spans = extract_spans(text, pii_values=pii, original_entities=original)
 
         labels = [s.label for s in spans]
-        assert 'CORP' not in labels
+        assert 'ORG' not in labels
         assert 'NAME' in labels
 
     def test_pii_value_missing_raises(self):
@@ -146,7 +146,7 @@ class TestLLMInjector:
     def test_inject_returns_valid_record(self):
         original = _rec(
             '創業にはミツカンも出資した。',
-            [_ent('CORP', 4, 8, 'ミツカン')],
+            [_ent('ORG', 4, 8, 'ミツカン')],
         )
         fake = FakeLLMClient('創業にはミツカンも出資した。')
         injector = LLMInjector(

@@ -14,10 +14,10 @@ class TestParseSpans:
     def test_list_with_think_prefix(self):
         raw = (
             '<think>some reasoning here</think>'
-            '[{"text": "Samsung", "type": "CORP"}]'
+            '[{"text": "Samsung", "type": "ORG"}]'
         )
         assert parse_spans(raw) == [
-            {'text': 'Samsung', 'type': 'CORP'},
+            {'text': 'Samsung', 'type': 'ORG'},
         ]
 
     def test_single_dict(self):
@@ -94,7 +94,7 @@ class TestMatchOffsets:
 
     def test_not_found_dropped(self):
         text = 'Không có tên nào.'
-        spans = [{'text': 'Samsung', 'type': 'CORP'}]
+        spans = [{'text': 'Samsung', 'type': 'ORG'}]
         assert match_offsets(text, spans) == []
 
     def test_empty_inputs(self):
@@ -117,8 +117,8 @@ class TestMatchOffsets:
         """LLM 출력 원래 순서를 유지한다."""
         text = 'Đảng Cộng sản Việt Nam và Bộ Giáo dục hợp tác.'
         spans = [
-            {'text': 'Đảng Cộng sản Việt Nam', 'type': 'POL'},
-            {'text': 'Bộ Giáo dục', 'type': 'POL'},
+            {'text': 'Đảng Cộng sản Việt Nam', 'type': 'ORG'},
+            {'text': 'Bộ Giáo dục', 'type': 'ORG'},
         ]
         result = match_offsets(text, spans)
         assert [r['text'] for r in result] == [
@@ -130,12 +130,12 @@ class TestRelabelerBatchParse:
     def test_parse_batch_dict(self):
         raw = (
             '{"0": [{"text": "Hà Nội", "type": "LOC"}], '
-            '"1": [{"text": "Samsung", "type": "CORP"}]}'
+            '"1": [{"text": "Samsung", "type": "ORG"}]}'
         )
         result = Relabeler._parse_batch(raw)
         assert 0 in result and 1 in result
         assert result[0] == [{'text': 'Hà Nội', 'type': 'LOC'}]
-        assert result[1] == [{'text': 'Samsung', 'type': 'CORP'}]
+        assert result[1] == [{'text': 'Samsung', 'type': 'ORG'}]
 
     def test_parse_batch_with_think(self):
         raw = (

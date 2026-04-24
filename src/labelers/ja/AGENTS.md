@@ -25,7 +25,8 @@ Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entit
 - `span_matcher.py` handles overlapping entities via consumed-range tracking — longest match wins
 - `_strip_particles()` fallback strips trailing Japanese particles/honorific suffixes — can incorrectly strip legitimate entity characters
 - `JapaneseDatasetLoader` seed=42 must stay consistent with `classifier/data_utils.py` for apples-to-apples comparison
-- `DEFAULT_ENTITY_TYPES = ["人名", "法人名", "地名", "施設名", "製品名", "イベント名", "政治的組織名", "その他の組織名"]`
+- `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "PROD", "EVT", "EMAIL", "PHONE", "DAT", "ID_NUM", "CREDIT_CARD"]` — canonical 10종 평면 목록(이슈 #21). 상세: `docs/manual/data/canonical-entity-schema.md`
+- HF Stockmark 원본은 일본어 8종 라벨을 사용하며 `dataset_loader.py`의 `JA_TO_CANONICAL` 매핑이 canonical 5종으로 변환
 
 ### Testing Requirements
 - Test `match_spans()` with overlapping entities, particle-containing entities, and whitespace-collapsed matches

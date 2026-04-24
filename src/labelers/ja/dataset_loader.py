@@ -2,7 +2,13 @@
 
 데이터셋: stockmark/ner-wikipedia-dataset (HuggingFace Hub)
 형식: 원시 텍스트 + 문자 오프셋 span (BIO 아님)
-엔티티 타입: 人名, 法人名, 地名, 施設名, 製品名, イベント名, 政治的組織名, その他の組織名
+
+HF 원본 8종(Japanese) → canonical 5종(English) 매핑을 로딩 시점에 적용:
+  人名                    → PER
+  地名 + 施設名            → LOC
+  法人名 + 政治的組織名 + その他の組織名 → ORG
+  製品名                  → PROD
+  イベント名              → EVT
 
 분할 전략: train 분할만 존재하므로 train_test_split(test_size=0.2, seed=42) 사용.
 """
@@ -14,26 +20,32 @@ from typing import List, Optional
 from datasets import load_dataset
 
 
+# HF Stockmark 일본어 라벨 → canonical 5종(English) 매핑
+JA_TO_CANONICAL: dict = {
+    '人名': 'PER',
+    '地名': 'LOC',
+    '施設名': 'LOC',
+    '法人名': 'ORG',
+    '政治的組織名': 'ORG',
+    'その他の組織名': 'ORG',
+    '製品名': 'PROD',
+    'イベント名': 'EVT',
+}
+
+
 class JapaneseDatasetLoader:
     """재현 가능한 분할로 Stockmark NER Wikipedia 데이터셋을 로드한다."""
 
     DATASET_NAME = "stockmark/ner-wikipedia-dataset"
 
-    # Stockmark 원본 cross-label 정정 테이블. 결정론적 접미사 우선순위 룰
-    # (docs/manual/data/canonical-entity-schema.md)에 따른 상위 라벨과
-    # 역전된 오라벨만 선별. 키: (curid, entity_text, original_type),
-    # 값: 정정된 type.
+    # Stockmark 원본 cross-label 정정 테이블. 5종 축소 후에도 의미가 바뀌는
+    # 케이스만 유지 — 법인/정부/기타조직 사이 정정은 모두 ORG로 수렴하여
+    # 축소 후에는 실효 없음. 법인(ORG) → 병원(LOC) 1건만 여전히 유의미.
+    # 키: (curid, entity_text, original_ja_type), 값: 정정된 canonical 라벨.
     LABEL_CORRECTIONS: dict = {
-        # NHK 단독 ORG → CORP (NHK 13건 중 12건이 법인명, 1건만 ORG 오라벨)
-        ('2746825', 'NHK', 'その他の組織名'): '法人名',
-        # 〜政府 CORP → POL (政府 60건 중 상위 라벨은 정치적 조직명)
-        ('2919391', '香港政府', '法人名'): '政治的組織名',
-        ('1836213', '中華民国政府', '法人名'): '政治的組織名',
-        ('2115134', '日本政府', '法人名'): '政治的組織名',
-        ('3908159', 'ロシア政府', '法人名'): '政治的組織名',
-        ('1587749', 'ロシア政府', '法人名'): '政治的組織名',
-        # 병원 단일체 CORP → FAC (病院 11건 중 10건이 시설명)
-        ('2942700', 'セントメアリー病院', '法人名'): '施設名',
+        # 병원 단일체: 법인명(ORG) → 시설명(LOC).
+        # 〜病院 11건 중 10건이 시설명이므로 상위 라벨은 LOC.
+        ('2942700', 'セントメアリー病院', '法人名'): 'LOC',
     }
 
     def __init__(self, cache_dir: Optional[str] = None) -> None:
@@ -59,7 +71,9 @@ class JapaneseDatasetLoader:
             test_size: 테스트 분할 비율.
 
         Returns:
-            레코드 리스트: {"id": str, "text": str, "gold_spans": [{"text", "type", "start", "end"}]}
+            레코드 리스트: {"id": str, "text": str,
+            "gold_spans": [{"text", "type", "start", "end"}]} —
+            type은 canonical 5종(PER/LOC/ORG/PROD/EVT).
         """
         dataset_name = name or self.DATASET_NAME
         hf_dataset = load_dataset(
@@ -74,7 +88,9 @@ class JapaneseDatasetLoader:
         selected = splits["test"] if split == "test" else splits["train"]
 
         if max_samples is not None:
-            selected = selected.select(range(min(max_samples, len(selected))))
+            selected = selected.select(
+                range(min(max_samples, len(selected)))
+            )
 
         return self._to_records(selected)
 
@@ -119,9 +135,11 @@ class JapaneseDatasetLoader:
 
     @classmethod
     def _to_records(cls, dataset) -> List[dict]:
-        """HuggingFace 데이터셋을 레코드 형식으로 변환한다.
+        """HuggingFace 데이터셋을 canonical 5종으로 매핑한 레코드로 변환.
 
-        `LABEL_CORRECTIONS`에 등록된 오라벨은 로딩 시점에 결정론적으로 정정된다.
+        1. LABEL_CORRECTIONS에 등록된 HF 원본 오라벨은 먼저 정정된다.
+           (값이 canonical 라벨이면 그대로 사용)
+        2. 그 외는 JA_TO_CANONICAL 매핑을 통해 5종 영문 라벨로 전환한다.
         """
         records = []
         for i, row in enumerate(dataset):
@@ -132,14 +150,19 @@ class JapaneseDatasetLoader:
             gold_spans = []
             for entity in entities:
                 name = entity.get("name", "")
-                etype = entity.get("type", "")
+                ja_type = entity.get("type", "")
+                # 정정 테이블은 canonical 라벨(LOC/ORG 등)을 직접 반환한다
                 corrected = cls.LABEL_CORRECTIONS.get(
-                    (rec_id, name, etype), etype
+                    (rec_id, name, ja_type)
                 )
+                if corrected is not None:
+                    canonical = corrected
+                else:
+                    canonical = JA_TO_CANONICAL.get(ja_type, ja_type)
                 span = entity.get("span", [0, 0])
                 gold_spans.append({
                     "text": name,
-                    "type": corrected,
+                    "type": canonical,
                     "start": span[0],
                     "end": span[1],
                 })

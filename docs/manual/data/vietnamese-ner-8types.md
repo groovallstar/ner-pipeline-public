@@ -1,9 +1,18 @@
 # 베트남어 NER 8종 매핑 스펙 (Stockmark 스키마 정렬)
 
 > 기준 시점: 2026-04-21
-> 대상 이슈: #10 (VI WikiANN → canonical 8종 스키마 확장)
+> 대상 이슈: #10 (VI WikiANN → canonical 8종 스키마 확장, self-close)
 > 선행 스펙: `docs/manual/data/japanese-ner.md`,
 >   `docs/manual/data/vietnamese-ner.md`
+
+## 변경 이력
+
+- **2026-04-24 (이슈 #21)**: canonical 8종 → **5종 축소** (`CORP/POL/ORG
+  → ORG`, `FAC → LOC`). 본 문서에 기재된 8종 라벨 문자열은 역사적 기록
+  으로 유지하되, **실제 데이터 파일**(`data/wikiann_vi/*.jsonl`)과
+  `src/augmenters/wikiann_vi/` 코드는 5종으로 전환됨. 현행 canonical은
+  `docs/manual/data/canonical-entity-schema.md` 참조.
+- 이슈 #10은 본 이슈와 방향 역전(확장 → 축소)으로 self-close.
 
 ## 1. 목적
 
