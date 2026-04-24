@@ -112,7 +112,8 @@ def generate_address(rng: random.Random | None = None) -> str:
     )
 
 
-def generate_dob(rng: random.Random | None = None) -> str:
+def generate_dat(rng: random.Random | None = None) -> str:
+    """베트남식 날짜 (출생일·사건일·일반 표기 공통)."""
     r = rng or random
     y = r.randint(1950, 2005)
     m = r.randint(1, 12)

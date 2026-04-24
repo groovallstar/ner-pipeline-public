@@ -12,8 +12,8 @@
 - 결과를 JSON 파일로 캐시해 재실행 시 재호출 방지
 - 네트워크 실패는 개별 엔티티 단위로 소프트 폴백 (reason='network')
 
-상세 기준: `docs/manual/canonical-entity-schema.md`,
-`docs/specs/entities/vietnamese-ner-8types.md` §5.2 두 번째 검증 레이어.
+상세 기준: `docs/manual/data/canonical-entity-schema.md`,
+`docs/manual/data/vietnamese-ner-8types.md` §5.2 두 번째 검증 레이어.
 """
 import argparse
 import json
@@ -104,7 +104,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q23413': 'FAC',         # castle
     'Q105731': 'FAC',        # tower
 
-    # CORP (영리 법인·기업·방송·운송 회사)
+    # CORP (영리 법인·기업·방송·운송 회사·대학 법인 본체)
     'Q4830453': 'CORP',      # business
     'Q783794': 'CORP',       # company
     'Q891723': 'CORP',       # public company
@@ -120,6 +120,10 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q46970': 'CORP',        # airline
     'Q249556': 'CORP',       # railway company
     'Q11229656': 'CORP',     # bank
+    # 대학 법인 본체 — Stockmark 실측 `〜大学` 115건 전수 100% CORP
+    'Q3918': 'CORP',         # university
+    'Q38723': 'CORP',        # higher education institution
+    'Q875538': 'CORP',       # public university
 
     # PROD (물건·작품·소프트웨어)
     'Q2424752': 'PROD',      # product
@@ -171,11 +175,12 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q772547': 'POL',        # armed forces
     'Q15925165': 'POL',      # specific intl organization (e.g. IOM)
 
-    # ORG (대학·스포츠·협회)
-    'Q3918': 'ORG',          # university
-    'Q38723': 'ORG',         # higher education institution
-    'Q875538': 'ORG',        # public university
-    'Q2385804': 'ORG',       # educational institution
+    # ORG (스포츠·협회·대학 부속 조직)
+    # 주의: 대학 법인 본체(university/higher education/public university)는
+    # Stockmark 실측 100% CORP이므로 CORP 블록으로 이동. Q2385804(educational
+    # institution)은 초중고·사설 학원까지 포함하는 상위 클래스라 ORG fallback
+    # 유지 (하위 Q3918 등이 매칭되면 그 쪽이 우선됨).
+    'Q2385804': 'ORG',       # educational institution (초중고 포함 fallback)
     'Q748019': 'ORG',        # scientific society
     'Q955824': 'ORG',        # learned society
     'Q4438121': 'ORG',       # sports organization
