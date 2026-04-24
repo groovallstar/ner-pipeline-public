@@ -107,7 +107,7 @@ def _load_records(args: argparse.Namespace):
     from augmenters.pii.loaders import load_hf, load_jsonl, load_stockmark
     if args.source == 'stockmark':
         return load_stockmark(
-            split='train', max_samples=args.n_samples, seed=args.seed,
+            split='train', max_samples=args.n_samples,
         )
     if args.source == 'jsonl':
         if not args.input:

@@ -76,7 +76,7 @@ class TestVerifySingleRecord:
     def test_conflict_label_mismatch(self):
         """텍스트는 같지만 라벨이 다르면 conflict."""
         gold = [_ent('LOC', 0, 3, '東京都')]
-        preds = [{'text': '東京都', 'type': 'FAC'}]
+        preds = [{'text': '東京都', 'type': 'ORG'}]
         rec = _rec('東京都にある施設。', gold)
         v = PIIVerifier(FakeLabeler(preds), policy=VerifyPolicy.DROP_SPAN)
         result = v.verify(rec)
@@ -85,7 +85,7 @@ class TestVerifySingleRecord:
         assert len(result.conflicts) == 1
         gold_ent, pred_type = result.conflicts[0]
         assert gold_ent.label == 'LOC'
-        assert pred_type == 'FAC'
+        assert pred_type == 'ORG'
 
     def test_no_gold_entities(self):
         """골드 엔티티가 없으면 빈 결과."""
@@ -124,7 +124,7 @@ class TestDropSpanPolicy:
             _ent('PHONE', 10, 23, '090-1234-5678'),
         ]
         preds = [
-            {'text': '東京都', 'type': 'FAC'},
+            {'text': '東京都', 'type': 'ORG'},
             {'text': '090-1234-5678', 'type': 'PHONE'},
         ]
         rec = _rec('東京都の連絡先：090-1234-5678。', gold)

@@ -148,13 +148,13 @@ def compute(
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='python -m augmenters.wikiann_vi.kappa',
-        description='Compute cross-model Cohen kappa on 8-type relabel',
+        description='Compute cross-model Cohen kappa on 5-type relabel',
     )
     parser.add_argument('--a', required=True, help='JSONL path for model A')
     parser.add_argument('--b', required=True, help='JSONL path for model B')
     parser.add_argument(
         '--span-key', default='gold_spans_8type',
-        help='Field name holding 8-type spans',
+        help='Field name holding 5-type spans',
     )
     parser.add_argument(
         '--json-out', default=None,

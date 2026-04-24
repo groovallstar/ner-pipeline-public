@@ -22,15 +22,15 @@ class TestCategorizeSpans:
         assert result[0]['source'] == 'both'
 
     def test_both_disagree_type(self):
-        a = [_span('X', 'CORP', 0, 1)]
-        b = [_span('X', 'ORG', 0, 1)]
+        a = [_span('X', 'ORG', 0, 1)]
+        b = [_span('X', 'LOC', 0, 1)]
         result = categorize_spans(a, b)
         assert len(result) == 1
         assert result[0]['confidence'] == 'conflict'
         assert result[0]['source'] == 'both_disagree'
-        assert result[0]['type'] == 'CORP'  # Gemma primary
-        assert result[0]['gemma_type'] == 'CORP'
-        assert result[0]['qwen_type'] == 'ORG'
+        assert result[0]['type'] == 'ORG'  # Gemma primary
+        assert result[0]['gemma_type'] == 'ORG'
+        assert result[0]['qwen_type'] == 'LOC'
 
     def test_gemma_only(self):
         a = [_span('X', 'PER', 0, 1)]
@@ -51,7 +51,7 @@ class TestCategorizeSpans:
     def test_mixed(self):
         a = [
             _span('A', 'PER', 0, 1),       # both agree
-            _span('B', 'CORP', 2, 3),     # disagree
+            _span('B', 'ORG', 2, 3),      # disagree
             _span('C', 'LOC', 4, 5),       # gemma_only
         ]
         b = [
@@ -124,7 +124,7 @@ class TestMergeRecords:
         assert 'gold_spans_8type' not in out[0]
 
     def test_policy_recall_drops_conflict(self):
-        gemma = [self._record('0', [_span('X', 'CORP', 0, 1)])]
+        gemma = [self._record('0', [_span('X', 'ORG', 0, 1)])]
         qwen = [self._record('0', [_span('X', 'LOC', 0, 1)])]
         out = merge_records(gemma, qwen, policy='recall')
         assert out[0]['gold_spans_8type_merged'] == []

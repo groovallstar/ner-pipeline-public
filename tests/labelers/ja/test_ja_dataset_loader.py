@@ -1,85 +1,122 @@
-"""Stockmark JA loader — LABEL_CORRECTIONS 정합 테스트."""
+"""Stockmark JA canonical 덤프 로더 테스트.
+
+HF 원본 로딩과 JA→canonical 매핑은 이슈 #21 이후 본 모듈에서 제거됐다.
+테스트는 canonical JSONL 덤프 스키마 기반으로 load/load_local 왕복만
+검증한다.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
 from labelers.ja.dataset_loader import JapaneseDatasetLoader
 
 
-class _MockRow(dict):
-    """HF 데이터셋 row 모사 (dict 접근 + .get)."""
+def _write_jsonl(path: Path, records: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
 
 
-def _rows():
-    """LABEL_CORRECTIONS 적용 대상·비대상을 각 1건씩 포함하는 고정 시퀀스."""
+def _sample_records() -> list[dict]:
     return [
-        _MockRow(
-            curid='2746825',
-            text='2015年4月の人事異動で、地元NHK仙台放送局へ異動。',
-            entities=[
-                {'name': 'NHK', 'type': 'その他の組織名', 'span': [16, 19]},
-                {'name': '仙台放送局', 'type': '施設名', 'span': [19, 24]},
+        {
+            'id': '1',
+            'text': 'トヨタ自動車は東京で新型プリウスを発表した。',
+            'entities': [
+                {'label': 'ORG', 'start_char': 0, 'end_char': 6,
+                 'text': 'トヨタ自動車'},
+                {'label': 'LOC', 'start_char': 7, 'end_char': 9,
+                 'text': '東京'},
+                {'label': 'PROD', 'start_char': 12, 'end_char': 16,
+                 'text': 'プリウス'},
             ],
-        ),
-        _MockRow(
-            curid='2919391',
-            text='香港政府から無料放送免許の申請が却下されたため',
-            entities=[
-                {'name': '香港政府', 'type': '法人名', 'span': [43, 47]},
+        },
+        {
+            'id': '2',
+            'text': '1985年4月3日に生まれた。',
+            'entities': [
+                {'label': 'DAT', 'start_char': 0, 'end_char': 9,
+                 'text': '1985年4月3日'},
             ],
-        ),
-        _MockRow(
-            curid='2942700',
-            text='コロラド・メサ大学とセントメアリー病院が主要な雇用主',
-            entities=[
-                {'name': 'コロラド・メサ大学', 'type': '法人名', 'span': [28, 37]},
-                {'name': 'セントメアリー病院', 'type': '法人名', 'span': [38, 47]},
-            ],
-        ),
-        _MockRow(
-            curid='999999',
-            text='関係のない文です。',
-            entities=[{'name': '関係', 'type': '人名', 'span': [0, 2]}],
-        ),
+        },
     ]
 
 
-class TestLabelCorrections:
-    def test_nhk_org_to_corp(self):
-        recs = JapaneseDatasetLoader._to_records(_rows())
-        nhk = [
-            g for r in recs for g in r['gold_spans']
-            if r['id'] == '2746825' and g['text'] == 'NHK'
-        ]
-        assert nhk and nhk[0]['type'] == '法人名'
+class TestLoadFromPath:
+    def test_load_with_explicit_path(self, tmp_path: Path) -> None:
+        path = tmp_path / 'sample.jsonl'
+        _write_jsonl(path, _sample_records())
+        records = JapaneseDatasetLoader().load(path=path)
+        assert len(records) == 2
+        assert records[0]['id'] == '1'
+        assert records[0]['text'] == 'トヨタ自動車は東京で新型プリウスを発表した。'
+        types = [g['type'] for g in records[0]['gold_spans']]
+        assert types == ['ORG', 'LOC', 'PROD']
 
-    def test_government_corp_to_pol(self):
-        recs = JapaneseDatasetLoader._to_records(_rows())
-        gov = [
-            g for r in recs for g in r['gold_spans']
-            if r['id'] == '2919391' and g['text'] == '香港政府'
-        ]
-        assert gov and gov[0]['type'] == '政治的組織名'
+    def test_max_samples(self, tmp_path: Path) -> None:
+        path = tmp_path / 'sample.jsonl'
+        _write_jsonl(path, _sample_records())
+        records = JapaneseDatasetLoader().load(
+            path=path, max_samples=1,
+        )
+        assert len(records) == 1
 
-    def test_hospital_corp_to_fac(self):
-        recs = JapaneseDatasetLoader._to_records(_rows())
-        hosp = [
-            g for r in recs for g in r['gold_spans']
-            if r['id'] == '2942700' and g['text'] == 'セントメアリー病院'
-        ]
-        assert hosp and hosp[0]['type'] == '施設名'
+    def test_schema_conversion(self, tmp_path: Path) -> None:
+        path = tmp_path / 'sample.jsonl'
+        _write_jsonl(path, _sample_records())
+        records = JapaneseDatasetLoader().load(path=path)
+        span = records[0]['gold_spans'][0]
+        # entities.label -> gold_spans.type, start_char -> start
+        assert span == {
+            'text': 'トヨタ自動車',
+            'type': 'ORG',
+            'start': 0,
+            'end': 6,
+        }
 
-    def test_university_kept_as_is(self):
-        # 대학 법인 본체는 이미 HF 원본이 法人名이므로 LABEL_CORRECTIONS
-        # 적용 대상이 아니다. 원본 라벨이 그대로 유지되는지 확인.
-        recs = JapaneseDatasetLoader._to_records(_rows())
-        univ = [
-            g for r in recs for g in r['gold_spans']
-            if r['id'] == '2942700' and g['text'] == 'コロラド・メサ大学'
-        ]
-        assert univ and univ[0]['type'] == '法人名'
+    def test_unknown_split_raises(self) -> None:
+        with pytest.raises(ValueError, match='unknown split'):
+            JapaneseDatasetLoader().load(split='bogus')
 
-    def test_unrelated_entities_untouched(self):
-        recs = JapaneseDatasetLoader._to_records(_rows())
-        other = [g for r in recs for g in r['gold_spans'] if r['id'] == '999999']
-        assert other and other[0]['type'] == '人名'
+    def test_missing_file_raises(self, tmp_path: Path) -> None:
+        target = tmp_path / 'absent.jsonl'
+        with pytest.raises(FileNotFoundError, match='not found'):
+            JapaneseDatasetLoader().load(path=target)
 
-    def test_corrections_table_size(self):
-        # 이슈 #16 범위: NHK 1건 + 政府 5건 + 병원 1건 = 7건
-        assert len(JapaneseDatasetLoader.LABEL_CORRECTIONS) == 7
+
+class TestLoadLocal:
+    """`load_local(path)`은 `load(path=...)`의 명시적 별칭."""
+
+    def test_load_local_matches_load(self, tmp_path: Path) -> None:
+        path = tmp_path / 'sample.jsonl'
+        _write_jsonl(path, _sample_records())
+        via_load = JapaneseDatasetLoader().load(path=path)
+        via_local = JapaneseDatasetLoader.load_local(path)
+        assert via_load == via_local
+
+    def test_legacy_key_aliases(self, tmp_path: Path) -> None:
+        """entities 내부가 start/end/type 표기여도 수용한다."""
+        path = tmp_path / 'alt.jsonl'
+        records = [{
+            'id': '9',
+            'text': 'テスト',
+            'entities': [
+                {'type': 'PER', 'start': 0, 'end': 3, 'text': 'テスト'},
+            ],
+        }]
+        _write_jsonl(path, records)
+        out = JapaneseDatasetLoader.load_local(path)
+        assert out[0]['gold_spans'][0] == {
+            'text': 'テスト', 'type': 'PER', 'start': 0, 'end': 3,
+        }
+
+
+class TestDefaultPaths:
+    def test_default_paths_exposed(self) -> None:
+        """CLI 등이 기본 경로를 조회할 수 있도록 노출된다."""
+        assert 'train' in JapaneseDatasetLoader.DEFAULT_PATH
+        assert 'test' in JapaneseDatasetLoader.DEFAULT_PATH

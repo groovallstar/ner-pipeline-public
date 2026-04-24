@@ -60,8 +60,11 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 CLI `--pii-max` 로 상한 조정 가능. 결정론성은 `--seed` 로 보장.
 
 ### wikiann_vi/
-WikiANN-vi를 canonical 8종으로 재라벨하는 async LLM 클라이언트 + 검증 유틸
-(kappa·Wikidata anchor·confidence 병합). 상세: 이슈 #10, #13 문서.
+WikiANN-vi를 canonical 5종(이슈 #21)으로 재라벨하는 async LLM 클라이언트
++ 검증 유틸(kappa·Wikidata anchor·confidence 병합). HF 원본(WikiANN 3종
+BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있으며,
+평가용 canonical 덤프 로더(`labelers/vi/dataset_loader.py`)는 HF를
+호출하지 않는다. 상세: 이슈 #10, #13, #21 문서.
 
 ## 사용 예
 

@@ -1,4 +1,4 @@
-"""WikiANN-vi → canonical 8종 재라벨 CLI.
+"""WikiANN-vi → canonical 5종 재라벨 CLI.
 
 사용 예::
 
@@ -10,6 +10,9 @@
 
 JSONL 출력 스키마(레코드별):
     {id, text, gold_spans, gold_spans_8type, relabel_model}
+
+파일·필드의 ``8type`` 리터럴은 이슈 #21 축소 이후에도 데이터 호환성을 위해
+유지한다(의미는 canonical 5종: PER·LOC·ORG·PROD·EVT).
 """
 import argparse
 import json
@@ -19,14 +22,57 @@ from collections import Counter
 from pathlib import Path
 from time import perf_counter
 
+from datasets import ClassLabel, load_dataset
+
 from augmenters.wikiann_vi.relabel_8type import Relabeler
-from labelers.vi.dataset_loader import VietnameseDatasetLoader
+from labelers.vi.dataset_loader import bio_to_offset_spans
+
+
+def _load_wikiann_hf(
+    hf_name: str, hf_config: str, split: str,
+    max_samples: int | None, cache_dir: str | None,
+) -> list[dict]:
+    """HF WikiANN 원본(BIO 3종)을 재라벨 입력용 레코드로 변환.
+
+    labelers/vi 로더는 canonical 덤프 전용이므로(이슈 #21), 재라벨
+    파이프라인 고유의 HF 원본 읽기는 본 CLI가 직접 책임진다.
+    """
+    import os
+    cache = cache_dir or os.environ.get(
+        'HF_DATASETS_CACHE', '/work/.huggingface/datasets',
+    )
+    hf_dataset = load_dataset(
+        hf_name, hf_config, split=split,
+        cache_dir=cache, trust_remote_code=False,
+    )
+    if max_samples is not None:
+        hf_dataset = hf_dataset.select(
+            range(min(max_samples, len(hf_dataset)))
+        )
+    label_feature = hf_dataset.features['ner_tags'].feature
+    is_class_label = isinstance(label_feature, ClassLabel)
+    records: list[dict] = []
+    for i, row in enumerate(hf_dataset):
+        tokens = list(row['tokens'])
+        raw_tags = row['ner_tags']
+        tags = (
+            [label_feature.int2str(t) for t in raw_tags]
+            if is_class_label
+            else [str(t) for t in raw_tags]
+        )
+        text, gold_spans = bio_to_offset_spans(tokens, tags)
+        records.append({
+            'id': str(i),
+            'text': text,
+            'gold_spans': gold_spans,
+        })
+    return records
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='python -m augmenters.wikiann_vi',
-        description='Relabel WikiANN-vi to canonical 8-type schema',
+        description='Relabel WikiANN-vi to canonical 5-type schema',
     )
     parser.add_argument(
         '--hf-name', default='unimelb-nlp/wikiann',
@@ -98,9 +144,9 @@ def _summarize(records: list[dict]) -> None:
 
     print('=== Relabel Summary ===')
     print(f'Total records: {total}')
-    print(f'Records with >=1 8-type span: {total - empty}')
+    print(f'Records with >=1 5-type span: {total - empty}')
     print(f'Records with relabel error: {error}')
-    print(f'Total 8-type spans: {sum(type_counter.values())}')
+    print(f'Total 5-type spans: {sum(type_counter.values())}')
     print('Per-type counts:')
     for type_name, count in type_counter.most_common():
         print(f'  {type_name}: {count}')
@@ -114,12 +160,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     print(f'Loading {args.hf_name}/{args.hf_config} split={args.split}')
-    loader = VietnameseDatasetLoader()
-    records = loader.load(
-        name=args.hf_name,
-        config=args.hf_config,
+    records = _load_wikiann_hf(
+        hf_name=args.hf_name,
+        hf_config=args.hf_config,
         split=args.split,
         max_samples=args.max_samples,
+        cache_dir=None,
     )
     print(f'Loaded {len(records)} records')
 

@@ -12,7 +12,7 @@ Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entit
 |------|-------------|
 | `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, and match_spans |
 | `ner_prompts.py` | Japanese NER prompts with 8 entity types and disambiguation rules (e.g., railroad=corporate, military=political, sports league=other org) |
-| `dataset_loader.py` | `JapaneseDatasetLoader` — loads stockmark/ner-wikipedia-dataset with reproducible 80/20 split (seed=42) |
+| `dataset_loader.py` | `JapaneseDatasetLoader` — reads canonical Stockmark JSONL dumps (`data/stockmark/{train,test}.jsonl`). No HF fetch, no label mapping — fails fast if dumps are missing (issue #21) |
 | `span_matcher.py` | `match_spans()` — converts LLM text spans to character offsets using longest-first matching with overlap prevention and Japanese particle stripping |
 | `ollama_ner_labeler.py` | Japanese Ollama labeler (same architecture as Korean) |
 | `vllm_ner_labeler.py` | Japanese vLLM labeler — sentence splitting includes Japanese punctuation `。！？` |
@@ -24,8 +24,9 @@ Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entit
 - Japanese evaluation uses character-offset spans (not BIO tags). `span_matcher.py` is the critical alignment module
 - `span_matcher.py` handles overlapping entities via consumed-range tracking — longest match wins
 - `_strip_particles()` fallback strips trailing Japanese particles/honorific suffixes — can incorrectly strip legitimate entity characters
-- `JapaneseDatasetLoader` seed=42 must stay consistent with `classifier/data_utils.py` for apples-to-apples comparison
-- `DEFAULT_ENTITY_TYPES = ["人名", "法人名", "地名", "施設名", "製品名", "イベント名", "政治的組織名", "その他の組織名"]`
+- `JapaneseDatasetLoader` loads pre-dumped canonical JSONL. Deterministic train/test split (seed=42, test_size=0.2) is baked into the dump at generation time — consumers should not re-split
+- `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "PROD", "EVT", "EMAIL", "PHONE", "DAT", "ID_NUM", "CREDIT_CARD"]` — canonical 10종 평면 목록(이슈 #21). 상세: `docs/manual/data/canonical-entity-schema.md`
+- canonical 5종 Stockmark 덤프는 augmenters 마이그레이션에서 HF 원본 일본어 8종 → 영문 5종으로 변환·저장된 결과이며, 로더는 그 결과만 읽는다(변환 책임 없음)
 
 ### Testing Requirements
 - Test `match_spans()` with overlapping entities, particle-containing entities, and whitespace-collapsed matches

@@ -1,4 +1,9 @@
-"""WikiANN-vi dataset_loader BIO↔offset span 왕복 테스트."""
+"""WikiANN-vi dataset_loader 테스트.
+
+이슈 #21 이후 `load()`는 canonical 덤프 JSONL을 읽는다. HF 원본 로딩은
+본 모듈에서 제거됐다. BIO↔offset span 유틸은 재라벨 파이프라인
+(augmenters/wikiann_vi) 용도로 유지된다.
+"""
 import json
 from pathlib import Path
 
@@ -151,3 +156,50 @@ class TestLoadLocal:
             str(path), max_samples=3
         )
         assert len(records) == 3
+
+
+class TestLoadCanonicalDump:
+    """canonical WikiANN-vi 덤프(`gold_spans_8type_merged`) 로딩."""
+
+    def _write(self, path: Path, span_key: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            for i, t in enumerate(['Hà Nội là thủ đô.', 'Samsung.']):
+                rec = {'id': str(i), 'text': t}
+                rec[span_key] = [
+                    {'text': 'Hà Nội', 'type': 'LOC', 'start': 0, 'end': 6}
+                    if i == 0 else
+                    {'text': 'Samsung', 'type': 'ORG',
+                     'start': 0, 'end': 7}
+                ]
+                f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+
+    def test_load_with_default_span_key(self, tmp_path: Path) -> None:
+        path = tmp_path / 'dump.jsonl'
+        self._write(path, span_key='gold_spans_8type_merged')
+        records = VietnameseDatasetLoader().load(path=path)
+        assert len(records) == 2
+        assert records[0]['gold_spans'][0]['type'] == 'LOC'
+        assert records[1]['gold_spans'][0]['type'] == 'ORG'
+
+    def test_load_with_custom_span_key(self, tmp_path: Path) -> None:
+        """3종 `gold_spans` 필드도 `span_key`로 선택 가능."""
+        path = tmp_path / 'dump3.jsonl'
+        self._write(path, span_key='gold_spans')
+        records = VietnameseDatasetLoader().load(
+            path=path, span_key='gold_spans',
+        )
+        assert records[0]['gold_spans'][0]['text'] == 'Hà Nội'
+
+    def test_unknown_split_raises(self) -> None:
+        with pytest.raises(ValueError, match='unknown split'):
+            VietnameseDatasetLoader().load(split='bogus')
+
+    def test_missing_file_raises(self, tmp_path: Path) -> None:
+        target = tmp_path / 'absent.jsonl'
+        with pytest.raises(FileNotFoundError, match='not found'):
+            VietnameseDatasetLoader().load(path=target)
+
+    def test_default_paths_exposed(self) -> None:
+        for split in ('train', 'validation', 'test'):
+            assert split in VietnameseDatasetLoader.DEFAULT_PATH

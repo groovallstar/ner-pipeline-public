@@ -1,10 +1,11 @@
-"""Wikipedia 인터링크 + Wikidata P31을 이용한 8종 앵커 검증 유틸.
+"""Wikipedia 인터링크 + Wikidata P31을 이용한 5종 앵커 검증 유틸.
 
 흐름:
 1. 재라벨 JSONL의 엔티티 표면형을 unique set으로 수집
 2. vi.wikipedia.org/w/api.php로 페이지 → Q-ID 조회 (batch ≤ 50)
 3. www.wikidata.org/w/api.php로 Q-ID → P31(instance of) claim 조회 (batch ≤ 50)
-4. P31 Q-ID를 canonical 8종으로 매핑 (`WIKIDATA_TO_CANONICAL` 테이블)
+4. P31 Q-ID를 canonical 5종(PER·LOC·ORG·PROD·EVT)으로 매핑
+   (`WIKIDATA_TO_CANONICAL` 테이블)
 5. 재라벨 타입 vs Wikidata 추론 타입 일치율 집계
 
 네트워크·캐시 제약:
@@ -35,7 +36,9 @@ _BATCH = 50
 _SLEEP = 0.2
 
 
-# Wikidata Q-ID → canonical 8종 (수작업 curated, 주요 케이스).
+# Wikidata Q-ID → canonical 5종 (수작업 curated, 주요 케이스).
+# 축소 매핑(이슈 #21): 과거 CORP/POL → ORG, FAC → LOC.
+# 섹션 헤더는 축소 전 원조 분류를 보존해 이력 추적 용도로 남겨둔다.
 # 본 테이블에 없는 Q-ID는 '미매핑(unmapped)'으로 집계되며, 리포트에 상위
 # unmapped Q-ID가 기록돼 후속 확장의 판단 근거가 된다.
 WIKIDATA_TO_CANONICAL: Dict[str, str] = {
@@ -80,50 +83,50 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q24764': 'LOC',         # municipality of the Philippines
 
     # FAC (물리적 개별 건축물·교통시설)
-    'Q41176': 'FAC',         # building
-    'Q811979': 'FAC',        # architectural structure
-    'Q16917': 'FAC',         # hospital
-    'Q1248784': 'FAC',       # airport
-    'Q55488': 'FAC',         # railway station
-    'Q124757': 'FAC',        # bus station
-    'Q3914': 'FAC',          # school (초·중·고)
-    'Q159334': 'FAC',        # secondary school
-    'Q9842': 'FAC',          # primary school
-    'Q44613': 'FAC',         # monastery
-    'Q24398318': 'FAC',      # religious building
-    'Q16970': 'FAC',         # church building
-    'Q210272': 'FAC',        # temple / pagoda
-    'Q33506': 'FAC',         # museum
-    'Q7075': 'FAC',          # library
-    'Q22806': 'FAC',         # national library
-    'Q24354': 'FAC',         # theatre
-    'Q483110': 'FAC',        # stadium
-    'Q12876': 'FAC',         # tunnel
-    'Q12280': 'FAC',         # bridge
-    'Q57821': 'FAC',         # fortification
-    'Q23413': 'FAC',         # castle
-    'Q105731': 'FAC',        # tower
+    'Q41176': 'LOC',         # building
+    'Q811979': 'LOC',        # architectural structure
+    'Q16917': 'LOC',         # hospital
+    'Q1248784': 'LOC',       # airport
+    'Q55488': 'LOC',         # railway station
+    'Q124757': 'LOC',        # bus station
+    'Q3914': 'LOC',          # school (초·중·고)
+    'Q159334': 'LOC',        # secondary school
+    'Q9842': 'LOC',          # primary school
+    'Q44613': 'LOC',         # monastery
+    'Q24398318': 'LOC',      # religious building
+    'Q16970': 'LOC',         # church building
+    'Q210272': 'LOC',        # temple / pagoda
+    'Q33506': 'LOC',         # museum
+    'Q7075': 'LOC',          # library
+    'Q22806': 'LOC',         # national library
+    'Q24354': 'LOC',         # theatre
+    'Q483110': 'LOC',        # stadium
+    'Q12876': 'LOC',         # tunnel
+    'Q12280': 'LOC',         # bridge
+    'Q57821': 'LOC',         # fortification
+    'Q23413': 'LOC',         # castle
+    'Q105731': 'LOC',        # tower
 
     # CORP (영리 법인·기업·방송·운송 회사·대학 법인 본체)
-    'Q4830453': 'CORP',      # business
-    'Q783794': 'CORP',       # company
-    'Q891723': 'CORP',       # public company
-    'Q219577': 'CORP',       # holding company
-    'Q18388277': 'CORP',     # technology company
-    'Q1002697': 'CORP',      # periodical
-    'Q11032': 'CORP',        # newspaper
-    'Q1616075': 'CORP',      # television station
-    'Q14350': 'CORP',        # radio station
-    'Q2085381': 'CORP',      # publisher
-    'Q270791': 'CORP',       # state-owned enterprise
-    'Q43229': 'CORP',        # organization (약 fallback; 더 구체 없는 경우)
-    'Q46970': 'CORP',        # airline
-    'Q249556': 'CORP',       # railway company
-    'Q11229656': 'CORP',     # bank
-    # 대학 법인 본체 — Stockmark 실측 `〜大学` 115건 전수 100% CORP
-    'Q3918': 'CORP',         # university
-    'Q38723': 'CORP',        # higher education institution
-    'Q875538': 'CORP',       # public university
+    'Q4830453': 'ORG',      # business
+    'Q783794': 'ORG',       # company
+    'Q891723': 'ORG',       # public company
+    'Q219577': 'ORG',       # holding company
+    'Q18388277': 'ORG',     # technology company
+    'Q1002697': 'ORG',      # periodical
+    'Q11032': 'ORG',        # newspaper
+    'Q1616075': 'ORG',      # television station
+    'Q14350': 'ORG',        # radio station
+    'Q2085381': 'ORG',      # publisher
+    'Q270791': 'ORG',       # state-owned enterprise
+    'Q43229': 'ORG',        # organization (약 fallback; 더 구체 없는 경우)
+    'Q46970': 'ORG',        # airline
+    'Q249556': 'ORG',       # railway company
+    'Q11229656': 'ORG',     # bank
+    # 대학 법인 본체 — 5종 축소에서 ORG. Stockmark 실측 근거 `〜大学` 115건
+    'Q3918': 'ORG',         # university
+    'Q38723': 'ORG',        # higher education institution
+    'Q875538': 'ORG',       # public university
 
     # PROD (물건·작품·소프트웨어)
     'Q2424752': 'PROD',      # product
@@ -158,28 +161,28 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q27020041': 'EVT',      # sports season
 
     # POL (정당·정부·군·국제기구)
-    'Q7278': 'POL',          # political party
-    'Q327333': 'POL',        # government agency
-    'Q7210356': 'POL',       # political organization
-    'Q183061': 'POL',        # cabinet
-    'Q8719': 'POL',          # military
-    'Q749622': 'POL',        # armed forces
-    'Q610311': 'POL',        # military unit
-    'Q484652': 'POL',        # international organization
-    'Q1463313': 'POL',       # intergovernmental organization
-    'Q41487': 'POL',         # national assembly
-    'Q35798': 'POL',         # court
-    'Q28083049': 'POL',      # national intelligence agency
-    'Q61883': 'POL',         # air force
-    'Q4508': 'POL',          # navy
-    'Q772547': 'POL',        # armed forces
-    'Q15925165': 'POL',      # specific intl organization (e.g. IOM)
+    'Q7278': 'ORG',          # political party
+    'Q327333': 'ORG',        # government agency
+    'Q7210356': 'ORG',       # political organization
+    'Q183061': 'ORG',        # cabinet
+    'Q8719': 'ORG',          # military
+    'Q749622': 'ORG',        # armed forces
+    'Q610311': 'ORG',        # military unit
+    'Q484652': 'ORG',        # international organization
+    'Q1463313': 'ORG',       # intergovernmental organization
+    'Q41487': 'ORG',         # national assembly
+    'Q35798': 'ORG',         # court
+    'Q28083049': 'ORG',      # national intelligence agency
+    'Q61883': 'ORG',         # air force
+    'Q4508': 'ORG',          # navy
+    'Q772547': 'ORG',        # armed forces
+    'Q15925165': 'ORG',      # specific intl organization (e.g. IOM)
 
     # ORG (스포츠·협회·대학 부속 조직)
     # 주의: 대학 법인 본체(university/higher education/public university)는
-    # Stockmark 실측 100% CORP이므로 CORP 블록으로 이동. Q2385804(educational
-    # institution)은 초중고·사설 학원까지 포함하는 상위 클래스라 ORG fallback
-    # 유지 (하위 Q3918 등이 매칭되면 그 쪽이 우선됨).
+    # 위쪽 법인 블록에 있음. Q2385804(educational institution)은 초중고·
+    # 사설 학원까지 포함하는 상위 클래스라 ORG fallback 유지 (하위 Q3918
+    # 대학 등이 매칭되면 그 쪽이 우선됨).
     'Q2385804': 'ORG',       # educational institution (초중고 포함 fallback)
     'Q748019': 'ORG',        # scientific society
     'Q955824': 'ORG',        # learned society
@@ -322,7 +325,7 @@ def fetch_p31(
 
 
 def anchor_type(p31_qids: List[str]) -> Optional[str]:
-    """P31 Q-ID 리스트에서 canonical 8종을 결정한다. 매핑 0건이면 None."""
+    """P31 Q-ID 리스트에서 canonical 5종을 결정한다. 매핑 0건이면 None."""
     for qid in p31_qids:
         tgt = WIKIDATA_TO_CANONICAL.get(qid)
         if tgt:
@@ -469,7 +472,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--input', required=True, help='Relabel JSONL path')
     p.add_argument(
         '--span-key', default='gold_spans_8type',
-        help='Field holding 8-type spans',
+        help='Field holding 5-type spans',
     )
     p.add_argument(
         '--cache', default='data/wikiann_vi/wikidata_cache.json',
@@ -504,7 +507,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"Unique surfaces    : {result['unique_surfaces']}")
     print(f"With Wikidata Q-ID : {result['with_qid']}")
     print(f"With P31 claims    : {result['with_p31']}")
-    print(f"Mapped to 8-type   : {result['with_mapped_type']}")
+    print(f"Mapped to 5-type   : {result['with_mapped_type']}")
     print(
         f"Agreement          : {result['matches']} / "
         f"{result['with_mapped_type']} = {result['agreement']:.4f}"

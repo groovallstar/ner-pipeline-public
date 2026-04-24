@@ -1,4 +1,4 @@
-"""WikiANN-vi → canonical 8종 스키마 재라벨 모듈.
+"""WikiANN-vi → canonical 5종 스키마 재라벨 모듈.
 
 canonical 라벨 정의는 `docs/manual/data/canonical-entity-schema.md`,
 매핑 기준은 `docs/manual/data/vietnamese-ner-8types.md` 참조.
