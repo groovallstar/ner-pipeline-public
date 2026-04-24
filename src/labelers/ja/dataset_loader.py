@@ -19,6 +19,23 @@ class JapaneseDatasetLoader:
 
     DATASET_NAME = "stockmark/ner-wikipedia-dataset"
 
+    # Stockmark 원본 cross-label 정정 테이블. 결정론적 접미사 우선순위 룰
+    # (docs/manual/data/canonical-entity-schema.md)에 따른 상위 라벨과
+    # 역전된 오라벨만 선별. 키: (curid, entity_text, original_type),
+    # 값: 정정된 type.
+    LABEL_CORRECTIONS: dict = {
+        # NHK 단독 ORG → CORP (NHK 13건 중 12건이 법인명, 1건만 ORG 오라벨)
+        ('2746825', 'NHK', 'その他の組織名'): '法人名',
+        # 〜政府 CORP → POL (政府 60건 중 상위 라벨은 정치적 조직명)
+        ('2919391', '香港政府', '法人名'): '政治的組織名',
+        ('1836213', '中華民国政府', '法人名'): '政治的組織名',
+        ('2115134', '日本政府', '法人名'): '政治的組織名',
+        ('3908159', 'ロシア政府', '法人名'): '政治的組織名',
+        ('1587749', 'ロシア政府', '法人名'): '政治的組織名',
+        # 병원 단일체 CORP → FAC (病院 11건 중 10건이 시설명)
+        ('2942700', 'セントメアリー病院', '法人名'): '施設名',
+    }
+
     def __init__(self, cache_dir: Optional[str] = None) -> None:
         self.cache_dir = cache_dir or os.environ.get(
             "HF_DATASETS_CACHE", "/work/.huggingface/datasets"
@@ -100,26 +117,35 @@ class JapaneseDatasetLoader:
                     break
         return records
 
-    @staticmethod
-    def _to_records(dataset) -> List[dict]:
-        """HuggingFace 데이터셋을 레코드 형식으로 변환한다."""
+    @classmethod
+    def _to_records(cls, dataset) -> List[dict]:
+        """HuggingFace 데이터셋을 레코드 형식으로 변환한다.
+
+        `LABEL_CORRECTIONS`에 등록된 오라벨은 로딩 시점에 결정론적으로 정정된다.
+        """
         records = []
         for i, row in enumerate(dataset):
             text = row["text"]
             entities = row.get("entities", [])
+            rec_id = str(row.get("curid", i))
 
             gold_spans = []
             for entity in entities:
+                name = entity.get("name", "")
+                etype = entity.get("type", "")
+                corrected = cls.LABEL_CORRECTIONS.get(
+                    (rec_id, name, etype), etype
+                )
                 span = entity.get("span", [0, 0])
                 gold_spans.append({
-                    "text": entity.get("name", ""),
-                    "type": entity.get("type", ""),
+                    "text": name,
+                    "type": corrected,
                     "start": span[0],
                     "end": span[1],
                 })
 
             records.append({
-                "id": str(row.get("curid", i)),
+                "id": rec_id,
                 "text": text,
                 "gold_spans": gold_spans,
             })
