@@ -1,10 +1,11 @@
-# issue-21: Stockmark canonical 스키마 8종 → 5종 축소 (JA 라벨 공간 단순화)
+# issue-21: canonical 스키마 8종 → 5종 축소 · 10종 평면 통합 (JA + VI)
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/21
 - PR: (머지 직전 채움, `closes #21`)
-- 브랜치: `feat/issue-21-ja-schema-5type-reduce`
-- 승인일: 2026-04-24
-- 완료일: <!-- 5단계에서 채움 -->
+- 브랜치: `feat/issue-21-ja-schema-5type-reduce` (브랜치명은 초기 JA 전용
+  범위 시점 기준, 중간에 VI 라벨러 포함으로 확장됨)
+- 승인일: 2026-04-24 (초기 JA 범위) · 확장 승인: 2026-04-24 (VI 라벨러)
+- 완료일: 2026-04-24
 - 선행 의존성: #13 (완료) · #16 (완료) · #17 (완료)
 - 무시: #10 (self-close — 본 이슈와 방향 역전)
 
@@ -56,8 +57,12 @@ LOC 3,266 · PROD 1,215 · EVT 1,009
   - `pii/` — 프롬프트·verifier·generators 라벨 공간을 **10종 평면
     목록**으로 전환 (NER 축소분 반영. PII 4개 라벨 자체는 #17 결과 유지,
     문서·프롬프트에서는 NER/PII 구분 없이 나열)
-- **영구 전환** — `src/labelers/ja/ner_prompts.py` — 룰·few-shot 5종 기준
-  재작성
+- **영구 전환** — `src/labelers/ja/` — 룰·few-shot 5종 기준 재작성
+  (`ner_prompts.py` + `dataset_loader.py`의 HF JA → canonical 매핑)
+- **영구 전환** — `src/labelers/vi/ner_prompts.py` (이슈 진행 중 확장):
+  WikiANN 3종에서 canonical **10종 평면 목록**으로 라벨 공간 확장.
+  `{ollama,vllm,openai}_ner_labeler.py`는 `DEFAULT_ENTITY_TYPES`를 임포트
+  하므로 자동 반영(수정 불필요)
 - **데이터 마이그레이션** (1회):
   - `data/stockmark/{train,test}.jsonl`
   - `data/pii/stockmark_pii_1000.jsonl` (+ `.stats.json`, `.verify.json`)
@@ -65,22 +70,25 @@ LOC 3,266 · PROD 1,215 · EVT 1,009
 - **테스트**:
   - 기존 `tests/augmenters/wikiann_vi/`, `tests/augmenters/pii/`,
     `tests/labelers/ja/` fixture·assertion 5종 전환
+  - `tests/labelers/vi/` 는 WikiANN 3종 fixture가 canonical 10종의
+    부분집합이므로 변경 불필요
   - 신규 `tests/augmenters/migration/test_reduce_5type.py` (1회성)
 - **문서 갱신** (과거 포함, 조용한 치환):
   - `docs/manual/data/canonical-entity-schema.md` — 13종 → **10종
-    단일 목록** (`PER LOC ORG PROD EVT DATE EMAIL PHONE ID_NUM
+    단일 목록** (`PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM
     CREDIT_CARD`). NER/PII 구분 섹션을 없애고 10종 평면 테이블로 재작성.
-    경계 규칙·대학 3단 규칙 축소판 포함
+    경계 규칙·대학 2단 규칙 축소판 포함
   - `docs/manual/data/japanese-ner.md`
+  - `docs/manual/data/vietnamese-ner.md` — §변경 이력 추가(10종 확장)
   - `docs/manual/data/vietnamese-ner-8types.md` — 파일명 유지, §변경 이력
     추가
   - `docs/reports/vietnamese-ner-schema-expansion-2026-04.md` — 표·본문
     라벨 일괄 치환
-  - `docs/issues/issue-21-ja-schema-5type-reduce.md` — 본 파일
+  - `docs/issues/issue-21-schema-5type-reduce.md` — 본 파일
 
 ### 제외
 
-- `src/labelers/vi/`, `src/labelers/ko/`
+- `src/labelers/ko/` (KLUE 6종 별도 스키마)
 - `src/llm_eval/**`, `src/classifier/**`
 - HF 원본 데이터 직접 수정
 - 이슈 #10, #8은 별도 트랙
@@ -137,11 +145,12 @@ LOC 3,266 · PROD 1,215 · EVT 1,009
 NER 8종(`PER CORP LOC FAC PROD EVT POL ORG`)을 canonical **5종**
 (`PER LOC ORG PROD EVT`)으로 축소. NER/PII 구분 없는 **10종 평면 목록**
 (`PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD`)을
-canonical로 확정. `src/labelers/ja/`를 범위에 편입해 일본어 라벨러가
-canonical 영문 라벨을 직접 출력하고, HF Stockmark 원본 JA 라벨은
-`dataset_loader.py`의 `JA_TO_CANONICAL` 매핑으로 5종 canonical에
-정렬된다. 1회성 `src/augmenters/migration/reduce_5type.py`로 기존
-JSONL·stats·kappa 파일을 결정론적으로 치환 후 해당 모듈을 삭제.
+canonical로 확정. JA·VI 라벨러 모두 canonical 영문 라벨을 직접 출력하고,
+dataset 로더는 `data/stockmark/`·`data/wikiann_vi/`의 canonical 덤프
+JSONL만 읽는다(HF 원본 로딩 및 런타임 라벨 매핑은 제거). 1회성
+`src/augmenters/migration/reduce_5type.py`로 기존 JSONL·stats·kappa
+파일을 결정론적으로 치환 후 해당 모듈을 삭제했고, 이후 로더 리팩터
+단계에서는 매핑 코드도 제거해 덤프 → 평가 경로를 단일 책임으로 정리.
 
 ## 구현 결과 (계획 대비)
 
@@ -226,6 +235,63 @@ PII-주입 5 샘플:
   외 라벨 0건, PII(EMAIL/PHONE) cardinality 일치. DAT 과다 예측은 원본
   데이터 스모크와 동일 경향(설계 의도)
 
+## 후속 확장 (VI 라벨러 + 로더 리팩터)
+
+주 커밋 후 동일 이슈·동일 브랜치에서 VI 경로를 JA와 동일 스키마로 정렬
+하고, 데이터 로더를 "canonical 덤프 전용"으로 재정렬했다.
+
+### 변경
+
+- **`src/labelers/vi/ner_prompts.py`**: WikiANN 3종에서 canonical **10종
+  평면 목록**으로 확장. SINGLE/BATCH/SYSTEM+USER 프롬프트와 few-shot을
+  PER/LOC/ORG/PROD/EVT + DAT·EMAIL·PHONE·ID_NUM·CREDIT_CARD 기준으로
+  재작성. ollama/vllm/openai 라벨러는 `DEFAULT_ENTITY_TYPES` 임포트로
+  자동 반영.
+- **`src/labelers/ja/dataset_loader.py`**: HF Stockmark 로딩과
+  `JA_TO_CANONICAL`·`LABEL_CORRECTIONS` 런타임 매핑 제거. `load()`는
+  `data/stockmark/{train,test}.jsonl` canonical 덤프만 읽고, 파일이
+  없으면 `FileNotFoundError`로 즉시 실패(폴백 없음).
+- **`src/labelers/vi/dataset_loader.py`**: HF WikiANN 로딩 제거. `load()`
+  는 `data/wikiann_vi/vi_wikiann_8type_recall_{split}.jsonl`의
+  `gold_spans_8type_merged` 필드(recall 정책 병합, canonical 5종)를
+  기본으로 읽는다. `span_key` 파라미터로 다른 필드(`gold_spans` 3종 등)
+  선택 가능. `bio_to_offset_spans` / `offset_spans_to_bio` 유틸은
+  augmenters 재라벨 파이프라인용으로 유지.
+- **호출자 업데이트**:
+  - `src/augmenters/wikiann_vi/__main__.py`: 재라벨 파이프라인은 HF 원본
+    3종 BIO를 필요로 하므로 본 CLI에 `_load_wikiann_hf` 헬퍼를 내장
+    (`labelers.vi` 의 `bio_to_offset_spans` 재사용). labelers 쪽 HF
+    의존을 의도적으로 제거한 뒤의 단일 책임 분리.
+  - `src/augmenters/pii/loaders.py`: `load_stockmark` 의 `seed`·
+    `test_size` 파라미터 삭제 — canonical 덤프에서 분할이 이미 고정.
+  - `src/augmenters/pii/__main__.py`: `load_stockmark(seed=...)` 호출
+    지점에서 인자 제거.
+  - `src/llm_eval/__main__.py`: JA/VI 경로 모두 `load(name=...)` 등
+    HF 인자 호출을 제거하고 canonical 덤프 경로를 출력 로그로 공개.
+
+### 방침
+
+- **폴백 금지**: 덤프가 없으면 명시적 에러로 실패. 히스토리 상 매핑
+  혼선(예: `JA_TO_CANONICAL` 정의 변경 시 과거 덤프와의 해석 불일치)을
+  구조적으로 제거.
+- **매핑 단일 책임**: HF→canonical 변환은 1회성 덤프 시점에 이뤄지고,
+  평가 로더는 덤프 결과만 소비. 재덤프가 필요하면 별도 1회성 도구로
+  처리.
+
+### 검증 (후속 단계)
+
+- 전체 pytest: **216 passed**
+  - 신규 `TestLoadCanonicalDump` (VI) 5 케이스
+  - 재작성 `tests/labelers/ja/test_ja_dataset_loader.py` 10 케이스
+    (JSONL 경로 로드·split 가드·파일 부재 예외·키 별칭)
+- `ruff check src/labelers src/augmenters tests/labelers tests/augmenters
+  src/llm_eval/__main__.py`: clean
+- 문서 갱신: `src/labelers/AGENTS.md`, `src/labelers/ja/AGENTS.md`,
+  `src/augmenters/AGENTS.md`, `docs/manual/data/vietnamese-ner.md`
+  (§변경 이력), 본 이슈 md 최신화
+
 ## 관련 커밋
 
 <!-- PR 직전 채움 -->
+- `f2fe819` feat(schema): NER 8종 → 5종 축소 · canonical 10종 평면 통합
+- (후속) VI 라벨러 10종 확장 + 로더 canonical 덤프 전용 리팩터

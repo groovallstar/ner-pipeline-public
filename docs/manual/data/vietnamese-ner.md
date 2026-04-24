@@ -1,8 +1,22 @@
 # 베트남어 NER 라벨링 방법론
 
-> 기준 코드 시점: 2026-04-09 (develop 브랜치)
-> 대상 데이터셋: WikiANN Vietnamese (3 엔티티 타입: PER, LOC, ORG)
-> 대상 코드: `src/labelers/vi/`, `src/evaluators/`, `src/labelers/dataset_loader.py`
+> 기준 코드 시점: 2026-04-24 (develop 브랜치)
+> 대상 데이터셋: WikiANN Vietnamese (원본 3 엔티티: PER, LOC, ORG)
+> 라벨러 출력: canonical 10종 평면 (PER·LOC·ORG·PROD·EVT + 5종 PII/날짜)
+> 대상 코드: `src/labelers/vi/`, `src/llm_eval/`, `src/labelers/dataset_loader.py`
+
+## 변경 이력
+
+- **2026-04-24 (이슈 #21)**: `src/labelers/vi/ner_prompts.py` 출력 라벨
+  공간을 WikiANN 3종에서 canonical **10종 평면 목록**
+  (`PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD`)으로
+  확장. `src/augmenters/wikiann_vi/`·`data/wikiann_vi/*.jsonl`은 이미
+  5종 canonical로 축소 완료(이슈 #21 본 단계).
+  - 평가 시 주의: WikiANN 원본 gold(3종 `PER/LOC/ORG`)로 벤치할 때는
+    PROD/EVT/PII 예측이 FP로 집계되어 precision이 하락한다. 5종·10종
+    라벨이 포함된 gold(`data/wikiann_vi/*.jsonl` 5종)로 평가하면 정상
+    비교 가능. 상세: `docs/manual/data/canonical-entity-schema.md` §평가
+    시 주의.
 
 ## 목차
 

@@ -1,64 +1,112 @@
 """베트남어 LLM 라벨러용 공통 NER 프롬프트 템플릿.
 
-WikiANN NER 어노테이션 가이드라인에 맞게 조정되었다:
-- 3개 엔티티 타입: PER, LOC, ORG
-- 베트남어 성조 부호 및 다중 어절 이름에 대한 언어별 규칙
+canonical 10종 평면 목록(이슈 #21) — NER/PII 구분 섹션 없음:
+  PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD
+
+WikiANN-vi 원본은 3종(PER/LOC/ORG)이지만, 본 라벨러는 canonical 전체를
+출력해 다국어 벤치마크(JA Stockmark 5종·PII 주입 세트)와 동일한 라벨
+공간에서 평가할 수 있도록 한다. WikiANN 3종 gold로 평가 시 PROD/EVT/
+PII 예측은 FP로 잡혀 precision이 하락하며, 이는 설계 의도다. 5종·10종
+라벨이 포함된 gold(`data/wikiann_vi/*.jsonl` 축소 후 5종)로 평가하면
+정상 비교가 가능하다.
 """
 
 from typing import List
 
-DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG"]
+DEFAULT_ENTITY_TYPES = [
+    'PER', 'LOC', 'ORG', 'PROD', 'EVT',
+    'EMAIL', 'PHONE', 'DAT', 'ID_NUM', 'CREDIT_CARD',
+]
 
 # ── Single-sentence prompt ────────────────────────────────────────────
 
-SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có tên (NER) tiếng Việt. Tìm các thực thể trong văn bản và trả về dưới dạng mảng JSON.
+SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có tên (NER) tiếng Việt theo hệ thống 10 loại chuẩn (nhãn dùng ký hiệu tiếng Anh). Tìm các thực thể trong văn bản và trả về dưới dạng mảng JSON.
 
 ## Loại thực thể ({entity_types})
-- PER (Người): Tên người, bao gồm họ và tên đầy đủ hoặc một phần. Bí danh, biệt hiệu, nghệ danh cũng là PER
-  Ví dụ: "Nguyễn Văn A" → PER, "Hồ Chí Minh" → PER, "Bác Hồ" → PER
-  Lưu ý: Tên nhóm nhạc, ban nhạc không phải PER mà là ORG
-- LOC (Địa điểm): Địa danh, quốc gia, thành phố, tỉnh, huyện, xã, đường, sông, núi, biển, đảo, công trình kiến trúc
-  Ví dụ: "Hà Nội", "Việt Nam", "Sông Hồng", "Phú Quốc", "Đà Nẵng", "Chùa Một Cột"
-  Lưu ý: Địa danh phức hợp giữ nguyên thành một thực thể ("Thành phố Hồ Chí Minh" → LOC 1 thực thể)
-- ORG (Tổ chức): Công ty, cơ quan, tổ chức, đảng phái, đội bóng, trường học, bệnh viện
-  Ví dụ: "Đảng Cộng sản Việt Nam", "Samsung", "Đại học Quốc gia Hà Nội", "Công an", "Bộ Giáo dục"
-  Lưu ý: Tên tổ chức phức hợp giữ nguyên thành một thực thể
+- PER: Tên người (họ tên đầy đủ, họ, tên, biệt hiệu, nghệ danh). Loại trừ chức danh "Ông/Bà/Chủ tịch/Thủ tướng/Tướng"
+- LOC: Địa danh và công trình vật lý cụ thể — quốc gia, tỉnh, thành phố, huyện, xã, sông, núi, biển, đảo, vịnh, ga, sân bay, cảng, bệnh viện, trường tiểu học/THCS/THPT, bảo tàng, thư viện, chùa, nhà thờ, ký túc xá/khu giảng đường đại học
+- ORG: Tổ chức — doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, **trường đại học (pháp nhân)**, đảng phái, bộ/cơ quan chính phủ, quân đội, tòa án, quốc hội, tổ chức quốc tế, câu lạc bộ/đội thể thao, giải đấu định kỳ, hiệp hội, liên đoàn, dàn nhạc giao hưởng, tổ chức trực thuộc đại học (câu lạc bộ/viện nghiên cứu)
+- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm (sách/phim/tiểu thuyết), chương trình (không bao gồm tên công ty, tên người, tên cơ sở)
+- EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn, cuộc cách mạng (không bao gồm giải đấu thường niên — đó là ORG)
+- EMAIL: Địa chỉ email đầy đủ dạng `local@domain.TLD` (TLD bắt buộc: .com/.vn/.net/.org/.edu/.gov.vn…)
+- PHONE: Số điện thoại (định dạng Việt Nam hoặc quốc tế: 090-1234-567, +84 90 1234 567, 0901234567)
+- DAT: Ngày tháng tổng quát — năm, tháng, ngày, khoảng thời gian, thời đại. Ngày sinh, ngày sự kiện, ngày thành lập đều thuộc DAT không phân biệt ngữ cảnh. Địa chỉ vật lý (số nhà) thuộc LOC, không phải DAT
+- ID_NUM: Số định danh cá nhân (CCCD, CMND, mã số thuế…), chuỗi số có thể có dấu gạch
+- CREDIT_CARD: Số thẻ tín dụng (13~19 chữ số, cho phép dấu cách/gạch ngang)
 
-## Quy tắc chính
-1. Trích xuất chính xác văn bản gốc, giữ nguyên dấu tiếng Việt
-2. Thực thể nhiều từ phải giữ nguyên thành một thực thể (không tách)
-3. Loại trừ các từ chức danh đứng trước tên ("Ông", "Bà", "Chủ tịch", "Thủ tướng") — chỉ trích xuất tên
-4. Chỉ trả về mảng JSON, không giải thích thêm
-5. Nếu không có thực thể, trả về []
+## Quy tắc phân loại (áp dụng khi phân vân)
+1. Tổ chức/pháp nhân/công quyền (công ty/trường đại học pháp nhân/chính phủ/quân đội/đảng/câu lạc bộ thể thao/hiệp hội/tổ chức trực thuộc đại học) → **ORG**
+2. Địa điểm vật lý (quốc gia/tỉnh/thành phố/sông/núi/ga/sân bay/bệnh viện/trường PT/cơ sở phụ thuộc đại học/chùa) → **LOC**
+3. Sản phẩm/tác phẩm/chương trình → **PROD**
+4. Sự kiện/chiến tranh/hiệp ước một lần → **EVT**
+- Trường đại học: pháp nhân bản thể và tổ chức trực thuộc (câu lạc bộ/viện nghiên cứu) đều là **ORG**, còn cơ sở phụ thuộc (ký túc xá/khu giảng đường/khuôn viên) là **LOC**
+- Bệnh viện/Trường tiểu học/THCS/THPT → **LOC** (công trình vật lý)
+
+## Quy tắc chung
+1. Giữ nguyên dấu tiếng Việt, trích xuất chính xác văn bản gốc
+2. Thực thể nhiều từ giữ nguyên thành một thực thể ("Thành phố Hồ Chí Minh" → 1 LOC, "Đại học Quốc gia Hà Nội" → 1 ORG)
+3. Loại trừ chức danh đứng trước tên ("Ông/Bà/Chủ tịch/Thủ tướng")
+4. Chỉ trả về mảng JSON, không giải thích
+5. Không có thực thể → trả về []
+6. Nhãn dùng ký hiệu tiếng Anh (PER/LOC/ORG/PROD/EVT/EMAIL/PHONE/DAT/ID_NUM/CREDIT_CARD)
 
 ## Ví dụ
 Đầu vào: Chủ tịch Nguyễn Xuân Phúc đã đến thăm Đà Nẵng và gặp đại diện Tập đoàn Vingroup.
 Đầu ra: [{{"text": "Nguyễn Xuân Phúc", "type": "PER"}}, {{"text": "Đà Nẵng", "type": "LOC"}}, {{"text": "Tập đoàn Vingroup", "type": "ORG"}}]
 
-Đầu vào: Sông Mekong chảy qua Campuchia và Việt Nam trước khi đổ ra Biển Đông.
-Đầu ra: [{{"text": "Sông Mekong", "type": "LOC"}}, {{"text": "Campuchia", "type": "LOC"}}, {{"text": "Việt Nam", "type": "LOC"}}, {{"text": "Biển Đông", "type": "LOC"}}]
+Đầu vào: Đảng Cộng sản Việt Nam và Bộ Giáo dục vừa ký kết hợp tác với Đại học Quốc gia Hà Nội.
+Đầu ra: [{{"text": "Đảng Cộng sản Việt Nam", "type": "ORG"}}, {{"text": "Bộ Giáo dục", "type": "ORG"}}, {{"text": "Đại học Quốc gia Hà Nội", "type": "ORG"}}]
 
-Đầu vào: Đại học Quốc gia Hà Nội vừa ký kết hợp tác với Samsung Electronics tại Hà Nội.
-Đầu ra: [{{"text": "Đại học Quốc gia Hà Nội", "type": "ORG"}}, {{"text": "Samsung Electronics", "type": "ORG"}}, {{"text": "Hà Nội", "type": "LOC"}}]
+Đầu vào: Vietnam Airlines vận hành chuyến bay từ Sân bay Nội Bài đến Bệnh viện Bạch Mai.
+Đầu ra: [{{"text": "Vietnam Airlines", "type": "ORG"}}, {{"text": "Sân bay Nội Bài", "type": "LOC"}}, {{"text": "Bệnh viện Bạch Mai", "type": "LOC"}}]
+
+Đầu vào: Hà Nội FC giành chức vô địch V.League mùa giải vừa qua.
+Đầu ra: [{{"text": "Hà Nội FC", "type": "ORG"}}, {{"text": "V.League", "type": "ORG"}}]
+
+Đầu vào: Trong Chiến tranh Việt Nam, Hiệp định Paris được ký kết tại Pháp.
+Đầu ra: [{{"text": "Chiến tranh Việt Nam", "type": "EVT"}}, {{"text": "Hiệp định Paris", "type": "EVT"}}, {{"text": "Pháp", "type": "LOC"}}]
+
+Đầu vào: Samsung giới thiệu Galaxy S24 cùng phần mềm Windows tại sự kiện công nghệ.
+Đầu ra: [{{"text": "Samsung", "type": "ORG"}}, {{"text": "Galaxy S24", "type": "PROD"}}, {{"text": "Windows", "type": "PROD"}}]
+
+Đầu vào: Phụ trách là Trần Minh (sinh ngày 03/04/1985). Liên hệ: 090-1234-567, email: minh@example.com. Địa chỉ: 123 Lê Lợi, Quận 1, TP.HCM. CCCD: 079123456789.
+Đầu ra: [{{"text": "Trần Minh", "type": "PER"}}, {{"text": "03/04/1985", "type": "DAT"}}, {{"text": "090-1234-567", "type": "PHONE"}}, {{"text": "minh@example.com", "type": "EMAIL"}}, {{"text": "123 Lê Lợi, Quận 1, TP.HCM", "type": "LOC"}}, {{"text": "079123456789", "type": "ID_NUM"}}]
+
+Đầu vào: Vịnh Hạ Long là một kỳ quan thiên nhiên ở tỉnh Quảng Ninh.
+Đầu ra: [{{"text": "Vịnh Hạ Long", "type": "LOC"}}, {{"text": "tỉnh Quảng Ninh", "type": "LOC"}}]
 
 Đầu vào: {sentence}
 Đầu ra:"""
 
 # ── Batch prompt ──────────────────────────────────────────────────────
 
-BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có tên (NER) tiếng Việt. Trích xuất thực thể từ nhiều câu và trả về dưới dạng JSON.
+BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ thống 10 loại chuẩn (nhãn tiếng Anh). Trích xuất thực thể từ nhiều câu và trả về JSON object với chỉ số câu làm khóa.
 
 ## Loại thực thể ({entity_types})
-- PER (Người): Tên người đầy đủ hoặc một phần, bí danh, nghệ danh. Không bao gồm chức danh ("Ông", "Bà", "Chủ tịch")
-- LOC (Địa điểm): Địa danh, quốc gia, thành phố, tỉnh, sông, núi, biển, đảo, công trình. Địa danh phức hợp giữ nguyên thành một thực thể
-- ORG (Tổ chức): Công ty, cơ quan, tổ chức, đảng phái, đội bóng, trường học, bệnh viện. Tên phức hợp giữ nguyên thành một thực thể
+- PER: Tên người (không bao gồm chức danh)
+- LOC: Địa danh và công trình vật lý (quốc gia/tỉnh/sông/núi/đảo + ga/sân bay/bệnh viện/trường PT/chùa/cơ sở phụ thuộc đại học)
+- ORG: Tổ chức (công ty/tập đoàn/ngân hàng/hãng/đài/trường đại học pháp nhân/đảng/bộ/quân đội/CLB thể thao/hiệp hội/tổ chức quốc tế)
+- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình
+- EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn
+- EMAIL: Địa chỉ email đầy đủ (local@domain.TLD)
+- PHONE: Số điện thoại (định dạng Việt Nam hoặc quốc tế)
+- DAT: Ngày tháng tổng quát (năm/tháng/ngày/khoảng thời gian/thời đại)
+- ID_NUM: Số định danh cá nhân (CCCD/CMND/mã số thuế)
+- CREDIT_CARD: Số thẻ tín dụng (13~19 chữ số)
 
-## Quy tắc chính
-1. Trích xuất chính xác văn bản gốc, giữ nguyên dấu tiếng Việt
-2. Thực thể nhiều từ phải giữ nguyên thành một thực thể
+## Quy tắc phân loại (áp dụng khi phân vân)
+- Pháp nhân/tổ chức → ORG; địa điểm vật lý → LOC
+- Trường đại học pháp nhân → ORG; cơ sở phụ thuộc → LOC
+- Trường PT/Bệnh viện → LOC (công trình)
+- Sản phẩm/tác phẩm → PROD; Sự kiện/chiến tranh/hiệp ước → EVT
+
+## Quy tắc chung
+1. Giữ nguyên dấu tiếng Việt
+2. Thực thể nhiều từ giữ nguyên thành một thực thể
 3. Loại trừ chức danh đứng trước tên
-4. Trả về JSON object với chỉ số câu là key. Nếu không có thực thể, trả về mảng rỗng
-5. Không giải thích thêm, chỉ JSON
+4. Trả về JSON object với chỉ số câu là key. Không có thực thể → mảng rỗng
+5. Chỉ JSON, không giải thích
+6. Nhãn dùng ký hiệu tiếng Anh
 
 ## Ví dụ
 Đầu vào:
@@ -74,30 +122,44 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có 
 
 # ── System prompt for OpenAI (chat format) ────────────────────────────
 
-SYSTEM_PROMPT = """Bạn là chuyên gia nhận dạng thực thể có tên (NER) tiếng Việt. Trích xuất thực thể từ các câu và trả về dưới dạng JSON.
+SYSTEM_PROMPT = """Bạn là chuyên gia nhận dạng thực thể có tên (NER) tiếng Việt theo hệ thống 10 loại chuẩn (nhãn tiếng Anh). Trích xuất thực thể từ các câu và trả về dưới dạng JSON.
 
 Loại thực thể:
-- PER (Người): Tên người đầy đủ hoặc một phần, bí danh, nghệ danh. Không bao gồm chức danh ("Ông", "Bà", "Chủ tịch")
-- LOC (Địa điểm): Địa danh, quốc gia, thành phố, tỉnh, sông, núi, biển, đảo, công trình. Địa danh phức hợp giữ nguyên thành một thực thể
-- ORG (Tổ chức): Công ty, cơ quan, tổ chức, đảng phái, đội bóng, trường học, bệnh viện. Tên phức hợp giữ nguyên thành một thực thể
+- PER: Tên người (không bao gồm chức danh)
+- LOC: Địa danh và công trình vật lý (quốc gia/tỉnh/sông/núi/đảo + ga/sân bay/bệnh viện/trường PT/chùa/cơ sở phụ thuộc đại học)
+- ORG: Tổ chức (công ty/tập đoàn/ngân hàng/hãng/đài/trường đại học pháp nhân/đảng/bộ/quân đội/CLB thể thao/hiệp hội/tổ chức quốc tế)
+- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình
+- EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn
+- EMAIL: Địa chỉ email đầy đủ (local@domain.TLD)
+- PHONE: Số điện thoại (định dạng Việt Nam hoặc quốc tế)
+- DAT: Ngày tháng tổng quát (năm/tháng/ngày/khoảng thời gian/thời đại)
+- ID_NUM: Số định danh cá nhân (CCCD/CMND/mã số thuế)
+- CREDIT_CARD: Số thẻ tín dụng (13~19 chữ số)
 
-Quy tắc chính:
-- Trích xuất chính xác văn bản gốc, giữ nguyên dấu tiếng Việt
-- Thực thể nhiều từ phải giữ nguyên thành một thực thể
+Quy tắc phân loại (áp dụng khi phân vân):
+1. Tổ chức/pháp nhân/công quyền → ORG
+2. Địa điểm vật lý → LOC
+3. Sản phẩm/tác phẩm/chương trình → PROD
+4. Sự kiện/chiến tranh/hiệp ước → EVT
+
+Quy tắc chung:
+- Giữ nguyên dấu tiếng Việt, trích xuất chính xác văn bản gốc
+- Thực thể nhiều từ giữ nguyên thành một thực thể
 - Loại trừ chức danh đứng trước tên
-- Trả về JSON object với chỉ số câu là key. Nếu không có thực thể, trả về mảng rỗng
-- Không giải thích thêm, chỉ JSON"""
+- Trả về JSON object với chỉ số câu là key. Không có thực thể → mảng rỗng
+- Chỉ JSON, không giải thích thêm
+- Nhãn dùng ký hiệu tiếng Anh"""
 
-USER_PROMPT_TEMPLATE = """Trích xuất thực thể từ các câu dưới đây.
+USER_PROMPT_TEMPLATE = """Trích xuất thực thể từ các câu dưới đây. Nhãn dùng ký hiệu tiếng Anh.
 
 Đầu vào:
 {sentences}
 
 Định dạng đầu ra ví dụ:
-{{"0": [{{"text": "Nguyễn Văn A", "type": "PER"}}, {{"text": "Hà Nội", "type": "LOC"}}], "1": [{{"text": "Samsung", "type": "ORG"}}], "2": []}}
+{{"0": [{{"text": "Nguyễn Văn A", "type": "PER"}}, {{"text": "Hà Nội", "type": "LOC"}}], "1": [{{"text": "Samsung", "type": "ORG"}}, {{"text": "Galaxy S24", "type": "PROD"}}], "2": []}}
 
 Đầu ra:"""
 
 
 def format_entity_types(entity_types: List[str]) -> str:
-    return ", ".join(entity_types)
+    return ', '.join(entity_types)

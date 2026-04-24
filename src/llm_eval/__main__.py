@@ -193,14 +193,21 @@ def _load_gold(args):
             return JapaneseDatasetLoader.load_local(
                 args.local_file, max_samples=args.max_samples,
             )
-        print(f"Loading gold data: {args.dataset} [{args.split}]")
         loader = JapaneseDatasetLoader()
-        return loader.load(name=args.dataset, split=args.split, max_samples=args.max_samples)
+        path = loader.DEFAULT_PATH[args.split]
+        print(f"Loading gold data (canonical dump): {path}")
+        return loader.load(split=args.split, max_samples=args.max_samples)
     if args.lang == "vi":
-        print(f"Loading gold data: {args.dataset} (vi) [{args.split}]")
-        return DatasetLoader().load(
-            args.dataset, config="vi", split=args.split, max_samples=args.max_samples,
-        )
+        from labelers.vi.dataset_loader import VietnameseDatasetLoader
+        if args.local_file:
+            print(f"Loading gold data (local): {args.local_file}")
+            return VietnameseDatasetLoader.load_local(
+                args.local_file, max_samples=args.max_samples,
+            )
+        loader = VietnameseDatasetLoader()
+        path = loader.DEFAULT_PATH[args.split]
+        print(f"Loading gold data (canonical dump): {path}")
+        return loader.load(split=args.split, max_samples=args.max_samples)
     print(f"Loading gold data: {args.dataset}/{args.config} [{args.split}]")
     return DatasetLoader().load(
         args.dataset, config=args.config, split=args.split, max_samples=args.max_samples,

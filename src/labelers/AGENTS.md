@@ -21,7 +21,8 @@ Core NER labeling package. Provides a HuggingFace dataset loader and LLM-based l
 | Directory | Purpose |
 |-----------|---------|
 | `ko/` | Korean NER labelers — KLUE 6-entity (PS, LC, OG, DT, TI, QT) (see `ko/AGENTS.md`) |
-| `ja/` | Japanese NER labelers — Stockmark 8-entity with span matcher and enhanced labeler (see `ja/AGENTS.md`) |
+| `ja/` | Japanese NER labelers — canonical 10-type flat output (이슈 #21); reads pre-dumped Stockmark JSONL only, no HF fallback (see `ja/AGENTS.md`) |
+| `vi/` | Vietnamese NER labelers — canonical 10-type flat output (이슈 #21); reads canonical WikiANN-vi JSONL dumps; BIO↔span utilities preserved for augmenters' re-labeling pipeline |
 
 ## For AI Agents
 

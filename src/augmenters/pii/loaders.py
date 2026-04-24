@@ -11,17 +11,18 @@ from augmenters.pii.schema import Entity, Record
 def load_stockmark(
     split: str = 'train',
     max_samples: Optional[int] = None,
-    seed: int = 42,
-    test_size: float = 0.2,
 ) -> list[Record]:
-    """Stockmark 데이터셋을 Record 리스트로 로드한다."""
+    """Stockmark canonical 덤프를 Record 리스트로 로드한다.
+
+    이슈 #21 이후 로더는 `data/stockmark/{train,test}.jsonl` canonical
+    덤프를 직접 읽는다. 분할 seed·비율 파라미터는 더 이상 런타임에서
+    지정하지 않으며, 덤프 시점에 고정된다.
+    """
     from labelers.ja.dataset_loader import JapaneseDatasetLoader
     loader = JapaneseDatasetLoader()
     raw = loader.load(
         split=split,
         max_samples=max_samples,
-        seed=seed,
-        test_size=test_size,
     )
     records: list[Record] = []
     for row in raw:
