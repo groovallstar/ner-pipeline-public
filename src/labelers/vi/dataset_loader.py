@@ -1,13 +1,14 @@
 """WikiANN-vi canonical 덤프 로더.
 
 이슈 #21에서 canonical 5종으로 축소된 JSONL 덤프
-(`data/wikiann_vi/vi_wikiann_8type_recall_{split}.jsonl`, recall-merge
+(`data/wikiann_vi/vi_wikiann_recall_{split}.jsonl`, recall-merge
 결과)를 그대로 읽는다. HF 원본(WikiANN 3종) 로딩은 본 모듈의 책임이
 아니다 — 재라벨 파이프라인은 augmenters/wikiann_vi 쪽에서 직접 HF를
 읽는다. 폴백 없음.
 
 출력 스키마: `{id, text, gold_spans:[{text, type, start, end}]}`
-— 기본 span_key는 `gold_spans_8type_merged` (recall 정책 병합 결과).
+— 기본 span_key는 `gold_spans_8type_merged` (recall 정책 병합 결과의
+필드명. 이슈 #21에서 데이터 호환성을 위해 필드명은 유지).
 """
 from __future__ import annotations
 
@@ -21,13 +22,13 @@ class VietnameseDatasetLoader:
 
     DEFAULT_PATH: dict = {
         'train': Path(
-            'data/wikiann_vi/vi_wikiann_8type_recall_train.jsonl'
+            'data/wikiann_vi/vi_wikiann_recall_train.jsonl'
         ),
         'validation': Path(
-            'data/wikiann_vi/vi_wikiann_8type_recall_validation.jsonl'
+            'data/wikiann_vi/vi_wikiann_recall_validation.jsonl'
         ),
         'test': Path(
-            'data/wikiann_vi/vi_wikiann_8type_recall_test.jsonl'
+            'data/wikiann_vi/vi_wikiann_recall_test.jsonl'
         ),
     }
     SPAN_KEY = 'gold_spans_8type_merged'
