@@ -48,6 +48,30 @@ class TestBuildInjectionPrompt:
         prompt = build_injection_prompt('テスト文。', {})
         assert 'テスト文。' in prompt
 
+    def test_vi_prompt_contains_negative_examples(self):
+        """VI 프롬프트는 단서어 직전 부착 금지 + 영문 라벨 leakage 금지."""
+        pii = {'EMAIL': 'tran.linh@example.vn', 'PHONE': '0912345678'}
+        prompt = build_injection_prompt(
+            'Đại học Quốc gia Hà Nội là một cơ sở giáo dục.',
+            pii,
+            lang='vi',
+        )
+        assert 'Đại học Quốc gia Hà Nội' in prompt
+        assert 'tran.linh@example.vn' in prompt
+        # Rule 4: 단서어 부정 예시
+        assert 'Liên hệ:' in prompt
+        assert 'SĐT:' in prompt
+        # Rule 5: 영문 라벨명 leakage 금지
+        assert 'ID_NUMBER' in prompt
+        assert 'CREDIT_CARD' in prompt
+        # 일본어 템플릿 누설 없음
+        assert '原文' not in prompt
+
+    def test_vi_empty_pii(self):
+        prompt = build_injection_prompt('Văn bản gốc.', {}, lang='vi')
+        assert 'Văn bản gốc.' in prompt
+        assert '(không có)' in prompt
+
 
 # ── span 추출 ────────────────────────────────────────────────────────────
 
