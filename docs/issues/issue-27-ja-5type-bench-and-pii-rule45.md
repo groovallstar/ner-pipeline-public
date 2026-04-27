@@ -182,7 +182,9 @@ $ python -m pytest tests/augmenters/pii/test_llm_injector.py -v
 
 ## 관련 커밋
 
-(머지 직전 채움)
+- `149013e` docs(reports): JA NER 벤치 5종판 재측정 · 10모델 단독 구동
+- `8c39f17` feat(pii): JA 프롬프트 Rule 4·5 · 단서어 부착·영문 라벨 leakage 금지
+- `291a746` docs(pii): stockmark_pii_1000 재생성 검증 리포트 · 이슈 #27 정리
 
 ## 후속 작업·알려진 한계
 
