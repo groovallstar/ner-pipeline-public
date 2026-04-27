@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # ── 프롬프트 ─────────────────────────────────────────────────────────────
 
-_INJECTION_PROMPT = """\
+_INJECTION_PROMPT_JA = """\
 あなたは日本語の文章編集の専門家です。
 
 ## タスク
@@ -45,19 +45,67 @@ _INJECTION_PROMPT = """\
 
 ## 出力"""
 
+_INJECTION_PROMPT_VI = """\
+Bạn là chuyên gia biên tập tiếng Việt.
+
+## Nhiệm vụ
+Chèn các thông tin PII được chỉ định vào [văn bản gốc] một cách tự nhiên
+như tiếng Việt thường ngày.
+
+## Quy tắc
+1. Giá trị PII phải được sao chép **chính xác từng ký tự**
+   (không sửa, không định dạng lại).
+2. Giữ nguyên các thực thể trong văn bản gốc (tên người, địa danh, tổ
+   chức, sản phẩm, sự kiện).
+3. Chèn vào ngữ cảnh tự nhiên trong câu, không liệt kê ở cuối.
+4. **KHÔNG** đặt giá trị PII ngay sau các từ-mào đầu cứng nhắc như:
+   "Liên hệ:", "SĐT:", "Số điện thoại:", "Email:", "CCCD:",
+   "Địa chỉ:", "Ngày sinh:", "Thẻ:", "ID:".
+   Hãy lồng ghép vào câu (ví dụ: "Anh có thể liên hệ qua
+   tran.linh@example.vn nếu cần thêm thông tin", thay vì
+   "Liên hệ: tran.linh@example.vn").
+5. **KHÔNG** xuất các tên nhãn tiếng Anh trong văn bản
+   ("PHONE", "EMAIL", "ID_NUM", "ID_NUMBER", "CREDIT_CARD", "DAT",
+   "ADDRESS", "NAME"). Chỉ dùng giá trị thực.
+6. Đầu ra chỉ gồm **văn bản đã biên tập**, không kèm giải thích, ghi
+   chú, hay bao bọc bằng ngoặc/markdown/tiền tố.
+
+## Văn bản gốc
+{original_text}
+
+## Thông tin PII (chỉ tham khảo, không xuất nguyên dạng)
+{pii_list}
+
+## Văn bản đã biên tập"""
+
+_INJECTION_PROMPTS: dict[str, str] = {
+    'ja': _INJECTION_PROMPT_JA,
+    'vi': _INJECTION_PROMPT_VI,
+}
+
+# 기존 호환용 별칭 (JA 기본 템플릿).
+_INJECTION_PROMPT = _INJECTION_PROMPT_JA
+
+_EMPTY_PII_LIST: dict[str, str] = {
+    'ja': '（なし）',
+    'vi': '(không có)',
+}
+
 
 def build_injection_prompt(
     original_text: str,
     pii_values: dict[str, str],
+    lang: str = 'ja',
 ) -> str:
-    """LLM に渡す PII 注入プロンプトを組み立てる。"""
+    """LLM 에 전달할 PII 주입 프롬프트를 언어별로 조립한다."""
+    template = _INJECTION_PROMPTS.get(lang, _INJECTION_PROMPT_JA)
     if not pii_values:
-        return _INJECTION_PROMPT.format(
+        return template.format(
             original_text=original_text,
-            pii_list='（なし）',
+            pii_list=_EMPTY_PII_LIST.get(lang, _EMPTY_PII_LIST['ja']),
         )
     lines = [f'- {label}: {value}' for label, value in pii_values.items()]
-    return _INJECTION_PROMPT.format(
+    return template.format(
         original_text=original_text,
         pii_list='\n'.join(lines),
     )
@@ -219,8 +267,8 @@ class LLMInjector:
             for label in labels
         }
 
-    def inject(self, record: Record) -> Record:
-        """단일 레코드에 LLM으로 PII를 자연 삽입한다."""
+    async def _inject_async(self, record: Record) -> Record:
+        """단일 레코드 비동기 주입 본체."""
         n = self._sample_n()
         labels = self._pick_labels(n)
 
@@ -232,8 +280,8 @@ class LLMInjector:
             )
 
         pii_values = self._generate_pii_values(labels)
-        prompt = build_injection_prompt(record.text, pii_values)
-        generated = asyncio.run(self._client.generate(prompt))
+        prompt = build_injection_prompt(record.text, pii_values, self.lang)
+        generated = await self._client.generate(prompt)
         generated = _clean_llm_output(generated)
 
         spans = extract_spans(
@@ -245,16 +293,38 @@ class LLMInjector:
         merged = merge_entities(spans, self._merge_rules)
         return Record(text=generated, entities=merged, id=record.id)
 
-    def inject_dataset(
-        self, records: Iterable[Record],
-    ) -> Iterator[Record]:
-        for rec in records:
+    def inject(self, record: Record) -> Record:
+        """단일 레코드에 LLM으로 PII를 자연 삽입한다 (단발 호출 전용)."""
+        return asyncio.run(self._inject_async(record))
+
+    async def _gather_inject(
+        self, records: list[Record],
+    ) -> list[Record | None]:
+        """전 레코드를 단일 event loop·asyncio.gather 로 병렬 처리한다.
+
+        VllmClient 의 세마포어가 실제 동시 요청 수를 제어하므로 task 자체는
+        모두 한 번에 생성해도 된다. event loop가 record마다 닫히지 않아
+        AsyncOpenAI 의 connection pool이 재사용되며 'Event loop is closed'
+        retry 폭주를 회피한다.
+        """
+        async def _safe(rec: Record) -> Record | None:
             try:
-                yield self.inject(rec)
+                return await self._inject_async(rec)
             except ValueError as e:
                 logger.warning(
                     'Skipping record %s: %s', rec.id, e,
                 )
+                return None
+        return await asyncio.gather(*(_safe(r) for r in records))
+
+    def inject_dataset(
+        self, records: Iterable[Record],
+    ) -> Iterator[Record]:
+        record_list = list(records)
+        results = asyncio.run(self._gather_inject(record_list))
+        for rec in results:
+            if rec is not None:
+                yield rec
 
 
 def _clean_llm_output(text: str) -> str:

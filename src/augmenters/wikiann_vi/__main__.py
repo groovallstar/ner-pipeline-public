@@ -6,7 +6,7 @@
         --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
         --base-url http://localhost:8081/v1 \
         --split test --max-samples 1000 \
-        --output data/wikiann_vi/gemma_8type.jsonl
+        --output data/wikiann_vi/gemma_test.jsonl
 
 JSONL 출력 스키마(레코드별):
     {id, text, gold_spans, gold_spans_8type, relabel_model}
