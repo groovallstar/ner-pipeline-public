@@ -1,7 +1,7 @@
 # issue-27: JA 5종 NER 라벨러 재벤치 + canonical 시설명 재정의(시설→ORG) + PII 프롬프트 Rule 4·5 보강 + 재생성
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/27
-- PR: (머지 직전 채움)
+- PR: https://github.com/groovallstar/ner_pipeline/pull/28
 - 브랜치: `feat/issue-27-ja-5type-bench-and-pii-rule45`
 - 승인일: 2026-04-27 (초안), 2026-04-28 (스키마 재정의 추가)
 - 완료일: (Phase 4 마무리 후 채움)
