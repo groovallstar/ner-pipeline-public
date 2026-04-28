@@ -4,13 +4,13 @@
 # labelers
 
 ## Purpose
-Core NER labeling package. Provides a HuggingFace dataset loader and LLM-based labelers that call Ollama, vLLM, or OpenAI backends to extract named entities from text. Each labeler converts raw LLM JSON span output into BIO-tagged token sequences. Contains language-specific subpackages for Korean and Japanese.
+Core NER labeling package. Provides a HuggingFace dataset loader and LLM-based labelers that call vLLM or OpenAI backends to extract named entities from text. Each labeler converts raw LLM JSON span output into BIO-tagged token sequences. Contains language-specific subpackages for Korean and Japanese.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Public API: exports DatasetLoader, NERRecord, OllamaNERLabeler |
+| `__init__.py` | Public API: exports DatasetLoader, NERRecord |
 | `labeler_base.py` | Shared `parse_json_response()` for extracting JSON spans from LLM output (handles think-tags, markdown fences, wrapped dicts) |
 | `dataset_loader.py` | `DatasetLoader` for HuggingFace NER datasets (KLUE, KMounLP) with ClassLabel conversion and JSONL fallback |
 | `tag_aligner.py` | `TagAligner`: BIO tag alignment to gold token boundaries, KLUE syllable tokenization, tag normalization (PER→PS, LOC→LC), `extract_spans_from_bio()` |
@@ -40,8 +40,8 @@ Core NER labeling package. Provides a HuggingFace dataset loader and LLM-based l
 
 ### Common Patterns
 - Prompt engineering is the primary quality lever — prompts are highly tuned per language
-- Labelers use `openai.AsyncOpenAI` (vllm/openai) and `langchain_ollama.ChatOllama` (ollama)
-- Default models: Ollama=`qwen3.5:27b`, vLLM=`Qwen/Qwen3.5-27B`, OpenAI=`gpt-5-mini`
+- Labelers use `openai.AsyncOpenAI` (vllm/openai)
+- Default models: vLLM=`Qwen/Qwen3.5-27B`, OpenAI=`gpt-5-mini`
 
 ## Dependencies
 
@@ -49,6 +49,6 @@ Core NER labeling package. Provides a HuggingFace dataset loader and LLM-based l
 - None (leaf package for labeling; `tag_aligner.py` is consumed by `llm_eval/` for benchmark evaluation)
 
 ### External
-- `openai`, `langchain_ollama`, `langchain_core`, `datasets`, `transformers`, `torch`
+- `openai`, `langchain_core`, `datasets`, `transformers`, `torch`
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

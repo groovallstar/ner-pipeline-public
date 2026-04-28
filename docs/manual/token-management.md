@@ -41,7 +41,6 @@ build/
 *.mp4
 
 # Docker 볼륨/임시
-docker/ollama/
 docker/vllm/
 
 # IDE
@@ -71,11 +70,11 @@ openspec/changes/
 ## 전략 4: Handoff 문서 — 이 프로젝트 적용 예시
 
 ```markdown
-목표: Ollama NER 라벨러 파이프라인 구현
-수정한 파일: src/labelers/ollama_labeler.py, tests/test_labeler.py
-확인한 사실: Ollama API는 /api/generate 엔드포인트 사용, JSON 모드 지원
-실패한 시도: LangChain ChatOllama의 structured output이 한국어에서 불안정
-다음 작업: 직접 Ollama API 호출 방식으로 전환
+목표: vLLM NER 라벨러 파이프라인 구현
+수정한 파일: src/labelers/vllm_labeler.py, tests/test_labeler.py
+확인한 사실: vLLM은 OpenAI 호환 API(/v1/chat/completions) 사용, AsyncOpenAI로 호출
+실패한 시도: temperature>0 설정 시 출력 불안정
+다음 작업: concurrency 파라미터 튜닝으로 처리 속도 최적화
 완료 조건: 한국어 NER 라벨링 정확도 85% 이상
 ```
 

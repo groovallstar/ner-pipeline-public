@@ -16,13 +16,13 @@
 
 | 파일 | 역할 |
 |------|------|
-| `__init__.py` | 패키지 공개 API (DatasetLoader, OllamaNERLabeler) |
+| `__init__.py` | 패키지 공개 API (DatasetLoader) |
 | `dataset_loader.py` | HuggingFace datasets 로딩 (KLUE, KMounLP NER), `NERRecord` 반환 |
 | `labeler_base.py` | 라벨러 공통 베이스 클래스 |
 | `tag_aligner.py` | BIO 태그 정렬, 태그 정규화 (PER→PS 등), span 추출 유틸리티 |
 | `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
-| `ko/` | 한국어 NER 라벨러 (ollama, openai, vllm) |
-| `ja/` | 일본어 NER 라벨러 (ollama, openai, vllm) |
+| `ko/` | 한국어 NER 라벨러 (vllm, openai) |
+| `ja/` | 일본어 NER 라벨러 (vllm, openai) |
 
 ## NER 엔티티 타입
 

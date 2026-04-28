@@ -4,7 +4,7 @@
 # ja
 
 ## Purpose
-Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entity types (person, corporate, location, facility, product, event, political org, other org). Mirrors the Korean labeler architecture plus a Japanese-specific dataset loader and character-offset span matcher.
+Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entity types (person, corporate, location, facility, product, event, political org, other org). Two backend implementations (vLLM, OpenAI) plus a Japanese-specific dataset loader and character-offset span matcher.
 
 ## Key Files
 
@@ -14,7 +14,6 @@ Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entit
 | `ner_prompts.py` | Japanese NER prompts with 8 entity types and disambiguation rules (e.g., railroad=corporate, military=political, sports league=other org) |
 | `dataset_loader.py` | `JapaneseDatasetLoader` — reads canonical Stockmark JSONL dumps (`data/stockmark/{train,test}.jsonl`). No HF fetch, no label mapping — fails fast if dumps are missing (issue #21) |
 | `span_matcher.py` | `match_spans()` — converts LLM text spans to character offsets using longest-first matching with overlap prevention and Japanese particle stripping |
-| `ollama_ner_labeler.py` | Japanese Ollama labeler (same architecture as Korean) |
 | `vllm_ner_labeler.py` | Japanese vLLM labeler — sentence splitting includes Japanese punctuation `。！？` |
 | `openai_ner_labeler.py` | Japanese OpenAI labeler |
 
@@ -42,6 +41,6 @@ Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entit
 - `labelers.ja.ner_prompts`, `labelers.ja.span_matcher`, `labelers.ja.dataset_loader`
 
 ### External
-- `openai`, `langchain_ollama`, `langchain_core`, `datasets`
+- `openai`, `langchain_core`, `datasets`
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

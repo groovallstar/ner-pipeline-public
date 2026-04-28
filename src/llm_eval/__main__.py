@@ -2,7 +2,7 @@
 
 사용 예:
     python -m llm_eval.benchmark \
-        --models ollama:qwen3.5:27b vllm:Qwen/Qwen3.5-9B hf:model-name openai:gpt-4o-mini \
+        --models vllm:Qwen/Qwen3.5-9B hf:model-name openai:gpt-4o-mini \
         --max-samples 100 \
         --output results/benchmark.json
 """
@@ -43,7 +43,6 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
 
     형식: backend:model_name
     예시:
-        ollama:qwen3.5:27b
         vllm:Qwen/Qwen3.5-9B
         openai:gpt-5-mini
         hf:soddokayo/klue-roberta-large-klue-ner
@@ -59,15 +58,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
     if lang == "vi":
         return _create_labeler_vi(backend, model_name, args)
 
-    if backend == "ollama":
-        from labelers.ko.ollama_ner_labeler import OllamaNERLabeler
-        return backend, OllamaNERLabeler(
-            model=model_name,
-            base_url=args.ollama_url,
-            num_ctx=args.num_ctx,
-            batch_size=args.batch_size,
-        )
-    elif backend == "vllm":
+    if backend == "vllm":
         from labelers.ko.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
@@ -82,20 +73,12 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
         from labelers.hf_ner_labeler import HFNERLabeler
         return backend, HFNERLabeler(model_name=model_name, lang="ko")
     else:
-        raise ValueError(f"Unknown backend '{backend}'. Use: ollama, vllm, openai, hf")
+        raise ValueError(f"Unknown backend '{backend}'. Use: vllm, openai, hf")
 
 
 def _create_labeler_ja(backend: str, model_name: str, args):
     """일본어 NER 라벨러를 생성한다."""
-    if backend == "ollama":
-        from labelers.ja.ollama_ner_labeler import OllamaNERLabeler
-        return backend, OllamaNERLabeler(
-            model=model_name,
-            base_url=args.ollama_url,
-            num_ctx=args.num_ctx,
-            batch_size=args.batch_size,
-        )
-    elif backend == "vllm":
+    if backend == "vllm":
         from labelers.ja.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
@@ -107,20 +90,12 @@ def _create_labeler_ja(backend: str, model_name: str, args):
         from labelers.ja.openai_ner_labeler import OpenAINERLabeler
         return backend, OpenAINERLabeler(model=model_name)
     else:
-        raise ValueError(f"Unknown backend '{backend}' for Japanese. Use: ollama, vllm, openai")
+        raise ValueError(f"Unknown backend '{backend}' for Japanese. Use: vllm, openai")
 
 
 def _create_labeler_vi(backend: str, model_name: str, args):
     """베트남어 NER 라벨러를 생성한다."""
-    if backend == "ollama":
-        from labelers.vi.ollama_ner_labeler import OllamaNERLabeler
-        return backend, OllamaNERLabeler(
-            model=model_name,
-            base_url=args.ollama_url,
-            num_ctx=args.num_ctx,
-            batch_size=args.batch_size,
-        )
-    elif backend == "vllm":
+    if backend == "vllm":
         from labelers.vi.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
@@ -135,7 +110,7 @@ def _create_labeler_vi(backend: str, model_name: str, args):
         from labelers.hf_ner_labeler import HFNERLabeler
         return backend, HFNERLabeler(model_name=model_name, lang="vi")
     else:
-        raise ValueError(f"Unknown backend '{backend}' for Vietnamese. Use: ollama, vllm, openai, hf")
+        raise ValueError(f"Unknown backend '{backend}' for Vietnamese. Use: vllm, openai, hf")
 
 
 def main():
@@ -147,7 +122,7 @@ def main():
     )
     parser.add_argument(
         "--models", nargs="+", required=True,
-        help="Model specs: 'backend:model' (e.g. ollama:qwen3.5:27b, vllm:Qwen/Qwen3.5-9B)",
+        help="Model specs: 'backend:model' (e.g. vllm:Qwen/Qwen3.5-9B, openai:gpt-5-mini)",
     )
     parser.add_argument("--lang", default="ko", choices=["ko", "ja", "vi"], help="Language (default: ko)")
     parser.add_argument("--dataset", default=None, help="Dataset name (default: klue for ko, stockmark for ja)")
@@ -159,10 +134,7 @@ def main():
     parser.add_argument("--no-bertscore", action="store_true", help="Skip BERTScore computation")
 
     # Backend-specific options
-    parser.add_argument("--ollama-url", default="http://localhost:11434", help="Ollama base URL")
     parser.add_argument("--vllm-url", default="http://localhost:8081/v1", help="vLLM base URL")
-    parser.add_argument("--num-ctx", type=int, default=4096, help="Ollama context window")
-    parser.add_argument("--batch-size", type=int, default=10, help="Ollama batch size")
     parser.add_argument("--concurrency", type=int, default=32, help="vLLM concurrency")
     parser.add_argument("--thinking", action="store_true", help="Enable thinking mode for vLLM")
 

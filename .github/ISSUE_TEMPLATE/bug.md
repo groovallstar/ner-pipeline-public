@@ -19,7 +19,7 @@ labels: []
 
 ## 환경
 - 브랜치/커밋:
-- 백엔드: (vllm / ollama / openai / hf-bert)
+- 백엔드: (vllm / openai / hf-bert)
 - 모델·데이터셋:
 - GPU / Python / uv lock 해시(해당 시):
 

@@ -45,10 +45,6 @@ bash docker/vllm/stop.sh
 bash docker/vllm/logs.sh
 ```
 
-## Ollama 서비스 (docker/ollama/)
-
-포트 11434. 모델은 `/data/.ollama/`에 캐시.
-
 ## 이미지 Pull 규칙
 
 - `:latest` 태그 사용 금지. 항상 명시된 버전 태그로 pin 한다 (예: `python:3.12.7-slim`, `pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel`).

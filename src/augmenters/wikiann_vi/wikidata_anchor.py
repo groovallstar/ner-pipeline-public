@@ -37,7 +37,9 @@ _SLEEP = 0.2
 
 
 # Wikidata Q-ID → canonical 5종 (수작업 curated, 주요 케이스).
-# 축소 매핑(이슈 #21): 과거 CORP/POL → ORG, FAC → LOC.
+# 축소 매핑 이력:
+#   - 이슈 #21: 과거 CORP/POL → ORG, FAC → LOC.
+#   - 이슈 #27: FAC(시설) → ORG 재배치. LOC 는 지명·주소만 보유.
 # 섹션 헤더는 축소 전 원조 분류를 보존해 이력 추적 용도로 남겨둔다.
 # 본 테이블에 없는 Q-ID는 '미매핑(unmapped)'으로 집계되며, 리포트에 상위
 # unmapped Q-ID가 기록돼 후속 확장의 판단 근거가 된다.
@@ -82,30 +84,30 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q1289426': 'LOC',       # county of China
     'Q24764': 'LOC',         # municipality of the Philippines
 
-    # FAC (물리적 개별 건축물·교통시설)
-    'Q41176': 'LOC',         # building
-    'Q811979': 'LOC',        # architectural structure
-    'Q16917': 'LOC',         # hospital
-    'Q1248784': 'LOC',       # airport
-    'Q55488': 'LOC',         # railway station
-    'Q124757': 'LOC',        # bus station
-    'Q3914': 'LOC',          # school (초·중·고)
-    'Q159334': 'LOC',        # secondary school
-    'Q9842': 'LOC',          # primary school
-    'Q44613': 'LOC',         # monastery
-    'Q24398318': 'LOC',      # religious building
-    'Q16970': 'LOC',         # church building
-    'Q210272': 'LOC',        # temple / pagoda
-    'Q33506': 'LOC',         # museum
-    'Q7075': 'LOC',          # library
-    'Q22806': 'LOC',         # national library
-    'Q24354': 'LOC',         # theatre
-    'Q483110': 'LOC',        # stadium
-    'Q12876': 'LOC',         # tunnel
-    'Q12280': 'LOC',         # bridge
-    'Q57821': 'LOC',         # fortification
-    'Q23413': 'LOC',         # castle
-    'Q105731': 'LOC',        # tower
+    # FAC (물리적 개별 건축물·교통시설) — 이슈 #27: 시설명 LOC → ORG
+    'Q41176': 'ORG',         # building
+    'Q811979': 'ORG',        # architectural structure
+    'Q16917': 'ORG',         # hospital
+    'Q1248784': 'ORG',       # airport
+    'Q55488': 'ORG',         # railway station
+    'Q124757': 'ORG',        # bus station
+    'Q3914': 'ORG',          # school (초·중·고)
+    'Q159334': 'ORG',        # secondary school
+    'Q9842': 'ORG',          # primary school
+    'Q44613': 'ORG',         # monastery
+    'Q24398318': 'ORG',      # religious building
+    'Q16970': 'ORG',         # church building
+    'Q210272': 'ORG',        # temple / pagoda
+    'Q33506': 'ORG',         # museum
+    'Q7075': 'ORG',          # library
+    'Q22806': 'ORG',         # national library
+    'Q24354': 'ORG',         # theatre
+    'Q483110': 'ORG',        # stadium
+    'Q12876': 'ORG',         # tunnel
+    'Q12280': 'ORG',         # bridge
+    'Q57821': 'ORG',         # fortification
+    'Q23413': 'ORG',         # castle
+    'Q105731': 'ORG',        # tower
 
     # CORP (영리 법인·기업·방송·운송 회사·대학 법인 본체)
     'Q4830453': 'ORG',      # business

@@ -29,7 +29,6 @@ build/
 *.mp4
 
 # Docker 볼륨/임시
-docker/ollama/
 docker/vllm/
 
 # IDE

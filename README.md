@@ -12,7 +12,6 @@ LangChain 기반 다국어 Named Entity Recognition(NER) 파이프라인. 멀티
 ## 지원 백엔드
 
 - **vLLM** — 로컬 GPU 추론 (Qwen3.5-27B, Qwen3.5-35B-A3B 등)
-- **Ollama** — 로컬 LLM 서빙
 - **OpenAI** — API 기반 (gpt-5-mini 등)
 
 ## 프로젝트 구조
@@ -20,14 +19,13 @@ LangChain 기반 다국어 Named Entity Recognition(NER) 파이프라인. 멀티
 ```
 src/
 ├── labelers/              # NER 라벨링 모듈
-│   ├── ko/                # 한국어 라벨러 (ollama, vllm, openai)
-│   ├── ja/                # 일본어 라벨러 (ollama, vllm, openai)
+│   ├── ko/                # 한국어 라벨러 (vllm, openai)
+│   ├── ja/                # 일본어 라벨러 (vllm, openai)
 │   ├── dataset_loader.py  # HuggingFace 데이터셋 로딩
 │   └── labeler_base.py    # 라벨러 베이스 클래스
 └── evaluators/            # 벤치마크 CLI 및 평가 모듈
 docker/
 ├── dev/                   # 개발 컨테이너 (GPU)
-├── ollama/                # Ollama 서비스
 └── vllm/                  # vLLM 서비스
 results/                   # 벤치마크 결과 JSON + 리포트
 tests/                     # pytest 테스트
@@ -69,7 +67,7 @@ pytest tests/ -v
 
 ## 주요 의존성
 
-- LangChain + OpenAI / Ollama / HuggingFace
+- LangChain + OpenAI / HuggingFace
 - transformers, datasets, evaluate, seqeval
 - NumPy, Pandas, scikit-learn
 

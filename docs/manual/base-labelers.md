@@ -1,6 +1,6 @@
 # Base Labelers (공통 NER 라벨러 베이스)
 
-`src/labelers/` 루트에 위치한 백엔드별 추상 베이스 3종. ko/ja 라벨러는 이 베이스를
+`src/labelers/` 루트에 위치한 백엔드별 추상 베이스 2종. ko/ja 라벨러는 이 베이스를
 상속받아 언어팩(`entity_types`, 프롬프트 템플릿, `lang` 코드)만 주입한다.
 
 ## BaseVllmLabeler
@@ -16,16 +16,6 @@
 OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrency)`로
 동시성을 제한한다. `response.usage`에서 토큰 사용량을
 `total_prompt_tokens`/`total_completion_tokens`에 누적한다.
-
-## BaseOllamaLabeler
-
-- **파일**: `src/labelers/base_ollama_labeler.py`
-- **공개 메서드**: `label`, `label_spans`, `label_records` (동일 시그니처).
-
-**주요 `__init__` 파라미터**: `model`, `entity_types`, `base_url`, `num_ctx`,
-`batch_size`, `lang`, `single_prompt_template`, `batch_prompt_template`.
-`langchain_ollama.ChatOllama`(`format="json"`)로 로컬 Ollama 서버를 호출하며
-배치 실패 시 단일 호출로 폴백한다.
 
 ## BaseOpenAILabeler
 
@@ -48,12 +38,11 @@ OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrenc
 | 백엔드 | ko | ja |
 |-------|----|----|
 | vLLM | `labelers.ko.vllm_ner_labeler.VllmNERLabeler` | `labelers.ja.vllm_ner_labeler.VllmNERLabeler` |
-| Ollama | `labelers.ko.ollama_ner_labeler.OllamaNERLabeler` | `labelers.ja.ollama_ner_labeler.OllamaNERLabeler` |
 | OpenAI | `labelers.ko.openai_ner_labeler.OpenAINERLabeler` | `labelers.ja.openai_ner_labeler.OpenAINERLabeler` |
 
 모든 서브클래스는 `__init__`만 오버라이드하며 `super().__init__(..., lang=<lang>,
 <prompt kwargs>)`로 언어팩을 주입한다 (AC13 드리프트 가드 참조).
 
-> vi(베트남어) 라벨러(`labelers.vi.{vllm,ollama,openai}_ner_labeler`)는 현재 Base*를
+> vi(베트남어) 라벨러(`labelers.vi.{vllm,openai}_ner_labeler`)는 현재 Base*를
 > 상속받지 않는 독립 구현이다. 추후 공통 베이스로 통합 예정이며, 그 전까지는 위
 > 표에서 제외한다.

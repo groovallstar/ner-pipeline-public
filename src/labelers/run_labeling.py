@@ -39,10 +39,6 @@ def _load_env() -> None:
 def _create_labeler(spec: str, lang: str, args):
     backend, model_name = spec.split(":", 1)
     if lang == "ja":
-        if backend == "ollama":
-            from labelers.ja.ollama_ner_labeler import OllamaNERLabeler
-            return backend, OllamaNERLabeler(model=model_name, base_url=args.ollama_url,
-                                             num_ctx=args.num_ctx, batch_size=args.batch_size)
         if backend == "vllm":
             from labelers.ja.vllm_ner_labeler import VllmNERLabeler
             return backend, VllmNERLabeler(base_url=args.vllm_url, model=model_name,
@@ -67,10 +63,7 @@ def main() -> None:
     p.add_argument("--model", required=True, help="backend:model_name (e.g. vllm:Qwen/Qwen3.5-27B)")
     p.add_argument("--max-samples", type=int, default=None)
     p.add_argument("--output", required=True)
-    p.add_argument("--ollama-url", default="http://localhost:11434")
     p.add_argument("--vllm-url", default="http://localhost:8081/v1")
-    p.add_argument("--num-ctx", type=int, default=4096)
-    p.add_argument("--batch-size", type=int, default=10)
     p.add_argument("--concurrency", type=int, default=32)
     p.add_argument("--thinking", action="store_true")
     args = p.parse_args()

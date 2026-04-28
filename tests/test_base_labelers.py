@@ -6,13 +6,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from labelers.base_ollama_labeler import BaseOllamaLabeler
 from labelers.base_openai_labeler import BaseOpenAILabeler
 from labelers.base_vllm_labeler import BaseVllmLabeler
-from labelers.ja.ollama_ner_labeler import OllamaNERLabeler as JO
 from labelers.ja.openai_ner_labeler import OpenAINERLabeler as JP
 from labelers.ja.vllm_ner_labeler import VllmNERLabeler as JV
-from labelers.ko.ollama_ner_labeler import OllamaNERLabeler as KO
 from labelers.ko.openai_ner_labeler import OpenAINERLabeler as KP
 from labelers.ko.vllm_ner_labeler import VllmNERLabeler as KV
 
@@ -22,17 +19,13 @@ class TestInheritance:
         assert issubclass(KV, BaseVllmLabeler)
         assert issubclass(JV, BaseVllmLabeler)
 
-    def test_ollama(self):
-        assert issubclass(KO, BaseOllamaLabeler)
-        assert issubclass(JO, BaseOllamaLabeler)
-
     def test_openai(self):
         assert issubclass(KP, BaseOpenAILabeler)
         assert issubclass(JP, BaseOpenAILabeler)
 
 
 class TestPublicAPI:
-    @pytest.mark.parametrize("cls", [KV, JV, KO, JO, KP, JP])
+    @pytest.mark.parametrize("cls", [KV, JV, KP, JP])
     def test_has_label_methods(self, cls):
         for name in ("label", "label_spans", "label_records"):
             fn = getattr(cls, name, None)
@@ -48,7 +41,7 @@ class TestDriftGuard:
         "__static_attributes__", "__firstlineno__",  # Python 3.12+
     }
 
-    @pytest.mark.parametrize("cls", [KV, JV, KO, JO, KP, JP])
+    @pytest.mark.parametrize("cls", [KV, JV, KP, JP])
     def test_only_init(self, cls):
         extra = set(cls.__dict__) - self.DUNDERS
         assert extra == set(), f"{cls.__name__} defines extra members: {extra}"
@@ -94,7 +87,7 @@ class TestTokenTracking:
 class TestInitSignatureParity:
     """ko and ja subclasses share the same __init__ signature."""
 
-    @pytest.mark.parametrize("pair", [(KV, JV), (KO, JO), (KP, JP)])
+    @pytest.mark.parametrize("pair", [(KV, JV), (KP, JP)])
     def test_signature_parity(self, pair):
         ko_sig = inspect.signature(pair[0].__init__)
         ja_sig = inspect.signature(pair[1].__init__)
