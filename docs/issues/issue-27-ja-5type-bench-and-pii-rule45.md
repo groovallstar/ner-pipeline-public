@@ -35,7 +35,7 @@
 - [ ] 10모델 전부 × stockmark 5종 test 1000샘플 span F1 측정 완료
 - [ ] vLLM 컨테이너 단독 구동 (한 번에 1모델, 속도 측정 오염 방지)
 - [ ] per-entity F1 (5종) + 8종↔5종 매핑 비교 컬럼
-- [ ] 기존 `docs/reports/japanese-ner-benchmark-2026-04.md` 제거
+- [ ] 기존 `docs/reports/japanese-ner-benchmark.md` 제거
 - [ ] 신규 5종판 리포트 생성 (파일명 추후 결정)
 
 ### Phase 2 — PII 프롬프트 Rule 4·5 + 재생성
@@ -100,7 +100,7 @@
 
 - #21 (JA 5종 축소)
 - #23 (VI Rule 4·5 효과 입증, PR #25)
-- `docs/reports/japanese-ner-benchmark-2026-04.md` (8종 baseline, 본 이슈에서
+- `docs/reports/japanese-ner-benchmark.md` (8종 baseline, 본 이슈에서
   제거 후 5종판으로 대체)
 - `docs/issues/handoff-post-issue-23-quality-validation.md` (J1·J2 합본
   결정 근거)
@@ -133,7 +133,7 @@
 - [x] 2. 10모델 단독 벤치 — vLLM 컨테이너 단독 구동, 총 소요 2시간
        20분 (17:35→19:55). 모든 결과 `results/ja-5type-bench-2026-04/`
        (gitignored) 에 누적.
-- [x] 3. 5종 NER 벤치 리포트 작성 — 기존 `japanese-ner-benchmark-2026-04.md`
+- [x] 3. 5종 NER 벤치 리포트 작성 — 기존 `japanese-ner-benchmark.md`
        (8종) 덮어쓰기로 5종판 신규 생성 (245줄).
 - [x] 4. `_INJECTION_PROMPT_JA` Rule 4·5 + 단위 테스트 (17/17 pass).
 - [x] 5. `stockmark_pii_1000.jsonl` 재생성 — 사용자가 Phase 1 결과
@@ -158,7 +158,7 @@
 | 9 | Qwen3.5-35B-A3B | 0.8010 | 0.7244 | 0.7280 | +0.073 |
 | 10 | Qwen3.5-122B-A10B-GPTQ-Int4 | 0.7491 | 0.6762 | 0.7237 | +0.025 |
 
-상세: `docs/reports/japanese-ner-benchmark-2026-04.md`.
+상세: `docs/reports/japanese-ner-benchmark.md`.
 
 ### Phase 2 — PII 재생성 검증 4종
 

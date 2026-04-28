@@ -4,7 +4,7 @@
 
 ## 리포트
 
-- [japanese-ner-benchmark-2026-04.md](japanese-ner-benchmark-2026-04.md) — Stockmark NER Wikipedia 원본 (PII 미주입, 엔티티 8종)
+- [japanese-ner-benchmark.md](japanese-ner-benchmark.md) — Stockmark NER Wikipedia 원본 (PII 미주입, 엔티티 8종 — 작성 시점 기준. 이후 #21·#27 에서 5종으로 재측정·갱신)
 - [japanese-ner-pii-benchmark-2026-04.md](japanese-ner-pii-benchmark-2026-04.md) — Stockmark + 합성 PII 6종 혼합 (총 15종)
 
 ## 목적

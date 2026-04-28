@@ -3,9 +3,6 @@
 > 본 리포트는 이슈 #21 에서 8종 → 5종(`PER · LOC · ORG · PROD · EVT`)으로
 > 축소된 canonical 스키마 위에서 측정한 **PII 주입 전 원본 NER 라벨러
 > 정당성** 측정이다. 이슈 #27 Phase 1 산출물.
->
-> 직전 8종 baseline(2026-04-16) 결과는 본 리포트의 "8종↔5종 비교" 컬럼에
-> 보존됐다. 별도 8종 리포트 파일은 삭제됐다.
 
 **측정일**: 2026-04-27
 **데이터셋**: `data/stockmark/test.jsonl` (1069 samples, 5종 canonical, PII 주입 없음)
@@ -29,30 +26,26 @@ False Positive** 로 잡혀 precision 이 인위적으로 하락한다.
 | F1 종류 | 정의 | 용도 |
 |---|---|---|
 | **Raw F1** | 10종 프롬프트 출력 그대로 5종 gold 에 매칭. PII 출력은 FP. | 운영 시점 라벨러 동작의 실측치. silver 데이터 생산 시 후처리 필요량의 직관 |
-| **Filtered F1** | 예측에서 PII 5종을 제외한 뒤 5종에 대해서만 매칭. | **8종 baseline 과 직접 비교 가능한 정량값**. 5종 NER 능력의 순수 측정 |
+| **Filtered F1** | 예측에서 PII 5종을 제외한 뒤 5종에 대해서만 매칭. | 5종 NER 능력의 순수 측정값 — silver 라벨러 정당성 평가 기준 |
 
-8종 baseline (2026-04-16) 은 8종 단일 스키마 프롬프트로 측정됐기 때문에
-PII FP 가 없다. 5종 비교는 **Filtered F1 ↔ 8종 F1** 로 한다.
+silver 라벨러 정당성 결론은 **Filtered F1** 기준으로 내린다.
 
 ---
 
 ## 1. 요약 테이블 (Filtered F1 정렬)
 
-| # | 모델 | 양자화 | 백엔드 | **Filtered F1** | Raw F1 | 8종 F1 (Δ) | Sec/sample | 총 시간 |
-|---|---|---|---|---|---|---|---|---|
-| 1 | cyankiwi/gemma-4-31B-it-AWQ-8bit | AWQ-8 (Dense) | vllm TP=1 | **0.8676** | 0.7750 | 0.8253 (+0.042) | 0.246 | 4:23 |
-| 2 | google/gemma-4-31B-it | BF16 (Dense) | vllm TP=2 | 0.8670 | 0.7748 | 0.8212 (+0.046) | 0.186 | 3:19 |
-| 3 | cyankiwi/gemma-4-31B-it-AWQ-4bit | AWQ-4 (Dense) | vllm TP=1 | 0.8670 | 0.7775 | 0.8190 (+0.048) | 0.197 | 3:30 |
-| 4 | Qwen/Qwen3.5-27B | BF16 (Dense) | vllm TP=2 | 0.8638 | 0.7704 | 0.7770 (+0.087) | 1.068 | 19:02 |
-| 5 | cyankiwi/Qwen3.5-27B-AWQ-4bit | AWQ-4 (Dense) | vllm TP=1 | 0.8576 | 0.7665 | 0.7777 (+0.080) | 1.229 | 21:54 |
-| 6 | cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit | AWQ-8 (MoE A4B) | vllm TP=1 | 0.8413 | 0.7540 | 0.7734 (+0.068) | 0.073 | 1:19 |
-| 7 | cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit | AWQ-4 (MoE A4B) | vllm TP=1 | 0.8357 | 0.7470 | 0.7622 (+0.074) | 0.062 | 1:06 |
-| 8 | openai:gpt-5-mini | - | openai API | 0.8049 | 0.7232 | 0.7935 (+0.011) | 1.527 | 27:13 |
-| 9 | Qwen/Qwen3.5-35B-A3B | BF16 (MoE A3B) | vllm TP=2 | 0.8010 | 0.7244 | 0.7280 (+0.073) | 0.302 | 5:23 |
-| 10 | Qwen/Qwen3.5-122B-A10B-GPTQ-Int4 | GPTQ-Int4 (MoE A10B) | vllm TP=2 | 0.7491 | 0.6762 | 0.7237 (+0.025) | 0.835 | 14:52 |
-
-> Δ 컬럼은 `Filtered F1 - 8종 F1` 차이. 모든 모델이 **+** 방향 — 5종
-> 축소가 라벨러 정합성을 일관되게 개선했다.
+| # | 모델 | 양자화 | 백엔드 | **Filtered F1** | Raw F1 | Sec/sample | 총 시간 |
+|---|---|---|---|---|---|---|---|
+| 1 | cyankiwi/gemma-4-31B-it-AWQ-8bit | AWQ-8 (Dense) | vllm TP=1 | **0.8676** | 0.7750 | 0.246 | 4:23 |
+| 2 | google/gemma-4-31B-it | BF16 (Dense) | vllm TP=2 | 0.8670 | 0.7748 | 0.186 | 3:19 |
+| 3 | cyankiwi/gemma-4-31B-it-AWQ-4bit | AWQ-4 (Dense) | vllm TP=1 | 0.8670 | 0.7775 | 0.197 | 3:30 |
+| 4 | Qwen/Qwen3.5-27B | BF16 (Dense) | vllm TP=2 | 0.8638 | 0.7704 | 1.068 | 19:02 |
+| 5 | cyankiwi/Qwen3.5-27B-AWQ-4bit | AWQ-4 (Dense) | vllm TP=1 | 0.8576 | 0.7665 | 1.229 | 21:54 |
+| 6 | cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit | AWQ-8 (MoE A4B) | vllm TP=1 | 0.8413 | 0.7540 | 0.073 | 1:19 |
+| 7 | cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit | AWQ-4 (MoE A4B) | vllm TP=1 | 0.8357 | 0.7470 | 0.062 | 1:06 |
+| 8 | openai:gpt-5-mini | - | openai API | 0.8049 | 0.7232 | 1.527 | 27:13 |
+| 9 | Qwen/Qwen3.5-35B-A3B | BF16 (MoE A3B) | vllm TP=2 | 0.8010 | 0.7244 | 0.302 | 5:23 |
+| 10 | Qwen/Qwen3.5-122B-A10B-GPTQ-Int4 | GPTQ-Int4 (MoE A10B) | vllm TP=2 | 0.7491 | 0.6762 | 0.835 | 14:52 |
 
 **품질 상위 3** (Filtered): gemma-4-31B-AWQ-8bit (0.8676) ≈ gemma-4-31B-BF16 (0.8670) ≈ gemma-4-31B-AWQ-4bit (0.8670)
 **속도 상위 3**: gemma-4-26B-AWQ-4bit (1:06) > gemma-4-26B-AWQ-8bit (1:19) > gemma-4-31B-BF16 (3:19)
@@ -67,7 +60,7 @@ PII FP 가 없다. 5종 비교는 **Filtered F1 ↔ 8종 F1** 로 한다.
   - TP=2 모델 (BF16/GPTQ): GPU 1·2
   - TP=1 모델 (AWQ): Gemma=GPU 1, Qwen=GPU 2
 - OpenAI: `gpt-5-mini`
-- **모든 측정 동일 조건**: `--concurrency 32` (sample-level 병렬), `--no-bertscore`, vLLM 컨테이너 단독 구동 (8종 baseline 의 BF16 직렬 측정과 달리 본 측정은 BF16 도 동일 병렬도)
+- **모든 측정 동일 조건**: `--concurrency 32` (sample-level 병렬), `--no-bertscore`, vLLM 컨테이너 단독 구동
 - 측정 스크립트: `/tmp/run-ja-5type-bench.sh` (이슈 #27 Phase 1 일회성 오케스트레이션)
 
 ---
@@ -138,9 +131,7 @@ PII 출력률은 모든 모델에서 17~21% 수준. 모델 크기·구조와 무
 | PROD | 0.7633 | 0.7390 | -0.024 |
 | **Overall (Filtered)** | **0.8638** | **0.8576** | **-0.006** |
 
-8종 baseline 에서 두 모델은 0.7770 ↔ 0.7777 (Δ +0.001) 거의 동일. 5종
-Filtered 에서도 0.8638 ↔ 0.8576 (Δ -0.006) 으로 BF16 소폭 우위. 양자화
-영향 미미.
+5종 Filtered 에서 BF16 소폭 우위 (Δ -0.006). 양자화 영향 미미.
 
 ### 4.3 gemma-4-26B-A4B (MoE) AWQ 8bit vs 4bit (6·7위)
 
@@ -153,42 +144,30 @@ Filtered 에서도 0.8638 ↔ 0.8576 (Δ -0.006) 으로 BF16 소폭 우위. 양�
 | PROD | 0.7237 | 0.7349 | +0.011 | 229 |
 | **Overall (Filtered)** | **0.8357** | **0.8413** | **+0.006** | 2,621 |
 
-- 5종 환경에서도 **8bit 가 4bit 대비 +0.006 우위** (8종 측정 +0.011 과
-  유사 추세).
+- **8bit 가 4bit 대비 +0.006 우위**.
 - 속도 차이는 1:06 ↔ 1:19 (+13초) 로 사용 가능 범위 내.
 
 ### 4.4 MoE / 외부 API (8·9·10위)
 
 | 모델 | Filtered F1 | 특이점 |
 |---|---|---|
-| gpt-5-mini | 0.8049 | 8종 baseline 4위(0.7935) → 5종 8위. **8종↔5종 개선폭 +0.011 로 가장 작음** — 외부 API 라 기존부터 8종 일부 라벨에 강했고 5종 축소 이득이 작음 |
-| Qwen3.5-35B-A3B (MoE) | 0.8010 | active 3B 라 31B/27B Dense 보다 capacity 낮음. 그러나 8종 0.7280 → 5종 0.8010 으로 +0.073 큰 개선 |
+| gpt-5-mini | 0.8049 | 외부 API. PER 0.8404 / ORG 0.8327 / LOC 0.7887 — 31B Dense 대비 PER -0.11 의 큰 격차 |
+| Qwen3.5-35B-A3B (MoE) | 0.8010 | active 3B 라 31B/27B Dense 보다 capacity 낮음 |
 | Qwen3.5-122B-A10B-GPTQ | 0.7491 | recall 0.6669 (전 모델 중 최저) — 누락 패턴이 많은 precision-지향 모델 |
 
 ---
 
-## 5. 8종↔5종 비교 종합
+## 5. silver 라벨러 정당성 결론
 
-5종 축소 효과(Δ = Filtered F1 - 8종 F1) 는 모델별로 +0.011 ~ +0.087
-범위. 평균 +0.058. 가장 큰 개선:
+전 모델 Filtered F1 분포:
 
-| Δ 상위 | 모델 | 8종 | 5종(Filtered) |
-|---|---|---|---|
-| +0.087 | Qwen/Qwen3.5-27B | 0.7770 | 0.8638 |
-| +0.080 | Qwen3.5-27B-AWQ-4bit | 0.7777 | 0.8576 |
-| +0.074 | gemma-4-26B-A4B-AWQ-4bit | 0.7622 | 0.8357 |
+- 0.85 이상 (5 모델): 31B 3종 + Qwen 27B 2종
+- 0.80~0.85 (3 모델): 26B-A4B 2종 + gpt-5-mini
+- 0.80 미만 (2 모델): 35B-A3B (0.8010 경계), 122B-GPTQ
 
-| Δ 하위 | 모델 | 8종 | 5종(Filtered) |
-|---|---|---|---|
-| +0.011 | gpt-5-mini | 0.7935 | 0.8049 |
-| +0.025 | Qwen3.5-122B-GPTQ | 0.7237 | 0.7491 |
-
-**해석**: 5종 reduction 의 효과는 "8종 시절 헷갈렸던 ORG 변종(政治的組織名/その他の組織名/法人名) 통합"·"地名/施設名 → LOC 통합" 등이 컸다.
-이미 8종에서 잘 분리하던 모델(gpt-5-mini, 122B-GPTQ)은 추가 이득이 적었다.
-
-**라벨러 정당성 결론**: 모든 모델의 5종 Filtered F1 이 8종 baseline 보다
-높음. 5종 축소가 라벨링 품질을 일관되게 개선했고, **silver 데이터
-생산자로 사용할 정당성이 정량적으로 확보됨**.
+**production silver 권장선**: Filtered F1 ≥ 0.85 (상위 5 모델). 1위
+gemma-4-31B-AWQ-8bit (0.8676) 가 silver 생산자 기본 후보로 선정되며,
+이슈 #27 Phase 2 의 PII 재생성에 사용됐다.
 
 ---
 
@@ -213,15 +192,12 @@ silver PII 데이터 재생성(이슈 #27 Phase 2) 의 기본 후보는 **gemma-
 - **PII 후처리 필터 필수**: 모든 모델이 17~21% 수준의 PII 타입 출력을
   생성. silver 생산 시 `pred_type ∈ {PER, LOC, ORG, PROD, EVT}` 필터
   적용해야 정확도 유지.
-- **샘플 카운트 정정**: 직전 8종 리포트는 "1000 samples" 라고 기재했으나
-  실제 `data/stockmark/test.jsonl` 은 **1069 samples** / 2621 entities.
-  본 측정부터 정확값을 사용한다.
-- **속도 비교 한계**: 직전 8종 리포트의 BF16 측정은 직렬(`concurrency=1`)
-  이라 시간이 부풀려져 있다(예: BF16 31B 49:24). 본 측정은 모든 모델
-  동일 `concurrency=32` → BF16 31B 가 3:19 로 측정. 8종↔5종 직접 속도
-  비교는 무의미.
+- **샘플 카운트**: `data/stockmark/test.jsonl` 은 1069 samples / 2,621
+  entities. 표·계산 모두 이 정확값을 사용.
 - **Raw F1 사용처**: 운영 환경에서 후처리 필터를 적용하지 않을 때의 F1
   추정값. 일반적인 학습/평가 목적에는 Filtered F1 만 사용.
+- **속도 측정 격리**: 모든 모델이 동일 `concurrency=32` + 단독 컨테이너
+  구동. GPU 경합 0 으로 sec/sample 비교가 공정.
 
 ---
 
