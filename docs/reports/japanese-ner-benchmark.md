@@ -1,12 +1,16 @@
-# Stockmark NER 벤치마크 리포트 (5종 canonical)
+# Stockmark NER 벤치마크 리포트 (5종 canonical, 시설=ORG)
 
 > 본 리포트는 이슈 #21 에서 8종 → 5종(`PER · LOC · ORG · PROD · EVT`)으로
-> 축소된 canonical 스키마 위에서 측정한 **PII 주입 전 원본 NER 라벨러
-> 정당성** 측정이다. 이슈 #27 Phase 1 산출물.
+> 축소되고, 이슈 #27 Phase 4 에서 `LOC/ORG` 경계가 재정의된 canonical
+> 스키마 위에서 측정한 **PII 주입 전 원본 NER 라벨러 정당성** 측정이다.
+>
+> #27 LOC/ORG 재정의 요지: `LOC` = 지명·주소만 (국가·행정구역·자연
+> 지명·주소). 인공 시설(역·공항·병원·초중고·대학(본체·캠퍼스·시설
+> 모두)·점포·박물관·도서관·종교시설 등) 은 모두 **ORG** 로 통합.
 
-**측정일**: 2026-04-27
-**데이터셋**: `data/stockmark/test.jsonl` (1069 samples, 5종 canonical, PII 주입 없음)
-**총 엔티티**: 2,621 개 (PER 554 / LOC 637 / ORG 996 / PROD 229 / EVT 205)
+**측정일**: 2026-04-28 (Phase 4)
+**데이터셋**: `data/stockmark/test.jsonl` (1,069 samples, 5종 canonical, PII 미주입)
+**총 엔티티**: 2,621 개 (PER 554 / LOC 400 / ORG 1,233 / PROD 229 / EVT 205)
 **평가지표**: 문자 오프셋 Span F1 (`metrics/span_metrics.compute_offset_span_f1`)
 **엔티티 타입**: PER · LOC · ORG · PROD · EVT
 **프롬프트**: 10종 평면 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`) — `src/labelers/ja/ner_prompts.py`
@@ -34,140 +38,103 @@ silver 라벨러 정당성 결론은 **Filtered F1** 기준으로 내린다.
 
 ## 1. 요약 테이블 (Filtered F1 정렬)
 
-| # | 모델 | 양자화 | 백엔드 | **Filtered F1** | Raw F1 | Sec/sample | 총 시간 |
-|---|---|---|---|---|---|---|---|
-| 1 | cyankiwi/gemma-4-31B-it-AWQ-8bit | AWQ-8 (Dense) | vllm TP=1 | **0.8676** | 0.7750 | 0.246 | 4:23 |
-| 2 | google/gemma-4-31B-it | BF16 (Dense) | vllm TP=2 | 0.8670 | 0.7748 | 0.186 | 3:19 |
-| 3 | cyankiwi/gemma-4-31B-it-AWQ-4bit | AWQ-4 (Dense) | vllm TP=1 | 0.8670 | 0.7775 | 0.197 | 3:30 |
-| 4 | Qwen/Qwen3.5-27B | BF16 (Dense) | vllm TP=2 | 0.8638 | 0.7704 | 1.068 | 19:02 |
-| 5 | cyankiwi/Qwen3.5-27B-AWQ-4bit | AWQ-4 (Dense) | vllm TP=1 | 0.8576 | 0.7665 | 1.229 | 21:54 |
-| 6 | cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit | AWQ-8 (MoE A4B) | vllm TP=1 | 0.8413 | 0.7540 | 0.073 | 1:19 |
-| 7 | cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit | AWQ-4 (MoE A4B) | vllm TP=1 | 0.8357 | 0.7470 | 0.062 | 1:06 |
-| 8 | openai:gpt-5-mini | - | openai API | 0.8049 | 0.7232 | 1.527 | 27:13 |
-| 9 | Qwen/Qwen3.5-35B-A3B | BF16 (MoE A3B) | vllm TP=2 | 0.8010 | 0.7244 | 0.302 | 5:23 |
-| 10 | Qwen/Qwen3.5-122B-A10B-GPTQ-Int4 | GPTQ-Int4 (MoE A10B) | vllm TP=2 | 0.7491 | 0.6762 | 0.835 | 14:52 |
+| # | 모델 | 양자화 | 백엔드 | **Filtered F1** | Raw F1 | sec/sample | Total TPS | Out TPS | 총 시간 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | google/gemma-4-31B-it | BF16 (Dense) | vllm TP=2 | **0.8772** | 0.7837 | 0.175 | 12,848 | 323.7 | 3:13 |
+| 2 | cyankiwi/gemma-4-31B-it-AWQ-8bit | AWQ-8 (Dense) | vllm TP=1 | 0.8767 | 0.7833 | 0.237 | 9,508 | 240.3 | 4:19 |
+| 3 | Qwen/Qwen3.5-27B | BF16 (Dense) | vllm TP=2 | 0.8588 | 0.7665 | 1.125 | 1,992 | 44.9 | 20:09 |
+| 4 | cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit | AWQ-8 (MoE A4B) | vllm TP=1 | 0.8549 | 0.7657 | 0.075 | 29,946 | 699.2 | 1:25 |
+| 5 | cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit | AWQ-4 (MoE A3B) | vllm TP=1 | 0.8359 | 0.7556 | 0.276 | 8,122 | 178.0 | 5:00 |
+| 6 | openai:gpt-5.4-mini | - | openai API | 0.8234 | 0.7377 | 0.277 | 4,182 | 181.7 | 5:01 |
+| 7 | openai:gpt-5-mini | - | openai API | 0.8160 | 0.7332 | 2.166 | 750 | 238.8 | 38:41 |
+| 8 | Qwen/Qwen3.5-35B-A3B | BF16 (MoE A3B) | vllm TP=2 | 0.7900 | 0.7138 | 0.317 | 7,050 | 146.6 | 5:45 |
 
-**품질 상위 3** (Filtered): gemma-4-31B-AWQ-8bit (0.8676) ≈ gemma-4-31B-BF16 (0.8670) ≈ gemma-4-31B-AWQ-4bit (0.8670)
-**속도 상위 3**: gemma-4-26B-AWQ-4bit (1:06) > gemma-4-26B-AWQ-8bit (1:19) > gemma-4-31B-BF16 (3:19)
+**품질 상위 3** (Filtered): google/gemma-4-31B-it (0.8772) ≈ gemma-4-31B-AWQ-8bit (0.8767) > Qwen3.5-27B (0.8588)
+**속도 상위 3** (Output TPS): gemma-4-26B-A4B-AWQ-8bit (699 tps) > google/gemma-4-31B-it (324 tps) > gemma-4-31B-AWQ-8bit (240 tps)
+
+> Total TPS = (prompt+completion)/sec, Output TPS = completion/sec.
+> 출력 TPS 는 디코딩 처리량으로 라벨러 운영 비용의 직접 지표.
 
 ---
 
-## 2. 환경 및 측정 조건
+## 2. Phase 1 (시설=LOC, 이전 스키마) 대비 변화
+
+| # | 모델 | Phase 1 Filtered F1 | Phase 4 Filtered F1 | Δ |
+|---|---|---|---|---|
+| 1 | google/gemma-4-31B-it | 0.8670 | 0.8772 | **+0.0102** |
+| 2 | cyankiwi/gemma-4-31B-it-AWQ-8bit | 0.8676 | 0.8767 | **+0.0091** |
+| 3 | Qwen/Qwen3.5-27B (BF16) | 0.8638 | 0.8588 | -0.0050 |
+| 4 | cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit | 0.8413 | 0.8549 | **+0.0136** |
+| 5 | cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit | 0.8316 | 0.8359 | +0.0043 |
+| 6 | openai:gpt-5-mini | 0.8049 | 0.8160 | **+0.0111** |
+| 7 | Qwen/Qwen3.5-35B-A3B | 0.8010 | 0.7900 | -0.0110 |
+| 8 | openai:gpt-5.4-mini | — | 0.8234 | (신규 측정) |
+
+평균 Δ +0.005. LOC/ORG 라벨 분포가 바뀌었음에도 라벨러 NER 능력은
+**거의 일관되게 유지**되거나 소폭 개선. 시설=ORG 통합이 라벨러에 추가적인
+모호성을 주지 않았다는 정량 근거.
+
+> Phase 1 결과는 동일 데이터셋(stockmark test 1069)·동일 프롬프트·동일
+> 실행 조건(concurrency 32, 단독 컨테이너) 으로 측정되었다. Phase 1 시점
+> 의 LOC 정의는 시설을 포함했고, Phase 4 는 시설을 ORG 로 재배치한 것이
+> 유일한 차이.
+
+---
+
+## 3. 환경 및 측정 조건
 
 - 하드웨어: NVIDIA RTX A6000 ×2
 - vLLM 이미지: `vllm/vllm-openai:gemma4` (Gemma-4 계열) / `vllm/vllm-openai:v0.19.0` (Qwen 계열)
 - GPU 할당:
-  - TP=2 모델 (BF16/GPTQ): GPU 1·2
+  - TP=2 모델 (BF16): GPU 1·2
   - TP=1 모델 (AWQ): Gemma=GPU 1, Qwen=GPU 2
-- OpenAI: `gpt-5-mini`
+- OpenAI: `gpt-5-mini`, `gpt-5.4-mini`
 - **모든 측정 동일 조건**: `--concurrency 32` (sample-level 병렬), `--no-bertscore`, vLLM 컨테이너 단독 구동
-- 측정 스크립트: `/tmp/run-ja-5type-bench.sh` (이슈 #27 Phase 1 일회성 오케스트레이션)
+- 측정 스크립트: `/tmp/run-ja-phase4-bench.sh` (이슈 #27 Phase 4 일회성 오케스트레이션)
 
 ---
 
-## 3. PII 출력 분석 (Raw vs Filtered 차이)
+## 4. PII 출력 분석 (Raw vs Filtered 차이)
 
 5종 gold 에는 PII 가 없는데도 모델은 평균 600+ 개의 PII 출력을 생성한다.
 **라벨러를 silver 데이터 생산자로 운영할 때 후처리 필터링이 필수**.
 
-| 모델 | Raw P | Filtered P | PII FP (derived) | PII FP / total pred |
+| 모델 | Raw P | Filtered P | PII pred (derived) | PII FP / total pred |
 |---|---|---|---|---|
-| gemma-4-31B-AWQ-8bit | 0.7009 | 0.8688 | 626 | 19.3% |
-| gemma-4-31B-BF16 | 0.7012 | 0.8684 | 623 | 19.2% |
-| gemma-4-31B-AWQ-4bit | 0.7081 | 0.8674 | 604 | 18.4% |
-| Qwen3.5-27B-BF16 | 0.6930 | 0.8603 | 638 | 19.5% |
-| Qwen3.5-27B-AWQ | 0.6894 | 0.8523 | 627 | 19.1% |
-| gemma-4-26B-AWQ-8bit | 0.6753 | 0.8530 | 600 | 19.6% |
-| gemma-4-26B-AWQ-4bit | 0.6679 | 0.8479 | 619 | 20.4% |
-| gpt-5-mini | 0.6539 | 0.8009 | 595 | 18.4% |
-| Qwen3.5-35B-A3B | 0.6742 | 0.8204 | 542 | 17.9% |
-| Qwen3.5-122B-GPTQ | 0.6858 | 0.8543 | 503 | 17.0% |
+| google/gemma-4-31B-it | 0.7105 | 0.8808 | 623 | 19.3% |
+| gemma-4-31B-AWQ-8bit | 0.7099 | 0.8798 | 623 | 19.3% |
+| Qwen3.5-27B BF16 | 0.6899 | 0.8554 | 634 | 19.4% |
+| gemma-4-26B-A4B-AWQ-8bit | 0.7007 | 0.8661 | 603 | 19.1% |
+| Qwen3.6-35B-A3B-AWQ-4bit | 0.6907 | 0.8379 | 556 | 17.6% |
+| gpt-5.4-mini | 0.6517 | 0.7983 | 628 | 18.4% |
+| gpt-5-mini | 0.6617 | 0.8098 | 596 | 18.3% |
+| Qwen3.5-35B-A3B | 0.6723 | 0.8216 | 539 | 18.2% |
 
-\* PII FP = `(Raw_TP / Raw_P) - (Raw_TP / Filtered_P)` (raw vs filtered 의
-TP 는 동일, pred 차이만 PII type FP).
+\* PII pred = `(Raw_TP / Raw_P) - (Filtered_TP / Filtered_P)` (PII 는 gold
+에 없어 raw_TP = filtered_TP).
 
-PII 출력률은 모든 모델에서 17~21% 수준. 모델 크기·구조와 무관하게 거의
-일정 → 프롬프트 자체의 효과지 모델 능력의 함수가 아니다. silver 생산
-파이프라인은 `pred_type ∈ {PER, LOC, ORG, PROD, EVT}` 필터를 항상
-적용해야 한다.
-
----
-
-## 4. 모델별 상세 (Filtered F1, 5종 per-entity)
-
-### 4.1 gemma-4-31B-it 3-model 비교 (1·2·3 위, ±0.001 동일성)
-
-| Entity | AWQ-8bit F1 | BF16 F1 | AWQ-4bit F1 | Support |
-|---|---|---|---|---|
-| PER | 0.9545 | 0.9536 | 0.9462 | 554 |
-| ORG | 0.8743 | 0.8760 | 0.8759 | 996 |
-| LOC | 0.8417 | 0.8384 | 0.8447 | 637 |
-| EVT | 0.8068 | 0.8010 | 0.8048 | 205 |
-| PROD | 0.7617 | 0.7633 | 0.7636 | 229 |
-| **Overall (Filtered)** | **0.8676** | **0.8670** | **0.8670** | 2,621 |
-
-| 지표 | AWQ-8bit | BF16 | AWQ-4bit |
-|---|---|---|---|
-| Filtered F1 | 0.8676 | 0.8670 | 0.8670 |
-| Filtered Precision | 0.8688 | 0.8684 | 0.8674 |
-| Filtered Recall | 0.8665 | 0.8657 | 0.8666 |
-| 총 시간 | 4:23 | 3:19 | 3:30 |
-| Sec/sample | 0.246 | 0.186 | 0.197 |
-| GPU | 1장 | 2장 (TP=2) | 1장 |
-
-- 세 양자화 변종이 **0.001 단위 차이**로 본질적 동등. 양자화로 인한
-  품질 손실 사실상 없음.
-- BF16 (TP=2) 가 sec/sample 에서 가장 빠르지만 GPU 2장 사용. AWQ-8bit
-  단일 GPU 로 동등 품질 확보 가능 → **운영 효율 1위는 AWQ-8bit**.
-
-### 4.2 Qwen3.5-27B BF16 vs AWQ-4bit (4·5위)
-
-| Entity | 27B BF16 | 27B AWQ | Δ |
-|---|---|---|---|
-| PER | 0.9349 | 0.9370 | +0.002 |
-| ORG | 0.8746 | 0.8698 | -0.005 |
-| LOC | 0.8472 | 0.8396 | -0.008 |
-| EVT | 0.7991 | 0.7936 | -0.006 |
-| PROD | 0.7633 | 0.7390 | -0.024 |
-| **Overall (Filtered)** | **0.8638** | **0.8576** | **-0.006** |
-
-5종 Filtered 에서 BF16 소폭 우위 (Δ -0.006). 양자화 영향 미미.
-
-### 4.3 gemma-4-26B-A4B (MoE) AWQ 8bit vs 4bit (6·7위)
-
-| Entity | 4bit F1 | 8bit F1 | Δ | Support |
-|---|---|---|---|---|
-| PER | 0.8973 | 0.9024 | +0.005 | 554 |
-| ORG | 0.8543 | 0.8525 | -0.002 | 996 |
-| LOC | 0.8170 | 0.8195 | +0.003 | 637 |
-| EVT | 0.7610 | 0.7800 | +0.019 | 205 |
-| PROD | 0.7237 | 0.7349 | +0.011 | 229 |
-| **Overall (Filtered)** | **0.8357** | **0.8413** | **+0.006** | 2,621 |
-
-- **8bit 가 4bit 대비 +0.006 우위**.
-- 속도 차이는 1:06 ↔ 1:19 (+13초) 로 사용 가능 범위 내.
-
-### 4.4 MoE / 외부 API (8·9·10위)
-
-| 모델 | Filtered F1 | 특이점 |
-|---|---|---|
-| gpt-5-mini | 0.8049 | 외부 API. PER 0.8404 / ORG 0.8327 / LOC 0.7887 — 31B Dense 대비 PER -0.11 의 큰 격차 |
-| Qwen3.5-35B-A3B (MoE) | 0.8010 | active 3B 라 31B/27B Dense 보다 capacity 낮음 |
-| Qwen3.5-122B-A10B-GPTQ | 0.7491 | recall 0.6669 (전 모델 중 최저) — 누락 패턴이 많은 precision-지향 모델 |
+PII 출력률은 모든 모델에서 17~20% 수준. Phase 1 측정값 (17~21%) 과 일관.
+모델 크기·구조·스키마와 무관 → 프롬프트 자체의 효과지 모델 능력의
+함수가 아니다. silver 생산 파이프라인은 `pred_type ∈ {PER, LOC, ORG,
+PROD, EVT}` 필터를 항상 적용해야 한다.
 
 ---
 
 ## 5. silver 라벨러 정당성 결론
 
-전 모델 Filtered F1 분포:
+8모델 Filtered F1 분포:
 
-- 0.85 이상 (5 모델): 31B 3종 + Qwen 27B 2종
-- 0.80~0.85 (3 모델): 26B-A4B 2종 + gpt-5-mini
-- 0.80 미만 (2 모델): 35B-A3B (0.8010 경계), 122B-GPTQ
+- 0.85 이상 (4 모델): gemma-31B 2종 + Qwen3.5-27B BF16 + gemma-26B-A4B-AWQ-8bit
+- 0.80~0.85 (3 모델): Qwen3.6-35B-A3B + gpt-5.4-mini + gpt-5-mini
+- 0.80 미만 (1 모델): Qwen3.5-35B-A3B BF16
 
-**production silver 권장선**: Filtered F1 ≥ 0.85 (상위 5 모델). 1위
-gemma-4-31B-AWQ-8bit (0.8676) 가 silver 생산자 기본 후보로 선정되며,
-이슈 #27 Phase 2 의 PII 재생성에 사용됐다.
+**production silver 권장선**: Filtered F1 ≥ 0.85 (상위 4 모델). 1위
+google/gemma-4-31B-it BF16 (0.8772) 과 2위 gemma-4-31B-AWQ-8bit (0.8767) 가
+공동 후보. 양자화 영향 미미(-0.0005), 실측 noise 수준.
+
+이슈 #27 Phase 4 PII 재생성에는 **gemma-4-31B-AWQ-8bit** (TP=1, 단일 GPU)
+를 inject 모델로, **Qwen3.6-35B-A3B-AWQ-4bit** 를 verify 모델로 배치
+(TP=1 단일 GPU 동시 구동).
 
 ---
 
@@ -175,47 +142,53 @@ gemma-4-31B-AWQ-8bit (0.8676) 가 silver 생산자 기본 후보로 선정되며
 
 | 우선순위 | 권장 모델 | 근거 |
 |---|---|---|
-| **silver 생산 품질·효율 1위** | **cyankiwi/gemma-4-31B-it-AWQ-8bit** | Filtered F1 0.8676, TP=1 단일 GPU, 4:23 |
-| 품질 동등 + GPU 2장 가용 | **google/gemma-4-31B-it (BF16)** | Filtered F1 0.8670, sec/sample 최저 (0.186) |
-| VRAM 17GB 한계 환경 | **cyankiwi/gemma-4-31B-it-AWQ-4bit** | Filtered F1 0.8670, BF16 동등 품질 |
-| 속도·VRAM 최우선 | **cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit** | 1:06, F1 0.8357 (-0.032 vs 1위) |
-| 속도 + 품질 소폭 ↑ | **cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit** | 1:19, F1 0.8413 |
-| Qwen 계열 단일 GPU | **cyankiwi/Qwen3.5-27B-AWQ-4bit** | Filtered F1 0.8576, 21:54 (느림) |
-| 외부 API | **openai:gpt-5-mini** | Filtered F1 0.8049, 운영 단순 |
+| **silver 생산 품질·효율 1위** | **google/gemma-4-31B-it (BF16)** | Filtered F1 0.8772, sec/sample 0.175, GPU 2장 |
+| 단일 GPU 환경 1위 | **cyankiwi/gemma-4-31B-it-AWQ-8bit** | Filtered F1 0.8767, TP=1, 4:19 |
+| 속도·VRAM 최우선 | **cyankiwi/gemma-4-26B-A4B-it-AWQ-8bit** | Out TPS 699 (1위), F1 0.8549, 1:25 |
+| Qwen 계열 단일 GPU | **cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit** | F1 0.8359, 5:00, GPU 1장, MoE |
+| 외부 API (속도·비용) | **openai:gpt-5.4-mini** | F1 0.8234, 5:01 (gpt-5-mini 38:41 대비 7배 빠름) |
+| 외부 API (품질) | **openai:gpt-5-mini** | F1 0.8160, 운영 단순. 단 처리 시간 38분(rate limit 영향 추정) |
 
-silver PII 데이터 재생성(이슈 #27 Phase 2) 의 기본 후보는 **gemma-4-31B-AWQ-8bit**.
+PII 재생성 워크플로우 (이슈 #27 Phase 4):
+- **Inject**: cyankiwi/gemma-4-31B-it-AWQ-8bit (8081, GPU 1)
+- **Verify**: cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit (8082, GPU 2)
+- 동시 구동, train+test 합쳐 ~2시간. 검증 4종 모두 PASS.
 
 ---
 
 ## 7. 운영 주의사항
 
-- **PII 후처리 필터 필수**: 모든 모델이 17~21% 수준의 PII 타입 출력을
+- **PII 후처리 필터 필수**: 모든 모델이 17~20% 수준의 PII 타입 출력을
   생성. silver 생산 시 `pred_type ∈ {PER, LOC, ORG, PROD, EVT}` 필터
   적용해야 정확도 유지.
-- **샘플 카운트**: `data/stockmark/test.jsonl` 은 1069 samples / 2,621
+- **샘플 카운트**: `data/stockmark/test.jsonl` 은 1,069 samples / 2,621
   entities. 표·계산 모두 이 정확값을 사용.
 - **Raw F1 사용처**: 운영 환경에서 후처리 필터를 적용하지 않을 때의 F1
   추정값. 일반적인 학습/평가 목적에는 Filtered F1 만 사용.
-- **속도 측정 격리**: 모든 모델이 동일 `concurrency=32` + 단독 컨테이너
-  구동. GPU 경합 0 으로 sec/sample 비교가 공정.
+- **속도 측정 격리**: 모든 vLLM 모델이 동일 `concurrency=32` + 단독 컨테이너
+  구동. GPU 경합 0 으로 sec/sample·TPS 비교가 공정.
+- **OpenAI 측정 변동성**: gpt-5-mini 측정 시간이 Phase 1 (27분) 대비
+  Phase 4 (38분) 로 늘었음. API rate limit · 외부 인프라 변동의 영향
+  으로 추정. 품질 지표(F1)는 일관 — TPS/시간만 영향.
 
 ---
 
 ## 8. 산출 파일
 
 ```
-results/ja-5type-bench-2026-04/
+results/ja-phase4-bench-2026-04/
 ├── 01-gemma-4-31B-it-AWQ-8bit.json       # cyankiwi/gemma-4-31B-it-AWQ-8bit
-├── 02-gemma-4-31B-it-AWQ-4bit.json
-├── 03-gemma-4-26B-A4B-it-AWQ-8bit.json
-├── 04-gemma-4-26B-A4B-it-AWQ-4bit.json
-├── 05-google-gemma-4-31B-it.json         # BF16
-├── 06-Qwen3.5-27B-AWQ-4bit.json
-├── 07-Qwen3.5-27B.json                   # BF16
-├── 08-Qwen3.5-35B-A3B.json
-├── 09-Qwen3.5-122B-A10B-GPTQ-Int4.json
-├── 10-gpt-5-mini.json
-└── run.log                               # 측정 진행 로그
+├── 02-gemma-4-26B-A4B-it-AWQ-8bit.json
+├── 03-Qwen3.6-35B-A3B-AWQ-4bit.json      # cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit
+├── 04-google-gemma-4-31B-it.json         # BF16
+├── 05-Qwen3.5-35B-A3B.json                # BF16 (MoE A3B)
+├── 06-Qwen3.5-27B.json                    # BF16
+├── 07-gpt-5-mini.json
+├── 08-gpt-5.4-mini.json
+└── run.log                                 # 측정 진행 로그
 ```
 
-각 JSON: `metrics.span_f1.{overall, per_entity}` + `latency.{total_seconds, samples_per_second, avg_per_sample, prompt_tokens, completion_tokens, total_tokens, tokens_per_second}`.
+각 JSON: `metrics.span_f1.{overall, per_entity}` + `latency.{total_seconds, samples_per_second, avg_per_sample, prompt_tokens, completion_tokens, total_tokens, tokens_per_second, output_tokens_per_second}`.
+
+이전 Phase 1 측정값 (시설=LOC) 은 `results/ja-5type-bench-2026-04/` 에
+보존 — 비교 분석용 데이터로만 참조.

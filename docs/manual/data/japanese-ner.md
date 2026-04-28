@@ -1,19 +1,7 @@
 # 일본어 NER 라벨링 방법론
 
-> 기준 코드 시점: 2026-04-24 (develop 브랜치)
-> 대상 데이터셋: Stockmark NER Wikipedia (canonical 5종 NER + 5종 PII/날짜)
-> 대상 코드: `src/labelers/ja/`, `src/llm_eval/benchmark_runner.py`, `src/metrics/span_metrics.py`
-
-## 변경 이력
-
-- **2026-04-24 (이슈 #21)**: NER 8종 → **5종 축소** (`CORP/POL/ORG → ORG`,
-  `FAC → LOC`), NER/PII 구분 없는 **10종 평면 canonical**로 통합. JA
-  라벨러가 영문 라벨을 직접 출력하도록 전환하고, `dataset_loader.py`에
-  HF 일본어 원본 라벨 → canonical 5종 매핑을 추가. 상세:
-  `docs/manual/data/canonical-entity-schema.md`.
-- **2026-04-23 (이슈 #16)**: 경계 룰 명문화 (대학 3단, 병원 단일 규칙 등).
-- 이하 원문은 축소 전 8종 체계 기준 서술. 라벨 문자열은 5종 매핑을 염두에
-  두고 읽는다 (`CORP/POL/ORG → ORG`, `FAC → LOC`).
+> 대상 데이터셋: Stockmark NER Wikipedia (canonical 10종 평면 = 5종 NER + 5종 PII/날짜)
+> 대상 코드: `src/labelers/ja/`, `src/llm_eval/`, `src/metrics/`
 
 ## 목차
 
@@ -30,37 +18,35 @@
 ## 1. 전체 파이프라인 흐름도
 
 ```
-Stockmark NER Wikipedia Dataset (HuggingFace)
+canonical JSONL 덤프 (data/stockmark/{train,test}.jsonl)
     |
-    v JapaneseDatasetLoader.load()                 [ja/dataset_loader.py:25-60]
-List[dict] {id, text, gold_spans: [{text, type, start, end}]}
+    v JapaneseDatasetLoader.load()                  [ja/dataset_loader.py]
+List[dict] {id, text, gold_spans:[{text, type, start, end}]}
     |
     v record["text"] (원본 텍스트 그대로 사용)
-원본 텍스트 문자열                                    [ja_benchmark_runner.py:66]
+원본 텍스트 문자열                                    [llm_eval/benchmark_runner.py]
     |
-    v _split_sentences() -> 배치 구성
-문장 리스트 (batch_size 단위)                         [ja/ollama_ner_labeler.py:24-39]
+    v _split_sentences() → 동시성 그룹/배치 구성     [labelers/base_vllm_labeler.py · base_openai_labeler.py]
+문장 리스트
     |
-    v ner_prompts.py (SINGLE/BATCH/SYSTEM+USER 템플릿)
+    v ner_prompts.py (SINGLE / SYSTEM+USER 템플릿)
 프롬프트 문자열                                       [ja/ner_prompts.py]
     |
-    v ChatOllama / vLLM / OpenAI (temperature=0, JSON mode)
-LLM JSON 응답                                        [ja/ollama_ner_labeler.py:168-224]
+    v vLLM AsyncOpenAI / OpenAI SDK (temperature=0, JSON mode)
+LLM JSON 응답
     |
-    v JSON 파싱
-[{"text": "東京", "type": "LOC"}, ...]              [ja/ollama_ner_labeler.py:199-224]
+    v JSON 파싱 → raw spans
+[{"text": "東京", "type": "LOC"}, ...]
     |
-    v label_spans() 경로: raw spans 직접 반환
+    v match_spans() — LLM 텍스트 span → 문자 오프셋 변환
+[{"text": "東京", "type": "LOC", "start": 5, "end": 7}]   [ja/span_matcher.py]
     |
-    v match_spans() -- LLM 텍스트 span -> 문자 오프셋 변환
-[{"text": "東京", "type": "LOC", "start": 5, "end": 7}]  [ja/span_matcher.py:19-87]
+    v BenchmarkRunner._run_offset_span_async()      [llm_eval/benchmark_runner.py]
     |
-    v JaBenchmarkRunner._run_single()               [ja_benchmark_runner.py:57-121]
-    |
-    v compute_offset_span_f1()                      [ja_metrics.py:9-54]
+    v compute_offset_span_f1()                      [metrics/span_metrics.py]
     |  (sent_idx, start, end, type) 튜플 기반 exact match
     |
-    v JaReportGenerator                             [ja_benchmark_runner.py:124-224]
+    v ReportGenerator                                [llm_eval/report.py]
 벤치마크 결과 (CLI 테이블 + JSON 파일)
 ```
 
@@ -72,27 +58,29 @@ LLM JSON 응답                                        [ja/ollama_ner_labeler.py
 
 ### 입력
 
-Stockmark NER Wikipedia 데이터셋. HuggingFace Hub에서 직접 로딩한다.
+canonical Stockmark JSONL 덤프를 그대로 읽는다. HF Hub 자동 로딩·라벨 매핑·폴백 모두 없다 — canonical 매핑은 1회성 마이그레이션 도구가 미리 수행하여 JSONL로 떨어뜨린다.
 
 | 항목 | 값 |
 |------|------|
-| 데이터셋 | `stockmark/ner-wikipedia-dataset` |
-| 원본 split | `train`만 존재 |
-| 분할 전략 | `train_test_split(test_size=0.2, seed=42)` |
-| 데이터 형식 | 원본 텍스트 + 문자 오프셋 span (BIO가 아님) |
+| 입력 경로 | `data/stockmark/train.jsonl`, `data/stockmark/test.jsonl` |
+| 라인 스키마 | `{id, text, entities:[{label, start_char, end_char, text}]}` |
+| 데이터 형식 | 원본 텍스트 + 문자 오프셋 span (BIO 아님) |
+| 라벨 공간 | canonical 10종 평면 (`PER/LOC/ORG/PROD/EVT/DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`) |
 
-**코드:** `JapaneseDatasetLoader.load()` (`src/labelers/ja/dataset_loader.py:25-60`)
+**코드:** `JapaneseDatasetLoader.load()` (`src/labelers/ja/dataset_loader.py`)
 
 ```python
-# Stockmark은 train split만 존재하므로 직접 분할
-hf_dataset = load_dataset(dataset_name, split="train", cache_dir=self.cache_dir)
-splits = hf_dataset.train_test_split(test_size=test_size, seed=seed)
-selected = splits["test"] if split == "test" else splits["train"]
+loader = JapaneseDatasetLoader()
+records = loader.load(split='test', max_samples=200)
+# 또는 임의 경로
+records = JapaneseDatasetLoader.load_local('data/.../pii_injected.jsonl')
 ```
 
-### 출력
+파일이 없으면 `FileNotFoundError`. PII 주입 산출물처럼 `start/end`·`type` 키를 쓰는 변형도 동일 스키마로 흡수한다(`label|type`, `start_char|start`, `end_char|end` 양 표기 허용).
 
-`List[dict]` -- 각 레코드는 다음 구조:
+### 출력 스키마
+
+`List[dict]` — 각 레코드는 다음 구조:
 
 ```json
 {
@@ -100,45 +88,14 @@ selected = splits["test"] if split == "test" else splits["train"]
   "text": "織田信長は安土城を建て、本能寺の変で明智光秀に討たれた。",
   "gold_spans": [
     {"text": "織田信長", "type": "PER", "start": 0, "end": 4},
-    {"text": "安土城", "type": "FAC", "start": 5, "end": 8},
+    {"text": "安土城",   "type": "ORG", "start": 5, "end": 8},
     {"text": "本能寺の変", "type": "EVT", "start": 11, "end": 16},
     {"text": "明智光秀", "type": "PER", "start": 17, "end": 21}
   ]
 }
 ```
 
-### gold_spans 변환
-
-HuggingFace 원본 데이터의 `entities` 필드를 `gold_spans` 형식으로 변환한다 (`dataset_loader.py:63-86`):
-
-```python
-for entity in entities:
-    span = entity.get("span", [0, 0])
-    gold_spans.append({
-        "text": entity.get("name", ""),
-        "type": entity.get("type", ""),
-        "start": span[0],
-        "end": span[1],
-    })
-```
-
-### 한국어와의 차이
-
-| 항목 | 한국어 (KLUE) | 일본어 (Stockmark) |
-|------|---------------|-------------------|
-| 데이터 형식 | 음절 단위 BIO 태그 | 문자 오프셋 span |
-| gold 데이터 | `{tokens, ner_tags}` | `{text, gold_spans}` |
-| 텍스트 접근 | `sentence` 필드 또는 토큰 재결합 | `text` 필드 직접 사용 |
-| split 제공 | validation split 존재 | train만 존재 (자체 분할) |
-| 로딩 폴백 | JSONL 파일 우선 | HuggingFace 직접 로딩만 |
-
-### 왜 이렇게 설계했는가
-
-| 결정 | 이유 |
-|------|------|
-| 문자 오프셋 span 형식 유지 | Stockmark 원본 데이터가 offset span이므로, BIO 변환 없이 직접 활용하는 것이 정보 손실 최소화 |
-| `train_test_split(seed=42)` | 재현 가능한 분할 보장. Stockmark에 공식 test split이 없으므로 직접 생성 |
-| JSONL 폴백 불필요 | 일본어 환경에서 HuggingFace datasets 호환성 문제 없음 |
+`gold_spans[*].type`은 canonical 10종 문자열을 그대로 담는다 — 평가·리포트 단에서 추가 정규화 없이 비교한다.
 
 ---
 
@@ -146,90 +103,91 @@ for entity in entities:
 
 ### 엔티티 타입 정의
 
-**코드:** `src/labelers/ja/ner_prompts.py:DEFAULT_ENTITY_TYPES`
+**코드:** `src/labelers/ja/ner_prompts.py` (`DEFAULT_ENTITY_TYPES`)
 
-**canonical 10종 평면 목록** — NER/PII 구분 섹션 없음. 상세: `docs/manual/
-data/canonical-entity-schema.md`.
+canonical 10종 평면 목록 — NER/PII 구분 섹션 없음. 정의의 단일 출처는 `docs/manual/data/canonical-entity-schema.md`.
 
 | 태그 | 의미 | 설명 | 예시 |
 |------|------|------|------|
-| PER | 인물 | 풀네임·성·이름·별명 | "織田信長", "田中" |
-| LOC | 지명·시설 | 국가·도시·자연지명 + 물리적 건축물(역·공항·병원·학교·점포·대학 부속 시설) | "東京", "富士山", "東京駅", "藤岡高校", "セントメアリー病院" |
-| ORG | 조직 | 기업·대학 법인 본체·정부기관·정당·군대·국제기관·스포츠리그/팀·협회·대학 부속 조직 | "トヨタ自動車", "NHK", "早稲田大学", "自民党", "米軍", "FCバルセロナ" |
-| PROD | 제품·작품 | 상품·서비스·소프트웨어·작품·프로그램 | "iPhone", "プリウス" |
-| EVT | 이벤트 | 대회·전쟁·조약·일회성 공식 행사 | "オリンピック", "関ヶ原の戦い" |
-| DAT | 날짜 | 연·월·일·기간·상대날짜·시대 (모든 날짜) | "1985年4月3日", "昨日" |
-| EMAIL | 이메일 | `local@domain.TLD` 완전 형식 | "taro@example.com" |
-| PHONE | 전화 | 국내·국제 전화번호 | "090-1234-5678" |
-| ID_NUM | 식별번호 | 주민번호·마이넘버·사원번호 | "284257239645" |
-| CREDIT_CARD | 카드번호 | 13~19자리 카드 번호 | "4065 0551 3022 4539" |
+| PER | 인물 | 풀네임·성·이름·별명 | `織田信長`, `田中` |
+| LOC | 지명·주소 | **지리적 위치만** — 국가·행정구역·자연지명·번지 포함 물리적 주소 | `東京`, `富士山`, `東京都千代田区1丁目2-3` |
+| ORG | 조직·인공시설 | 기업·대학(본체·캠퍼스·부속시설 모두)·정당·정부·군·국제기관·스포츠팀/리그·협회 + 역·공항·병원·학교·점포·박물관·도서관·寺·神社 등 모든 인공 시설 | `トヨタ自動車`, `早稲田大学`, `自民党`, `東京駅`, `セントメアリー病院`, `FCバルセロナ` |
+| PROD | 제품·작품 | 상품·서비스·소프트웨어·작품·방송 프로그램 (조직·인물·시설은 제외) | `iPhone`, `プリウス`, `NHKスペシャル` |
+| EVT | 이벤트 | 일회성 행사·전쟁·조약·대회 | `オリンピック`, `関ヶ原の戦い` |
+| DAT | 날짜 | 연·월·일·기간·상대날짜·시대 — 생년월일·사건일·이적일 등 문맥 무관 모든 날짜 | `1985年4月3日`, `昨日`, `平安時代` |
+| EMAIL | 이메일 | `local@domain.TLD` 완전 형식. `@` 뒤에는 반드시 1개 이상의 `.`과 TLD가 있어야 함 | `taro@example.com`, `hanako@yahoo.co.jp` |
+| PHONE | 전화 | 국내·국제 전화번호 | `090-1234-5678`, `+81 80 1234 5678` |
+| ID_NUM | 식별번호 | 마이넘버·사원번호·주민번호 등 | `284257239645` |
+| CREDIT_CARD | 카드번호 | 13~19자리 카드 번호 | `4065 0551 3022 4539` |
 
-원본 HF Stockmark는 8종 일본어 라벨(`人名/法人名/地名/施設名/製品名/
-イベント名/政治的組織名/その他の組織名`)을 사용하며, `dataset_loader.py`가
-canonical 5종으로 매핑한다: `人名→PER`, `地名∪施設名→LOC`, `法人名∪
-政治的組織名∪その他の組織名→ORG`, `製品名→PROD`, `イベント名→EVT`.
+**LOC vs ORG 핵심**: LOC는 *지리적 위치만*. 인공 시설은 모두 ORG. 대학(본체·캠퍼스·부속시설), `○○大学病院`, 역·공항·병원·학교·우체국·박물관·寺·神社 모두 ORG.
+
+**HF 원본 라벨 매핑 (canonical 덤프 생성 시 적용)**: HF Stockmark의 8종 일본어 라벨은 다음 규칙으로 canonical 10종에 사상되어 JSONL 덤프에 저장된다.
+
+| HF 원본 | canonical |
+|---------|-----------|
+| `人名` | `PER` |
+| `地名` | `LOC` |
+| `施設名` | `ORG` |
+| `法人名` / `政治的組織名` / `その他の組織名` | `ORG` |
+| `製品名` | `PROD` |
+| `イベント名` | `EVT` |
 
 ### 핵심 라벨링 규칙
 
-프롬프트에 포함된 4가지 핵심 규칙 (`ner_prompts.py:40-44`):
+프롬프트(`ner_prompts.py:SINGLE_PROMPT_TEMPLATE`)에 명시된 5가지 규칙:
 
-1. **조사 제외**: は/が/を/に/で/と/の/へ/から/まで/も/や -- 반드시 제거
+1. **조사 제외**: `は/が/を/に/で/と/の/へ/から/まで/も/や` — 반드시 제거
 2. **JSON 배열만 출력**: 다른 설명 금지
 3. **빈 결과**: 고유표현 없으면 `[]` 반환
 4. **복합 명칭**: 분리하지 않고 하나로 묶기
+5. **라벨은 영문 기호만**: `PER/LOC/ORG/PROD/EVT/EMAIL/PHONE/DAT/ID_NUM/CREDIT_CARD` — 일본어 라벨(`人名` 등)을 그대로 출력하지 않는다
 
-### 일본어 특화 분류 규칙 — 2단 판정 (5종 축소 이후)
-
-이슈 #21 5종 축소 이후 NER 경계 모호성은 두 축으로 단순화된다. 모호한
-경우 위에서 아래 순서로 적용한다.
+### 판정 우선순위 (모호할 때 위에서 아래)
 
 | 순위 | 판정 | 적용 대상 | 예시 |
 |---|---|---|---|
-| 1 | **ORG** | 조직·법인·공권력의 활동 주체 — 기업·대학 법인 본체·정당·정부(`〜省`/`〜庁`/`〜政府`)·군대·부대·국제기관·스포츠리그/팀·협회·대학 부속 조직 | "早稲田大学", "財務省", "米軍", "NHK", "FCバルセロナ", "NHK交響楽団" |
-| 2 | **LOC** | 물리적 지명 및 건축물 — 국가·도시·자연지명·건물·역·공항·병원·초중고·대학 부속 시설(캠퍼스·植物園·校舎) | "東京駅", "藤岡高校", "セントメアリー病院", "旭川キャンパス", "富士山" |
-| 3 | **PROD** | 상품·서비스·작품·방송 프로그램 | "iPhone", "プリウス", "NHKスペシャル" |
-| 4 | **EVT** | 일회성 행사·전쟁·조약 | "関ヶ原の戦い", "第45回NHK紅白歌合戦" |
+| 1 | **ORG** | 조직·법인·공권력·인공 시설 모두 — 기업·대학(본체·캠퍼스·부속시설)·정당·정부·군·국제기관·스포츠팀/리그·협회 + 역·공항·병원·학교·점포·박물관·寺·神社 | `早稲田大学`, `財務省`, `米軍`, `NHK`, `FCバルセロナ`, `東京駅`, `セントメアリー病院` |
+| 2 | **LOC** | 지리적 위치만 — 국가·행정구역·자연지명·주소 | `富士山`, `東京都千代田区`, `茨城県神栖市` |
+| 3 | **PROD** | 상품·서비스·작품·방송 프로그램 | `iPhone`, `プリウス`, `NHKスペシャル` |
+| 4 | **EVT** | 일회성 행사·전쟁·조약·대회 | `関ヶ原の戦い`, `第45回NHK紅白歌合戦` |
 
-**대학의 2단 규칙** (축소 전 3단 → 2단): Stockmark `〜大学` 115건 전수
-오디트 결과 대학 법인 본체는 100% ORG. 부속 조직(研究会 등)도 ORG.
-부속 시설(캠퍼스·植物園·校舎)만 LOC.
-
-**병원의 단일 규칙**: `〜病院`은 운영체(대학·법인)와 무관하게 개별 시설
-그 자체이므로 LOC. `東京大学病院`은 시설(LOC)이고 `東京大学` 법인은
-별도 ORG.
+추가 규칙:
+- **대학**: 본체·캠퍼스·부속시설 모두 ORG. `○○大学病院`도 ORG.
+- **행정구역 복합체**: `東京都千代田区` 같은 복합체는 단일 LOC 한 덩어리.
+- **복합 조직명**: `리그명+팀명`은 분리하지 않고 한 덩어리.
+- **번지 포함 주소**: `東京都千代田区1丁目2-3 ビル7F`처럼 번지·층 포함도 LOC (별도 ADDRESS 타입 없음).
+- **일본어 라벨 leakage 금지**: `人名/地名/施設名` 같은 원어 라벨을 출력에 그대로 흘리지 않는다.
 
 ### 프롬프트 구조
 
-한국어와 동일하게 3종류의 프롬프트 템플릿을 사용한다:
+3종 템플릿이 백엔드별로 다르게 쓰인다:
 
 | 템플릿 | 변수명 | 용도 | 사용 클래스 |
 |--------|--------|------|------------|
-| SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 | OllamaNERLabeler, VllmNERLabeler |
-| BATCH | `BATCH_PROMPT_TEMPLATE` | 다중 문장 배치 라벨링 | OllamaNERLabeler |
-| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 | OpenAINERLabeler |
+| SINGLE | `SINGLE_PROMPT_TEMPLATE` | 문장 단위 라벨링 (concurrency로 다중 호출) | `VllmNERLabeler` |
+| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 (한 호출에 다문 묶음) | `OpenAINERLabeler` |
 
-### Few-shot 예시의 설계 의도
+### Few-shot 예시 구성
 
-프롬프트에 7개의 예시가 포함되어 있다 (`ner_prompts.py:46-66`). 각 예시가 커버하는 케이스:
+`SINGLE_PROMPT_TEMPLATE`에 11개 예시가 포함되어 있다.
 
-| 예시 | 커버하는 케이스 |
-|------|----------------|
-| 1. 織田信長は安土城を建て... | 인물(PER), 시설(LOC), 이벤트(EVT), 조사 제외(は/を/で/に) |
-| 2. トヨタ自動車は東京モーターショーで... | 조직(ORG), 이벤트(EVT), 제품(PROD) |
-| 3. 国連の安全保障理事会は... | 조직(ORG) 복수, 지명(LOC) |
-| 4. 元々は北海道東海大学の... | 대학 법인 본체(ORG), 캠퍼스(LOC) — 대학 2단 규칙의 ORG/LOC 분리 |
-| 5. 神栖郵便局は茨城県... | 시설(LOC)으로서의 우체국, 복합 지명(LOC) |
-| 6. 国旗団は第一次世界大戦... | 조직(ORG), 이벤트(EVT) |
-| 7. 藤岡高校から高崎鉄道管理局を経て... | 시설(LOC)으로서의 학교, 조직(ORG)으로서의 관리국, 조직(ORG)으로서의 스포츠팀 |
+| 그룹 | 예시 | 커버하는 케이스 |
+|------|------|----------------|
+| 메인 8종 | `国連の安全保障理事会はニューヨークの国連本部で…` | ORG 복수 + LOC |
+| | `元々は北海道東海大学の旭川キャンパス。` | 대학 본체·캠퍼스 모두 ORG |
+| | `神栖郵便局は茨城県神栖市にある郵便局。` | 우체국 = ORG, 행정구역 = LOC |
+| | `国旗団は第一次世界大戦に出征した退役軍人の連合会…` | ORG + EVT |
+| | `藤岡高校から高崎鉄道管理局を経て、大映スターズへ入団。` | 학교·관리국·스포츠팀 모두 ORG |
+| | `ラ・リーガのFCバルセロナはチャンピオンズリーグで優勝した。` | 리그·팀 모두 ORG |
+| | `東京駅から成田空港まで電車で移動した。` | 역·공항 = ORG |
+| | `富士山は日本最高峰で、東京から見える。` | 자연지명·국가·도시 = LOC |
+| PII 종합 | `担当は山田太郎（1985年4月3日生）。連絡先：090-…、メール：…` | PER + DAT + PHONE + EMAIL + LOC + CREDIT_CARD + ID_NUM |
+| DAT/LOC | `2016年1月29日、セルティックFCに移籍した。住所：…ビル7F。` | 문맥무관 DAT, 번지·층 포함 주소 LOC |
+| | `田中氏は1985年に生まれた。福島県福島市にある美術館を運営。` | 연도 단독 DAT, 행정구역 LOC |
+| EMAIL 카운터 | `連絡先はabc@example.comです。メール：hanako@yahoo.co.jp。` | TLD 누락(`@example`, `@yahoo.co`) 금지 |
 
-### 왜 이렇게 설계했는가
-
-| 결정 | 이유 |
-|------|------|
-| NER 5종 + 5 PII/날짜 (10종 평면) | Stockmark 원본 8종을 canonical 5종으로 축소(이슈 #21). NER/PII 구분 없이 평면 목록 유지로 프롬프트·평가 단순화 |
-| canonical 영문 축약 사용 | OntoNotes 관용 표기(PER/LOC/ORG/PROD/EVT + 날짜·PII)로 다국어 라벨 공간 일관성 확보. 자세한 정의: `docs/manual/data/canonical-entity-schema.md` |
-| 2단 판정 (ORG / LOC) | 축소 전 CORP/POL/ORG, LOC/FAC 사이 접미사 룰로 봉합하던 누적 복잡도를 구조적으로 제거. 법인·공권력·조직 모두 ORG, 건물·지명 모두 LOC |
-| 7개 Few-shot | 5종 NER + 5종 PII/날짜를 커버하면서 경계 케이스(대학 2단, 병원 단일체 등)를 학습시키기 위함 |
+OpenAI 백엔드의 `SYSTEM_PROMPT`는 합성 PII 벤치마크에서 거부 응답을 회피하기 위한 안전 도입부(인공 합성 데이터·정보 추출 전용 명시)를 추가로 포함한다.
 
 ---
 
@@ -237,7 +195,7 @@ canonical 5종으로 매핑한다: `人名→PER`, `地名∪施設名→LOC`, `
 
 ### 전체 흐름
 
-Canonical 구현: `OllamaNERLabeler` (`src/labelers/ja/ollama_ner_labeler.py`)
+JA 라벨러(`VllmNERLabeler`, `OpenAINERLabeler`)는 공통 베이스(`labelers/base_vllm_labeler.py`, `base_openai_labeler.py`)의 얇은 서브클래스다. JA 별도 파일은 프롬프트 템플릿·기본 모델명·`lang='ja'` 만 주입한다.
 
 ```
 입력 텍스트
@@ -245,66 +203,44 @@ Canonical 구현: `OllamaNERLabeler` (`src/labelers/ja/ollama_ner_labeler.py`)
     v _split_sentences()             (1) 문장 분리
 문장 리스트
     |
-    v batch_size 단위 그룹핑          (2) 배치 구성
-배치 리스트
+    v 백엔드별 호출 단위 구성          (2) 분할
+    |   ├─ vLLM:    문장 단위 SINGLE 프롬프트 × concurrency 동시 호출
+    |   └─ OpenAI:  max_tokens_per_batch 토큰 한도로 문장 묶음 →
+    |               SYSTEM + USER(다문) × concurrency 동시 호출
     |
-    v _call_llm_batch()              (3) LLM 호출
-    |   +-- 단일 문장 -> _call_llm() 직접 호출
-    |   +-- 다중 문장 -> BATCH 프롬프트 사용
+    v LLM 호출                       (3)
     |
     v JSON 파싱                      (4) 응답 처리
 [{"text": "東京", "type": "LOC"}, ...]
     |
-    v label_spans() 경로: 여기서 반환 (raw spans)
+    v label_spans() / alabel_spans() 경로: raw spans 반환
     |
-    v match_spans()                  (5) 문자 오프셋 매칭 [span_matcher.py]
+    v match_spans()                  (5) 문자 오프셋 매칭
 [{"text": "東京", "type": "LOC", "start": 5, "end": 7}]
 ```
 
-**한국어와의 핵심 차이**: `label()` 경로의 `_spans_to_bio()` 변환 대신, `label_spans()` 경로로 raw span을 반환한 뒤 `match_spans()`로 문자 오프셋을 부여한다. 벤치마크 평가 시 BIO 변환이 전혀 발생하지 않는다.
+**한국어와의 핵심 차이**: `label()` 경로의 `_spans_to_bio()` 변환 대신, `label_spans()` 경로로 raw span을 반환한 뒤 `match_spans()`로 문자 오프셋을 부여한다. 벤치마크 평가 시 BIO 변환이 일어나지 않는다.
 
 ### 4.1 문장 분리
 
-**코드:** `_split_sentences()` (`ja/ollama_ner_labeler.py:24-39`)
+베이스 클래스의 `_split_sentences()`가 일본어 문장 부호(`。`, `！`, `？`)를 포함한 정규식으로 텍스트를 분리한다. 짧은 단편은 최소 길이 버퍼링으로 통합한다.
 
-```python
-parts = re.split(r'(?<=[.!?。！？])\s*|\n+', text.strip())
-```
+### 4.2 호출 단위 구성
 
-한국어 버전과의 차이:
-- 일본어 문장 부호 추가: `。` (마침표), `！` (느낌표), `？` (물음표)
-- 분리 후 공백 처리: `\s*` (한국어는 `\s+`)
-- 최소 10자 버퍼링은 동일
-
-### 4.2 배치 구성
-
-**코드:** `label()` 메서드 (`ja/ollama_ner_labeler.py:111-141`)
-
-- `batch_size` 파라미터 (기본값: 10)로 문장 그룹핑
-- 빈 문장 사전 필터링
-- 타이밍 계측 출력 (`[TIMER]`)
+- **vLLM**: `_split_sentences()` 결과 문장 각각을 SINGLE 프롬프트로 1회씩 호출. `concurrency`(기본 32)로 동시 실행.
+- **OpenAI**: `_make_batches()`가 문장을 `max_tokens_per_batch`(기본 1000) 토큰 한도로 묶어 USER 프롬프트의 `{sentences}`에 주입. 배치 단위를 `concurrency`(기본 4)로 동시 실행.
+- 빈 문장은 양쪽 모두 사전 필터링.
 
 ### 4.3 LLM 호출
 
-**코드:** `OllamaNERLabeler.__init__()` (`ja/ollama_ner_labeler.py:88-109`)
-
-```python
-self._llm = ChatOllama(
-    model=model,
-    format="json",       # JSON 출력 강제
-    temperature=0,       # 결정적 출력
-    think=False,         # thinking 비활성화
-    reasoning=False,
-)
-```
-
-한국어 버전과 동일한 설정을 사용한다.
+| 백엔드 | 클라이언트 | 동시성 | 핵심 옵션 |
+|--------|-----------|--------|----------|
+| vllm | `AsyncOpenAI` (vLLM 호환 엔드포인트) | async (`concurrency`, 기본 32) | `temperature=0`, `<think>` 태그 strip (`thinking=False`) |
+| openai | OpenAI SDK | async (`concurrency`, 기본 4) | system+user 채팅, 토큰 기준 배치 분할(`max_tokens_per_batch`) |
 
 ### 4.4 JSON 파싱
 
-두 가지 파싱 경로가 존재한다:
-
-**경로 A -- OllamaNERLabeler 인라인 파싱** (`ja/ollama_ner_labeler.py:199-224`):
+**vLLM 파서**: `<think>...</think>` 태그를 먼저 제거한 뒤 `json.loads(raw)` → 형태별 분기. JSON 파싱이 실패하면 정규식(`\[.*?\]`) 폴백으로 배열을 추출한다.
 
 ```python
 data = json.loads(raw)
@@ -318,73 +254,47 @@ if isinstance(data, dict):
             return val
 ```
 
-**경로 B -- VllmNERLabeler의 `_parse_spans()`** (`ja/vllm_ner_labeler.py:55-79`):
+**OpenAI 파서** (`_parse_batch_response`): 응답이 `{"0": [...], "1": [...], ...}` 형태(문장 인덱스 → span 리스트)임을 가정하고 입력 문장 수만큼 분리·복원한다. 인덱스 누락·범위 초과는 빈 리스트로 채운다.
 
-`<think>` 태그 제거 후 JSON 파싱. 실패 시 정규식으로 `[...]` 추출:
+**배치 폴백**: 배치 호출 실패 시 묶음을 더 작게 쪼개거나 개별 문장 단위로 재시도한다.
 
-```python
-raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-# json.loads 시도 후 실패 시 정규식 폴백
-match = re.search(r"\[.*?\]", raw, re.DOTALL)
-```
+### 4.5 span_matcher.py — 문자 오프셋 매칭
 
-**폴백 전략**: 배치 호출 실패 시 개별 문장 단위 재시도 (`ja/ollama_ner_labeler.py:195-197`):
+**코드:** `match_spans()` (`src/labelers/ja/span_matcher.py`)
 
-```python
-except (json.JSONDecodeError, Exception) as e:
-    return [self._call_llm(s) for s in sentences]
-```
-
-### 4.5 span_matcher.py -- 문자 오프셋 매칭
-
-**코드:** `match_spans()` (`src/labelers/ja/span_matcher.py:19-87`)
-
-LLM은 `{"text": "東京", "type": "LOC"}` 형태로 위치 정보 없이 엔티티를 반환한다. `match_spans()`는 원본 텍스트에서 해당 문자열의 문자 오프셋을 찾아 `{"text", "type", "start", "end"}`를 반환한다.
+LLM은 `{"text": "東京", "type": "LOC"}` 형태로 위치 정보 없이 엔티티를 반환한다. `match_spans()`가 원문에서 해당 문자열의 문자 오프셋을 찾아 `{text, type, start, end}`를 부여한다.
 
 **알고리즘:**
 
-1. **길이 역순 정렬** (line 32-37): 긴 엔티티를 먼저 매칭하여 부분 문자열 충돌 방지
+1. **길이 역순 정렬** — 긴 엔티티를 먼저 매칭하여 부분 문자열 충돌 방지
 2. **3단계 매칭 시도**:
-   - Exact match: `_find_all_occurrences(original_text, text)` (line 49)
-   - 공백 제거 매칭: LLM이 삽입한 불필요 공백 제거 후 재시도 (line 52-56)
-   - **조사 제거 매칭**: `_strip_particles(text)` 후 재시도 (line 59-65)
-3. **충돌 방지** (line 69-79): `consumed` 집합으로 이미 매칭된 문자 인덱스를 추적, 겹치지 않는 최좌측 후보 선택
-4. **원래 순서 복원** (line 86-87): 정렬을 해제하고 LLM 출력 순서로 복원
+   - Exact match: `_find_all_occurrences(original_text, text)`
+   - 공백 제거 매칭: LLM이 삽입한 불필요 공백 제거 후 재시도
+   - 조사 제거 매칭: `_strip_particles(text)` 후 재시도
+3. **충돌 방지**: `consumed` 집합으로 이미 매칭된 문자 인덱스를 추적, 겹치지 않는 최좌측 후보 선택
+4. **원래 순서 복원**: 정렬을 해제하고 LLM 출력 순서로 복원
 
-### 4.6 일본어 조사 제거
+### 4.6 일본어 조사·경칭 제거
 
-**코드:** `_strip_particles()` (`src/labelers/ja/span_matcher.py:95-105`)
-
-LLM이 엔티티 끝에 조사나 경칭을 포함할 수 있다. 이를 제거하여 매칭 성공률을 높인다:
+LLM이 엔티티 끝에 조사나 경칭을 포함할 수 있다. 매칭 성공률을 위해 `_strip_particles()`가 다음을 끝에서 1개씩 제거한다:
 
 ```python
-_PARTICLES = ("は", "が", "を", "に", "で", "と", "の", "へ", "から", "まで", "も", "や", "より")
-_SUFFIXES = ("氏", "さん", "君", "ちゃん", "様")
+_PARTICLES = ('は', 'が', 'を', 'に', 'で', 'と', 'の', 'へ',
+              'から', 'まで', 'も', 'や', 'より')
+_SUFFIXES  = ('氏', 'さん', '君', 'ちゃん', '様')
 ```
 
-- 조사는 길이 역순으로 처리 (예: "から"를 "か"보다 먼저 시도)
-- 텍스트 길이가 조사/접미사보다 긴 경우에만 제거 (1글자 엔티티 보호)
-- 조사와 접미사는 각각 최대 1개씩만 제거
+- 조사는 길이 역순 시도 (예: `から`를 `か`보다 먼저)
+- 텍스트 길이가 조사·접미사보다 클 때만 제거 (1글자 엔티티 보호)
 
 ### 백엔드 변형
 
-동일 인터페이스(`label()`, `label_spans()`)로 3개 백엔드를 지원한다:
+동일 인터페이스(`label()`, `label_spans()`/`alabel_spans()`)로 2개 백엔드를 지원한다:
 
 | 파일 | 클래스 | 특징 |
 |------|--------|------|
-| `ja/ollama_ner_labeler.py` | `OllamaNERLabeler` | 동기 처리, ChatOllama, 배치 지원 |
-| `ja/vllm_ner_labeler.py` | `VllmNERLabeler` | **async 동시성** (`concurrency` 파라미터, 기본 32), AsyncOpenAI |
-| `ja/openai_ner_labeler.py` | `OpenAINERLabeler` | **system/user 채팅 형식**, 토큰 기반 배치 분할 |
-
-### 왜 이렇게 설계했는가
-
-| 결정 | 이유 |
-|------|------|
-| `label_spans()` 경로를 주 경로로 사용 | Stockmark 데이터가 offset span이므로 BIO 변환이 불필요 |
-| `match_spans()` 별도 모듈 분리 | LLM 출력(위치 없음)과 gold 데이터(위치 있음) 간 브릿지 역할. 재사용 가능한 독립 모듈 |
-| 3단계 매칭 (exact -> 공백 제거 -> 조사 제거) | 일본어 조사/공백 문제를 단계적으로 해결하여 매칭률 극대화 |
-| 길이 역순 매칭 | "東京タワー"와 "東京"이 모두 있을 때, 긴 엔티티를 먼저 매칭하여 부분 문자열 충돌 방지 |
-| `consumed` 집합으로 중복 방지 | 동일 문자 범위에 여러 엔티티가 매칭되는 것을 원천 차단 |
+| `ja/vllm_ner_labeler.py` | `VllmNERLabeler` | AsyncOpenAI(vLLM 호환), 문장 단위 SINGLE 호출 + concurrency 동시 실행, `<think>` strip |
+| `ja/openai_ner_labeler.py` | `OpenAINERLabeler` | OpenAI SDK, system/user 채팅, 토큰 기반 배치 분할, 합성 PII 안전 도입부 system prompt |
 
 ---
 
@@ -392,45 +302,46 @@ _SUFFIXES = ("氏", "さん", "君", "ちゃん", "様")
 
 ### 평가 진입점
 
-**코드:** `src/evaluators/__main__.py`
+**코드:** `src/llm_eval/__main__.py`
 
 ```bash
 python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 ```
 
-CLI가 수행하는 흐름:
-1. `JapaneseDatasetLoader`로 gold records 로딩
-2. `JaBenchmarkRunner` 생성 후 labeler 추가
-3. `runner.run()` -> 각 labeler에 대해 `_run_single()` 실행
-4. `JaReportGenerator`로 결과 출력
+CLI 흐름:
+1. `JapaneseDatasetLoader`로 gold records 로딩 (`_load_gold` 분기)
+2. 통합 `BenchmarkRunner`(`eval_mode='offset_span'`) 생성 후 labeler 추가
+3. `runner.run()` → 각 labeler에 대해 `_run_offset_span()` 실행
+   (내부적으로 `_run_offset_span_async()`로 sample 단위 비동기 처리)
+4. 통합 `ReportGenerator`로 결과 출력 (`lang='ja'`)
 
-### 평가 흐름 상세
+### 평가 흐름
 
-**코드:** `JaBenchmarkRunner._run_single()` (`src/evaluators/ja_benchmark_runner.py:57-121`)
+**코드:** `BenchmarkRunner._run_offset_span_async()` (`src/llm_eval/benchmark_runner.py`)
 
 각 gold record에 대해:
 
 ```
 gold record {id, text, gold_spans}
     |
-    +-- (1) 텍스트 추출: record["text"] 그대로 사용
+    ├─ (1) 텍스트 추출: record["text"] 그대로 사용
     |
-    +-- (2) LLM 라벨링: labeler.label_spans(text)
-    |       -> [{"text": "東京", "type": "LOC"}, ...]  (raw spans)
+    ├─ (2) LLM 라벨링: labeler.alabel_spans(text) 또는 label_spans
+    |       → [{"text": "東京", "type": "LOC"}, ...]  (raw spans)
     |
-    +-- (3) span 매칭: match_spans(text, raw_spans)
-    |       -> [{"text": "東京", "type": "LOC", "start": 5, "end": 7}]
+    ├─ (3) span 매칭: match_spans(text, raw_spans)
+    |       → [{"text": "東京", "type": "LOC", "start": 5, "end": 7}]
     |
-    +-- (4) gold/pred span 수집
+    ├─ (4) gold/pred span 수집
     |
-    +-- (5) compute_offset_span_f1(gold_spans_all, pred_spans_all)
+    └─ (5) compute_offset_span_f1(gold_spans_all, pred_spans_all)
 ```
 
 ### 평가 메트릭: compute_offset_span_f1()
 
-**코드:** `src/evaluators/ja_metrics.py:9-54`
+**코드:** `src/metrics/span_metrics.py`
 
-문자 오프셋 기반 span-level F1을 계산한다. seqeval을 사용하지 않는다.
+문자 오프셋 기반 span-level F1. seqeval을 사용하지 않는다.
 
 **매칭 기준:**
 
@@ -439,37 +350,16 @@ gold record {id, text, gold_spans}
 key = (sent_idx, s["start"], s["end"], s["type"])
 ```
 
-- **Exact match only**: start, end, type이 모두 일치해야 함
+- **Exact match only**: start, end, type 모두 일치 시 TP
 - **Micro-average**: 전체 엔티티에 대한 TP/FP/FN 기반 P/R/F1
-- **Per-entity breakdown**: 엔티티 타입별 개별 P/R/F1/support
+- **Per-entity breakdown**: 엔티티 타입별 P/R/F1/support
 
 ```python
-tp = len(all_gold & all_pred)          # 정확히 일치하는 span 수
-precision = tp / len(all_pred)          # 예측 중 정확한 비율
-recall = tp / len(all_gold)             # gold 중 찾은 비율
-f1 = 2 * precision * recall / (precision + recall)
+tp = len(all_gold & all_pred)           # 정확히 일치하는 span 수
+precision = tp / len(all_pred)
+recall    = tp / len(all_gold)
+f1        = 2 * precision * recall / (precision + recall)
 ```
-
-### 한국어 평가와의 차이
-
-| 항목 | 한국어 | 일본어 |
-|------|--------|--------|
-| 주 평가 메트릭 | Span Match (exact/relaxed) | Offset Span F1 (exact only) |
-| 보조 메트릭 | seqeval BIO F1, Character Span F1, BERTScore | 없음 (단일 메트릭) |
-| 매칭 단위 | entity text + type | character offset (start, end) + type |
-| BIO 변환 필요 | 예 (spans_to_syllable_bio) | 아니오 |
-| TagAligner 필요 | 예 | 아니오 |
-| relaxed matching | 예 (부분 겹침 허용) | 아니오 (exact only) |
-
-### 왜 이렇게 설계했는가
-
-| 결정 | 이유 |
-|------|------|
-| Offset Span F1 단일 메트릭 | gold 데이터가 offset span이므로 BIO 변환 없이 직접 비교 가능. 변환 노이즈 제거 |
-| seqeval 미사용 | BIO 태그 자체가 존재하지 않으므로 seqeval 적용 불가 |
-| relaxed matching 미지원 | 문자 오프셋은 명확한 경계를 가지므로, relaxed 매칭보다 exact가 더 의미 있음 |
-| BERTScore 미사용 | span 기반 평가에서 의미적 유사도 평가의 필요성이 낮음 |
-| 단일 메트릭의 단순성 | 평가 파이프라인 복잡도를 줄여 유지보수 용이 |
 
 ---
 
@@ -477,36 +367,34 @@ f1 = 2 * precision * recall / (precision + recall)
 
 | 항목 | 한국어 (KLUE) | 일본어 (Stockmark) |
 |------|---------------|-------------------|
-| **데이터셋** | KLUE NER (klue/ner) | Stockmark NER Wikipedia (stockmark/ner-wikipedia-dataset) |
-| **엔티티 수** | 6 타입 (PS, LC, OG, DT, TI, QT) | 10 타입 평면 (PER, LOC, ORG, PROD, EVT, DAT, EMAIL, PHONE, ID_NUM, CREDIT_CARD) |
-| **태그 표기** | 영어 약어 (PS, LC, OG...) | canonical 영문 축약 (PER, LOC, ORG...) |
-| **gold 데이터 형식** | 음절 BIO 태그 (`tokens` + `ner_tags`) | 문자 오프셋 span (`text` + `gold_spans: [{start, end, type}]`) |
-| **데이터 로딩** | JSONL 폴백 우선, HuggingFace 폴백 | HuggingFace 직접 로딩 |
-| **split 전략** | validation split 사용 | `train_test_split(test_size=0.2, seed=42)` 자체 분할 |
-| **조사 처리** | 프롬프트 규칙 + `_spans_to_bio()` substring match | 프롬프트 규칙 + `span_matcher._strip_particles()` 조사 제거 |
-| **조사 목록** | 은/는/이/가/을/를/에/에서/으로/의/과/와/부터/까지 | は/が/を/に/で/と/の/へ/から/まで/も/や/より + 경칭(氏/さん/君/ちゃん/様) |
-| **span -> 태그 변환** | `_spans_to_bio()` (BIO 태그 생성) | `match_spans()` (문자 오프셋 부여, BIO 변환 없음) |
-| **태그 정규화** | 필요 (PER->PS, LOC->LC 등) | 불필요 (canonical 영문 축약 그대로 사용) |
-| **평가 메트릭** | Span Match + seqeval + Character Span F1 + BERTScore (4종) | Offset Span F1 (1종) |
-| **평가 라이브러리** | seqeval, bert-score 의존 | 자체 구현 (`ja_metrics.py`), 외부 의존 없음 |
-| **TagAligner** | 필수 (음절 BIO 변환) | 미사용 |
-| **주요 모듈** | `dataset_loader.py`, `labelers/tag_aligner.py`, `metrics.py`, `benchmark_runner.py` | `ja/dataset_loader.py`, `ja/span_matcher.py`, `ja_metrics.py`, `ja_benchmark_runner.py` |
+| 데이터셋 | KLUE NER (`klue/ner`) | Stockmark NER Wikipedia (`stockmark/ner-wikipedia-dataset`) |
+| 엔티티 수 | 6 타입 (PS, LC, OG, DT, TI, QT) | 10 타입 평면 (PER, LOC, ORG, PROD, EVT, DAT, EMAIL, PHONE, ID_NUM, CREDIT_CARD) |
+| 태그 표기 | KLUE 약어 | canonical 영문 (PER/LOC/ORG/PROD/EVT + PII) |
+| gold 데이터 형식 | 음절 BIO (`tokens` + `ner_tags`) | 문자 오프셋 span (`text` + `gold_spans`) |
+| 데이터 로딩 | JSONL 폴백 우선, HF 폴백 | canonical JSONL 덤프 전용 (HF 자동 로딩 없음) |
+| split 제공 | validation split 사용 | canonical 덤프에 train/test 두 파일 분리 보관 |
+| 조사 처리 | 프롬프트 규칙 + `_spans_to_bio()` substring match | 프롬프트 규칙 + `span_matcher._strip_particles()` |
+| 조사·경칭 목록 | 은/는/이/가/을/를/에/에서/으로/의/과/와/부터/까지 | は/が/を/に/で/と/の/へ/から/まで/も/や/より + 경칭(氏/さん/君/ちゃん/様) |
+| span → 태그 변환 | `_spans_to_bio()` (BIO 생성) | `match_spans()` (오프셋 부여, BIO 변환 없음) |
+| 태그 정규화 | 필요 (PER→PS 등) | 불필요 (canonical 그대로) |
+| 평가 메트릭 | Span Match + seqeval BIO F1 + Char Span F1 + BERTScore | Offset Span F1 단일 |
+| 평가 라이브러리 | seqeval, bert-score 의존 | 자체 구현 (`metrics/span_metrics.py`) |
+| TagAligner | 필수 | 미사용 |
+| 주요 모듈 | `dataset_loader.py`, `labelers/tag_aligner.py`, `metrics/bio_metrics.py`, `llm_eval/benchmark_runner.py` | `ja/dataset_loader.py`, `ja/span_matcher.py`, `metrics/span_metrics.py`, `llm_eval/benchmark_runner.py` |
 
 ---
 
 ## 7. 설계 의사결정 요약
 
-전체 파이프라인에서 내려진 핵심 설계 결정들:
-
-| # | 단계 | 결정 | 이유 | 대안 (채택하지 않은 것) |
+| # | 단계 | 결정 | 이유 | 대안 (채택하지 않음) |
 |---|------|------|------|----------------------|
-| 1 | 데이터 | 문자 오프셋 span 형식 유지 | Stockmark 원본 형식 활용, BIO 변환 정보 손실 방지 | BIO 태그로 변환 (불필요한 복잡도) |
-| 2 | 데이터 | `train_test_split(seed=42)` | 재현 가능한 분할, 공식 test split 부재 | 전체 데이터 사용 (과적합 위험) |
-| 3 | 프롬프트 | canonical 영문 축약 사용 (PER/LOC/ORG/PROD/EVT + 5종 PII/날짜) | 다국어 라벨 공간 일관성 + 리포트 가독성 (canonical 정의: `docs/manual/data/canonical-entity-schema.md`) | 데이터셋 원문(일본어) 라벨 그대로 (다국어 통합 곤란) |
-| 4 | 프롬프트 | 8개 엔티티 + 상세 경계 규칙 | Stockmark 타입 체계 준수, 법인/시설/조직 경계 명확화 | 6개 타입으로 축소 (정보 손실) |
-| 5 | 프롬프트 | 7개 Few-shot 예시 | 8개 엔티티 타입 전체 커버 + 경계 케이스 학습 | Zero-shot (정확도 저하) |
-| 6 | 라벨링 | `match_spans()` 별도 모듈 | LLM 출력(위치 없음)과 gold(위치 있음) 간 독립적 브릿지 | BIO 변환 후 비교 (변환 노이즈) |
-| 7 | 라벨링 | 길이 역순 + consumed 추적 | 부분 문자열 충돌 및 중복 매칭 방지 | 출현 순서대로 매칭 (충돌 위험) |
-| 8 | 라벨링 | 조사 제거 폴백 (3단계 매칭) | 일본어 조사 부착 문제를 단계적으로 해결 | exact match만 (매칭률 저하) |
-| 9 | 평가 | Offset Span F1 단일 메트릭 | BIO 변환 불필요, 평가 파이프라인 단순화 | 다중 메트릭 (불필요한 복잡도) |
-| 10 | 평가 | seqeval/BERTScore 미사용 | BIO 태그가 없으므로 적용 불가/불필요 | BIO 변환 후 seqeval (변환 노이즈 유입) |
+| 1 | 데이터 | 문자 오프셋 span 형식 유지 | Stockmark 원본이 offset span. BIO 변환의 정보 손실 회피 | BIO 태그로 변환 (불필요한 복잡도) |
+| 2 | 데이터 | canonical JSONL 덤프 전용 | 라벨 매핑·세이프티 정정 등 한 번 결정해야 할 변환을 1회성 도구에 격리. 런타임에서는 단순 읽기 | HF 자동 로딩 + 런타임 매핑 (변환 분산·재현성 약화) |
+| 3 | 프롬프트 | canonical 영문 라벨 (10종 평면) | OntoNotes 관용 표기로 다국어 라벨 공간 일관성 확보 + NER/PII 구분 없는 평면 단순화 | 데이터셋 원어 라벨 그대로 (다국어 통합 곤란, leakage 위험) |
+| 4 | 프롬프트 | LOC=지리만, ORG=인공시설 전부 | 접미사·운영체 룰로 봉합하던 LOC/FAC/CORP/POL/ORG 경계 모호성을 구조적으로 제거 | 시설/조직 분리 (경계 분쟁 누적, 평가 편차 큼) |
+| 5 | 프롬프트 | 메인 8 + DAT/LOC 2 + EMAIL 카운터 1 = 11개 Few-shot | 5종 NER + 5종 PII 동시 커버 + EMAIL 누락·번지 주소 같은 함정 케이스 학습 | Zero-shot (정확도 저하) |
+| 6 | 라벨링 | `match_spans()` 별도 모듈 | LLM 출력(위치 없음) ↔ gold(위치 있음) 간 독립적 브릿지 | BIO 변환 후 비교 (변환 노이즈) |
+| 7 | 라벨링 | 길이 역순 + `consumed` 추적 | 부분 문자열 충돌·중복 매칭 방지 | 출현 순서대로 매칭 (충돌 위험) |
+| 8 | 라벨링 | 3단계 매칭 (exact → 공백 제거 → 조사 제거) | 일본어 조사·공백 부착 문제를 단계적 해결 | exact만 (매칭률 저하) |
+| 9 | 평가 | Offset Span F1 단일 메트릭 | gold가 offset span. BIO 변환 불필요, 변환 노이즈 제거 | 다중 메트릭 (불필요한 복잡도) |
+| 10 | 평가 | seqeval/BERTScore 미사용 | BIO 태그 부재, span 평가에 의미 유사도 불필요 | BIO 변환 후 seqeval (변환 노이즈 유입) |
