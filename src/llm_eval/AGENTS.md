@@ -36,7 +36,7 @@ Benchmark orchestration and metrics computation package. Provides CLI entrypoint
 
 ### Common Patterns
 - CLI: `python -m llm_eval --lang ja|ko --models "backend:model" --max-samples N`
-- Model spec format: `backend:model_name` (e.g., `vllm:Qwen/Qwen3.5-27B`, `ollama:qwen3.5:27b`)
+- Model spec format: `backend:model_name` (e.g., `vllm:Qwen/Qwen3.5-27B`, `openai:gpt-4o-mini`)
 
 ## Dependencies
 

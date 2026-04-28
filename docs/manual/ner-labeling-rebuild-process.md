@@ -26,8 +26,8 @@
 | 1 | 데이터셋 선정 및 준비 | `List[NERRecord]` | `src/labelers/dataset_loader.py` |
 | 2 | 엔티티 타입 정의 | 태그 목록 + 정의 문서 | 예: `src/labelers/ko/ner_prompts.py:11` |
 | 3 | 프롬프트 설계 | 프롬프트 템플릿 (규칙 + 예시 + 출력 형식) | 예: `src/labelers/ko/ner_prompts.py` |
-| 4 | LLM 선정 및 설정 | LLM 인스턴스 (모델, temperature, JSON mode) | 예: `src/labelers/ko/ollama_ner_labeler.py:89-109` |
-| 5 | 파싱 및 후처리 | spans 리스트 + BIO 태그 | 예: `src/labelers/ko/ollama_ner_labeler.py:42-85, 199-224` |
+| 4 | LLM 선정 및 설정 | LLM 인스턴스 (모델, temperature, JSON mode) | 예: `src/labelers/ko/vllm_ner_labeler.py` |
+| 5 | 파싱 및 후처리 | spans 리스트 + BIO 태그 | 예: `src/labelers/ko/vllm_ner_labeler.py` |
 | 6 | 반복 개선 | 개선된 프롬프트/설정 | (Step 2~5 반복) |
 
 > **주의**: 평가 파이프라인(메트릭 구축 및 실행)은 재설계 중이며 이 가이드에서 제외되었다. 재구축된 방법이 확정된 후 다시 문서화한다.
@@ -321,7 +321,6 @@ print(prompt)
 
    | 백엔드 | 클래스 | 파일 | 특징 |
    |--------|--------|------|------|
-   | Ollama | `OllamaNERLabeler` | `ko/ollama_ner_labeler.py` | 동기 처리, ChatOllama |
    | vLLM | `VllmNERLabeler` | `ko/vllm_ner_labeler.py` | async 동시성 (`concurrency` 파라미터) |
    | OpenAI | `OpenAINERLabeler` | `ko/openai_ner_labeler.py` | system/user 채팅 형식 |
 
@@ -329,18 +328,16 @@ print(prompt)
 
 2. **핵심 설정값**:
    ```python
-   # 예시 — 한국어 파이프라인의 경우 (ollama_ner_labeler.py:89-109)
+   # 예시 — 한국어 파이프라인의 경우 (vllm_ner_labeler.py)
    temperature=0       # 결정적 출력 (NER은 창의적 변형 불필요)
-   format="json"       # 유효한 JSON 출력 강제
-   think=False          # thinking 토큰이 파싱 방해하지 않도록
-   reasoning=False
+   thinking=False      # thinking 토큰이 파싱 방해하지 않도록
    ```
 
 3. **배치 크기 설정**: `batch_size` 파라미터 (기본값 10)
 
 ### 체크포인트
 
-- [ ] LLM 서버에 연결 가능한가 (Ollama/vLLM 엔드포인트 확인)
+- [ ] LLM 서버에 연결 가능한가 (vLLM 엔드포인트 확인)
 - [ ] `temperature=0`으로 동일 입력에 동일 출력이 나오는가
 - [ ] JSON mode가 활성화되어 유효한 JSON만 출력되는가
 - [ ] thinking 토큰 없이 순수 JSON만 응답에 포함되는가
@@ -348,8 +345,8 @@ print(prompt)
 
 ```python
 # 체크포인트 검증 코드 (예시 — 한국어 파이프라인의 경우)
-from labelers.ko.ollama_ner_labeler import OllamaNERLabeler
-labeler = OllamaNERLabeler(model="Qwen/Qwen3.5-27B")
+from labelers.ko.vllm_ner_labeler import VllmNERLabeler
+labeler = VllmNERLabeler(model="Qwen/Qwen3.5-27B")
 result = labeler.label_spans("삼성전자는 어제 서울에서 신제품을 발표했다.")
 print(result)
 # 기대: [{"text": "삼성전자", "type": "OG"}, {"text": "어제", "type": "DT"}, {"text": "서울", "type": "LC"}]
@@ -360,8 +357,8 @@ print(result)
 | 증상 | 원인 | 조치 |
 |------|------|------|
 | 연결 거부 | LLM 서버 미실행 | 서버 상태 확인 (docker 서비스) |
-| JSON 파싱 실패 빈번 | JSON mode 미지원 모델 | `format="json"` 지원 여부 확인, 모델 교체 |
-| `<think>` 태그가 응답에 포함 | thinking 비활성화 실패 | `think=False` 설정 확인, 모델 변경 |
+| JSON 파싱 실패 빈번 | JSON mode 미지원 모델 | 모델 교체 또는 프롬프트 형식 강화 |
+| `<think>` 태그가 응답에 포함 | thinking 비활성화 실패 | `thinking=False` 설정 확인, 모델 변경 |
 | 응답 속도 극도로 느림 | 모델 크기 vs GPU 메모리 불일치 | 더 작은 모델 선택 또는 quantization |
 | 동일 입력에 다른 출력 | temperature > 0 | `temperature=0` 설정 확인 |
 
@@ -388,12 +385,12 @@ print(result)
 ### 작업 내용
 
 1. **JSON 파싱 구현**: 두 가지 파싱 경로
-   - **인라인 파싱** (예: `ollama_ner_labeler.py:199-224`): `json.loads()` + 다양한 형태 처리 (list, dict, 래퍼)
+   - **인라인 파싱** (예: `vllm_ner_labeler.py`): `json.loads()` + 다양한 형태 처리 (list, dict, 래퍼)
    - **공통 파싱** (`labeler_base.py:10-34`): `<think>` 태그 제거, markdown fence 내 JSON 추출 등
 
 2. **배치 실패 폴백**: 배치 파싱 실패 시 개별 문장 단위 재시도
    ```python
-   # 예시 — 한국어 파이프라인의 경우 (ollama_ner_labeler.py:196-197)
+   # 예시 — 한국어 파이프라인의 경우 (vllm_ner_labeler.py)
    except (json.JSONDecodeError, Exception) as e:
        return [self._call_llm(s) for s in sentences]  # 개별 폴백
    ```

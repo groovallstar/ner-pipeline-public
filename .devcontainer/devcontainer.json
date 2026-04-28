@@ -7,8 +7,7 @@
   "remoteUser": "${localEnv:USER}",
   "remoteEnv": {
     "PYTHONPATH": "/work/git/ner_pipeline/src/",
-    "HF_HOME": "/work/.huggingface/",
-    "OLLAMA_MODELS": "/data/.ollama/"
+    "HF_HOME": "/work/.huggingface/"
   },
 
   "initializeCommand": "mkdir -p ${HOME}/dev/.claude && export DOCKER_UID=$(id -u) && export DOCKER_GID=$(id -g) && echo \"DOCKER_UID=${DOCKER_UID}, DOCKER_GID=${DOCKER_GID}, USER=${USER}\"",

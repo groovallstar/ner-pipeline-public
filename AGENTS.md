@@ -3,7 +3,7 @@
 # ner_pipeline
 
 ## Purpose
-Multilingual Named Entity Recognition (NER) pipeline built on LangChain with multi-backend LLM support (vLLM, Ollama, OpenAI). Supports Korean (KLUE NER, 6 entity types) and Japanese (Stockmark NER Wikipedia, 8 entity types). Includes BERT fine-tuning for comparison, benchmark evaluation, and Docker-based GPU inference infrastructure.
+Multilingual Named Entity Recognition (NER) pipeline built on LangChain with multi-backend LLM support (vLLM, OpenAI). Supports Korean (KLUE NER, 6 entity types) and Japanese (Stockmark NER Wikipedia, 8 entity types). Includes BERT fine-tuning for comparison, benchmark evaluation, and Docker-based GPU inference infrastructure.
 
 ## Key Files
 
@@ -22,7 +22,7 @@ Multilingual Named Entity Recognition (NER) pipeline built on LangChain with mul
 | Directory | Purpose |
 |-----------|---------|
 | `src/` | Source code: labelers, evaluators, classifier, reference utils (see `src/AGENTS.md`) |
-| `docker/` | Docker service configs for dev, Ollama, and vLLM (see `docker/AGENTS.md`) |
+| `docker/` | Docker service configs for dev and vLLM (see `docker/AGENTS.md`) |
 | `tests/` | pytest unit tests (see `tests/AGENTS.md`) |
 | `results/` | Benchmark result JSONs, reports, and model checkpoints (see `results/AGENTS.md`) |
 | `data/` | Dataset files (see `data/AGENTS.md`) |
@@ -33,7 +33,7 @@ Multilingual Named Entity Recognition (NER) pipeline built on LangChain with mul
 ### Working In This Directory
 - Set `PYTHONPATH=/work/git/ner_pipeline/src/` before running Python
 - Package manager is UV (`uv pip install`), not pip
-- Development happens inside Docker containers with GPU access
+- Development happens on the host directly (Docker is for vLLM and other external services only)
 - Python version: 3.13
 - Imports use absolute paths from `src/`: `from labelers.xxx import Xxx`
 - Active development on `develop` branch; `main` is the PR target
@@ -46,12 +46,12 @@ Multilingual Named Entity Recognition (NER) pipeline built on LangChain with mul
 ### Common Patterns
 - LLM labelers share a common interface: `label(text)`, `label_spans(text)`, `label_records(records)`
 - Korean uses BIO tag evaluation; Japanese uses character-offset span evaluation
-- Three LLM backends: Ollama (single GPU), vLLM (multi-GPU tensor parallel), OpenAI API
+- Two LLM backends: vLLM (multi-GPU tensor parallel), OpenAI API
 
 ## Dependencies
 
 ### External
-- LangChain ecosystem (langchain, langchain-openai, langchain-ollama)
+- LangChain ecosystem (langchain, langchain-openai)
 - transformers, datasets, evaluate, seqeval, bert-score
 - torch (CUDA 13.0), accelerate
 - numpy, pandas, scikit-learn

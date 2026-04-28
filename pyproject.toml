@@ -27,7 +27,6 @@ dependencies = [
     "langchain",
     "langgraph",
     "langchain-openai",
-    "langchain-ollama",
     "langchain-huggingface",
     "langchain-community",
     "langchain-milvus",

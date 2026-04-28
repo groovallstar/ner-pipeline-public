@@ -12,7 +12,7 @@
 
 ## 개발 환경
 
-- **호스트에서 직접 개발** (Docker는 Ollama·vLLM 등 외부 서비스 전용 — 개발 컨테이너에 진입하지 않는다)
+- **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스 전용 — 개발 컨테이너에 진입하지 않는다)
 - 패키지 관리자: **UV** (`uv sync` 또는 `uv pip install -e .` 으로 editable install)
 - `PYTHONPATH` **설정·주입 금지** — uv editable install이 `.pth`로 `src/`를 `sys.path`에 자동 등록한다
 - import 형태: `from labelers.xxx import Xxx`, `from llm_eval.xxx import Xxx`, `from classifier.xxx import Xxx` 등 (src 접두어 없이)
@@ -23,9 +23,9 @@
 ```
 src/
 ├── labelers/          # NER 라벨링 모듈 (상세: src/CLAUDE.md)
-│   ├── ko/            # 한국어 (ollama, vllm, openai)
-│   ├── ja/            # 일본어 (ollama, vllm, openai)
-│   ├── vi/            # 베트남어 (ollama, vllm, openai)
+│   ├── ko/            # 한국어 (vllm, openai)
+│   ├── ja/            # 일본어 (vllm, openai)
+│   ├── vi/            # 베트남어 (vllm, openai)
 │   ├── dataset_loader.py
 │   ├── labeler_base.py
 │   ├── tag_aligner.py     # BIO 태그 정렬/정규화/span 추출
@@ -50,7 +50,6 @@ src/
 └── scripts/           # 보조 셸 스크립트 (eval_spans.sh 등)
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
-├── ollama/            # Ollama 서비스
 └── vllm/              # vLLM 서비스
 results/               # 벤치마크 결과 JSON + 리포트
 tests/                 # 테스트 (상세: tests/CLAUDE.md)
