@@ -105,6 +105,33 @@ class TestFilterByPolicy:
         with pytest.raises(ValueError):
             _filter_by_policy([], 'bogus')
 
+    def test_recall_strict_drops_prod_evt_medium(self):
+        """PROD/EVT 의 medium_recall 은 drop, PER/LOC/ORG 의 medium_recall 은 보존."""
+        spans = [
+            {'confidence': 'high', 'type': 'PER'},
+            {'confidence': 'medium_recall', 'type': 'PER'},
+            {'confidence': 'high', 'type': 'PROD'},
+            {'confidence': 'medium_recall', 'type': 'PROD'},
+            {'confidence': 'high', 'type': 'EVT'},
+            {'confidence': 'medium_recall', 'type': 'EVT'},
+            {'confidence': 'medium_recall', 'type': 'LOC'},
+            {'confidence': 'conflict', 'type': 'PER'},
+            {'confidence': 'medium_prec', 'type': 'PER'},
+        ]
+        r = _filter_by_policy(spans, 'recall_strict')
+        kept = [(s['type'], s['confidence']) for s in r]
+        assert ('PER', 'high') in kept
+        assert ('PER', 'medium_recall') in kept
+        assert ('LOC', 'medium_recall') in kept
+        assert ('PROD', 'high') in kept
+        assert ('EVT', 'high') in kept
+        # PROD/EVT 의 medium 은 drop
+        assert ('PROD', 'medium_recall') not in kept
+        assert ('EVT', 'medium_recall') not in kept
+        # conflict / medium_prec 는 모든 type 에서 drop
+        assert ('PER', 'conflict') not in kept
+        assert ('PER', 'medium_prec') not in kept
+
 
 class TestMergeRecords:
     def _record(self, rid, spans):

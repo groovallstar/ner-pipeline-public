@@ -130,7 +130,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q38723': 'ORG',        # higher education institution
     'Q875538': 'ORG',       # public university
 
-    # PROD (물건·작품·소프트웨어)
+    # PROD (물건·작품·소프트웨어) — 이슈 #30 §8.4: PROD 합의율 47% 보정
     'Q2424752': 'PROD',      # product
     'Q7397': 'PROD',         # software
     'Q9143': 'PROD',         # programming language
@@ -147,8 +147,25 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q3405677': 'PROD',      # automobile model
     'Q105543609': 'PROD',    # musical work / composition
     'Q21198342': 'PROD',     # manga series
+    # 이슈 #30 추가: 작품·미디어 커버리지 확대
+    'Q7366': 'PROD',         # song
+    'Q838948': 'PROD',       # work of art
+    'Q47461344': 'PROD',     # written work
+    'Q15709879': 'PROD',     # anime series
+    'Q1107': 'PROD',         # anime
+    'Q1004': 'PROD',         # comic book
+    'Q14406742': 'PROD',     # comic book series
+    'Q838795': 'PROD',       # comic series
+    'Q220898': 'PROD',       # audio drama
+    'Q2188189': 'PROD',      # musical work
+    'Q1107654': 'PROD',      # operating system
+    'Q3464665': 'PROD',      # television series episode
+    'Q220505': 'PROD',       # video game series
+    'Q24856': 'PROD',        # film series
+    'Q4502142': 'PROD',      # visual artwork
+    'Q1339864': 'PROD',      # video game franchise
 
-    # EVT (일회성 사건·전쟁·조약)
+    # EVT (일회성 사건·전쟁·조약) — 이슈 #30 §8.4: EVT 합의율 56% 보정
     'Q1190554': 'EVT',       # occurrence (event)
     'Q178561': 'EVT',        # battle
     'Q198': 'EVT',           # war
@@ -161,6 +178,20 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q131569': 'EVT',        # treaty
     'Q1407217': 'EVT',       # national sports competition (일회 대회)
     'Q27020041': 'EVT',      # sports season
+    # 이슈 #30 추가: 1회성 사건 커버리지 확대
+    'Q40231': 'EVT',         # election
+    'Q3306904': 'EVT',       # peace agreement
+    'Q1768295': 'EVT',       # uprising / rebellion
+    'Q56019': 'EVT',         # military campaign
+    'Q11514315': 'EVT',      # historical period
+    'Q132241': 'EVT',        # concert tour
+    'Q19953632': 'EVT',      # sports competition (specific)
+    'Q500834': 'EVT',        # tournament (specific instance)
+    'Q5413056': 'EVT',       # film festival edition
+    'Q464980': 'EVT',        # historical battle
+    'Q41397': 'EVT',         # genocide
+    'Q1685451': 'EVT',       # coronation
+    'Q1656682': 'EVT',       # event (generic)
 
     # POL (정당·정부·군·국제기구)
     'Q7278': 'ORG',          # political party

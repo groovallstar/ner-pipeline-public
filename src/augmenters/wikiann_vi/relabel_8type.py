@@ -73,6 +73,12 @@ def match_offsets(text: str, spans: List[dict]) -> List[dict]:
     if not text or not spans:
         return []
 
+    # LLM 이 가끔 dict 대신 문자열·int 등 잘못된 타입을 섞어 반환하는
+    # 케이스 방어. dict 가 아닌 항목은 안전하게 건너뛴다.
+    spans = [s for s in spans if isinstance(s, dict)]
+    if not spans:
+        return []
+
     indexed = sorted(
         enumerate(spans),
         key=lambda p: -len((p[1].get('text') or '')),

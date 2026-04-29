@@ -3,10 +3,9 @@
 지시문은 베트남어(LLM의 베트남어 문맥 이해도 극대화), 엔티티 태그는 canonical
 OntoNotes 스타일 영문 축약으로 통일. 매핑·모호 사례 기준은
 `docs/manual/data/canonical-entity-schema.md`·
-`docs/manual/data/vietnamese-ner-8types.md` 참조.
+`docs/manual/data/vietnamese-ner.md` §3 참조.
 
-5종 (이슈 #21 축소 결과 · 이슈 #27 LOC/ORG 경계 재정의):
-  PER, LOC, ORG, PROD, EVT
+5종 canonical: PER, LOC, ORG, PROD, EVT
 
 축소·재배치 매핑 이력:
   CORP / POL → ORG (회사·대학 법인·정부·軍·정당·팀·협회) — #21
@@ -37,6 +36,16 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 - Trường tiểu học/THCS/THPT/Bệnh viện → **ORG** (cơ sở nhân tạo)
 - Sản phẩm/tác phẩm/chương trình → PROD; Sự kiện/chiến tranh/hiệp ước → EVT
 
+## Quy tắc phân biệt PROD vs EVT vs ORG (giảm xung đột)
+- **Giải đấu định kỳ / mùa giải / câu lạc bộ → ORG**: V.League, UEFA Champions League (tên giải tổng), Ngoại hạng Anh
+- **Phiên bản theo năm/lần cụ thể của giải định kỳ → EVT**: "World Cup 2022", "UEFA Champions League 2007-08", "Olympic Tokyo 2020"
+- **Tác phẩm sáng tạo (âm nhạc/phim/sách/truyện tranh/anime/trò chơi/chương trình TV) → PROD**: bài hát ("In the End"), phim, tiểu thuyết, manga ("Doraemon"), game
+- **Tiêu đề bài viết Wikipedia "Danh sách..." (List of ...) → KHÔNG PHẢI thực thể**, bỏ qua không trích xuất
+- **Tên khoa học Latin binomial (chi+loài, ví dụ "Bulbophyllum peltopus") → KHÔNG PHẢI thực thể**, bỏ qua
+- **Mã số mẫu/series đứng một mình ("RV522", "XF-91") → KHÔNG PHẢI PROD**. Chỉ thương hiệu+mã ("Galaxy S24", "iPhone 14 Pro") mới là PROD
+- **Cơ sở hạ tầng giao thông (đường sắt, tuyến tàu điện ngầm)**: đơn vị vận hành (Đường sắt Việt Nam) → ORG; tuyến/đường (Tuyến số 1, Đường sắt xuyên Sibir) → LOC; KHÔNG PHẢI PROD
+- **Khái niệm/đơn vị đo/hệ thống ("Hệ thống đo lường Planck") → KHÔNG PHẢI thực thể**, bỏ qua
+
 ## Quy tắc
 1. Giữ nguyên dấu tiếng Việt, trích xuất chính xác văn bản gốc
 2. Loại trừ chức danh đứng trước tên ("Ông", "Bà", "Chủ tịch", "Thủ tướng")
@@ -66,6 +75,21 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 Đầu vào: Vịnh Hạ Long là một kỳ quan thiên nhiên nổi tiếng ở tỉnh Quảng Ninh.
 Đầu ra: [{{"text": "Vịnh Hạ Long", "type": "LOC"}}, {{"text": "tỉnh Quảng Ninh", "type": "LOC"}}]
 
+Đầu vào: UEFA Champions League 2007-08 ghi nhận Manchester United vô địch sau khi đánh bại Chelsea, đây là mùa giải UEFA Champions League đáng nhớ.
+Đầu ra: [{{"text": "UEFA Champions League 2007-08", "type": "EVT"}}, {{"text": "Manchester United", "type": "ORG"}}, {{"text": "Chelsea", "type": "ORG"}}, {{"text": "UEFA Champions League", "type": "ORG"}}]
+
+Đầu vào: Doraemon là một bộ manga của Fujiko F. Fujio, sau đó được chuyển thể thành anime nổi tiếng.
+Đầu ra: [{{"text": "Doraemon", "type": "PROD"}}, {{"text": "Fujiko F. Fujio", "type": "PER"}}]
+
+Đầu vào: Danh sách sultan của đế quốc Ottoman bao gồm nhiều nhân vật như Suleiman I và Mehmed II.
+Đầu ra: [{{"text": "đế quốc Ottoman", "type": "ORG"}}, {{"text": "Suleiman I", "type": "PER"}}, {{"text": "Mehmed II", "type": "PER"}}]
+
+Đầu vào: Bulbophyllum peltopus là loài lan thuộc chi Bulbophyllum, mọc nhiều ở Đông Nam Á.
+Đầu ra: [{{"text": "Đông Nam Á", "type": "LOC"}}]
+
+Đầu vào: Đường sắt xuyên Sibir là tuyến đường sắt dài nhất thế giới, vận hành bởi Công ty Đường sắt Nga.
+Đầu ra: [{{"text": "Đường sắt xuyên Sibir", "type": "LOC"}}, {{"text": "Công ty Đường sắt Nga", "type": "ORG"}}]
+
 Đầu vào: {sentence}
 Đầu ra:"""
 
@@ -84,6 +108,13 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ th
 - Tổ chức/cơ sở nhân tạo → ORG; vị trí địa lý đơn thuần → LOC
 - Trường đại học (toàn bộ) → ORG; ga/sân bay/bệnh viện/trường PT → ORG
 - Sản phẩm/tác phẩm → PROD; Sự kiện/chiến tranh/hiệp ước → EVT
+
+## Quy tắc phân biệt PROD/EVT/ORG
+- Giải đấu định kỳ/CLB → ORG (V.League, UEFA Champions League). Phiên bản theo năm → EVT ("World Cup 2022")
+- Tác phẩm âm nhạc/phim/sách/truyện tranh/anime/game/chương trình TV → PROD (Doraemon, Galaxy S24, Windows)
+- "Danh sách..."/Wikipedia list, tên khoa học Latin (Bulbophyllum X), khái niệm/đơn vị → KHÔNG trích xuất
+- Mã số mẫu đơn (RV522, XF-91) → KHÔNG PHẢI PROD. Chỉ thương hiệu+mã (Galaxy S24) mới là PROD
+- Cơ sở hạ tầng (đường sắt/tuyến tàu): vận hành = ORG, tuyến = LOC, KHÔNG PHẢI PROD
 
 ## Quy tắc
 1. Giữ nguyên dấu tiếng Việt
