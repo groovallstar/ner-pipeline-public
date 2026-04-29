@@ -35,7 +35,7 @@
 
 ### Phase 4 — canonical 시설=ORG 재정의 + 재측정
 
-- [ ] `docs/manual/data/canonical-entity-schema.md` 재작성 — 변경 이력
+- [ ] `docs/manual/data/japanese-canonical-entity-schema.md` 재작성 — 변경 이력
       2026-04-28 (#27) 추가, LOC/ORG 정의 갱신, 핵심 경계 케이스 표 갱신
 - [ ] `src/labelers/ja/dataset_loader.py` `JA_TO_CANONICAL`: `施設名 LOC → ORG`
 - [ ] `src/labelers/ja/ner_prompts.py` 5종 가이드 전면 갱신 (시설=ORG 예시)
@@ -65,7 +65,7 @@
 
 ### Phase 4 (완료 — 2026-04-28)
 
-- [x] 4.1 canonical 스키마 문서 재작성 (`docs/manual/data/canonical-entity-schema.md`)
+- [x] 4.1 canonical 스키마 문서 재작성 (`docs/manual/data/japanese-canonical-entity-schema.md`)
 - [x] 4.2 Stockmark 1회성 재덤프 (`/tmp/regen_stockmark.py` + LLM 검증/정정)
 - [x] 4.3 JA ner_prompts 가이드 갱신 (시설=ORG 예시·경계 규칙)
 - [x] 4.4 VI ner_prompts 동기화 (시설=ORG 정의)
@@ -134,7 +134,7 @@
 
 - #21 (JA 5종 축소)
 - #23 (VI Rule 4·5 효과 입증, PR #25)
-- `docs/manual/data/canonical-entity-schema.md` (시설 = ORG 재정의)
+- `docs/manual/data/japanese-canonical-entity-schema.md` (시설 = ORG 재정의)
 - `docs/reports/japanese-ner-benchmark.md` (재벤치 대상)
 - `docs/issues/handoff-post-issue-23-quality-validation.md` (J1·J2 합본
   결정 근거)

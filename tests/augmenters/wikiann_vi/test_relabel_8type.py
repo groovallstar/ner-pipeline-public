@@ -102,6 +102,19 @@ class TestMatchOffsets:
         assert match_offsets('abc', []) == []
         assert match_offsets('', [{'text': 'x', 'type': 'y'}]) == []
 
+    def test_non_dict_spans_skipped(self):
+        """LLM 이 dict 대신 str/int 등 잘못된 타입 섞어 반환할 때 안전 폴백."""
+        text = 'Hà Nội là thủ đô.'
+        spans = [
+            'Hà Nội',                                  # 잘못된 타입 (str)
+            {'text': 'Hà Nội', 'type': 'LOC'},         # 정상
+            42,                                        # 잘못된 타입 (int)
+            None,                                      # 잘못된 타입 (None)
+        ]
+        result = match_offsets(text, spans)
+        assert len(result) == 1
+        assert result[0]['type'] == 'LOC'
+
     def test_missing_fields_skipped(self):
         text = 'Hà Nội.'
         spans = [

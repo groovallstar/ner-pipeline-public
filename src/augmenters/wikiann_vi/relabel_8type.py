@@ -10,8 +10,8 @@ vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 5종 엔�
 - `match_offsets`: LLM 표면형 span을 원본 텍스트 오프셋에 매핑 (중복 안전 소비).
 - `Relabeler`: concurrency 제한 + usage 누적을 가진 async 재라벨러.
 
-canonical 라벨 정의는 `docs/manual/data/canonical-entity-schema.md`,
-모호 사례 기준은 `docs/manual/data/vietnamese-ner-8types.md` 참조.
+canonical 라벨 정의는 `docs/manual/data/japanese-canonical-entity-schema.md`,
+모호 사례 기준은 `docs/manual/data/vietnamese-ner.md` §3 참조.
 """
 import asyncio
 import json
@@ -71,6 +71,12 @@ def match_offsets(text: str, spans: List[dict]) -> List[dict]:
     반환 순서는 LLM 출력 원래 순서를 보존한다.
     """
     if not text or not spans:
+        return []
+
+    # LLM 이 가끔 dict 대신 문자열·int 등 잘못된 타입을 섞어 반환하는
+    # 케이스 방어. dict 가 아닌 항목은 안전하게 건너뛴다.
+    spans = [s for s in spans if isinstance(s, dict)]
+    if not spans:
         return []
 
     indexed = sorted(

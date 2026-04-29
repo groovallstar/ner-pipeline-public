@@ -14,8 +14,11 @@
 - `precision`     : high + qwen_only  (B의 보수적 커버리지, conflict 제외)
 - `high_only`     : high 만             (양쪽 합의, 최고신뢰)
 - `full`          : 전부 포함 (conflict 포함)
+- `recall_strict` : recall 정책 + PROD/EVT 는 high 만 (PROD/EVT 합의율
+                    낮은 점을 보정하기 위해 신규 type 의 medium 을 drop)
 
 이슈 #10 §10.2 신뢰도 계층별 학습 데이터 활용 구조의 단일-파일 구현.
+이슈 #30 §8.2 — 타입별 신뢰도 격차를 반영한 type-aware 필터(`recall_strict`).
 """
 import argparse
 import json
@@ -26,7 +29,10 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-POLICIES = ('recall', 'precision', 'high_only', 'full')
+POLICIES = ('recall', 'precision', 'high_only', 'full', 'recall_strict')
+
+# recall_strict 에서 high 만 허용할 type — 신규 5종 중 합의율 낮은 두 type
+HIGH_ONLY_TYPES = frozenset({'PROD', 'EVT'})
 
 
 def _span_map(spans: List[dict]) -> Dict[Tuple[int, int], dict]:
@@ -116,6 +122,19 @@ def _filter_by_policy(
         allowed = {'high'}
     elif policy == 'full':
         return list(spans)
+    elif policy == 'recall_strict':
+        # PER/LOC/ORG 는 recall 정책 (high+medium_recall),
+        # PROD/EVT 는 high 만 (합의율 낮은 신규 type 보수 처리).
+        return [
+            s for s in spans
+            if (
+                s['type'] in HIGH_ONLY_TYPES
+                and s['confidence'] == 'high'
+            ) or (
+                s['type'] not in HIGH_ONLY_TYPES
+                and s['confidence'] in {'high', 'medium_recall'}
+            )
+        ]
     else:
         raise ValueError(f'unknown policy: {policy}')
     return [s for s in spans if s['confidence'] in allowed]

@@ -6,7 +6,7 @@
 
 **측정일**: 2026-04-28 (Phase 4)
 **입력**: `data/stockmark/{train,test}.jsonl` (5종 canonical, 시설=ORG, #27 Phase 4 기준)
-**출력**: `data/pii/stockmark_pii_{train,test}.jsonl` + `.stats.json` + `.verify.json`
+**출력**: `data/stockmark/pii_{train,test}.jsonl` + `.stats.json` + `.verify.json`
 **Inject 모델**: cyankiwi/gemma-4-31B-it-AWQ-8bit (vLLM TP=1, GPU 1, 포트 8081)
 **Verify 모델**: cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit (vLLM TP=1, GPU 2, 포트 8082)
 **Verify policy**: `drop_span` — 미확인 span 만 제거, 레코드 보존
@@ -161,13 +161,13 @@ GPU 2) 가 **GPU 별도라 동시 구동 가능**. 측정 격리는 NER 벤치(�
 ## 7. 산출 파일
 
 ```
-data/pii/
-├── stockmark_pii_train.jsonl          # 4,243 records / 14,021 entities
-├── stockmark_pii_train.stats.json
-├── stockmark_pii_train.verify.json
-├── stockmark_pii_test.jsonl           # 1,064 records / 3,504 entities
-├── stockmark_pii_test.stats.json
-└── stockmark_pii_test.verify.json
+data/stockmark/
+├── pii_train.jsonl          # 4,243 records / 14,021 entities
+├── pii_train.stats.json
+├── pii_train.verify.json
+├── pii_test.jsonl           # 1,064 records / 3,504 entities
+├── pii_test.stats.json
+└── pii_test.verify.json
 ```
 
 스키마: `{id, text, entities:[{label, start_char, end_char, text}]}`. 라벨은
@@ -179,7 +179,7 @@ canonical 10종 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`)
 # train
 python -m augmenters.pii \
   --source stockmark --lang ja \
-  --output data/pii/stockmark_pii_train.jsonl \
+  --output data/stockmark/pii_train.jsonl \
   --mode llm --llm-concurrency 32 \
   --inject-url http://localhost:8081/v1 \
   --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
@@ -191,6 +191,6 @@ python -m augmenters.pii \
 # test
 python -m augmenters.pii \
   --source jsonl --input data/stockmark/test.jsonl --lang ja \
-  --output data/pii/stockmark_pii_test.jsonl \
+  --output data/stockmark/pii_test.jsonl \
   ... (동일 inject/verify 옵션)
 ```

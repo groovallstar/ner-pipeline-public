@@ -2,7 +2,7 @@
 
 예:
     python -m augmenters.pii --source stockmark --lang ja \\
-        --output /data/ner/ja_stockmark_pii.jsonl --n-samples 100
+        --output data/stockmark/pii_test.jsonl --n-samples 100
 """
 from __future__ import annotations
 

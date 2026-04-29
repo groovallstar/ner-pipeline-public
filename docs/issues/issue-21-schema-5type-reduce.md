@@ -74,7 +74,7 @@ LOC 3,266 · PROD 1,215 · EVT 1,009
     부분집합이므로 변경 불필요
   - 신규 `tests/augmenters/migration/test_reduce_5type.py` (1회성)
 - **문서 갱신** (과거 포함, 조용한 치환):
-  - `docs/manual/data/canonical-entity-schema.md` — 13종 → **10종
+  - `docs/manual/data/japanese-canonical-entity-schema.md` — 13종 → **10종
     단일 목록** (`PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM
     CREDIT_CARD`). NER/PII 구분 섹션을 없애고 10종 평면 테이블로 재작성.
     경계 규칙·대학 2단 규칙 축소판 포함
@@ -227,7 +227,7 @@ JSONL만 읽는다(HF 원본 로딩 및 런타임 라벨 매핑은 제거). 1회
 - PII 클래스 오탐(EMAIL/PHONE/ID_NUM/CREDIT_CARD): **0건**
 - DAT 예측 3건: 설계 의도(모든 날짜 추출). Stockmark gold는 DAT 비포함
   이므로 해당 예측은 span F1 산출 시 FP로 잡혀 precision이 DAT 예측
-  건수만큼 하락함을 `canonical-entity-schema.md` §평가 시 주의에 명시
+  건수만큼 하락함을 `japanese-canonical-entity-schema.md` §평가 시 주의에 명시
 
 PII-주입 5 샘플:
 - gold 라벨 `ORG 5 · PER 1 · EMAIL 3 · PHONE 1 · DAT 2 · LOC 1`
