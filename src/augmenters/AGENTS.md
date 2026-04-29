@@ -3,7 +3,7 @@
 학습 데이터 증강(augmentation) 모듈 모음.
 
 라벨 스키마는 canonical 영문 축약 **13종**
-(`docs/manual/data/canonical-entity-schema.md`). NER 8종
+(`docs/manual/data/japanese-canonical-entity-schema.md`). NER 8종
 (`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`) + 일반 날짜 1종(`DAT`) + PII 4종
 (`EMAIL/PHONE/ID_NUM/CREDIT_CARD`). 이전 `ADDRESS`는 `LOC`로 흡수,
 `DOB`는 `DAT`로 개명·확장되었다 (#17 Phase 1).
@@ -71,11 +71,11 @@ BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있�
 ```bash
 # suffix 모드 (규칙 기반, 결정론적, LLM 불필요)
 python -m augmenters.pii --source stockmark --lang ja \
-    --output /data/ner/ja_stockmark_pii.jsonl --n-samples 1000
+    --output data/stockmark/pii_test.jsonl --n-samples 1000
 
 # llm 모드 (자연 삽입, vLLM 필요) + 교차 검증
 python -m augmenters.pii --source stockmark --lang ja \
-    --output /data/ner/ja_stockmark_pii.jsonl --n-samples 1000 \
+    --output data/stockmark/pii_test.jsonl --n-samples 1000 \
     --mode llm \
     --vllm-url http://localhost:8081/v1 \
     --vllm-model Qwen/Qwen3.5-27B \

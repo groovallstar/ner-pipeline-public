@@ -91,7 +91,7 @@
 ## 참고
 
 - 선행 리포트: `docs/reports/japanese-ner-*-2026-04.md`, 메타
-  `japanese-pii-model-selection-2026-04.md`
+  `augmentation-model-selection.md`
 - 선행 이슈: #5 / `docs/issues/issue-5-stockmark-1000-pii-bench.md`
 - 선행 이슈: #10 / `docs/issues/issue-10-vi-ner-8type-relabel.md` —
   VI loader·라벨러·8종 재라벨 작업 이전

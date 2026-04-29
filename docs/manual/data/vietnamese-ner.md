@@ -2,7 +2,7 @@
 
 > 대상 데이터셋: WikiANN Vietnamese (`unimelb-nlp/wikiann`, config=`vi`, 원본 3종 PER/LOC/ORG)
 > 라벨러 출력 스키마: canonical 10종 평면 (NER 5종 + PII 5종)
-> 라벨 정의의 단일 출처: `docs/manual/data/canonical-entity-schema.md`
+> 라벨 정의의 단일 출처: `docs/manual/data/japanese-canonical-entity-schema.md`
 
 ## 목차
 
@@ -110,7 +110,7 @@ WikiANN test split → augmenters/wikiann_vi/__main__.py
 | `ID_NUM` | 주민번호·CCCD·세무번호 | |
 | `CREDIT_CARD` | 신용카드 번호 | 13~19 자리 |
 
-**상세 정의·경계 규칙·모호 사례 처리는 `docs/manual/data/canonical-entity-schema.md` 단일 출처.**
+**상세 정의·경계 규칙·모호 사례 처리는 `docs/manual/data/japanese-canonical-entity-schema.md` 단일 출처.**
 
 본 라벨러는 WikiANN 평가 외에 PII 주입본 평가와 코드를 공유하므로 10종 출력 공간을 유지한다. WikiANN 3종 gold 로 평가 시 PROD/EVT/PII 5종 출력은 FP 로 잡혀 precision 이 인위적으로 하락하는데, 이는 의도된 trade-off.
 

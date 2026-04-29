@@ -62,10 +62,10 @@ canonical Stockmark JSONL 덤프를 그대로 읽는다. HF Hub 자동 로딩·�
 
 | 항목 | 값 |
 |------|------|
-| 입력 경로 | `data/stockmark/train.jsonl`, `data/stockmark/test.jsonl` |
+| 입력 경로 | `data/stockmark/train.jsonl`, `data/stockmark/test.jsonl` (NER 5종) · `data/stockmark/pii_train.jsonl`, `data/stockmark/pii_test.jsonl` (PII 주입 10종) |
 | 라인 스키마 | `{id, text, entities:[{label, start_char, end_char, text}]}` |
 | 데이터 형식 | 원본 텍스트 + 문자 오프셋 span (BIO 아님) |
-| 라벨 공간 | canonical 10종 평면 (`PER/LOC/ORG/PROD/EVT/DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`) |
+| 라벨 공간 | NER 5종 (`PER/LOC/ORG/PROD/EVT`) — PII 주입본은 10종 평면 (5종 + `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`) |
 
 **코드:** `JapaneseDatasetLoader.load()` (`src/labelers/ja/dataset_loader.py`)
 
@@ -105,7 +105,7 @@ records = JapaneseDatasetLoader.load_local('data/.../pii_injected.jsonl')
 
 **코드:** `src/labelers/ja/ner_prompts.py` (`DEFAULT_ENTITY_TYPES`)
 
-canonical 10종 평면 목록 — NER/PII 구분 섹션 없음. 정의의 단일 출처는 `docs/manual/data/canonical-entity-schema.md`.
+canonical 10종 평면 목록 — NER/PII 구분 섹션 없음. 정의의 단일 출처는 `docs/manual/data/japanese-canonical-entity-schema.md`.
 
 | 태그 | 의미 | 설명 | 예시 |
 |------|------|------|------|

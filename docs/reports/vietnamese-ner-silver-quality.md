@@ -411,6 +411,6 @@ rm -f kappa_*.json wikidata_anchor_*.json
   - anchor: `src/augmenters/wikiann_vi/wikidata_anchor.py`
   - kappa: `src/augmenters/wikiann_vi/kappa.py`
   - 라벨링 CLI: `src/augmenters/wikiann_vi/__main__.py`, `src/augmenters/wikiann_vi/relabel_8type.py`
-- 라벨 정의: `docs/manual/data/canonical-entity-schema.md`, `docs/manual/data/vietnamese-ner.md`
+- 라벨 정의: `docs/manual/data/japanese-canonical-entity-schema.md`, `docs/manual/data/vietnamese-ner.md`
 - 이슈 md: `docs/issues/issue-30-vi-silver-quality-vs-3gold.md`
 - 테스트: `tests/augmenters/wikiann_vi/`, `tests/llm_eval/`

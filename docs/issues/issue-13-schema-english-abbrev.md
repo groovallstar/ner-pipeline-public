@@ -21,7 +21,7 @@ space만 영문 축약으로 전환한다. 이미 생성된 JSONL은 **결정론
 ## Canonical 14종
 
 정의·경계 규칙·예시·원본 매핑은 독립 문서로 분리:
-**[`docs/manual/data/canonical-entity-schema.md`](../manual/data/canonical-entity-schema.md)**
+**[`docs/manual/data/japanese-canonical-entity-schema.md`](../manual/data/japanese-canonical-entity-schema.md)**
 
 요약:
 - 8종: `PER CORP LOC FAC PROD EVT POL ORG`
