@@ -6,15 +6,13 @@
 > Wikidata 앵커 외부 검증으로 PROD/EVT(직접 gold 없음)의 신뢰도를 추정한다.
 
 **대상 데이터셋**: HuggingFace `unimelb-nlp/wikiann/vi` train/validation/test (각 20K/10K/10K)
-**라벨러**: `cyankiwi/gemma-4-31B-it-AWQ-8bit` (primary, 8081) + `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` (validator, 8082, MoE 활성 ~3B)
+**라벨러**: Gemma (primary) + Qwen (validator) — 풀 식별자는 §1.1
 **평가지표**: 문자 offset span F1 (`metrics/span_metrics.compute_offset_span_f1`)
 **라벨 스키마**: PER · LOC · ORG · PROD · EVT (canonical 5종)
 
 ---
 
-## 0. 측정 구조 및 한계 (먼저 읽을 것)
-
-### 0.1 측정 대상
+## 0. 측정 대상
 
 ```
 [입력 문장: WikiANN-vi 40K]
@@ -27,20 +25,8 @@
                             gold 와 strict span match (start, end, type)
 ```
 
-### 0.2 본 측정의 핵심 한계
-
-| 한계 | 영향 받는 type | 의미 |
-|---|---|---|
-| **gold 가 3종만 보유** | PROD, EVT | 직접 F1 측정 불가능 — 간접 신호로만 추정 |
-| **gold 와 silver 의 LOC/ORG 정의 불일치** | LOC, ORG | gold 는 시설=LOC, silver 는 시설=ORG. type mismatch 가 F1 ↓ 의 일부 원인 |
-| **gold 자체가 자동 생성 silver** | 모든 type | WikiANN 은 인간 검수 일부만 들어간 자동 라벨링. 절대 정답이 아님 |
-| **PER 만 정의가 일치** | PER | 본 측정에서 silver 라벨러의 절대 성능을 직접 측정 가능한 유일한 type |
-
-### 0.3 따라서 본 리포트의 결론은 type 별로 신뢰 수준이 다르다
-
-- **PER F1**: 라벨러 절대 성능의 직접 지표 — 신뢰 가능
-- **LOC/ORG F1**: 라벨러 성능 + 스키마 차이가 섞인 값 — *모델 간 상대 비교*만 의미 있음
-- **PROD/EVT**: 직접 F1 불가 — cross-model agreement + Wikidata anchor 으로 간접 추정
+> 본 측정의 한계(gold 자체가 silver, PROD/EVT 직접 F1 불가, LOC/ORG 정의
+> 불일치 등)는 §8 에 모았다. type 별 신뢰 등급 결론은 §9.1.
 
 ---
 
@@ -52,8 +38,8 @@
 |---|---|
 | 데이터셋 | `unimelb-nlp/wikiann` config=`vi`, splits=`train`/`validation`/`test` |
 | 전체 크기 | train 20,000 + validation 10,000 + test 10,000 = 40,000 |
-| 모델 A (primary) | `cyankiwi/gemma-4-31B-it-AWQ-8bit` @ :8081 (Dense 31B, AWQ-8) |
-| 모델 B (validator) | `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` @ :8082 (MoE 활성 ~3B, AWQ-4) |
+| Gemma (primary) | `cyankiwi/gemma-4-31B-it-AWQ-8bit`, 포트 8081, dense 31B AWQ-8 |
+| Qwen (validator) | `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit`, 포트 8082, MoE 활성 ~3B AWQ-4 |
 | 프롬프트 | `src/augmenters/wikiann_vi/prompts.py` SINGLE (~5K chars 포함 PROD/EVT 6규칙) |
 | 요청 제어 | concurrency=16, temperature=0, max_tokens=2048, timeout=120s |
 | max_model_len | 8192 |
@@ -112,7 +98,7 @@ data/wikiann_vi/
 }
 ```
 
-`recall_strict` 정책 통과한 entity 만 포함. drop 된 span 위치는 BIO 변환 시 `O` 로 처리. 다른 정책 (recall, precision, high_only) 또는 per-model 평가가 필요하면 §12 재현 명령으로 재생성.
+`recall_strict` 정책 통과한 entity 만 포함. drop 된 span 위치는 BIO 변환 시 `O` 로 처리. 다른 정책 (recall, precision, high_only) 또는 per-model 평가가 필요하면 §10 재현 명령으로 재생성.
 
 ---
 
@@ -122,12 +108,12 @@ data/wikiann_vi/
 
 | silver | split | overall F1 | P | R | PER | LOC | ORG |
 |---|---|---:|---:|---:|---:|---:|---:|
-| **gemma** | test | 0.5652 | 0.5980 | 0.5359 | **0.749** | 0.384 | 0.552 |
-| gemma | val | 0.5652 | 0.5978 | 0.5360 | **0.752** | 0.379 | 0.567 |
-| gemma | train | 0.5601 | 0.5901 | 0.5330 | **0.757** | 0.373 | 0.551 |
-| **qwen** | test | 0.5553 | 0.6364 | 0.4925 | **0.784** | 0.343 | 0.510 |
-| qwen | val | 0.5574 | 0.6408 | 0.4933 | **0.791** | 0.338 | 0.530 |
-| qwen | train | 0.5515 | 0.6318 | 0.4893 | **0.799** | 0.331 | 0.511 |
+| **Gemma** | test | 0.5652 | 0.5980 | 0.5359 | **0.749** | 0.384 | 0.552 |
+| Gemma | val | 0.5652 | 0.5978 | 0.5360 | **0.752** | 0.379 | 0.567 |
+| Gemma | train | 0.5601 | 0.5901 | 0.5330 | **0.757** | 0.373 | 0.551 |
+| **Qwen** | test | 0.5553 | 0.6364 | 0.4925 | **0.784** | 0.343 | 0.510 |
+| Qwen | val | 0.5574 | 0.6408 | 0.4933 | **0.791** | 0.338 | 0.530 |
+| Qwen | train | 0.5515 | 0.6318 | 0.4893 | **0.799** | 0.331 | 0.511 |
 
 ### 2.2 merge 정책 적용 silver (recall_strict)
 
@@ -137,15 +123,9 @@ data/wikiann_vi/
 | recall_strict | val | 0.5651 | 0.752 | 0.378 | 0.567 |
 | recall_strict | train | 0.5601 | 0.759 | 0.371 | 0.551 |
 
-→ recall_strict 의 PER/LOC/ORG F1 이 gemma 와 거의 동일한 이유: PROD/EVT high-only 필터는 PROD/EVT span 만 줄이므로 PER/LOC/ORG 평가에 영향 없음.
+→ recall_strict 의 PER/LOC/ORG F1 이 Gemma 와 거의 동일한 이유: PROD/EVT high-only 필터는 PROD/EVT span 만 줄이므로 PER/LOC/ORG 평가에 영향 없음.
 
-### 2.3 type 별 F1 분석
-
-| type | 정의 일치성 | F1 의 의미 | 권장 해석 |
-|---|---|---|---|
-| **PER** | gold = silver = "인물명" | 라벨러 절대 성능 | Qwen 0.78~0.80, Gemma 0.75~0.76 — 둘 다 production 임계 (0.85) 미달 |
-| **LOC** | gold ⊃ silver (gold 가 시설 포함) | F1 ↓ 의 일부는 스키마 차이 | 절대 비교 무의미. 모델 간 비교: 두 모델 비슷 (0.34~0.38) |
-| **ORG** | gold ⊂ silver (silver 가 시설 흡수) | precision 0.51~0.78 vs recall 0.39~0.46 → silver 가 광범위 추출 | 정의 차이로 R ↓ 가 자연. ORG 라벨러 보강의 정당화는 다른 메트릭으로 |
+> type 별 F1 의 의미 분석(정의 일치성, 절대/상대 해석)은 §9.1 신뢰 등급 표로 통합.
 
 ---
 
@@ -159,13 +139,13 @@ Gemma 라벨링 결과 기준 (라벨링 성공률 ~86%, 에러 0건):
 | validation | 11,177 | 4,030 | 2,879 | 2,562 | 1,297 | 209 |
 | train | 22,606 | 8,288 | 5,777 | 5,331 | 2,584 | 469 |
 
-→ PROD/EVT 도 학습 데이터로 충분한 빈도 확보 (train PROD 2,584, EVT 469). 별도 합성 데이터 보충 불필요 (§9 참조).
+→ PROD/EVT 도 학습 데이터로 충분한 빈도 확보 (train PROD 2,584, EVT 469). 별도 합성 데이터 보충 불필요 (§6 참조).
 
 ---
 
 ## 4. cross-model agreement — PROD/EVT 신뢰의 간접 신호
 
-직접 gold 가 없는 PROD/EVT 의 신뢰는 **두 독립 LLM (Gemma + Qwen) 의 합의율**로 추정한다. 합의율이 높을수록 무작위·환각 가능성이 낮음을 시사하지만, *공통 편향*은 잡지 못한다 (§10.2 참조).
+직접 gold 가 없는 PROD/EVT 의 신뢰는 **두 독립 LLM (Gemma + Qwen) 의 합의율**로 추정한다. 합의율이 높을수록 무작위·환각 가능성이 낮음을 시사하지만, *공통 편향*은 잡지 못한다 (§8.2 참조).
 
 ### 4.1 silver 합의율 (per-type, 3-split 평균)
 
@@ -178,6 +158,8 @@ Gemma 라벨링 결과 기준 (라벨링 성공률 ~86%, 에러 0건):
 | **PROD** | 52.7% | 신규 type, 합의 절반 수준 (가장 낮음) |
 
 ### 4.2 Cohen kappa (3-split)
+
+`po` = 관측 합의율 (observed agreement), `pe` = 우연 기대 합의율 (chance agreement). kappa = (po − pe) / (1 − pe).
 
 | split | kappa | po | pe |
 |---|---:|---:|---:|
@@ -264,7 +246,7 @@ LLM 재라벨 과정에서 WikiANN 의 silver 오라벨을 일부 교정하는 �
 - `Ốc móng tay` (조개류 요리): WikiANN gold = LOC → Gemma/Qwen 모두 skip (음식 = entity 아님)
 - `Lãm` (인명): WikiANN gold = non-entity → Gemma PER 신규 탐지
 
-다만 교정 규모를 정량화하려면 진짜 gold 수준의 수작업 평가가 필요 — 본 프로젝트 제약으로 수작업 검증 불가하므로 정성 언급에 한정. 본 리포트 §0 한계의 일부.
+다만 교정 규모를 정량화하려면 진짜 gold 수준의 수작업 평가가 필요 — 본 프로젝트 제약으로 수작업 검증 불가하므로 정성 언급에 한정. 본 리포트 §8 한계의 일부.
 
 ---
 
@@ -331,7 +313,7 @@ WikiANN-vi 는 Wikipedia 기사 첫 문장을 문장 단위로 분리한 데이�
 
 3. **5-종 silver 만으로 production 모델 학습은 부족**
    - 절대 F1 가 0.55~0.57 (PER/LOC/ORG 평균) — production 임계 (0.85+) 한참 미달
-   - 다만 본 측정의 한계 (§10) 를 감안하면 실제 production 성능은 더 높을 가능성이 큼
+   - 다만 본 측정의 한계 (§8) 를 감안하면 실제 production 성능은 더 높을 가능성이 큼
    - 권장: silver 로 사전학습 → 소량 인간 검수 라벨로 fine-tune
 
 ### 9.3 운영 제안 (주·보조 라벨러 분리)

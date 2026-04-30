@@ -34,7 +34,7 @@ data/wikiann_vi/
 └── wikidata_cache.json      # API 캐시 (재실행 효율용)
 ```
 
-중간 산출물(개별 모델 silver, 다른 정책 변종, kappa, anchor)은 분석 후 정리. 재현은 본 이슈 §3 + 리포트 §12 명령으로 가능.
+중간 산출물(개별 모델 silver, 다른 정책 변종, kappa, anchor)은 분석 후 정리. 재현은 본 이슈 §3 + 리포트 §10 명령으로 가능.
 
 ## 3. 작업 분해 (체크박스 ≠ 커밋, 관심사 단위로 나중에 묶음)
 
@@ -131,144 +131,33 @@ CLAUDE.md "커밋 입도" 기준 적용:
 - **엔티티**: 5종 고정 (PER · LOC · ORG · PROD · EVT)
 - **정책**: 1차 산출물(Gemma·Qwen 단독) F1 비교 결과 본 후 사용자가 정책 결정 → 그 정책으로 merge 재실행 후 평가 재실행
 
-## 7. 1차 측정 결과 (silver vs WikiANN-vi 3-gold, span F1)
+## 7. 1차 측정 결과
 
-| silver | split | F1 | P | R | PER | LOC | ORG |
-|---|---|---|---|---|---|---|---|
-| Gemma | test | 0.558 | 0.582 | 0.536 | 0.723 | 0.383 | 0.557 |
-| Gemma | val | 0.556 | 0.581 | 0.534 | 0.728 | 0.374 | 0.568 |
-| Gemma | train | 0.551 | 0.573 | 0.531 | 0.731 | 0.370 | 0.550 |
-| Qwen | test | 0.560 | 0.628 | 0.505 | 0.787 | 0.345 | 0.515 |
-| Qwen | val | 0.566 | 0.639 | 0.508 | 0.804 | 0.342 | 0.534 |
-| Qwen | train | 0.561 | 0.631 | 0.504 | 0.812 | 0.337 | 0.513 |
+수치 표·해석은 모두 리포트로 이전(`docs/reports/vietnamese-ner-silver-quality.md` §2·§4). 본 이슈에는 1차 비교가 후속 작업(§8) 의 출발점이었다는 사실만 남긴다.
 
-### 7.1 해석 — 정의 일치 여부로 분리
-
-| entity | 정의 일치성 | 의미 |
-|---|---|---|
-| **PER** | 같음 | 라벨러 절대 성능 직접 측정 가능. Qwen 0.79~0.81, Gemma 0.72~0.73 |
-| **LOC** | 다름 (gold=지리+시설, silver=지리만) | F1 ↓ 의 일부는 스키마 차이. 절대 성능 추정 어려움 |
-| **ORG** | 다름 (silver 가 시설 흡수) | 마찬가지 — silver ORG P 0.73~0.78 vs R 0.39~0.46 → 광범위 추출 |
-| **PROD/EVT** | gold 없음 | 직접 비교 불가 — 간접 신호로 추정해야 함 |
-
-### 7.2 cross-model 합의율 (PROD/EVT 신뢰의 간접 신호)
-
-| type | test | val | train | 평균 |
-|---|---|---|---|---|
-| PER | 71.4% | 69.9% | 71.1% | 70.8% |
-| LOC | 77.2% | 76.4% | 77.7% | 77.1% |
-| ORG | 76.4% | 76.3% | 75.2% | 75.9% |
-| EVT | 57.0% | 55.5% | 55.7% | 56.1% |
-| PROD | 46.9% | 46.2% | 47.7% | 46.9% |
-
-→ PROD/EVT 합의율이 PER/LOC/ORG 의 60~65% 수준. **신규 type 신뢰 부족** 확인.
-
-### 7.3 cohen kappa (3-split 안정)
-
-- test 0.6284 / validation 0.6179 / train 0.6285 → 모든 split 에서 일관된 ~0.62.
+요지:
+- PER 만 정의가 같아 절대 측정 가능 (Gemma 0.72~0.76, Qwen 0.78~0.81)
+- LOC/ORG 는 silver↔gold 정의 불일치로 절대값 무의미
+- PROD/EVT 는 직접 측정 불가 → 합의율·anchor 로 간접 추정 필요
 
 ## 8. PROD/EVT 신뢰도 향상 — 후속 작업 (3전략)
 
-### 8.1 disagreement 패턴 (test split 분석)
+1차 측정에서 PROD/EVT 합의율이 47~57% 로 PER/LOC/ORG 대비 60~65% 수준에 머물러 신뢰 보강 필요. 세 전략을 병렬 실행:
 
-- conflict 패턴 top: LOC↔ORG(55), LOC↔PER(38), **ORG↔PROD(17)**, **PER↔PROD(15)**, **EVT↔ORG(13)**, **EVT↔PROD(9)**
-- Gemma 단독 PROD: 영어 노래 강함, 작품 약함
-- Qwen 단독 PROD: 작품 강함, 노래 약함
-- 공통 노이즈: 식물 학명, "Danh sách..." (Wikipedia 리스트 글), 모델 번호 단독
+- **전략 1 — type-aware 정책**: `merge_confidence._filter_by_policy` 에 분기 추가. PROD/EVT 만 `high` 강제, PER/LOC/ORG 는 `recall` 유지 → `recall_strict` 정책 신설.
+- **전략 2 — 프롬프트 규칙 보강 후 재라벨링**: 리그/대회·작품·리스트글·학명·모델번호·인프라 6개 규칙을 `src/labelers/vi/ner_prompts.py` + `src/augmenters/wikiann_vi/prompts.py` 에 추가. Gemma+Qwen 동시 재라벨링.
+- **전략 3 — Wikidata anchor PROD/EVT 매핑 확장**: `wikidata_anchor.py::WIKIDATA_TO_CANONICAL` 에 PROD(film/song/album/video game/book/free software) + EVT(war/treaty/election/championship instance) Q-ID 추가, 캐시 재사용.
 
-### 8.2 전략 1 — Consensus filter (type-aware policy, ~30분)
+세 전략 산출물의 최종 측정치는 리포트 §4·§5 참조.
 
-- `merge_confidence._filter_by_policy` 에 type-aware 분기 추가
-- PROD/EVT 는 `high` 만, PER/LOC/ORG 는 기존 정책 (recall 등) 그대로
-- 학습 데이터 양 ↓, 신뢰 ↑
+## 9. 결과
 
-### 8.3 전략 2 — Prompt 규칙 보강 + 재라벨링 (~2시간 wall-clock)
+검증 완료 수치는 모두 리포트로 단일화:
 
-`src/labelers/vi/ner_prompts.py` + `src/augmenters/wikiann_vi/prompts.py` 양쪽에 추가:
-
-```
-6. 연간 리그·정기 대회 → ORG. 특정 연도판만 EVT
-   (예: V-League=ORG, "World Cup 2022"=EVT)
-7. 음악·영화·책·만화·게임·TV 프로그램 = PROD
-8. Wikipedia "Danh sách..."(List of) 글 제목은 entity 아님 → 무시
-9. 학명·종 학술명 (Latin binomial, Bulbophyllum X) 은 무시
-10. 모델 번호 단독 ("RV522") 은 PROD 아님. 브랜드+모델 결합만 PROD
-11. 인프라 (철도노선·지하철노선) → 운영주체=ORG, 경로=LOC. PROD 아님
-```
-
-→ Gemma+Qwen 동시 재라벨링 (test 25분 + val 25분 + train 50분 = ~100분 wall-clock).
-
-### 8.4 전략 3 — Wikidata anchor PROD/EVT 매핑 추가 (~1.5시간)
-
-`wikidata_anchor.py::WIKIDATA_TO_CANONICAL` 확장:
-
-```python
-# PROD
-'Q341':   'PROD',  # free software
-'Q7889':  'PROD',  # video game
-'Q11424': 'PROD',  # film
-'Q7366':  'PROD',  # song
-'Q482994': 'PROD', # album
-'Q571':   'PROD',  # book
-# EVT
-'Q198':   'EVT',   # war
-'Q625298': 'EVT',  # peace treaty
-'Q40231': 'EVT',   # election
-'Q27968055': 'EVT', # championship instance
-```
-
-→ 캐시 재사용 (기존 60% mapped + 신규 PROD/EVT QID 추가 fetch).
-
-### 8.5 진행 계획 (병렬, wall-clock ~2.5시간)
-
-```
-t=0~30   전략 1 구현 + 테스트
-t=10~120 전략 2 프롬프트 수정 + 재라벨링 (백그라운드)  ─┐
-t=10~90  전략 3 anchor 매핑 추가 + 코드               │← 병렬
-t=120    전략 2 post-pipeline 자동 실행
-t=130    전략 3 재실행 (PROD/EVT 앵커링)
-t=150    합의율 + F1 비교 결과 통합
-```
-
-## 9. 결과 (현 상태 측정값)
-
-세부 지표·해석은 리포트 (`docs/reports/vietnamese-ner-silver-quality.md`) 참조. 본 섹션은 검증 완료된 핵심 수치만 기록.
-
-### 9.1 silver F1 vs WikiANN-vi 3-gold (PER/LOC/ORG)
-
-| silver | split | F1 | PER | LOC | ORG |
-|---|---|---:|---:|---:|---:|
-| recall_strict | test | 0.5652 | 0.750 | 0.382 | 0.553 |
-| recall_strict | val | 0.5651 | 0.752 | 0.378 | 0.567 |
-| recall_strict | train | 0.5601 | 0.759 | 0.371 | 0.551 |
-
-### 9.2 cross-model agreement (per-type, 3-split 평균)
-
-| type | LOC | ORG | PER | EVT | PROD |
-|---|---:|---:|---:|---:|---:|
-| 합의율 | 77.5% | 74.7% | 73.3% | 59.4% | 52.7% |
-
-### 9.3 Cohen kappa
-
-| split | test | val | train |
-|---|---:|---:|---:|
-| kappa | 0.6461 | 0.6419 | 0.6545 |
-
-### 9.4 Wikidata anchor agreement
-
-| split | mapped | overall | PER | LOC | ORG | PROD | EVT |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| test | 61.1% | 96.07% | 99.0% | 98.2% | 86.2% | 93.6% | 86.8% |
-| val | 60.6% | 96.37% | 99.0% | 98.8% | 86.2% | 95.2% | 89.5% |
-| train | 60.7% | 96.43% | 98.8% | 98.7% | 87.7% | 94.4% | 84.8% |
-
-### 9.5 recall_strict 데이터셋 크기
-
-| split | records | entities |
-|---|---:|---:|
-| train | 20,000 | 21,379 |
-| valid | 10,000 | 10,580 |
-| test | 10,000 | 10,669 |
+- silver F1 vs WikiANN-vi 3-gold → 리포트 §2
+- cross-model 합의율 + Cohen kappa → 리포트 §4
+- Wikidata anchor agreement → 리포트 §5
+- `recall_strict` 데이터셋 크기 → 리포트 §1.3
 
 ## 10. 검증 완료 사항
 
@@ -282,13 +171,9 @@ t=150    합의율 + F1 비교 결과 통합
 - [x] 본 이슈 md 결과 섹션 추가
 - [x] 전체 pytest 회귀 + ruff clean
 
-## 11. 한계 (리포트 §8 요약)
+## 11. 한계
 
-- gold 자체가 자동 생성 silver — ceiling 모름
-- PROD/EVT 직접 F1 측정 불가 — 간접 신호로만 추정
-- LOC/ORG F1 의 스키마 차이 분리 안 됨
-- cross-model agreement 는 공통 편향 미감지
-- Wikidata anchor 는 mapped 60% 만 검증 가능
+리포트 §8 참조.
 
 ## 12. 참조
 
