@@ -44,7 +44,7 @@
 ### 범위
 
 #### 포함
-- `docs/manual/data/canonical-entity-schema.md` — 14종 → 13종 (ADDRESS 삭제, DOB → DAT)
+- `docs/manual/data/japanese-canonical-entity-schema.md` — 14종 → 13종 (ADDRESS 삭제, DOB → DAT)
 - `docs/manual/data/japanese-ner.md` — PII 라벨 언급 부분 정합
 - `src/augmenters/pii/config.py` — `DEFAULT_LABELS`에서 ADDRESS 제거, DOB → DAT 개명
 - `src/augmenters/pii/injector.py` — `_SUFFIX_JA`에서 ADDRESS 템플릿 삭제, DOB → DAT 개명. `apply_label_merge`의 ADDRESS → LOC 병합 로직 삭제 (완전 흡수되므로 병합 개념 불필요)
@@ -67,7 +67,7 @@
 
 ### 성공 기준
 
-- [ ] `docs/manual/data/canonical-entity-schema.md` — ADDRESS 부재, DOB 부재, DAT 존재 (13종)
+- [ ] `docs/manual/data/japanese-canonical-entity-schema.md` — ADDRESS 부재, DOB 부재, DAT 존재 (13종)
 - [ ] `data/pii/*.jsonl` (JA)에서 `ADDRESS`·`DOB` 라벨 0건 (전부 LOC·DAT로 이월)
 - [ ] `pytest` 통과 (augmenters/pii 테스트 포함)
 - [ ] `ruff check` 통과
@@ -78,7 +78,7 @@
 전체 변경은 **단일 원자 커밋**으로 처리 (사용자 지시: 2026-04-23).
 
 1. **스키마 문서 13종화**
-   - `canonical-entity-schema.md` PII 표에서 ADDRESS 행 제거, DOB 행을 DAT로 개명·의미 확장
+   - `japanese-canonical-entity-schema.md` PII 표에서 ADDRESS 행 제거, DOB 행을 DAT로 개명·의미 확장
    - 경계 규칙 섹션의 `ADDRESS vs LOC`, `DOB vs 일반 연도` 행 제거 → `DAT` 규칙 1행(모든 날짜) 추가
    - 원본 → canonical 매핑 표에서 `ADDRESS → ADDRESS` 제거, `DOB → DAT` 반영
 2. **augmenters/pii 코드 갱신**
@@ -122,7 +122,7 @@ Phase 1과 동일 브랜치에서 이어서 처리. 어정쩡한 중간 상태�
 - `src/augmenters/pii/generators/base.py` — Phase 1에서 임시로 두었던
   `getattr(mod, 'generate_dat', …or generate_dob)` 폴백 제거, `mod.generate_dat`
   단순 호출로 복원
-- `docs/manual/data/canonical-entity-schema.md` — 변경 이력에 Phase 2 완료 기록
+- `docs/manual/data/japanese-canonical-entity-schema.md` — 변경 이력에 Phase 2 완료 기록
 - `src/augmenters/AGENTS.md` — VI Phase 2 호환 주석 제거
 
 #### 제외 (별도 이슈)
@@ -144,7 +144,7 @@ Phase 1과 동일 브랜치에서 이어서 처리. 어정쩡한 중간 상태�
 - [x] `generators/vi.py` `generate_dob` → `generate_dat` 개명 + docstring
 - [x] `generators/base.py` DAT dispatch 단순화 (폴백 제거)
 - [x] `augmenters/AGENTS.md` VI 호환 주석 제거
-- [x] `canonical-entity-schema.md` 변경 이력에 Phase 2 완료 반영
+- [x] `japanese-canonical-entity-schema.md` 변경 이력에 Phase 2 완료 반영
 
 ### Phase 2 검증
 
@@ -168,7 +168,7 @@ canonical을 14종 → 13종으로 축소 (ADDRESS 제거, DOB → DAT 개명·�
 
 ## Phase 1 구현 결과 (계획 대비)
 
-- [x] 1. **스키마 문서 13종화** — canonical-entity-schema.md 재구조화 (NER 8종 + 일반 날짜 1종 + PII 4종). ADDRESS→LOC 병합 주석, 매핑 표 갱신, 변경 이력 추가
+- [x] 1. **스키마 문서 13종화** — japanese-canonical-entity-schema.md 재구조화 (NER 8종 + 일반 날짜 1종 + PII 4종). ADDRESS→LOC 병합 주석, 매핑 표 갱신, 변경 이력 추가
 - [x] 2. **augmenters/pii 코드 갱신**
   - `config.py`: `DEFAULT_PII_LABELS`에서 DOB → DAT, `DEFAULT_MERGE_RULES`에 `'ADDRESS': 'LOC'` 추가
   - `injector.py`: `_JA_CONNECTORS`·`_VI_CONNECTORS` DOB 키 → DAT, 템플릿 "生年月日："/"Ngày sinh:" → "日付："/"Ngày:". `apply_label_merge` `is_simple_place` 조건부 로직 제거(무조건 ADDRESS→LOC). `is_simple_place` 함수·`_SIMPLE_PLACE_SPLIT` 정규식 삭제, 미사용 `re` import 제거

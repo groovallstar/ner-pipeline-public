@@ -82,7 +82,7 @@ Stockmark `train.jsonl`(약 5K) + `test.jsonl`(약 0.3K) 전수 오디트.
 ## 스코프
 
 ### 포함
-- `docs/manual/data/canonical-entity-schema.md` — CORP/POL/FAC/ORG 경계 룰
+- `docs/manual/data/japanese-canonical-entity-schema.md` — CORP/POL/FAC/ORG 경계 룰
   재작성, 대학=CORP 3단 규칙 추가
 - `docs/manual/data/japanese-ner.md` — 대학=CORP·접미사 우선순위 정합,
   few-shot 예시(`北海道東海大学 → 그 외 조직` → 法人名) 수정
@@ -114,7 +114,7 @@ Stockmark `train.jsonl`(약 5K) + `test.jsonl`(약 0.3K) 전수 오디트.
 
 ## 작업 계획 (체크박스)
 
-- [x] canonical-entity-schema.md — 대학=CORP 3단 규칙, 접미사 우선순위 명문화
+- [x] japanese-canonical-entity-schema.md — 대학=CORP 3단 규칙, 접미사 우선순위 명문화
 - [x] japanese-ner.md 정합 — 본문 표·few-shot 예시
 - [x] vietnamese-ner-8types.md 정합 — §3.4 재정렬, 모호 사례 표 갱신
 - [x] augmenters/wikiann_vi/prompts.py — Đại học=CORP, 우선순위 정합
@@ -128,7 +128,7 @@ Stockmark `train.jsonl`(약 5K) + `test.jsonl`(약 0.3K) 전수 오디트.
 
 ### 1. 스키마 문서 정비
 
-- **`canonical-entity-schema.md`**: 13종 정의 표에서 CORP(대학 법인 본체),
+- **`japanese-canonical-entity-schema.md`**: 13종 정의 표에서 CORP(대학 법인 본체),
   FAC(병원·초중고·대학 부속 시설), POL(`〜政府`/`〜条約機構` 등) 경계를
   재작성. 새 섹션 "접미사 우선순위(결정론적 룰)" 추가(POL>ORG>CORP>FAC>
   PROD>EVT 6단계). "대학의 3단 규칙" 하위 섹션 추가(본체=CORP, 부속

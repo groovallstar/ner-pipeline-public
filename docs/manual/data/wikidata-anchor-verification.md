@@ -13,6 +13,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 중요 원칙:
 - **검증은 라벨을 바꾸지 않는다.** 통계(일치율·per-type agreement)와 불일치 샘플을 리포트로 남길 뿐, 원본 JSONL은 불변이다.
 - **매핑된 엔티티만 집계된다.** Wikipedia에 페이지가 없거나 P31이 비어 있거나 `WIKIDATA_TO_CANONICAL` 테이블에 없는 Q-ID는 검증에서 제외된다 (10K에서 약 49%만 검증 가능).
+- **앵커 라벨 공간은 canonical 5종**(PER/LOC/ORG/PROD/EVT). 이슈 #21에서 8종(PER/LOC/FAC/CORP/PROD/EVT/POL/ORG) → 5종으로 축소되었고, 이슈 #27에서 시설 카테고리(`FAC`)가 LOC가 아닌 ORG로 재배치됐다. 테이블 내 섹션 헤더(`# FAC`, `# CORP`, `# POL`)는 이력 추적용으로 남아 있되 매핑 값은 모두 5종 중 하나다.
 
 ## 조사 범위 — 무엇을 조사하고 무엇을 조사하지 않는가
 
@@ -23,16 +24,16 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 즉 "베트남어 엔티티 전수 조사"가 아니라 **"우리 데이터셋에 실제로 쓰인 문자열이 Wikipedia 기준으로 어떤 타입으로 간주되는가"** 를 묻는 구조다. 데이터셋에 없는 지명·인물은 쿼리 자체가 발생하지 않는다 (10K 기준 unique 7,647개만 조회).
 
-또한 **수작업 매핑 테이블(`WIKIDATA_TO_CANONICAL`, 134종)은 엔티티 Q-ID가 아니라 "타입" Q-ID(= P31 값) 목록이다.** 구분이 중요하다:
+또한 **수작업 매핑 테이블(`WIKIDATA_TO_CANONICAL`, 현재 약 163개 Q-ID)은 엔티티 Q-ID가 아니라 "타입" Q-ID(= P31 값) 목록이다.** 구분이 중요하다:
 
 | 구분 | 예 | 테이블에 넣는가 |
 |---|---|---|
 | 엔티티 Q-ID | `Q1858` (Hà Nội), `Q8447` (Hồ Chí Minh) | ❌ 넣지 않음 |
-| 타입 Q-ID (P31 값) | `Q515` (city), `Q5` (human), `Q43229` (organization) | ✅ 8종으로 매핑 |
+| 타입 Q-ID (P31 값) | `Q515` (city), `Q5` (human), `Q43229` (organization) | ✅ 5종으로 매핑 |
 
 따라서 데이터셋에 새로운 지명(예: 특정 마을)이 등장해도 그 엔티티를 테이블에 일일이 등재할 필요가 없다. 해당 엔티티의 P31 값(예: `Q515` city)이 이미 테이블에 있으면 자동으로 `LOC`로 앵커링된다. 매핑 테이블 확장은 **새로운 *타입*이 데이터에 등장했을 때만** 필요하다(예: `Q190752` 같은 unmapped 타입 Q-ID가 누적 빈도 상위에 오면 추가 검토).
 
-요컨대 — 스키마(= 8종 × 대응 타입 Q-ID)만 수작업으로 관리하고, 개별 엔티티 판정은 Wikipedia/Wikidata의 P31을 그대로 위탁하는 구조다.
+요컨대 — 스키마(= 5종 × 대응 타입 Q-ID)만 수작업으로 관리하고, 개별 엔티티 판정은 Wikipedia/Wikidata의 P31을 그대로 위탁하는 구조다.
 
 ## 전체 파이프라인
 
@@ -44,7 +45,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
                  └─ [2] www.wikidata.org/w/api.php (wbgetentities)
                       └─ P31 Q-ID 리스트
                            └─ [3] WIKIDATA_TO_CANONICAL 테이블
-                                └─ canonical 8종 추론 타입
+                                └─ canonical 5종 추론 타입
                                      └─ [4] LLM 라벨과 비교
                                           └─ 일치율·per-type agreement 집계
 ```
@@ -53,7 +54,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 ### 1단계: 표면형 → Wikipedia → Q-ID
 
-`fetch_qids(titles)` (`wikidata_anchor.py:201`)
+`fetch_qids(titles)` (`wikidata_anchor.py`)
 
 - 엔드포인트: `https://vi.wikipedia.org/w/api.php`
 - 파라미터: `action=query&prop=pageprops&ppprop=wikibase_item&redirects=1`
@@ -67,7 +68,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 ### 2단계: Q-ID → P31(instance of)
 
-`fetch_p31(qids)` (`wikidata_anchor.py:276`)
+`fetch_p31(qids)` (`wikidata_anchor.py`)
 
 - 엔드포인트: `https://www.wikidata.org/w/api.php`
 - 파라미터: `action=wbgetentities&props=claims`
@@ -78,13 +79,13 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 예: `'Q1858' → ['Q5119', 'Q515']` (capital city, city).
 
-### 3단계: P31 → 8종 매핑
+### 3단계: P31 → 5종 매핑
 
-`anchor_type(p31_qids)` (`wikidata_anchor.py:320`)
+`anchor_type(p31_qids)` (`wikidata_anchor.py`)
 
-- `WIKIDATA_TO_CANONICAL` 수작업 큐레이션 테이블에서 조회 (현재 134개 Q-ID, `wikidata_anchor.py:41`)
-- P31 리스트를 **순차 스캔해 첫 매칭**을 반환. 여러 P31 중 하나라도 8종에 매핑되면 그 타입 채택
-- 테이블은 타입 섹션별로 구성: PER / LOC / FAC / CORP / PROD / EVT / POL / ORG
+- `WIKIDATA_TO_CANONICAL` 수작업 큐레이션 테이블에서 조회 (현재 약 163개 Q-ID)
+- P31 리스트를 **순차 스캔해 첫 매칭**을 반환. 여러 P31 중 하나라도 5종에 매핑되면 그 타입 채택
+- 테이블 섹션 헤더는 축소 전 8종 분류(`# PER`, `# LOC`, `# FAC`, `# CORP`, `# PROD`, `# EVT`, `# POL`, `# ORG`)를 이력 추적용으로 보존하되, 매핑 값은 모두 5종(`PER/LOC/ORG/PROD/EVT`) 중 하나로 축소돼 있다(`FAC/CORP/POL → ORG`).
 
 예: `['Q5119', 'Q515'] → 'LOC'` (Q515=city가 테이블에 있음).
 
@@ -92,7 +93,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 ### 4단계: LLM 라벨 vs 앵커 타입 비교
 
-`run_anchor(records, span_key, cache_path)` (`wikidata_anchor.py:339`)
+`run_anchor(records, span_key, cache_path)` (`wikidata_anchor.py`)
 
 각 span `(surface, pred_type, record_id)` 에 대해:
 
@@ -133,7 +134,7 @@ Entities           : 11629
 Unique surfaces    : 7647
 With Wikidata Q-ID : 9184
 With P31 claims    : 9134
-Mapped to 8-type   : 6858
+Mapped to 5-type   : 6858
 Agreement          : 6524 / 6858 = 0.9512
 Per-type agreement:
   PER: 3017/3068 = 0.9836
@@ -149,20 +150,20 @@ Top unmapped P31 Q-IDs (to consider for table expansion):
 |---|---|---|
 | `_VI_WIKI_API` | `https://vi.wikipedia.org/w/api.php` | 베트남어 위키 엔드포인트 |
 | `_WIKIDATA_API` | `https://www.wikidata.org/w/api.php` | Wikidata 엔드포인트 |
-| `_UA` | `ner_pipeline/issue-10 ...` | User-Agent (Wikimedia 권장) |
+| `_UA` | `ner_pipeline/issue-13 ...` | User-Agent (Wikimedia 권장) |
 | `_BATCH` | 50 | 1 요청당 최대 제목/Q-ID 수 |
 | `_SLEEP` | 0.2s | 배치 간 대기 |
 
 ## 한계와 주의
 
 1. **커버리지 50%** — Wikipedia 등재가 없는 개별 인물명·세부 지명·제품 인스턴스는 검증 불가. 따라서 "앵커 일치율"은 매핑 가능한 부분집합의 지표이지 전체 품질은 아니다.
-2. **수작업 매핑 테이블** — `WIKIDATA_TO_CANONICAL` 134종은 사람이 고른 큐레이션. 누락된 세부 타입(예: `Q22806 national library`가 없으면 `CORP publisher`로 잘못 매핑)이 체계적 에러를 만든다. 리포트 §5.4 카테고리 B 참조.
+2. **수작업 매핑 테이블** — `WIKIDATA_TO_CANONICAL`(약 163종)은 사람이 고른 큐레이션. 누락된 세부 타입(예: `Q22806 national library`가 없으면 publisher 류로 잘못 매핑되는 식)이 체계적 에러를 만든다. 리포트 §5.4 카테고리 B 참조.
 3. **리다이렉트 왜곡** — Wikipedia 리다이렉트가 다른 개념으로 연결되면 엉뚱한 Q-ID가 할당된다. 예: `'Her Morning Elegance'`(노래) → `'Oren Lavie'`(가수) 리다이렉트로 anchor 타입이 PER으로 잡힘.
 4. **P31 복수 해석** — 역사적 정치체가 `city` 와 `former country` 를 모두 가지면 테이블 스캔 순서에 따라 타입이 갈린다(첫 매칭 규칙). 진짜 모호 케이스는 불일치로 기록되지만 실제로는 양쪽 모두 타당할 수 있다.
 5. **네트워크 의존** — 1K 엔티티 전체 조회는 신규 실행 시 수 분 소요. 실패는 `reason='network'` 로 소프트 폴백되며 재실행으로 채운다.
 
 ## 관련 문서
 
-- 스펙: `docs/manual/data/vietnamese-ner-8types.md` §5.2 (두 번째 검증 레이어)
+- 스펙: `docs/manual/data/vietnamese-ner.md` §7 (silver 검증 전략 — 두 번째 검증 레이어)
 - 이슈: `docs/issues/issue-10-vi-ner-8type-relabel.md`
 - 리포트: `docs/reports/vietnamese-ner-schema-expansion-2026-04.md` §5, §5.5

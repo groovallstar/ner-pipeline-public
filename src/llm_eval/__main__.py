@@ -126,7 +126,7 @@ def main():
     )
     parser.add_argument("--lang", default="ko", choices=["ko", "ja", "vi"], help="Language (default: ko)")
     parser.add_argument("--dataset", default=None, help="Dataset name (default: klue for ko, stockmark for ja)")
-    parser.add_argument("--local-file", default=None, help="Local JSONL gold file (e.g. PII-injected dataset); ja only")
+    parser.add_argument("--local-file", default=None, help="Local JSONL gold file (e.g. PII-injected dataset); ja, vi only")
     parser.add_argument("--config", default="ner", help="Dataset config (default: ner)")
     parser.add_argument("--split", default=None, help="Dataset split (default: validation for ko, test for ja)")
     parser.add_argument("--max-samples", type=int, default=None, help="Limit number of samples")
@@ -186,12 +186,23 @@ def _load_gold(args):
     )
 
 
+def _eval_mode_for_lang(lang: str) -> str:
+    """언어별 평가 모드를 반환한다.
+
+    - ja, vi: 문자 오프셋 span (gold_spans 스키마)
+    - ko: 음절 BIO (tokens + ner_tags 스키마)
+    """
+    if lang in ("ja", "vi"):
+        return "offset_span"
+    return "bio"
+
+
 def _run_benchmark(args):
     """통합 벤치마크 러너: eval_mode를 통해 언어별로 분기한다."""
     gold_records = _load_gold(args)
     print(f"  Loaded {len(gold_records)} records")
 
-    eval_mode = "offset_span" if args.lang == "ja" else "bio"
+    eval_mode = _eval_mode_for_lang(args.lang)
     runner = BenchmarkRunner(
         gold_records,
         compute_bertscore=not args.no_bertscore,

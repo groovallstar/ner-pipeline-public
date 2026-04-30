@@ -1,115 +1,79 @@
 # 베트남어 NER 라벨링 방법론
 
-> 기준 코드 시점: 2026-04-24 (develop 브랜치)
-> 대상 데이터셋: WikiANN Vietnamese (원본 3 엔티티: PER, LOC, ORG)
-> 라벨러 출력: canonical 10종 평면 (PER·LOC·ORG·PROD·EVT + 5종 PII/날짜)
-> 대상 코드: `src/labelers/vi/`, `src/llm_eval/`, `src/labelers/dataset_loader.py`
-
-## 변경 이력
-
-- **2026-04-24 (이슈 #21)**: `src/labelers/vi/ner_prompts.py` 출력 라벨
-  공간을 WikiANN 3종에서 canonical **10종 평면 목록**
-  (`PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD`)으로
-  확장. `src/augmenters/wikiann_vi/`·`data/wikiann_vi/*.jsonl`은 이미
-  5종 canonical로 축소 완료(이슈 #21 본 단계).
-  - 평가 시 주의: WikiANN 원본 gold(3종 `PER/LOC/ORG`)로 벤치할 때는
-    PROD/EVT/PII 예측이 FP로 집계되어 precision이 하락한다. 5종·10종
-    라벨이 포함된 gold(`data/wikiann_vi/*.jsonl` 5종)로 평가하면 정상
-    비교 가능. 상세: `docs/manual/data/canonical-entity-schema.md` §평가
-    시 주의.
+> 대상 데이터셋: WikiANN Vietnamese (`unimelb-nlp/wikiann`, config=`vi`, 원본 3종 PER/LOC/ORG)
+> 라벨러 출력 스키마: canonical 10종 평면 (NER 5종 + PII 5종)
+> 라벨 정의의 단일 출처: `docs/manual/data/japanese-canonical-entity-schema.md`
 
 ## 목차
 
 1. [전체 파이프라인 흐름도](#1-전체-파이프라인-흐름도)
-2. [Stage 1: 데이터 준비](#2-stage-1-데이터-준비)
-3. [Stage 2: NER Tag 목록 및 프롬프트 설계](#3-stage-2-ner-tag-목록-및-프롬프트-설계)
-4. [Stage 3: LLM 라벨링 실행](#4-stage-3-llm-라벨링-실행)
-5. [Stage 4: 결과 확인 (평가)](#5-stage-4-결과-확인-평가)
-6. [한국어 파이프라인과의 차이점 요약](#6-한국어-파이프라인과의-차이점-요약)
-7. [설계 의사결정 요약](#7-설계-의사결정-요약)
+2. [Stage 1 — 데이터 준비](#2-stage-1--데이터-준비)
+3. [Stage 2 — 엔티티 스키마와 WikiANN 매핑](#3-stage-2--엔티티-스키마와-wikiann-매핑)
+4. [Stage 3 — 프롬프트 설계](#4-stage-3--프롬프트-설계)
+5. [Stage 4 — LLM 라벨링 실행](#5-stage-4--llm-라벨링-실행)
+6. [Stage 5 — 평가](#6-stage-5--평가)
+7. [Silver 검증 전략 (재라벨 파이프라인)](#7-silver-검증-전략-재라벨-파이프라인)
+8. [한국어·일본어 파이프라인과의 차이](#8-한국어일본어-파이프라인과의-차이)
 
 ---
 
 ## 1. 전체 파이프라인 흐름도
 
 ```
-WikiANN Dataset (unimelb-nlp/wikiann, config="vi")
+WikiANN Dataset (unimelb-nlp/wikiann, config=vi)
     │
-    ▼ DatasetLoader.load()                          [dataset_loader.py:35-62]
+    ▼ DatasetLoader.load()                          [labelers/dataset_loader.py]
 List[NERRecord] {tokens, ner_tags, id}
     │
-    ▼ TagAligner.reconstruct_text()                  [tag_aligner.py:137-149]
-원본 텍스트 문자열 (word-level 토큰 space-join)
+    ▼ TagAligner.reconstruct_text()                 [labelers/tag_aligner.py]
+원본 텍스트 (word-level 토큰 space-join)
     │
-    ▼ _split_sentences() → 배치 구성
-문장 리스트 (batch_size 단위)                         [vi/ollama_ner_labeler.py:33-48]
+    ▼ ner_prompts.py SINGLE/BATCH 템플릿            [labelers/vi/ner_prompts.py]
+프롬프트 (베트남어, 10종 라벨 공간)
     │
-    ▼ ner_prompts.py (SINGLE/BATCH 템플릿)
-프롬프트 문자열 (베트남어)                             [vi/ner_prompts.py]
-    │
-    ▼ ChatOllama / vLLM / OpenAI (temperature=0, JSON mode)
-LLM JSON 응답                                        [vi/ollama_ner_labeler.py:165-216]
-    │
-    ▼ JSON 파싱
-[{"text": "Nguyễn Xuân Phúc", "type": "PER"}, ...]  [vi/ollama_ner_labeler.py:195-216]
+    ▼ vLLM 또는 OpenAI 호출                          [labelers/vi/{vllm,openai}_ner_labeler.py]
+LLM JSON 응답 → spans 파싱
+[{"text": "Nguyễn Xuân Phúc", "type": "PER"}, ...]
     │
     ├──▶ label_spans() 경로: raw spans 직접 반환
     │
-    └──▶ label() 경로: _spans_to_bio() 변환
-         BIO 태그 리스트 ["B-PER", "O", "B-LOC", ...] [vi/ollama_ner_labeler.py:51-89]
+    └──▶ label() 경로: spans → BIO 변환
+         → NERRecord {tokens, ner_tags, id}
     │
-    ▼ BenchmarkRunner._run_single()                  [benchmark_runner.py]
+    ▼ BenchmarkRunner._run_single()                 [llm_eval/benchmark_runner.py]
+    ├── extract_spans_from_bio()  gold span 추출
+    ├── normalize_tag()           태그 정규화 (PERSON→PER 등)
+    └── TagAligner.align()        토큰 정렬
     │
-    ├── extract_spans_from_bio()  gold span 추출      [tag_aligner.py:94-130]
-    ├── normalize_tag()           태그 정규화          [tag_aligner.py:44-59]
-    │   └── _TAG_NORMALIZE_MAP_VI 사용                [tag_aligner.py:30-35]
-    └── TagAligner.align()        토큰 정렬           [tag_aligner.py:152-174]
+    ▼ MetricsCalculator + span_metrics              [metrics/{bio_metrics,span_metrics}.py]
     │
-    ▼ MetricsCalculator                              [metrics.py]
-    ├── compute_span_match()   Span Match (exact/relaxed)
-    ├── compute_seqeval()      seqeval BIO F1
-    ├── compute_span_f1()      Character Span F1
-    └── compute_bertscore()    BERTScore (optional)
-    │
-    ▼ ReportGenerator                                [report.py]
-벤치마크 결과 (CLI 테이블 + JSON 파일)
+    ▼ ReportGenerator                               [llm_eval/report.py]
+벤치마크 결과 (CLI 테이블 + JSON)
+```
+
+재라벨 파이프라인 (silver 데이터셋 생성, §7) 은 별개의 흐름:
+
+```
+WikiANN test split → augmenters/wikiann_vi/__main__.py
+    → Gemma + Qwen 독립 라벨링 → merge_confidence (recall_strict)
+    → kappa + Wikidata anchor 검증
+    → data/wikiann_vi/{train,valid,test}.jsonl (Stockmark 포맷)
 ```
 
 ---
 
-## 2. Stage 1: 데이터 준비
+## 2. Stage 1 — 데이터 준비
 
 ### 입력
 
-WikiANN Vietnamese 데이터셋. 한국어와 동일한 `DatasetLoader`를 사용하되, config를 `"vi"`로 지정한다:
-
 | 경로 | 소스 | 조건 |
-|------|------|------|
-| JSONL 폴백 | `/data/ner/unimelb-nlp_wikiann/test.jsonl` | 파일이 존재하면 우선 사용 |
-| HuggingFace | `load_dataset("unimelb-nlp/wikiann", "vi", split="test")` | JSONL 없을 때 |
+|---|---|---|
+| JSONL 폴백 | `/data/ner/unimelb-nlp_wikiann/test.jsonl` | 파일 존재 시 우선 사용 |
+| HuggingFace | `load_dataset('unimelb-nlp/wikiann', 'vi', split='test')` | JSONL 없을 때 |
 
-**코드:** `_run_vietnamese()` (`src/evaluators/__main__.py:250-277`)
+진입점: `_create_labeler_vi()` in `src/llm_eval/__main__.py`. 기본 split 은 `test` (KLUE 의 `validation` 과 다름 — WikiANN-vi 의 validation 은 작거나 없음).
 
-```python
-# __main__.py:250-256
-loader = DatasetLoader()
-gold_records = loader.load(
-    args.dataset, config="vi", split=args.split, max_samples=args.max_samples,
-)
-```
-
-기본 데이터셋과 split 설정 (`__main__.py:174-179`):
-
-```python
-if args.lang == "vi":
-    args.dataset = "unimelb-nlp/wikiann"
-# ...
-args.split = "test" if args.lang in ("ja", "vi") else "validation"
-```
-
-### 출력
-
-`List[NERRecord]` — 각 레코드는 다음 구조:
+### 출력 — `NERRecord`
 
 ```json
 {
@@ -121,389 +85,279 @@ args.split = "test" if args.lang in ("ja", "vi") else "validation"
 
 ### WikiANN 토큰화 특성
 
-WikiANN은 **단어(word) 단위** 토큰화를 사용한다:
+- **단어(word) 단위** 토큰화. KLUE 의 음절(syllable) 단위와 다름
+- BIO 태그도 단어 단위로 부여
+- 한국어 KLUE 의 음절→단어 정렬 문제 미발생
 
-- 각 단어가 하나의 토큰: `["Nguyễn", "Văn", "A"]`
-- 단어 사이 공백은 별도 토큰이 **아님** (KLUE와의 핵심 차이)
-- BIO 태그도 단어 단위로 부여됨
+`ClassLabel` 정수 태그 자동 변환: `dataset_loader.py` 가 `ClassLabel.int2str()` 으로 0→"O", 1→"B-PER" 등 처리.
 
-이 특성 덕분에 한국어 KLUE의 음절→단어 정렬 문제가 발생하지 않는다.
+---
 
-### ClassLabel 변환
+## 3. Stage 2 — 엔티티 스키마와 WikiANN 매핑
 
-WikiANN에서도 NER 태그는 정수(`ClassLabel`)로 저장된다. `DatasetLoader`가 자동으로 문자열 태그로 변환한다 (`dataset_loader.py:83-99`):
+### 3.1 출력 라벨 공간 — canonical 10종 평면
 
-```python
-if label_feature is not None and isinstance(label_feature, ClassLabel):
-    ner_tags = [label_feature.int2str(t) for t in raw_tags]  # 0 → "O", 1 → "B-PER", ...
+| 태그 | 의미 | 베트남어 설명 |
+|---|---|---|
+| `PER` | 인물 | Tên người (전체 이름·성·이름·별명·예명) |
+| `LOC` | 지명 (자연·행정만) | Quốc gia, thành phố, tỉnh, sông, núi, biển, đảo, vịnh — **자연지명·행정지명만** |
+| `ORG` | 조직·기관·법인·**시설** | 기업·정당·정부·군·CLB + 역·공항·병원·학교·박물관·종교시설 등 모든 인공시설 |
+| `PROD` | 제품·작품·소프트웨어 | Sản phẩm, dịch vụ, phần mềm, tác phẩm |
+| `EVT` | 1회성 사건·전쟁·조약 | Chiến tranh, hiệp ước, đại hội, giải đấu lớn |
+| `EMAIL` | 이메일 주소 | `local@domain.TLD` |
+| `PHONE` | 전화번호 | 베트남 또는 국제 형식 |
+| `DAT` | 날짜·기간 | 년·월·일·기간·시대 |
+| `ID_NUM` | 주민번호·CCCD·세무번호 | |
+| `CREDIT_CARD` | 신용카드 번호 | 13~19 자리 |
+
+**상세 정의·경계 규칙·모호 사례 처리는 `docs/manual/data/japanese-canonical-entity-schema.md` 단일 출처.**
+
+본 라벨러는 WikiANN 평가 외에 PII 주입본 평가와 코드를 공유하므로 10종 출력 공간을 유지한다. WikiANN 3종 gold 로 평가 시 PROD/EVT/PII 5종 출력은 FP 로 잡혀 precision 이 인위적으로 하락하는데, 이는 의도된 trade-off.
+
+### 3.2 WikiANN 3종 → canonical 5종 매핑
+
+```
+WikiANN PER → PER (1:1)
+WikiANN LOC → LOC  (자연지명·행정지명만)
+            → ORG  (시설 — 역·공항·병원·종교시설·박물관·도서관·체육관 등)
+WikiANN ORG → ORG  (기업·정당·정부·군·CLB·협회·대학 일체 — 본 canonical 은 모두 ORG)
+            → LOC  (드물게 wikiann ORG 가 자연지명을 잘못 라벨한 경우)
+(WikiANN 없음) → PROD · EVT (재라벨 LLM 이 신규 추출)
 ```
 
-### 왜 이렇게 설계했는가
+본 매핑은 silver 재라벨 파이프라인 (§7) 에서 LLM 이 자동 적용. WikiANN 시설=LOC 와 canonical 시설=ORG 의 불일치는 재라벨로 자동 해소.
 
-| 결정 | 이유 |
-|------|------|
-| 한국어와 동일한 `DatasetLoader` 재사용 | WikiANN도 HuggingFace datasets 형식이며, tokens/ner_tags 컬럼 구조가 동일 |
-| config="vi"로 언어 지정 | WikiANN은 다국어 데이터셋으로 config 파라미터로 언어를 선택 |
-| split="test" 기본값 | WikiANN에는 validation split이 없거나 작을 수 있으므로 test 사용 |
-| `sentence` 필드 없음 | WikiANN은 KLUE와 달리 원본 문장 필드를 제공하지 않음 → `TagAligner.reconstruct_text()`로 재구성 |
+### 3.3 LOC vs ORG 경계 규칙 — silver 재라벨 시 적용
+
+**LOC (자연·행정만)**:
+- 국가·도시·성(tỉnh)·군(huyện)·사(xã)
+- 자연지명: Sông X / Núi X / Biển X / Đảo X / Vịnh X / Hồ X
+- 주소 (số nhà, tầng, tòa nhà 포함)
+
+**ORG (모든 조직·인공시설)**:
+- 영리법인: Công ty X / Tập đoàn X / Ngân hàng X / Hãng X / Đài truyền hình X
+- 정치·정부·군: Đảng X / Bộ X / Cục X / Quốc hội / Quân đội X / Tòa án
+- 국제기관: Liên Hợp Quốc, ASEAN, WTO
+- 학교 (대학·초중고 모두): Đại học X / Trường THCS·THPT X / Học viện X
+- 시설: Bệnh viện X / Sân bay X / Ga X / Cảng X / Bảo tàng X / Thư viện X / Chùa X / Nhà thờ X / Đền X / Sân vận động X
+- 스포츠: Hà Nội FC / V.League / Câu lạc bộ X (정기 리그 = ORG, 특정 연도판 = EVT)
+
+**PROD vs EVT vs ORG 경계 (재라벨 시 모호 케이스 해소)**:
+- 정기 리그·정기 대회 → ORG. **특정 연도판** ("World Cup 2022", "UEFA Champions League 2007-08") → EVT
+- 음악·영화·책·만화·게임·TV 프로그램 = PROD
+- "Danh sách..." (Wikipedia "List of") 는 entity 아님 → 무시
+- 학명 Latin binomial ("Bulbophyllum X") 는 entity 아님 → 무시
+- 모델 번호 단독 ("RV522") → PROD 아님. 브랜드+모델 결합 ("Galaxy S24") 만 PROD
+- 인프라 (철도·지하철 노선) → 운영주체=ORG, 경로=LOC, 노선 자체=LOC
+
+### 3.4 모호 사례 결정표
+
+| 표면형 | WikiANN 원본 | canonical 5종 | 근거 |
+|---|---|---|---|
+| `Chùa Một Cột` | LOC | **ORG** | 종교 시설 = ORG |
+| `Vịnh Hạ Long` | LOC | **LOC** | 자연 지명 |
+| `Sân bay Nội Bài` | LOC | **ORG** | 공항 시설 |
+| `Bệnh viện Bạch Mai` | ORG | **ORG** | 병원 시설 |
+| `Đại học Quốc gia Hà Nội` | ORG | **ORG** | 대학 법인·캠퍼스 모두 ORG |
+| `V.League` | ORG | **ORG** | 정기 리그 |
+| `UEFA Champions League 2007-08` | (없음) | **EVT** | 특정 연도판 → 1회성 |
+| `Hà Nội FC` | ORG | **ORG** | 스포츠 팀 |
+| `Đảng Cộng sản Việt Nam` | ORG | **ORG** | 정당 |
+| `Bộ Giáo dục và Đào tạo` | ORG | **ORG** | 정부 부처 |
+| `Vietnam Airlines` | ORG | **ORG** | 공기업·영리법인 |
+| `Doraemon` | (없음) | **PROD** | 만화·작품 |
+| `Galaxy S24` | (없음) | **PROD** | 브랜드+모델 결합 |
+| `Đường sắt xuyên Sibir` | (없음) | **LOC** | 철도 노선 자체 = LOC |
+| `Thành phố Hồ Chí Minh` | LOC | **LOC** | 행정 지명 전체 단일 LOC. "Hồ Chí Minh" 단독은 PER |
 
 ---
 
-## 3. Stage 2: NER Tag 목록 및 프롬프트 설계
+## 4. Stage 3 — 프롬프트 설계
 
-### 엔티티 타입 정의
+### 4.1 3종 프롬프트 템플릿
 
-**코드:** `src/labelers/vi/ner_prompts.py:10`
-
-| 태그 | 의미 | 설명 | 예시 |
-|------|------|------|------|
-| PER | 인물 (Người) | 사람 이름 (성+이름 전체 또는 일부), 별명, 예명. 그룹/밴드명은 ORG | "Nguyễn Xuân Phúc", "Hồ Chí Minh", "Bác Hồ" |
-| LOC | 지명 (Địa điểm) | 국가, 도시, 성(tỉnh), 군(huyện), 사(xã), 도로, 강, 산, 바다, 섬, 건축물. 복합 지명은 하나로 | "Hà Nội", "Việt Nam", "Sông Mekong", "Chùa Một Cột" |
-| ORG | 기관 (Tổ chức) | 회사, 기관, 조직, 정당, 스포츠팀, 학교, 병원. 복합 기관명은 하나로 | "Đảng Cộng sản Việt Nam", "Samsung", "Đại học Quốc gia Hà Nội" |
-
-한국어 KLUE는 6개 타입(PS, LC, OG, DT, TI, QT)을 사용하지만, 베트남어 WikiANN은 **3개 타입(PER, LOC, ORG)만** 사용한다. 날짜(DT), 시간(TI), 수량(QT)은 WikiANN 어노테이션 범위에 포함되지 않는다.
-
-### 핵심 라벨링 규칙
-
-프롬프트에 포함된 5가지 핵심 규칙 (`ner_prompts.py:27-32`):
-
-1. **원문 보존**: 베트남어 성조 부호(dấu)를 정확히 유지하며 추출 — "Hà Nội"를 "Ha Noi"로 변환하면 안 됨
-2. **다중 단어 엔티티 통합**: 여러 단어로 구성된 엔티티를 하나로 묶음 — "Thành phố Hồ Chí Minh" → LOC 1개
-3. **직함/호칭 제외**: "Ông"(씨), "Bà"(여사), "Chủ tịch"(주석), "Thủ tướng"(총리) 등 직함은 제외하고 이름만 추출
-4. **JSON 배열만 출력**: 설명 없이 JSON 배열만 반환
-5. **빈 결과**: 엔티티 없으면 `[]` 반환
-
-### 프롬프트 구조
-
-한국어와 동일하게 3종류의 프롬프트 템플릿이 존재한다:
+`src/labelers/vi/ner_prompts.py`:
 
 | 템플릿 | 변수명 | 용도 | 형식 |
-|--------|--------|------|------|
+|---|---|---|---|
 | SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 | `Đầu vào: {sentence}\nĐầu ra:` |
-| BATCH | `BATCH_PROMPT_TEMPLATE` | 다중 문장 배치 라벨링 | `0: {sent0}\n1: {sent1}\n...` → `{"0": [...], "1": [...]}` |
+| BATCH | `BATCH_PROMPT_TEMPLATE` | 다중 문장 배치 | `0: ...\n1: ...` → `{"0":[...], "1":[...]}` |
 | SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 | system/user 메시지 분리 |
 
-**코드:** `src/labelers/vi/ner_prompts.py:13-99`
+### 4.2 6가지 핵심 라벨링 규칙
 
-### Few-shot 예시의 설계 의도
+1. **원문 보존** — 베트남어 성조 부호(dấu) 정확히 유지 ("Hà Nội" → "Ha Noi" 변환 금지)
+2. **다중 단어 엔티티 통합** — "Thành phố Hồ Chí Minh" → 1개 LOC, "Đại học Quốc gia Hà Nội" → 1개 ORG
+3. **직함·호칭 제외** — "Ông", "Bà", "Chủ tịch", "Thủ tướng", "Tướng", "GS" 등 제거 후 이름만
+4. **JSON 배열만 출력** — 설명 없이 array 만
+5. **빈 결과** — 엔티티 없으면 `[]`
+6. **영문 태그 사용** — `PER`/`LOC`/`ORG`/`PROD`/`EVT`/`EMAIL`/`PHONE`/`DAT`/`ID_NUM`/`CREDIT_CARD`
 
-프롬프트에 3개의 예시가 포함되어 있다 (`ner_prompts.py:34-42`). 각 예시가 커버하는 엣지 케이스:
+### 4.3 PROD/EVT 분기 규칙 (silver 재라벨 프롬프트 추가)
 
-| 예시 | 커버하는 엣지 케이스 |
-|------|---------------------|
-| 1. Chủ tịch Nguyễn Xuân Phúc đã đến thăm Đà Nẵng... | 직함 제외(Chủ tịch→제거), PER/LOC/ORG 혼합, 기업명("Tập đoàn Vingroup"=ORG) |
-| 2. Sông Mekong chảy qua Campuchia và Việt Nam... | 복합 지명("Sông Mekong"=LOC), 다중 LOC 인식, 외래 지명("Campuchia") |
-| 3. Đại học Quốc gia Hà Nội vừa ký kết... | 복합 기관명("Đại học Quốc gia Hà Nội"=ORG), 동일 단어의 문맥별 타입("Hà Nội"가 LOC vs ORG 내 일부) |
+silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 §3.3 의 경계 규칙을 추가 명시:
 
-### 왜 이렇게 설계했는가
+- 정기 리그/대회 → ORG, 특정 연도판 → EVT
+- 작품(음악·영화·책·만화·게임·TV) → PROD
+- "Danh sách..." 글 무시
+- Latin binomial 학명 무시
+- 모델 번호 단독 무시 (브랜드+결합만)
+- 인프라 (철도·지하철 노선): 운영=ORG, 노선=LOC
 
-| 결정 | 이유 |
-|------|------|
-| 3종류 프롬프트 | 한국어와 동일한 아키텍처 — 백엔드별 최적 형식이 다름 |
-| 베트남어 전용 프롬프트 | 프롬프트 전체를 베트남어로 작성하여 LLM의 베트남어 NER 성능 극대화 |
-| 성조 부호 보존 규칙 강조 | 베트남어의 핵심 특성 — 성조가 다르면 다른 단어가 되므로 정확한 추출 필수 |
-| 직함 제외 규칙 | 베트남어에서 "Ông", "Bà" 등 호칭이 이름 앞에 붙는 것이 일반적이므로 명시적으로 제외 규칙 필요 |
-| 3개 Few-shot 예시 (한국어 7개 대비 적음) | 엔티티 타입이 3개로 단순하여, 적은 예시로도 충분한 패턴 커버 가능 |
+### 4.4 Few-shot 예시
+
+`src/labelers/vi/ner_prompts.py` SINGLE 템플릿에 약 9개 예시 (메인 8 + PII 종합 1):
+- PER + LOC + ORG 혼합 (`Chủ tịch Nguyễn Xuân Phúc...`)
+- 정당 + 정부기관 + 대학 (`Đảng Cộng sản Việt Nam và Bộ Giáo dục...`)
+- 시설 (공항·병원) (`Vietnam Airlines vận hành chuyến bay...`)
+- 스포츠 (`Hà Nội FC giành chức vô địch V.League...`)
+- 1회성 사건 (`Trong Chiến tranh Việt Nam, Hiệp định Paris...`)
+- 제품·소프트웨어 (`Samsung giới thiệu Galaxy S24...`)
+- PII 종합 (`Phụ trách là Trần Minh ... CCCD: 079123456789.`)
+- 자연지명 (`Vịnh Hạ Long là một kỳ quan thiên nhiên...`)
+- 시설 + 자연지명 분리 (`Chùa Một Cột nằm ở quận Ba Đình, Hà Nội.`)
 
 ---
 
-## 4. Stage 3: LLM 라벨링 실행
+## 5. Stage 4 — LLM 라벨링 실행
 
-### 전체 흐름
+### 5.1 백엔드 — vLLM + OpenAI 2종
 
-Canonical 구현: `OllamaNERLabeler` (`src/labelers/vi/ollama_ner_labeler.py`)
+| 파일 | 클래스 | 특징 |
+|---|---|---|
+| `src/labelers/vi/vllm_ner_labeler.py` | `VllmNERLabeler` | async 동시성 (`concurrency` 파라미터, 기본 32), AsyncOpenAI 호환, vLLM 서버용 |
+| `src/labelers/vi/openai_ner_labeler.py` | `OpenAINERLabeler` | system/user 채팅 형식, `response_format={"type": "json_object"}` |
+| `src/labelers/hf_ner_labeler.py` | `HFNERLabeler` | HuggingFace BERT 베이스라인 (`lang="vi"`) |
+
+라벨러 팩토리: `src/llm_eval/__main__.py::_create_labeler_vi()`
+
+### 5.2 단계별 처리
 
 ```
 입력 텍스트
-    │
-    ▼ _split_sentences()        (1) 문장 분리
+    ▼ _split_sentences()       정규식 [.!?]+공백 으로 문장 분리
 문장 리스트
-    │
-    ▼ batch_size 단위 그룹핑     (2) 배치 구성
+    ▼ batch_size 단위 그룹핑
 배치 리스트
-    │
-    ▼ _call_llm_batch()          (3) LLM 호출
-    │   └── 단일 문장 → _call_llm() 직접 호출
-    │   └── 다중 문장 → BATCH 프롬프트 사용
-    │
-    ▼ JSON 파싱                  (4) 응답 처리
+    ▼ _call_llm_batch()        BATCH 프롬프트 호출. 단일 문장이면 SINGLE 폴백
+    ▼ JSON 파싱                <think> 태그 제거 + json.loads + 정규식 [...] 폴백
 [{"text": "...", "type": "..."}, ...]
-    │
-    ├── label_spans() 경로: 여기서 반환 (raw spans)
-    │
-    └── label() 경로:
-        ▼ _spans_to_bio()        (5) BIO 변환
-        NERRecord {tokens, ner_tags, id}
+    ├── label_spans() 경로: raw spans 반환
+    └── label() 경로: spans → BIO 변환 (2단계: exact → substring 매칭)
 ```
 
-### 4.1 문장 분리
-
-**코드:** `_split_sentences()` (`vi/ollama_ner_labeler.py:33-48`)
-
-```python
-parts = re.split(r'(?<=[.!?])\s+|\n+', text.strip())
-```
-
-- 마침표(`.`), 느낌표(`!`), 물음표(`?`) 뒤 공백 또는 줄바꿈으로 분리
-- **최소 10자 버퍼링**: 짧은 조각은 다음 조각과 합침
-- 한국어와 동일한 로직 (베트남어도 라틴 문자 기반 문장부호 사용)
-
-### 4.2 배치 구성
-
-**코드:** `label()` 메서드 (`vi/ollama_ner_labeler.py:115-142`)
-
-- `batch_size` 파라미터 (기본값: 10)로 문장을 그룹핑
-- 빈 문장은 사전에 필터링 (`non_empty`)
-- 각 배치마다 타이밍 계측 출력 (`[TIMER]`)
-
-**단일 문장 최적화** (`_call_llm_batch()`, line 166-167):
-```python
-if len(sentences) == 1:
-    return [self._call_llm(sentences[0])]  # SINGLE 프롬프트 사용
-```
-
-### 4.3 LLM 호출
-
-**코드:** `OllamaNERLabeler.__init__()` (`vi/ollama_ner_labeler.py:92-113`)
-
-```python
-self._llm = ChatOllama(
-    model=model,
-    format="json",       # JSON 출력 강제
-    temperature=0,       # 결정적 출력
-    think=False,         # thinking 비활성화
-    reasoning=False,
-)
-```
-
-한국어 Ollama 라벨러와 동일한 설정을 사용한다.
-
-| 설정 | 값 | 이유 |
-|------|------|------|
-| `temperature` | 0 | NER은 정확성이 중요 — 창의적 변형 불필요 |
-| `format` | "json" | LLM이 반드시 유효한 JSON을 출력하도록 강제 |
-| `think` / `reasoning` | False | thinking 토큰이 JSON 파싱을 방해하지 않도록 |
-
-### 4.4 JSON 파싱
-
-두 가지 파싱 경로가 존재한다:
-
-**경로 A — OllamaNERLabeler 인라인 파싱** (`vi/ollama_ner_labeler.py:195-216`):
-```python
-data = json.loads(raw)
-if isinstance(data, list):          # 일반 케이스: [{"text":..., "type":...}, ...]
-    return data
-if isinstance(data, dict):
-    if "text" in data and "type" in data:  # 단일 엔티티 bare object
-        return [data]
-    for val in data.values():              # {"entities": [...]} 래퍼
-        if isinstance(val, list):
-            return val
-```
-
-**경로 B — VllmNERLabeler의 `_parse_spans()`** (`vi/vllm_ner_labeler.py:48-72`):
-추가로 `<think>` 태그 제거, 정규식으로 `[...]` 배열 추출 등 더 견고한 파싱을 수행:
-```python
-raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-# ... json.loads 시도 후 실패 시 정규식으로 [...] 추출
-match = re.search(r"\[.*?\]", raw, re.DOTALL)
-```
-
-**폴백 전략**: 배치 호출 실패 시 → 개별 문장 단위로 재시도 (`vi/ollama_ner_labeler.py:191-193`):
-```python
-except (json.JSONDecodeError, Exception) as e:
-    return [self._call_llm(s) for s in sentences]  # 개별 폴백
-```
-
-### 4.5 spans → BIO 변환
-
-**코드:** `_spans_to_bio()` (`vi/ollama_ner_labeler.py:51-89`)
-
-LLM이 반환한 entity spans를 토큰 레벨 BIO 태그로 변환한다. **2단계 매칭 전략**:
-
-**1단계 — Exact match** (line 63-69):
-```python
-# span "Nguyễn Xuân Phúc" → span_tokens ["Nguyễn", "Xuân", "Phúc"]
-# tokens [..., "Nguyễn", "Xuân", "Phúc", ...] 에서 연속 일치 찾기
-if tokens[i : i + n] == span_tokens:
-    tags[i] = f"B-{entity_type}"
-```
-
-**2단계 — Substring match** (line 72-83):
-```python
-# 부분 문자열 매칭으로 약간의 토큰 불일치 처리
-if all(sp in tokens[i + j] or tokens[i + j] in sp for j, sp in enumerate(span_tokens)):
-```
-
-베트남어는 한국어와 달리 조사가 단어에 부착되지 않으므로, exact match만으로 대부분의 경우가 처리된다. 그러나 substring match는 LLM이 약간 다른 형태의 텍스트를 반환하는 경우에 대비한 안전장치로 유지된다.
-
-### 백엔드 변형
-
-동일 인터페이스(`label()`, `label_spans()`)로 3개 백엔드를 지원한다:
-
-| 파일 | 클래스 | 특징 |
-|------|--------|------|
-| `vi/ollama_ner_labeler.py` | `OllamaNERLabeler` | 동기 처리, ChatOllama, 배치 지원 |
-| `vi/vllm_ner_labeler.py` | `VllmNERLabeler` | **async 동시성** (`concurrency` 파라미터, 기본 32), AsyncOpenAI 호환 |
-| `vi/openai_ner_labeler.py` | `OpenAINERLabeler` | **system/user 채팅 형식**, `response_format={"type": "json_object"}` |
-
-**코드:** 라벨러 팩토리 (`src/evaluators/__main__.py:113-138`)
-
-```python
-def _create_labeler_vi(backend: str, model_name: str, args):
-    if backend == "ollama":
-        from labelers.vi.ollama_ner_labeler import OllamaNERLabeler
-        # ...
-    elif backend == "vllm":
-        from labelers.vi.vllm_ner_labeler import VllmNERLabeler
-        # ...
-    elif backend == "openai":
-        from labelers.vi.openai_ner_labeler import OpenAINERLabeler
-        # ...
-    elif backend == "hf":
-        from labelers.hf_ner_labeler import HFNERLabeler
-        return backend, HFNERLabeler(model_name=model_name, lang="vi")
-```
-
-### 왜 이렇게 설계했는가
-
-| 결정 | 이유 |
-|------|------|
-| 한국어와 동일한 문장 분리 로직 | 베트남어도 라틴 문자 기반으로 `.!?` 문장부호를 사용하므로 동일 정규식 적용 가능 |
-| 2단계 매칭 유지 | 베트남어는 조사 부착이 없지만, LLM 출력의 미세한 차이(성조 부호 누락 등)에 대비 |
-| 3개 백엔드 동일 지원 | 파이프라인 아키텍처 일관성 유지 — 한국어/일본어와 동일한 백엔드 선택지 제공 |
-| HF 백엔드 추가 지원 | BERT 기반 모델과 LLM 성능 비교를 위한 HFNERLabeler 연동 (`lang="vi"`) |
+설정:
+- `temperature=0` — NER 결정성
+- `format=json` 또는 `response_format={"type": "json_object"}` — 유효 JSON 강제
+- vLLM 컨테이너 `enable_thinking=false` — thinking 토큰이 JSON 파싱 방해 방지
+- 폴백: 배치 호출 실패 시 개별 문장 단위 재시도
 
 ---
 
-## 5. Stage 4: 결과 확인 (평가)
+## 6. Stage 5 — 평가
 
-### 평가 진입점
-
-**코드:** `_run_vietnamese()` (`src/evaluators/__main__.py:250-277`)
+### 6.1 CLI
 
 ```bash
-python -m llm_eval --lang vi --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+python -m llm_eval --lang vi --models "vllm:cyankiwi/gemma-4-31B-it-AWQ-8bit" --max-samples 200
 ```
 
-CLI가 수행하는 흐름:
-1. `DatasetLoader`로 WikiANN(vi) gold records 로딩
-2. `BenchmarkRunner` 생성 (`lang="vi"` 지정)
-3. 각 labeler에 대해 `_run_single()` 실행
-4. `ReportGenerator`로 결과 출력
+### 6.2 평가 흐름
 
-```python
-# __main__.py:259
-runner = BenchmarkRunner(gold_records, compute_bertscore=not args.no_bertscore, lang="vi")
-```
-
-### 평가 흐름 상세
-
-한국어와 동일한 `BenchmarkRunner`를 사용한다. 각 gold record에 대해:
+`src/llm_eval/__main__.py` 단일 dispatch → `BenchmarkRunner` (lang="vi") 실행:
 
 ```
 gold record {tokens, ner_tags}
-    │
     ├── (1) 텍스트 재구성: reconstruct_text() (word-level space-join)
-    │       → "Nguyễn Văn A sinh ra tại Hà Nội"
-    │
-    ├── (2) gold spans 추출: extract_spans_from_bio(gold_tokens, gold_tags, lang="vi")
-    │       → [{"text": "Nguyễn Văn A", "type": "PER"}, {"text": "Hà Nội", "type": "LOC"}]
-    │
-    ├── (3) LLM 라벨링: labeler.label_spans(text) 또는 labeler.label(text)
-    │       → predicted spans 또는 BIO 태그
-    │
-    ├── (4) 태그 정렬: TagAligner.align() (word-level이므로 음절 변환 불필요)
-    │
-    └── (5) 메트릭 계산 (전체 샘플에 대해)
+    ├── (2) gold spans 추출: extract_spans_from_bio(lang="vi")
+    ├── (3) LLM 라벨링: labeler.label_spans(text) 또는 label(text)
+    ├── (4) 태그 정렬: TagAligner.align()
+    └── (5) 메트릭 계산
 ```
 
-### 태그 정규화
+### 6.3 태그 정규화
 
-**코드:** `normalize_tag()` (`src/labelers/tag_aligner.py:44-59`), `_TAG_NORMALIZE_MAP_VI` (`tag_aligner.py:30-35`)
-
-베트남어 태그 정규화 맵:
+`src/labelers/tag_aligner.py::_TAG_NORMALIZE_MAP_VI` :
 
 ```python
-_TAG_NORMALIZE_MAP_VI = {
-    "PERSON": "PER",
-    "LOCATION": "LOC",
-    "ORGANIZATION": "ORG",
-    "MISCELLANEOUS": "MISC",
+{"PERSON": "PER", "LOCATION": "LOC", "ORGANIZATION": "ORG", "MISCELLANEOUS": "MISC"}
+```
+
+LLM 이 풀네임을 출력하는 경우 약어로 변환. KO 와 달리 별도 KLUE 약어 변환은 없음.
+
+### 6.4 메트릭
+
+`src/metrics/bio_metrics.py::MetricsCalculator` + `src/metrics/span_metrics.py::compute_offset_span_f1`:
+
+| 메트릭 | 역할 | 비고 |
+|---|---|---|
+| Span Match | entity 단위 exact/relaxed 매칭 | **Primary** |
+| seqeval | 단어 BIO 태그 기반 F1 | Secondary |
+| Character Span F1 | 문자 수준 span 매칭 | |
+| BERTScore | 의미 유사도 | Optional (`--no-bertscore`) |
+
+VI 평가는 BIO 경로 (`eval_mode='bio'`) 사용. KO 와 동일.
+
+---
+
+## 7. Silver 검증 전략 (재라벨 파이프라인)
+
+`augmenters/wikiann_vi/` 가 WikiANN 3종 gold 를 LLM 으로 5종 silver 로 재라벨하는 별도 파이프라인. 결과는 `data/wikiann_vi/{train,valid,test}.jsonl` 로 저장 (Stockmark 포맷).
+
+### 7.1 이중 silver 인식
+
+- WikiANN 원본 = Wikipedia 인터링크 기반 자동 silver
+- 본 5종 라벨 = WikiANN silver 를 LLM 이 재분류 → 추가 silver
+- → 본 데이터셋은 이중 silver. 절대 F1 비교는 부적합. 모델 간 상대 순위·cross-model kappa·Wikidata anchor agreement 만 해석 대상.
+
+### 7.2 3중 검증 레이어
+
+1. **Cross-model agreement** — Gemma + Qwen 2개 LLM 독립 라벨링 → Cohen kappa + per-type 합의율 (`augmenters/wikiann_vi/kappa.py`)
+2. **Wikidata anchor** — 베트남어 Wikipedia → Wikidata Q-ID → P31(instance of) 으로 canonical type 역추정 (`augmenters/wikiann_vi/wikidata_anchor.py`, 약 163개 Q-ID 매핑). 상세: `docs/manual/data/wikidata-anchor-verification.md`
+3. **WikiANN 3종 gold 직접 비교** — silver PER/LOC/ORG 만 필터링해 gold 와 span F1 (`llm_eval/vi_silver_quality.py`)
+
+### 7.3 confidence 카테고리 + 정책 (`merge_confidence.py`)
+
+두 모델 출력 비교로 4 카테고리 분류 (`high`/`medium_recall`/`medium_prec`/`conflict`), 5 정책 중 선택:
+
+| 정책 | PER/LOC/ORG | PROD/EVT |
+|---|---|---|
+| `recall` | high + medium_recall | high + medium_recall |
+| `precision` | high + medium_prec | high + medium_prec |
+| `high_only` | high 만 | high 만 |
+| `full` | 전체 (conflict 포함) | 전체 |
+| **`recall_strict`** (권장) | **high + medium_recall** | **high 만** |
+
+상세 평가 결과·신뢰 등급은 `docs/reports/vietnamese-ner-silver-quality.md` 참조.
+
+### 7.4 산출물 포맷 (Stockmark 호환)
+
+```json
+{
+  "id": "0",
+  "text": "Đồng bằng sông Cửu Long",
+  "entities": [
+    {"label": "LOC", "start_char": 0, "end_char": 23, "text": "Đồng bằng sông Cửu Long"}
+  ]
 }
 ```
 
-**핵심 차이**: 한국어는 국제 표준 태그를 KLUE 고유 태그로 변환(PER→PS, LOC→LC, ORG→OG)하지만, 베트남어는 **국제 표준 태그를 그대로 유지**(PER, LOC, ORG)한다. 정규화는 LLM이 풀네임("PERSON", "LOCATION")을 출력하는 경우에만 약어로 변환한다.
-
-### 토큰 정렬의 단순화
-
-WikiANN은 word-level 토큰을 사용하므로, KLUE의 음절→단어 정렬 문제가 발생하지 않는다:
-
-- **한국어 (KLUE)**: 음절 단위 gold tokens → LLM word-level 출력 → `spans_to_syllable_bio()` 또는 `align_syllable_to_word()` 필요
-- **베트남어 (WikiANN)**: word-level gold tokens → LLM word-level 출력 → `TagAligner.align()` 직접 사용 가능
-
-`extract_spans_from_bio()` (`tag_aligner.py:94-130`)에서 space token 유무를 자동 감지:
-
-```python
-has_space_tokens = any(t.strip() == "" for t in tokens)
-joiner = "" if has_space_tokens else " "  # WikiANN: " " (word-level)
-```
-
-### 4종 메트릭
-
-한국어와 동일한 `MetricsCalculator`를 사용한다:
-
-| 메트릭 | 역할 | 비고 |
-|--------|------|------|
-| **Span Match** | entity 단위 exact/relaxed 매칭 | **Primary** |
-| **seqeval** | 단어 BIO 태그 기반 F1/Precision/Recall | Secondary |
-| **Character Span F1** | 문자 수준 span 매칭 | |
-| **BERTScore** | 의미적 유사도 기반 평가 | Optional (`--no-bertscore`) |
-
-### 왜 이렇게 설계했는가
-
-| 결정 | 이유 |
-|------|------|
-| 한국어와 동일한 `BenchmarkRunner` 사용 | BIO 기반 평가 프레임워크를 공유하여 코드 중복 제거 |
-| 국제 표준 태그 유지 (PER, LOC, ORG) | WikiANN이 국제 표준 태그를 사용하므로, 불필요한 태그 변환 없이 직접 비교 가능 |
-| `lang="vi"` 전달 | 태그 정규화 맵 선택 및 BERTScore 언어 모델 지정에 사용 |
-| 음절 BIO 변환 불필요 | WikiANN의 word-level 토큰이 LLM 출력과 동일한 수준이므로 복잡한 정렬 로직 생략 가능 |
-
 ---
 
-## 6. 한국어 파이프라인과의 차이점 요약
+## 8. 한국어·일본어 파이프라인과의 차이
 
-| 항목 | 한국어 (KLUE) | 베트남어 (WikiANN) |
-|------|--------------|-------------------|
-| **데이터셋** | KLUE NER (`klue`, config=`ner`) | WikiANN (`unimelb-nlp/wikiann`, config=`vi`) |
-| **데이터 split** | `validation` | `test` |
-| **엔티티 타입** | 6개: PS, LC, OG, DT, TI, QT | 3개: PER, LOC, ORG |
-| **태그 표준** | KLUE 고유 (PS, LC, OG...) | 국제 표준 (PER, LOC, ORG) |
-| **태그 정규화** | PER→PS, LOC→LC, ORG→OG 등 | PERSON→PER, LOCATION→LOC 등 (약어 이미 표준) |
-| **토큰 수준** | 음절(syllable) 단위 + 공백 토큰 | 단어(word) 단위 |
-| **`sentence` 필드** | 있음 (원본 문장 포함) | 없음 (토큰 재결합으로 복원) |
-| **음절 BIO 변환** | 필요 (`spans_to_syllable_bio`) | 불필요 (word-level 직접 비교) |
-| **프롬프트 언어** | 한국어 | 베트남어 |
-| **프롬프트 규칙 수** | 7개 (조사 제외, 접미사 처리 등) | 5개 (성조 보존, 직함 제외 등) |
-| **Few-shot 예시** | 7개 | 3개 |
-| **핵심 언어 특성** | 조사 부착, 음절 토큰화 | 성조 부호(dấu), 다중 단어 이름 |
-| **평가 러너** | `BenchmarkRunner` (lang="ko") | `BenchmarkRunner` (lang="vi") — 동일 클래스 |
-
----
-
-## 7. 설계 의사결정 요약
-
-전체 파이프라인에서 내려진 핵심 설계 결정들:
-
-| # | 단계 | 결정 | 이유 | 대안 (채택하지 않은 것) |
-|---|------|------|------|----------------------|
-| 1 | 데이터 | DatasetLoader 재사용 | WikiANN과 KLUE 모두 tokens/ner_tags 구조가 동일 | 별도 VietnameseDatasetLoader 구현 (불필요한 코드 중복) |
-| 2 | 데이터 | config="vi"로 언어 지정 | WikiANN 다국어 데이터셋의 표준 접근법 | 별도 데이터셋 사용 |
-| 3 | 태그 | 국제 표준 태그 유지 | WikiANN이 PER/LOC/ORG를 사용하므로 변환 불필요 | KLUE 스타일로 변환 (PS/LC/OG → 혼란 유발) |
-| 4 | 프롬프트 | 베트남어 전체 작성 | LLM의 베트남어 이해도 극대화 | 영어/한국어 프롬프트 (성능 저하 예상) |
-| 5 | 프롬프트 | 3개 Few-shot | 3개 타입에 대해 충분한 엣지 케이스 커버 | 7개 (한국어 수준) — 엔티티 타입이 적어 불필요 |
-| 6 | 프롬프트 | 성조 부호 보존 명시 | 베트남어에서 성조는 의미 구분의 핵심 | 별도 언급 없음 (LLM이 성조 누락 가능) |
-| 7 | 프롬프트 | 직함 제외 규칙 | "Ông", "Bà" 등이 이름 앞에 붙는 베트남어 관용 반영 | 한국어식 조사 제외 규칙 (베트남어에 해당 없음) |
-| 8 | 라벨링 | 한국어와 동일한 3개 백엔드 | 파이프라인 일관성 + 백엔드 선택 유연성 | 단일 백엔드만 지원 |
-| 9 | 평가 | BenchmarkRunner 공유 | BIO 기반 seqeval이 word-level에서도 동일 동작 | 별도 평가 러너 (코드 중복) |
-| 10 | 평가 | 음절 변환 생략 | word-level 토큰으로 직접 비교 가능 | 음절 변환 로직 적용 (불필요한 복잡도) |
+| 항목 | 한국어 (KLUE) | 일본어 (Stockmark) | 베트남어 (WikiANN) |
+|---|---|---|---|
+| **데이터셋** | `klue` config=`ner` | `stockmark/ner-wikipedia-dataset` (canonical JSONL 덤프) | `unimelb-nlp/wikiann` config=`vi` |
+| **데이터 split** | `validation` | `test` | `test` |
+| **gold 엔티티 종수** | 6 (PS/LC/OG/DT/TI/QT) | 5 canonical (PER/LOC/ORG/PROD/EVT) | 3 (PER/LOC/ORG) |
+| **라벨러 출력 종수** | 6 | 10 평면 (5 NER + 5 PII) | 10 평면 (5 NER + 5 PII) |
+| **태그 표준** | KLUE 고유 (PS/LC/OG…) | canonical 영문 약어 | canonical 영문 약어 |
+| **태그 정규화** | PER→PS, LOC→LC | (정규화 불필요, 이미 표준) | PERSON→PER, LOCATION→LOC |
+| **토큰 수준** | 음절 + 공백 토큰 | 형태소 (sentencepiece) | 단어 (word) |
+| **`sentence` 필드** | 있음 | 있음 (canonical 덤프) | 없음 (토큰 재결합) |
+| **음절 BIO 변환** | 필요 | 불필요 | 불필요 |
+| **프롬프트 언어** | 한국어 | 일본어 | 베트남어 |
+| **silver 재라벨 파이프라인** | — | — | `augmenters/wikiann_vi/` (Gemma+Qwen+Wikidata 3중 검증) |
+| **PII 주입** | — | `augmenters/pii/` (LLMInjector + PIIVerifier) | `augmenters/pii/` (동일) |
+| **평가 러너** | `BenchmarkRunner` (lang="ko") | 동일 클래스 (lang="ja") | 동일 클래스 (lang="vi") |

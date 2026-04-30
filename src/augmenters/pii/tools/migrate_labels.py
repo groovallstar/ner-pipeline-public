@@ -1,12 +1,12 @@
-"""#17 Phase 1 — data/pii JSONL 라벨 마이그레이션 CLI.
+"""#17 Phase 1 — PII JSONL 라벨 마이그레이션 CLI.
 
 기존 PII 주입 산출물의 `ADDRESS` 라벨을 `LOC`로, `DOB` 라벨을 `DAT`로
 치환한다. JSONL 본체와 부수 파일(`.stats.json`·`.verify.json`)의 라벨 키도
 동일하게 치환하며, 이미 치환된 대상은 no-op(idempotent)이다.
 
 사용 예:
-    python -m augmenters.pii.tools.migrate_labels data/pii/stockmark_pii_1000.jsonl
-    python -m augmenters.pii.tools.migrate_labels data/pii/ --dry-run
+    python -m augmenters.pii.tools.migrate_labels data/stockmark/pii_test.jsonl
+    python -m augmenters.pii.tools.migrate_labels data/stockmark/ --dry-run
 
 span 오프셋은 건드리지 않으며 라벨 이외 필드는 원형을 유지한다.
 """
