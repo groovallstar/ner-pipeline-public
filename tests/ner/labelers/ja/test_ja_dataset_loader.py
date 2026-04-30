@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from labelers.ja.dataset_loader import JapaneseDatasetLoader
+from ner.labelers.ja.dataset_loader import JapaneseDatasetLoader
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> None:

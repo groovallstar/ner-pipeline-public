@@ -1,5 +1,5 @@
 """Wikidata 앵커 유틸 단위 테스트 (네트워크 없는 부분만)."""
-from augmenters.wikiann_vi.wikidata_anchor import (
+from ner.augmenters.wikiann_vi.wikidata_anchor import (
     WIKIDATA_TO_CANONICAL,
     _iter_entities,
     _resolve_title,

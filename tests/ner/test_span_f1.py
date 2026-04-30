@@ -3,7 +3,7 @@
 import sys
 sys.path.insert(0, "/work/git/ner_pipeline/src")
 
-from metrics.bio_metrics import MetricsCalculator
+from ner.metrics.bio_metrics import MetricsCalculator
 
 
 def test_perfect_match_with_space_tokens():

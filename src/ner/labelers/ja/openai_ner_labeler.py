@@ -1,8 +1,8 @@
 """일본어 OpenAI NER 라벨러 — BaseOpenAILabeler의 경량 서브클래스."""
 from typing import List, Optional
 
-from labelers.base_openai_labeler import BaseOpenAILabeler
-from labelers.ja.ner_prompts import (
+from ner.labelers.base_openai_labeler import BaseOpenAILabeler
+from ner.labelers.ja.ner_prompts import (
     DEFAULT_ENTITY_TYPES,
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,

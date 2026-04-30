@@ -65,8 +65,8 @@ class VietnameseDatasetLoader:
         if not target.exists():
             raise FileNotFoundError(
                 f'WikiANN-vi canonical dump not found: {target}. '
-                'Generate it via augmenters.wikiann_vi + '
-                'augmenters.wikiann_vi.merge_confidence.'
+                'Generate it via ner.augmenters.wikiann_vi + '
+                'ner.augmenters.wikiann_vi.merge_confidence.'
             )
         return _read_records(
             target, max_samples, span_key or self.SPAN_KEY,

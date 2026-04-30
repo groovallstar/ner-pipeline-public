@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 from openai import AsyncOpenAI
 
-from augmenters.wikiann_vi.prompts import (
+from ner.augmenters.wikiann_vi.prompts import (
     BATCH_PROMPT_TEMPLATE,
     DEFAULT_ENTITY_TYPES,
     SINGLE_PROMPT_TEMPLATE,

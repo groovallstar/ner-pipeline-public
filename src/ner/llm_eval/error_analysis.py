@@ -1,7 +1,7 @@
 """문장별 오류 분석: NER 벤치마크에서 FN/FP 패턴을 추출한다.
 
 사용 예:
-    python -m llm_eval.error_analysis \
+    python -m ner.llm_eval.error_analysis \
         --models vllm:Qwen/Qwen3.5-27B \
         --max-samples 50 \
         --output results/error_analysis.json
@@ -17,8 +17,8 @@ import time
 from collections import Counter, defaultdict
 from typing import Dict, List, Tuple
 
-from labelers.dataset_loader import DatasetLoader
-from labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
+from ner.labelers.dataset_loader import DatasetLoader
+from ner.labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +281,7 @@ def run_error_analysis(args) -> dict:
     print(f"  Loaded {len(gold_records)} records")
 
     # 라벨러를 생성한다
-    from llm_eval.__main__ import _create_labeler, _load_env
+    from ner.llm_eval.__main__ import _create_labeler, _load_env
     _load_env()
     backend, labeler = _create_labeler(args.models[0], args)
 

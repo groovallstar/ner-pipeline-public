@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 
-from augmenters.pii.generators.base import random_digits
+from ner.augmenters.pii.generators.base import random_digits
 
 JAPANESE_FAMILY_NAMES = [
     '山田', '佐藤', '鈴木', '田中', '高橋', '伊藤', '渡辺', '中村',

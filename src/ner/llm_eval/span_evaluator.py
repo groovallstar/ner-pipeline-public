@@ -4,8 +4,8 @@ bio_dataset.load() gold 레코드와 labeler.label_spans() 예측을 연결하�
 MetricsCalculator.compute_span_match()로 정확/완화 F1을 계산한다.
 
 사용 예:
-    from labelers.bio_dataset import load
-    from llm_eval.span_evaluator import evaluate
+    from ner.labelers.bio_dataset import load
+    from ner.llm_eval.span_evaluator import evaluate
 
     gold = load("klue", "validation", max_samples=100)
     results = evaluate(gold, labeler)
@@ -15,7 +15,7 @@ import logging
 import time
 from typing import Any, List, Optional
 
-from metrics.bio_metrics import MetricsCalculator
+from ner.metrics.bio_metrics import MetricsCalculator
 
 logger = logging.getLogger(__name__)
 

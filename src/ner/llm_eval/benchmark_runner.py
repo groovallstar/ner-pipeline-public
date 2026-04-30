@@ -9,9 +9,9 @@ from typing import Any, Dict, List, Optional
 
 from tqdm import tqdm
 
-from labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
-from metrics.bio_metrics import MetricsCalculator
-from metrics.span_metrics import compute_offset_span_f1
+from ner.labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
+from ner.metrics.bio_metrics import MetricsCalculator
+from ner.metrics.span_metrics import compute_offset_span_f1
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class BenchmarkRunner:
         self, name: str, backend: str, labeler: Any
     ) -> BenchmarkResult:
         """sample 단위 concurrency로 병렬 라벨링한다."""
-        from labelers.ja.span_matcher import match_spans
+        from ner.labelers.ja.span_matcher import match_spans
 
         sem = asyncio.Semaphore(self.sample_concurrency)
 

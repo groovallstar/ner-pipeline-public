@@ -1,8 +1,8 @@
 """일본어 vLLM NER 라벨러 — BaseVllmLabeler의 경량 서브클래스."""
 from typing import List, Optional
 
-from labelers.base_vllm_labeler import BaseVllmLabeler
-from labelers.ja.ner_prompts import DEFAULT_ENTITY_TYPES, SINGLE_PROMPT_TEMPLATE
+from ner.labelers.base_vllm_labeler import BaseVllmLabeler
+from ner.labelers.ja.ner_prompts import DEFAULT_ENTITY_TYPES, SINGLE_PROMPT_TEMPLATE
 
 
 class VllmNERLabeler(BaseVllmLabeler):

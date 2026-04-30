@@ -3,7 +3,7 @@ import math
 
 import pytest
 
-from augmenters.wikiann_vi.kappa import (
+from ner.augmenters.wikiann_vi.kappa import (
     cohen_kappa,
     compute,
     confusion_matrix,

@@ -3,7 +3,7 @@ WikiANN-vi 인간 주석 gold 와 비교해 span F1 을 측정한다.
 
 CLI 사용 예::
 
-    python -m llm_eval.vi_silver_quality \
+    python -m ner.llm_eval.vi_silver_quality \
         --silver-dir data/wikiann_vi \
         --silver-prefix gemma \
         --splits test validation train \
@@ -18,8 +18,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-from llm_eval.wikiann_vi_gold import GOLD_TYPES, load_wikiann_vi_gold
-from metrics.span_metrics import compute_offset_span_f1
+from ner.llm_eval.wikiann_vi_gold import GOLD_TYPES, load_wikiann_vi_gold
+from ner.metrics.span_metrics import compute_offset_span_f1
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def _format_summary(results: Dict[str, dict]) -> str:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog='python -m llm_eval.vi_silver_quality',
+        prog='python -m ner.llm_eval.vi_silver_quality',
         description='Evaluate VI silver vs WikiANN-vi 3-gold span F1',
     )
     p.add_argument(

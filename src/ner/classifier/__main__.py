@@ -1,9 +1,9 @@
 """Stockmark NER에서 BERT 모델을 파인튜닝하고 평가한다.
 
 사용 예:
-    python -m classifier
-    python -m classifier --models "tohoku-nlp/bert-base-japanese-v3"
-    python -m classifier --epochs 3 --batch-size 8
+    python -m ner.classifier
+    python -m ner.classifier --models "tohoku-nlp/bert-base-japanese-v3"
+    python -m ner.classifier --epochs 3 --batch-size 8
 """
 
 import argparse
@@ -13,8 +13,8 @@ import os
 
 from transformers import AutoTokenizer
 
-from classifier.data_utils import build_label_maps, load_stockmark, prepare_datasets
-from classifier.train_eval import NERDataset, fine_tune, evaluate_model
+from ner.classifier.data_utils import build_label_maps, load_stockmark, prepare_datasets
+from ner.classifier.train_eval import NERDataset, fine_tune, evaluate_model
 
 logging.basicConfig(
     level=logging.INFO,

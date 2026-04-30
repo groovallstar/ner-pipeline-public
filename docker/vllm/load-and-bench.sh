@@ -78,7 +78,7 @@ done
 echo ""
 echo "[4/4] 벤치마크 실행 중..."
 cd "$PROJECT_DIR"
-.venv/bin/python -m llm_eval.error_analysis \
+.venv/bin/python -m ner.llm_eval.error_analysis \
   --models "vllm:$MODEL" \
   --vllm-url "$VLLM_URL" \
   --max-samples 50 \

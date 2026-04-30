@@ -68,9 +68,9 @@ echo "  Concurrency: ${CONCURRENCY}"
 echo ""
 
 python3 -c "
-from labelers.bio_dataset import load
-from labelers.ko.vllm_ner_labeler import VllmNERLabeler
-from llm_eval.span_evaluator import evaluate
+from ner.labelers.bio_dataset import load
+from ner.labelers.ko.vllm_ner_labeler import VllmNERLabeler
+from ner.llm_eval.span_evaluator import evaluate
 
 gold = load('${DATASET}', '${SPLIT}', max_samples=${SAMPLES})
 print(f'Loaded {len(gold)} gold records')

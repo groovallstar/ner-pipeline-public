@@ -1,5 +1,5 @@
 """Tests for language-neutral LLM labeler helpers."""
-from labelers.llm_helpers import parse_spans, spans_to_bio, split_sentences
+from ner.labelers.llm_helpers import parse_spans, spans_to_bio, split_sentences
 
 
 class TestSplitSentences:

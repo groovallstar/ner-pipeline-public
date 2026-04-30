@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-from llm_eval.benchmark_runner import BenchmarkResult
+from ner.llm_eval.benchmark_runner import BenchmarkResult
 
 
 class ReportGenerator:

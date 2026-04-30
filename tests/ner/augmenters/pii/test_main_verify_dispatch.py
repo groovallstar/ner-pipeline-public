@@ -1,14 +1,14 @@
-"""augmenters.pii.__main__ 의 verify 라벨러 lang 분기 단위 테스트."""
+"""ner.augmenters.pii.__main__ 의 verify 라벨러 lang 분기 단위 테스트."""
 from __future__ import annotations
 
 import pytest
 
-from augmenters.pii import __main__ as pii_main
+from ner.augmenters.pii import __main__ as pii_main
 
 
 @pytest.mark.parametrize('lang,expected_module', [
-    ('ja', 'labelers.ja.vllm_ner_labeler'),
-    ('vi', 'labelers.vi.vllm_ner_labeler'),
+    ('ja', 'ner.labelers.ja.vllm_ner_labeler'),
+    ('vi', 'ner.labelers.vi.vllm_ner_labeler'),
 ])
 def test_build_verify_labeler_dispatches_by_lang(
     lang, expected_module,

@@ -16,7 +16,7 @@
     {"_meta": {"model": "Qwen3.5-27B", "backend": "vllm", "lang": "ja"}}
 
 사용 예:
-    python -m llm_eval.span_evaluator_cli --predictions f1.jsonl f2.jsonl [--output eval.json]
+    python -m ner.llm_eval.span_evaluator_cli --predictions f1.jsonl f2.jsonl [--output eval.json]
 """
 import argparse
 import json
@@ -24,7 +24,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from metrics.span_metrics import compute_offset_span_f1
+from ner.metrics.span_metrics import compute_offset_span_f1
 
 
 @dataclass
@@ -129,7 +129,7 @@ def _print_table(results: List[EvalResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="python -m llm_eval.span_evaluator_cli")
+    parser = argparse.ArgumentParser(prog="python -m ner.llm_eval.span_evaluator_cli")
     parser.add_argument("--predictions", nargs="+", required=True,
                         help="One or more JSONL prediction files")
     parser.add_argument("--output", default=None, help="Optional JSON output path")

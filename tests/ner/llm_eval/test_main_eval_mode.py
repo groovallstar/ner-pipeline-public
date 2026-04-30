@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from llm_eval.__main__ import _eval_mode_for_lang
-from llm_eval.benchmark_runner import BenchmarkRunner
+from ner.llm_eval.__main__ import _eval_mode_for_lang
+from ner.llm_eval.benchmark_runner import BenchmarkRunner
 
 
 class _StubLabeler:
@@ -72,7 +72,7 @@ def test_vi_offset_span_path_runs_end_to_end():
 def test_vi_local_jsonl_loads_via_loader(tmp_path: Path):
     # VietnameseDatasetLoader.load_local 이 PII 스키마(entities)를
     # gold_spans 로 변환하는지 확인 — VI offset_span 경로의 입력 계약.
-    from labelers.vi.dataset_loader import VietnameseDatasetLoader
+    from ner.labelers.vi.dataset_loader import VietnameseDatasetLoader
 
     payload = {
         'id': 'r1',

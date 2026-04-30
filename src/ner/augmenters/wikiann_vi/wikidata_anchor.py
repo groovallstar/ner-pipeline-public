@@ -499,7 +499,7 @@ def run_anchor(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog='python -m augmenters.wikiann_vi.wikidata_anchor',
+        prog='python -m ner.augmenters.wikiann_vi.wikidata_anchor',
         description='Wikipedia/Wikidata anchor verification',
     )
     p.add_argument('--input', required=True, help='Relabel JSONL path')

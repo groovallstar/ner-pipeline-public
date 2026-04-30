@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_eval import vi_silver_quality
+from ner.llm_eval import vi_silver_quality
 
 
 def _write_jsonl(path: Path, records):

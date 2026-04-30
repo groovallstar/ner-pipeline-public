@@ -6,7 +6,7 @@ from typing import List, Optional
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 
-from labelers.tag_aligner import normalize_tag
+from ner.labelers.tag_aligner import normalize_tag
 
 logger = logging.getLogger(__name__)
 

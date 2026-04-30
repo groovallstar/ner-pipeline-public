@@ -9,7 +9,7 @@ import logging
 import re
 from typing import List
 
-from labelers.labeler_base import parse_json_response
+from ner.labelers.labeler_base import parse_json_response
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from augmenters.pii.schema import Entity, Record
+from ner.augmenters.pii.schema import Entity, Record
 
 
 def load_stockmark(
@@ -18,7 +18,7 @@ def load_stockmark(
     덤프를 직접 읽는다. 분할 seed·비율 파라미터는 더 이상 런타임에서
     지정하지 않으며, 덤프 시점에 고정된다.
     """
-    from labelers.ja.dataset_loader import JapaneseDatasetLoader
+    from ner.labelers.ja.dataset_loader import JapaneseDatasetLoader
     loader = JapaneseDatasetLoader()
     raw = loader.load(
         split=split,

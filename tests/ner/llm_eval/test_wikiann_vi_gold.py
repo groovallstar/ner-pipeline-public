@@ -9,7 +9,7 @@ from typing import List
 
 import pytest
 
-from llm_eval import wikiann_vi_gold
+from ner.llm_eval import wikiann_vi_gold
 
 
 class _FakeFeature:

@@ -1,5 +1,5 @@
 """Unit tests for Japanese NER span matcher."""
-from labelers.ja.span_matcher import match_spans
+from ner.labelers.ja.span_matcher import match_spans
 
 
 class TestMatchSpans:

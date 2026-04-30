@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from labelers.vi.dataset_loader import (
+from ner.labelers.vi.dataset_loader import (
     VietnameseDatasetLoader,
     bio_to_offset_spans,
     offset_spans_to_bio,

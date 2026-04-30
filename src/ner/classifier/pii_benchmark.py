@@ -1,9 +1,9 @@
 """PII NER 벤치마크: 합성 PII 데이터 생성 → BERT 파인튜닝 → 평가.
 
 사용 예:
-    python -m classifier.pii_benchmark
-    python -m classifier.pii_benchmark --models "tohoku-nlp/bert-base-japanese-v3"
-    python -m classifier.pii_benchmark --n-train 1000 --n-test 300
+    python -m ner.classifier.pii_benchmark
+    python -m ner.classifier.pii_benchmark --models "tohoku-nlp/bert-base-japanese-v3"
+    python -m ner.classifier.pii_benchmark --n-train 1000 --n-test 300
 """
 
 import argparse
@@ -15,8 +15,8 @@ import sys
 
 from transformers import AutoTokenizer
 
-from classifier.data_utils import tokenize_and_align
-from classifier.train_eval import NERDataset, fine_tune, evaluate_model
+from ner.classifier.data_utils import tokenize_and_align
+from ner.classifier.train_eval import NERDataset, fine_tune, evaluate_model
 
 # PII generator
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ref"))

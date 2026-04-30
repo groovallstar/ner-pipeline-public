@@ -1,8 +1,8 @@
 """베트남어 vLLM NER 라벨러 — BaseVllmLabeler의 경량 서브클래스."""
 from typing import List, Optional
 
-from labelers.base_vllm_labeler import BaseVllmLabeler
-from labelers.vi.ner_prompts import (
+from ner.labelers.base_vllm_labeler import BaseVllmLabeler
+from ner.labelers.vi.ner_prompts import (
     DEFAULT_ENTITY_TYPES,
     SINGLE_PROMPT_TEMPLATE,
 )

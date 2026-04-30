@@ -1,7 +1,7 @@
 """merge_confidence 단위 테스트."""
 import pytest
 
-from augmenters.wikiann_vi.merge_confidence import (
+from ner.augmenters.wikiann_vi.merge_confidence import (
     _filter_by_policy,
     categorize_spans,
     merge_records,

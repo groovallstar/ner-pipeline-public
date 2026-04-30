@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from labelers.bio_dataset import (
+from ner.labelers.bio_dataset import (
     DatasetNotFoundError,
     DatasetSpec,
     REGISTRY,
@@ -188,7 +188,7 @@ class TestLoadFromJsonl:
         jsonl_file.write_text(json.dumps(record, ensure_ascii=False) + "\n")
 
         # Monkey-patch the JSONL path to point to tmp_path
-        import labelers.bio_dataset as bio_mod
+        import ner.labelers.bio_dataset as bio_mod
         _original_load = bio_mod.load  # noqa: F841 (kept for potential teardown)
 
         def patched_load(spec_name, split, max_samples=None):
@@ -213,7 +213,7 @@ class TestLoadFromJsonl:
             }, ensure_ascii=False))
         jsonl_file.write_text("\n".join(lines) + "\n")
 
-        import labelers.bio_dataset as bio_mod
+        import ner.labelers.bio_dataset as bio_mod
         from pathlib import Path
         spec = bio_mod.REGISTRY["klue"]
         results = bio_mod._load_from_jsonl(Path(jsonl_file), spec, max_samples=5)

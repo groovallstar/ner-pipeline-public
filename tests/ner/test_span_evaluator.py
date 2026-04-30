@@ -1,7 +1,7 @@
 """Tests for llm_eval.span_evaluator module."""
 
 
-from llm_eval.span_evaluator import evaluate
+from ner.llm_eval.span_evaluator import evaluate
 
 
 class MockLabeler:

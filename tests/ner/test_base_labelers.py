@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from labelers.base_openai_labeler import BaseOpenAILabeler
-from labelers.base_vllm_labeler import BaseVllmLabeler
-from labelers.ja.openai_ner_labeler import OpenAINERLabeler as JP
-from labelers.ja.vllm_ner_labeler import VllmNERLabeler as JV
-from labelers.ko.openai_ner_labeler import OpenAINERLabeler as KP
-from labelers.ko.vllm_ner_labeler import VllmNERLabeler as KV
+from ner.labelers.base_openai_labeler import BaseOpenAILabeler
+from ner.labelers.base_vllm_labeler import BaseVllmLabeler
+from ner.labelers.ja.openai_ner_labeler import OpenAINERLabeler as JP
+from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler as JV
+from ner.labelers.ko.openai_ner_labeler import OpenAINERLabeler as KP
+from ner.labelers.ko.vllm_ner_labeler import VllmNERLabeler as KV
 
 
 class TestInheritance:

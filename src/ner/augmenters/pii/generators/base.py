@@ -76,9 +76,9 @@ def generate_pii(
 ) -> str:
     """언어/라벨에 해당하는 합성 PII 값을 생성한다."""
     if lang == 'ja':
-        from augmenters.pii.generators import ja as mod
+        from ner.augmenters.pii.generators import ja as mod
     elif lang == 'vi':
-        from augmenters.pii.generators import vi as mod
+        from ner.augmenters.pii.generators import vi as mod
     else:
         raise ValueError(f'Unsupported language: {lang}')
 

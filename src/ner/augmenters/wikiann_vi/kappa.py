@@ -147,7 +147,7 @@ def compute(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog='python -m augmenters.wikiann_vi.kappa',
+        prog='python -m ner.augmenters.wikiann_vi.kappa',
         description='Compute cross-model Cohen kappa on 5-type relabel',
     )
     parser.add_argument('--a', required=True, help='JSONL path for model A')

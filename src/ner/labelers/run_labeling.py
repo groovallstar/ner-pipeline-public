@@ -3,7 +3,7 @@
 출력 JSONL은 `llm_eval.span_evaluator_cli`에서 사용된다. 한 번 실행 시 모델 하나를 처리한다.
 
 사용 예:
-    python -m labelers.run_labeling \
+    python -m ner.labelers.run_labeling \
         --lang ja \
         --model vllm:Qwen/Qwen3.5-27B \
         --max-samples 500 \
@@ -17,7 +17,7 @@ import time
 
 from tqdm import tqdm
 
-from labelers.ja.span_matcher import match_spans
+from ner.labelers.ja.span_matcher import match_spans
 
 
 def _load_env() -> None:
@@ -40,25 +40,25 @@ def _create_labeler(spec: str, lang: str, args):
     backend, model_name = spec.split(":", 1)
     if lang == "ja":
         if backend == "vllm":
-            from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+            from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler
             return backend, VllmNERLabeler(base_url=args.vllm_url, model=model_name,
                                            concurrency=args.concurrency, thinking=args.thinking)
         if backend == "openai":
-            from labelers.ja.openai_ner_labeler import OpenAINERLabeler
+            from ner.labelers.ja.openai_ner_labeler import OpenAINERLabeler
             return backend, OpenAINERLabeler(model=model_name)
     raise ValueError(f"Unsupported lang/backend: {lang}/{backend}")
 
 
 def _load_gold(lang: str, max_samples: int):
     if lang == "ja":
-        from labelers.ja.dataset_loader import JapaneseDatasetLoader
+        from ner.labelers.ja.dataset_loader import JapaneseDatasetLoader
         return JapaneseDatasetLoader().load(split="test", max_samples=max_samples)
     raise ValueError(f"Lang not implemented yet: {lang}")
 
 
 def main() -> None:
     _load_env()
-    p = argparse.ArgumentParser(prog="python -m labelers.run_labeling")
+    p = argparse.ArgumentParser(prog="python -m ner.labelers.run_labeling")
     p.add_argument("--lang", default="ja", choices=["ja"])
     p.add_argument("--model", required=True, help="backend:model_name (e.g. vllm:Qwen/Qwen3.5-27B)")
     p.add_argument("--max-samples", type=int, default=None)

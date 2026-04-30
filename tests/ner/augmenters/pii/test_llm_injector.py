@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from augmenters.pii.llm_injector import (
+from ner.augmenters.pii.llm_injector import (
     LLMInjector,
     build_injection_prompt,
     extract_spans,
 )
-from augmenters.pii.schema import Entity, Record
+from ner.augmenters.pii.schema import Entity, Record
 
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────────────

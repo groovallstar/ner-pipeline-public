@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from openai import AsyncOpenAI
 
-from labelers.llm_helpers import parse_spans, spans_to_bio, split_sentences
+from ner.labelers.llm_helpers import parse_spans, spans_to_bio, split_sentences
 
 logger = logging.getLogger(__name__)
 

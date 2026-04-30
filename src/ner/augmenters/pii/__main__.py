@@ -1,7 +1,7 @@
 """PII 주입 CLI.
 
 예:
-    python -m augmenters.pii --source stockmark --lang ja \\
+    python -m ner.augmenters.pii --source stockmark --lang ja \\
         --output data/stockmark/pii_test.jsonl --n-samples 100
 """
 from __future__ import annotations
@@ -11,9 +11,9 @@ import json
 import logging
 from pathlib import Path
 
-from augmenters.pii.config import InjectionConfig
-from augmenters.pii.injector import PIIInjector
-from augmenters.pii.stats import compute_stats
+from ner.augmenters.pii.config import InjectionConfig
+from ner.augmenters.pii.injector import PIIInjector
+from ner.augmenters.pii.stats import compute_stats
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +112,9 @@ def _build_verify_labeler(
     선택해 주입해야 한다. 미지원 lang 은 `ValueError`.
     """
     if lang == 'ja':
-        from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+        from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler
     elif lang == 'vi':
-        from labelers.vi.vllm_ner_labeler import VllmNERLabeler
+        from ner.labelers.vi.vllm_ner_labeler import VllmNERLabeler
     else:
         raise ValueError(f'unsupported lang for verify: {lang!r}')
     return VllmNERLabeler(
@@ -123,7 +123,7 @@ def _build_verify_labeler(
 
 
 def _load_records(args: argparse.Namespace):
-    from augmenters.pii.loaders import load_hf, load_jsonl, load_stockmark
+    from ner.augmenters.pii.loaders import load_hf, load_jsonl, load_stockmark
     if args.source == 'stockmark':
         return load_stockmark(
             split='train', max_samples=args.n_samples,
@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
 
     injected = []
     if args.mode == 'llm':
-        from augmenters.pii.llm_injector import LLMInjector, VllmClient
+        from ner.augmenters.pii.llm_injector import LLMInjector, VllmClient
         inject_url = args.inject_url or args.vllm_url
         inject_model = args.inject_model or args.vllm_model
         client = VllmClient(
@@ -197,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # 교차 검증
     if args.verify == 'vllm':
-        from augmenters.pii.verifier import PIIVerifier, VerifyPolicy
+        from ner.augmenters.pii.verifier import PIIVerifier, VerifyPolicy
         verify_url = args.verify_url or args.vllm_url
         verify_model = args.verify_model or args.vllm_model
         labeler = _build_verify_labeler(

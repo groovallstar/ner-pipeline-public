@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from openai import AsyncOpenAI, OpenAI
 
-from labelers.llm_helpers import spans_to_bio, split_sentences
+from ner.labelers.llm_helpers import spans_to_bio, split_sentences
 
 logger = logging.getLogger(__name__)
 

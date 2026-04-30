@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import asyncio
 
-from augmenters.pii.schema import Entity, Record
-from augmenters.pii.verifier import (
+from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.pii.verifier import (
     PIIVerifier,
     VerifyPolicy,
 )

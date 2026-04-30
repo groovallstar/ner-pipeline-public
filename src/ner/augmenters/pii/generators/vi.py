@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 
-from augmenters.pii.generators.base import random_digits
+from ner.augmenters.pii.generators.base import random_digits
 
 VIETNAMESE_FAMILY_NAMES = [
     'Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Phan', 'Vu', 'Vo',

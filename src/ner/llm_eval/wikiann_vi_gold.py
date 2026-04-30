@@ -13,7 +13,7 @@ from typing import Dict, List
 
 from datasets import ClassLabel, load_dataset
 
-from labelers.vi.dataset_loader import bio_to_offset_spans
+from ner.labelers.vi.dataset_loader import bio_to_offset_spans
 
 GOLD_TYPES = ('PER', 'LOC', 'ORG')
 

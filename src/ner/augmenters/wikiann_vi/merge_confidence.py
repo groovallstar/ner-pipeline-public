@@ -215,7 +215,7 @@ def _summarize(records: List[dict]) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog='python -m augmenters.wikiann_vi.merge_confidence',
+        prog='python -m ner.augmenters.wikiann_vi.merge_confidence',
         description='Merge two relabel JSONLs with confidence tagging',
     )
     p.add_argument('--gemma', required=True, help='Gemma JSONL path')

@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from augmenters.pii.config import InjectionConfig
-from augmenters.pii.injector import PIIInjector
-from augmenters.pii.schema import Entity, Record
+from ner.augmenters.pii.config import InjectionConfig
+from ner.augmenters.pii.injector import PIIInjector
+from ner.augmenters.pii.schema import Entity, Record
 
 
 def test_load_local_roundtrip(tmp_path: Path):
@@ -30,7 +30,7 @@ def test_load_local_roundtrip(tmp_path: Path):
         for r in injector.inject_dataset(recs):
             f.write(json.dumps(r.to_dict(), ensure_ascii=False) + '\n')
 
-    from labelers.ja import JapaneseDatasetLoader
+    from ner.labelers.ja import JapaneseDatasetLoader
     loaded = JapaneseDatasetLoader.load_local(str(out_path))
     assert len(loaded) == 2
     for rec in loaded:

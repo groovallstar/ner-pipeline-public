@@ -2,7 +2,7 @@
 
 사용 예::
 
-    python -m augmenters.wikiann_vi \
+    python -m ner.augmenters.wikiann_vi \
         --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
         --base-url http://localhost:8081/v1 \
         --split test --max-samples 1000 \
@@ -24,8 +24,8 @@ from time import perf_counter
 
 from datasets import ClassLabel, load_dataset
 
-from augmenters.wikiann_vi.relabel_8type import Relabeler
-from labelers.vi.dataset_loader import bio_to_offset_spans
+from ner.augmenters.wikiann_vi.relabel_8type import Relabeler
+from ner.labelers.vi.dataset_loader import bio_to_offset_spans
 
 
 def _load_wikiann_hf(
@@ -71,7 +71,7 @@ def _load_wikiann_hf(
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog='python -m augmenters.wikiann_vi',
+        prog='python -m ner.augmenters.wikiann_vi',
         description='Relabel WikiANN-vi to canonical 5-type schema',
     )
     parser.add_argument(

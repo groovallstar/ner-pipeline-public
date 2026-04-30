@@ -5,8 +5,8 @@
 동일하게 치환하며, 이미 치환된 대상은 no-op(idempotent)이다.
 
 사용 예:
-    python -m augmenters.pii.tools.migrate_labels data/stockmark/pii_test.jsonl
-    python -m augmenters.pii.tools.migrate_labels data/stockmark/ --dry-run
+    python -m ner.augmenters.pii.tools.migrate_labels data/stockmark/pii_test.jsonl
+    python -m ner.augmenters.pii.tools.migrate_labels data/stockmark/ --dry-run
 
 span 오프셋은 건드리지 않으며 라벨 이외 필드는 원형을 유지한다.
 """

@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from collections import Counter
 
-from augmenters.pii.config import InjectionConfig
-from augmenters.pii.injector import PIIInjector
-from augmenters.pii.schema import Entity, Record
+from ner.augmenters.pii.config import InjectionConfig
+from ner.augmenters.pii.injector import PIIInjector
+from ner.augmenters.pii.schema import Entity, Record
 
 
 def _make_record() -> Record:

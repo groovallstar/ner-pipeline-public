@@ -1,7 +1,7 @@
-"""CLI 진입점: python -m llm_eval.benchmark
+"""CLI 진입점: python -m ner.llm_eval.benchmark
 
 사용 예:
-    python -m llm_eval.benchmark \
+    python -m ner.llm_eval.benchmark \
         --models vllm:Qwen/Qwen3.5-9B hf:model-name openai:gpt-4o-mini \
         --max-samples 100 \
         --output results/benchmark.json
@@ -12,9 +12,9 @@ import logging
 import os
 import sys
 
-from labelers.dataset_loader import DatasetLoader  # noqa: direct import avoids bs4 dep in labelers.__init__
-from llm_eval.benchmark_runner import BenchmarkRunner
-from llm_eval.report import ReportGenerator
+from ner.labelers.dataset_loader import DatasetLoader  # noqa: direct import avoids bs4 dep in labelers.__init__
+from ner.llm_eval.benchmark_runner import BenchmarkRunner
+from ner.llm_eval.report import ReportGenerator
 
 
 def _load_env():
@@ -59,7 +59,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
         return _create_labeler_vi(backend, model_name, args)
 
     if backend == "vllm":
-        from labelers.ko.vllm_ner_labeler import VllmNERLabeler
+        from ner.labelers.ko.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
             model=model_name,
@@ -67,10 +67,10 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
             thinking=getattr(args, "thinking", False),
         )
     elif backend == "openai":
-        from labelers.ko.openai_ner_labeler import OpenAINERLabeler
+        from ner.labelers.ko.openai_ner_labeler import OpenAINERLabeler
         return backend, OpenAINERLabeler(model=model_name)
     elif backend == "hf":
-        from labelers.hf_ner_labeler import HFNERLabeler
+        from ner.labelers.hf_ner_labeler import HFNERLabeler
         return backend, HFNERLabeler(model_name=model_name, lang="ko")
     else:
         raise ValueError(f"Unknown backend '{backend}'. Use: vllm, openai, hf")
@@ -79,7 +79,7 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
 def _create_labeler_ja(backend: str, model_name: str, args):
     """일본어 NER 라벨러를 생성한다."""
     if backend == "vllm":
-        from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+        from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
             model=model_name,
@@ -87,7 +87,7 @@ def _create_labeler_ja(backend: str, model_name: str, args):
             thinking=getattr(args, "thinking", False),
         )
     elif backend == "openai":
-        from labelers.ja.openai_ner_labeler import OpenAINERLabeler
+        from ner.labelers.ja.openai_ner_labeler import OpenAINERLabeler
         return backend, OpenAINERLabeler(model=model_name)
     else:
         raise ValueError(f"Unknown backend '{backend}' for Japanese. Use: vllm, openai")
@@ -96,7 +96,7 @@ def _create_labeler_ja(backend: str, model_name: str, args):
 def _create_labeler_vi(backend: str, model_name: str, args):
     """베트남어 NER 라벨러를 생성한다."""
     if backend == "vllm":
-        from labelers.vi.vllm_ner_labeler import VllmNERLabeler
+        from ner.labelers.vi.vllm_ner_labeler import VllmNERLabeler
         return backend, VllmNERLabeler(
             base_url=args.vllm_url,
             model=model_name,
@@ -104,10 +104,10 @@ def _create_labeler_vi(backend: str, model_name: str, args):
             thinking=getattr(args, "thinking", False),
         )
     elif backend == "openai":
-        from labelers.vi.openai_ner_labeler import OpenAINERLabeler
+        from ner.labelers.vi.openai_ner_labeler import OpenAINERLabeler
         return backend, OpenAINERLabeler(model=model_name)
     elif backend == "hf":
-        from labelers.hf_ner_labeler import HFNERLabeler
+        from ner.labelers.hf_ner_labeler import HFNERLabeler
         return backend, HFNERLabeler(model_name=model_name, lang="vi")
     else:
         raise ValueError(f"Unknown backend '{backend}' for Vietnamese. Use: vllm, openai, hf")
@@ -118,7 +118,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="NER Benchmark: evaluate labeling quality and speed",
-        prog="python -m llm_eval.benchmark",
+        prog="python -m ner.llm_eval.benchmark",
     )
     parser.add_argument(
         "--models", nargs="+", required=True,
@@ -159,7 +159,7 @@ def main():
 def _load_gold(args):
     """언어별 gold 레코드를 로드한다."""
     if args.lang == "ja":
-        from labelers.ja.dataset_loader import JapaneseDatasetLoader
+        from ner.labelers.ja.dataset_loader import JapaneseDatasetLoader
         if args.local_file:
             print(f"Loading gold data (local): {args.local_file}")
             return JapaneseDatasetLoader.load_local(
@@ -170,7 +170,7 @@ def _load_gold(args):
         print(f"Loading gold data (canonical dump): {path}")
         return loader.load(split=args.split, max_samples=args.max_samples)
     if args.lang == "vi":
-        from labelers.vi.dataset_loader import VietnameseDatasetLoader
+        from ner.labelers.vi.dataset_loader import VietnameseDatasetLoader
         if args.local_file:
             print(f"Loading gold data (local): {args.local_file}")
             return VietnameseDatasetLoader.load_local(
