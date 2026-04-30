@@ -5,6 +5,7 @@ confirmed / missed / conflict 로 분류하고, 정책에 따라 레코드를 �
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -23,7 +24,10 @@ class SpanLabeler(Protocol):
     """label_spans(text, split=...) -> List[dict] 를 구현하는 라벨러.
 
     verifier는 문맥 보존을 위해 split=False로 호출한다. 모의 라벨러는
-    split 인자를 선택적으로 수용하면 된다.
+    split 인자를 선택적으로 수용하면 된다. async 경로(`alabel_spans`)를
+    구현한 라벨러는 batch 검증 시 단일 event loop 에서 재사용되어
+    AsyncOpenAI connection pool 의 'Event loop is closed' retry 폭주를
+    회피한다.
     """
 
     def label_spans(self, text: str) -> list[dict]: ...
@@ -105,10 +109,20 @@ class PIIVerifier:
         except TypeError:
             return self._labeler.label_spans(text)
 
-    def verify(self, record: Record) -> VerifyResult:
-        """단일 레코드를 검증한다. 문맥 보존을 위해 split=False 선호."""
-        preds = self._call_labeler(record.text)
+    async def _acall_labeler(self, text: str) -> list[dict]:
+        """async 라벨러를 우선 시도하고, sync 라벨러로 graceful fallback."""
+        alabel = getattr(self._labeler, 'alabel_spans', None)
+        if alabel is not None:
+            try:
+                return await alabel(text, split=False)
+            except TypeError:
+                return await alabel(text)
+        return self._call_labeler(text)
 
+    def _classify(
+        self, record: Record, preds: list[dict],
+    ) -> VerifyResult:
+        """gold 엔티티와 예측을 매칭하여 confirmed/missed/conflict 분류."""
         confirmed: list[Entity] = []
         missed: list[Entity] = []
         conflicts: list[tuple[Entity, str]] = []
@@ -127,25 +141,73 @@ class PIIVerifier:
             else:
                 conflicts.append((gold_ent, pred_type))
 
-        return self._apply_policy(
-            record, confirmed, missed, conflicts,
-        )
+        return self._apply_policy(record, confirmed, missed, conflicts)
+
+    def verify(self, record: Record) -> VerifyResult:
+        """단일 레코드를 검증한다. 문맥 보존을 위해 split=False 선호."""
+        preds = self._call_labeler(record.text)
+        return self._classify(record, preds)
+
+    async def averify(self, record: Record) -> VerifyResult:
+        """verify() 의 async 버전. 외부 event loop 안에서 호출 가능."""
+        preds = await self._acall_labeler(record.text)
+        return self._classify(record, preds)
 
     def verify_dataset(
         self, records: Iterable[Record],
     ) -> tuple[list[Record], dict[str, Any]]:
-        """레코드 목록을 검증하고 (정제된 레코드, 리포트)를 반환한다."""
+        """레코드 목록을 검증하고 (정제된 레코드, 리포트)를 반환한다.
+
+        async 라벨러(`alabel_spans` 보유)가 주입된 경우 단일 event loop
+        에서 batch 처리하여 connection pool 재사용을 보장한다 (sync
+        wrapper 의 record 마다 `asyncio.run` 패턴이 유발하던 'Event
+        loop is closed' retry 폭주 회피).
+        """
+        records = list(records)
+        if hasattr(self._labeler, 'alabel_spans'):
+            results = asyncio.run(self._gather_verify(records))
+        else:
+            results = [self.verify(r) for r in records]
+        return self._aggregate(records, results)
+
+    async def averify_dataset(
+        self, records: Iterable[Record],
+    ) -> tuple[list[Record], dict[str, Any]]:
+        """verify_dataset() 의 async 버전."""
+        records = list(records)
+        results = await self._gather_verify(records)
+        return self._aggregate(records, results)
+
+    # ── 내부 ─────────────────────────────────────────────────────────
+
+    async def _gather_verify(
+        self, records: list[Record],
+    ) -> list[VerifyResult]:
+        """모든 레코드를 단일 event loop 에서 병렬 검증한다.
+
+        라벨러 자체의 동시성 제한(예: BaseVllmLabeler 의 semaphore)이
+        실제 동시 HTTP 요청 수를 제어하므로 task 는 모두 한 번에 생성한다.
+        """
+        return await asyncio.gather(
+            *(self.averify(r) for r in records)
+        )
+
+    def _aggregate(
+        self,
+        records: list[Record],
+        results: list[VerifyResult],
+    ) -> tuple[list[Record], dict[str, Any]]:
+        """검증 결과를 집계해 (정제된 레코드, 리포트)를 만든다."""
         kept: list[Record] = []
-        total = 0
         confirmed_count = 0
         missed_count = 0
         conflict_count = 0
         dropped_count = 0
         per_label: dict[str, dict[str, int]] = {}
+        conflict_details: list[dict[str, Any]] = []
+        missed_details: list[dict[str, Any]] = []
 
-        for rec in records:
-            total += 1
-            result = self.verify(rec)
+        for rec, result in zip(records, results):
             confirmed_count += len(result.confirmed)
             missed_count += len(result.missed)
             conflict_count += len(result.conflicts)
@@ -157,21 +219,36 @@ class PIIVerifier:
                 _inc(per_label, ent.label, 'confirmed')
             for ent in result.missed:
                 _inc(per_label, ent.label, 'missed')
-            for ent, _ in result.conflicts:
+                missed_details.append({
+                    'record_id': rec.id,
+                    'gold_label': ent.label,
+                    'gold_text': ent.text,
+                    'start_char': ent.start_char,
+                    'end_char': ent.end_char,
+                })
+            for ent, pred_label in result.conflicts:
                 _inc(per_label, ent.label, 'conflict')
+                conflict_details.append({
+                    'record_id': rec.id,
+                    'gold_label': ent.label,
+                    'pred_label': pred_label,
+                    'gold_text': ent.text,
+                    'start_char': ent.start_char,
+                    'end_char': ent.end_char,
+                })
 
         report: dict[str, Any] = {
-            'total': total,
+            'total': len(records),
             'confirmed_count': confirmed_count,
             'missed_count': missed_count,
             'conflict_count': conflict_count,
             'dropped_count': dropped_count,
             'kept_count': len(kept),
             'per_label': dict(per_label),
+            'conflict_details': conflict_details,
+            'missed_details': missed_details,
         }
         return kept, report
-
-    # ── 내부 ─────────────────────────────────────────────────────────
 
     def _apply_policy(
         self,

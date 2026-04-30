@@ -1,6 +1,7 @@
 """PIIVerifier 단위 테스트 — TDD red phase."""
 from __future__ import annotations
 
+import asyncio
 
 from augmenters.pii.schema import Entity, Record
 from augmenters.pii.verifier import (
@@ -19,6 +20,20 @@ class FakeLabeler:
 
     def label_spans(self, text: str) -> list[dict]:
         return list(self._spans)
+
+
+class FakeAsyncLabeler:
+    """alabel_spans 만 가진 async 라벨러 (vLLM 라벨러 대용)."""
+
+    def __init__(self, preds_map: dict[str, list[dict]]) -> None:
+        self._preds_map = preds_map
+        self.calls = 0
+
+    async def alabel_spans(
+        self, text: str, split: bool = True,
+    ) -> list[dict]:
+        self.calls += 1
+        return list(self._preds_map.get(text, []))
 
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────────────
@@ -255,3 +270,93 @@ class TestPartialTextMatch:
         v = PIIVerifier(FakeLabeler(preds), policy=VerifyPolicy.DROP_SPAN)
         result = v.verify(rec)
         assert len(result.confirmed) == 1
+
+
+# ── 리포트 디테일 ─────────────────────────────────────────────────────────
+
+class TestReportDetails:
+    """verify_dataset 리포트의 conflict_details/missed_details 누적."""
+
+    def test_collects_conflict_and_missed_details(self):
+        recs = [
+            _rec(
+                '東京都の連絡先：a@b.com。',
+                [
+                    _ent('LOC', 0, 3, '東京都'),
+                    _ent('EMAIL', 9, 16, 'a@b.com'),
+                ],
+                rid='r1',
+            ),
+            _rec(
+                '090-1111-2222。',
+                [_ent('PHONE', 0, 13, '090-1111-2222')],
+                rid='r2',
+            ),
+        ]
+        preds_map = {
+            '東京都の連絡先：a@b.com。': [
+                {'text': '東京都', 'type': 'ORG'},
+            ],
+            '090-1111-2222。': [],
+        }
+
+        class MapLabeler:
+            def label_spans(self, text: str) -> list[dict]:
+                return preds_map.get(text, [])
+
+        v = PIIVerifier(MapLabeler(), policy=VerifyPolicy.DROP_SPAN)
+        _, report = v.verify_dataset(recs)
+
+        assert report['conflict_count'] == 1
+        assert report['missed_count'] == 2
+        # conflict: LOC -> ORG (r1)
+        assert report['conflict_details'] == [{
+            'record_id': 'r1',
+            'gold_label': 'LOC',
+            'pred_label': 'ORG',
+            'gold_text': '東京都',
+            'start_char': 0,
+            'end_char': 3,
+        }]
+        missed_labels = sorted(
+            d['gold_label'] for d in report['missed_details']
+        )
+        assert missed_labels == ['EMAIL', 'PHONE']
+
+
+# ── async batch 경로 ─────────────────────────────────────────────────────
+
+class TestAsyncBatchPath:
+    """alabel_spans 보유 라벨러는 단일 event loop batch 경로로 처리."""
+
+    def test_uses_async_path_when_available(self):
+        """alabel_spans 가 있으면 verify_dataset 가 async batch 로 호출."""
+        recs = [
+            _rec('a。', [_ent('PHONE', 0, 1, 'a')], rid='r0'),
+            _rec('b。', [_ent('EMAIL', 0, 1, 'b')], rid='r1'),
+        ]
+        preds_map = {
+            'a。': [{'text': 'a', 'type': 'PHONE'}],
+            'b。': [{'text': 'b', 'type': 'EMAIL'}],
+        }
+        labeler = FakeAsyncLabeler(preds_map)
+        v = PIIVerifier(labeler, policy=VerifyPolicy.DROP_SPAN)
+        kept, report = v.verify_dataset(recs)
+
+        assert labeler.calls == 2
+        assert len(kept) == 2
+        assert report['confirmed_count'] == 2
+        assert report['conflict_count'] == 0
+
+    def test_averify_dataset_runs_inside_external_loop(self):
+        """averify_dataset 는 외부 event loop 안에서도 호출 가능."""
+        recs = [_rec('x。', [_ent('PHONE', 0, 1, 'x')], rid='r0')]
+        labeler = FakeAsyncLabeler({'x。': [{'text': 'x', 'type': 'PHONE'}]})
+        v = PIIVerifier(labeler, policy=VerifyPolicy.DROP_SPAN)
+
+        async def runner():
+            return await v.averify_dataset(recs)
+
+        kept, report = asyncio.run(runner())
+        assert len(kept) == 1
+        assert report['confirmed_count'] == 1

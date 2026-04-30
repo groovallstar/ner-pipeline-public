@@ -91,8 +91,11 @@ NER 5종 중 ORG 비중 가장 높음 — #27 시설=ORG 통합으로 LOC 가 OR
 > `CREDIT_CARD`/`DAT`/`ADDRESS`. 단어 경계 매칭.
 
 이슈 #23 (PR #25) 에서 입증된 VI 측 Rule 4·5 효과(prefix 27.5%→0%,
-leakage 170→0) 가 JA 측 새 스키마에서도 동일하게 발현. 새 LOC/ORG
-경계가 PII 주입 품질에 영향을 주지 않음.
+leakage 170→0) 가 JA 측 새 스키마에서도 동일하게 발현.
+
+> 위 4종은 모두 **inject 산출의 표면적 품질** 검증이다. 새 LOC/ORG 경계
+> 가 verify 단계 라벨링에 어떻게 반영되는지는 §6.1 (conflict 분포) 참조
+> — silent drop 경로가 발견됐다.
 
 ---
 
@@ -115,6 +118,13 @@ PII 주입 후 LOC 가 +276, PER 가 +498 증가한 것은 합성 PII 의 `NAME`
 
 ORG/PROD/EVT 가 약간 감소한 것은 verify 단계에서 conflict span 이 drop
 된 결과. confirmed ratio 87.9% 와 일치.
+
+§6.1 의 conflict 분포 분석에 따르면 train+test 합산 630건의 conflict
+중 gold ORG 가 244건으로 가장 많았으며, 이 중 142건(58.2%)은 verifier
+가 LOC 로, 50건(20.5%)은 PROD 로, 43건(17.6%)은 PER 로 재분류한 결과.
+ORG 가 -682 줄어든 것은 verify drop 의 자연스러운 부산물이 아니라
+**verifier(qwen3.6) 의 시설=ORG 경계 미반영** 이 LOC/ORG 비대칭(ORG→LOC
+4.6배) 형태로 표면화된 결과로 해석해야 한다.
 
 ---
 
@@ -143,18 +153,68 @@ GPU 2) 가 **GPU 별도라 동시 구동 가능**. 측정 격리는 NER 벤치(�
 
 ---
 
-## 6. 알려진 한계
+## 6. 후속 분석 결과
 
-- **conflict 615 건 분석 미진행**: Verifier 가 inject 모델과 다른 라벨을
-  부여한 span 615건. drop_span 정책으로 모두 제거됐지만, 어떤 라벨 간
-  충돌이 가장 많은지 (예: LOC↔ORG, PER↔ORG) 본 리포트에는 분석 없음.
-  V 이슈(VI) 에서 동일 검증을 진행할 때 추가 분석 가능.
-- **Verifier retry 패턴**: Qwen3.6-AWQ-4bit verify 호출에서 매 요청마다
-  retry 가 1회 발생 (200 OK 후 retry, 또 200 OK). 응답은 정상이나
-  처리량을 절반으로 떨어뜨림. 원인 추적 미실시.
-- **단서어 동반률 정의**: strict colon 정의 (`〜：` / `〜:` 패턴) 사용.
-  핸드오프 문서의 27.5% 베이스라인은 더 느슨한 매칭 정의 — 직접 비교
-  불가. 두 정의 모두에서 본 산출은 0% 일치.
+### 6.1 Conflict 라벨 쌍 분포 (645건 → 분석 후 630건 재현)
+
+`stockmark_pii_*.verify.json` 의 `conflict_details` 누적치를 회수하여
+gold→pred 라벨 쌍 confusion matrix 산출.
+
+| 카테고리 | 건수 | 비중 |
+|---|---|---|
+| **NER ↔ NER** | 502 | 79.7% |
+| **PII ↔ PII** | 127 | 20.2% |
+| **PII ↔ NER** | 1 | 0.2% |
+
+단일 라벨 쌍 top 5:
+1. **ORG → LOC : 142건 (22.5%)** ← 단일 1위, LOC↔ORG 비대칭 4.6배
+2. CREDIT_CARD → ID_NUM : 89건 (14.1%, gold CREDIT_CARD 의 97.8%)
+3. PROD → ORG : 51건 (8.1%)
+4. ORG → PROD : 50건 (7.9%)
+5. PROD → EVT : 46건 (7.3%)
+
+핵심 발견:
+
+- **시설=ORG 경계가 verifier 에 반영되지 않음**. inject(gemma) 는 #27
+  Phase 4 의 시설=ORG 정의를 따랐지만, verify(qwen3.6) 는 시설을 LOC
+  로 분류하는 경향. drop_span 정책으로 142개 ORG span 이 silent 하게
+  잘려나감 — §3 의 "주입 품질에 영향 없음" 결론은 inject 측에만 해당.
+- **PII 패밀리 내 표면 패턴 혼동**. CREDIT_CARD(16자리) 97.8%가 ID_NUM
+  으로, ID_NUM(12자리) 88.6%가 PHONE 으로 재분류 — verifier 가 의미
+  구분 없이 자릿수만으로 분류하는 한계.
+- **PII↔NER 침범 0건**. merge 규칙(NAME→PER, ADDRESS→LOC) 이 안전.
+  inject 가 PII 위치에 NER span 을 잘못 만들거나 그 역도 발생하지 않음.
+
+### 6.2 Verifier retry 폭주 — 원인 확정 + 수정 완료
+
+본 측정 시 Qwen3.6 verify 호출에서 record 의 99.96% (5,306/5,308) 에
+retry 가 1회씩 발생, 처리량이 정확히 절반으로 떨어짐.
+
+**근본 원인**: `src/labelers/base_vllm_labeler.py:76` 의 `label_spans`
+sync wrapper 가 호출마다 `asyncio.run(...)` 으로 새 event loop 생성·
+종료. `AsyncOpenAI` 의 httpx connection pool 은 첫 호출 loop 에 묶임 →
+두 번째 호출부터 connection cleanup 단계(`_response_closed → aclose
+→ call_soon`) 에서 닫힌 loop 참조 → `RuntimeError('Event loop is
+closed')` → httpx 가 connection error 로 분류 → OpenAI SDK 가 retry
+발동 → 새 연결로 동일 요청 재전송 → 두 번째 200 OK. vLLM access log
+에 동일 요청 200 OK 두 번 찍히는 패턴이 이렇게 형성.
+
+`src/augmenters/pii/llm_injector.py:303-321` `_gather_inject` 가 동일
+문제를 인지해 단일 loop 패턴으로 회피한 반면, **verifier 쪽은 이
+회피가 빠져 있었음**.
+
+**수정**: `src/augmenters/pii/verifier.py` 에 `averify_dataset` async
+경로 + 단일 `asyncio.run` batch 처리 추가. `verify_dataset` 가 라벨러의
+`alabel_spans` 보유 여부로 분기. 50샘플 E2E 재측정에서 retry 0건 / Event
+loop closed 0건 확인. 처리량 약 2배 회복 예상 (`§5` 의 ~0.66/s 는 본
+수정 적용 전 측정값).
+
+### 6.3 단서어 동반률 정의 (보고 누락)
+
+§3 표는 strict colon 정의(`〜：`/`〜:` 패턴) 결과 0% 만 표시. 핸드오프
+27.5% 베이스라인은 더 느슨한 매칭이라 자(尺) 가 다르나, loose 정의
+재계산에서도 0% 일치 — 두 정의 모두 PASS. 표 보강은 미적용(낮은 우선
+순위).
 
 ---
 
