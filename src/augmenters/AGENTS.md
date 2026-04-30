@@ -2,11 +2,11 @@
 
 학습 데이터 증강(augmentation) 모듈 모음.
 
-라벨 스키마는 canonical 영문 축약 **13종**
-(`docs/manual/data/japanese-canonical-entity-schema.md`). NER 8종
-(`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`) + 일반 날짜 1종(`DAT`) + PII 4종
-(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`). 이전 `ADDRESS`는 `LOC`로 흡수,
-`DOB`는 `DAT`로 개명·확장되었다 (#17 Phase 1).
+라벨 스키마는 canonical 영문 축약 **10종 평면 목록**
+(`docs/manual/data/canonical-entity-schema.md`). NER 5종
+(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`).
+JA·VI 공통 스키마이며, 이슈 #21 에서 13종 → 10종 평면화, 이슈 #27 에서
+LOC/ORG 경계 재정의(인공 시설 모두 ORG)가 적용됐다.
 
 ## 서브 모듈
 

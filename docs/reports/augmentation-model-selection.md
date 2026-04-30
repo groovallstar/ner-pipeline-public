@@ -2,7 +2,7 @@
 
 > JA(PII 주입)·VI(WikiANN 재라벨) 양쪽 파이프라인의 공통 배경·각 언어의 증강 방식·모델 선정 기준을 한 곳에 모은 메타 문서.
 > 실제 측정 숫자는 각 리포트(`japanese-ner-benchmark.md`, `japanese-ner-pii-benchmark.md`, `vietnamese-ner-silver-quality.md`)를 참조.
-> 라벨 정의의 단일 출처: `docs/manual/data/japanese-canonical-entity-schema.md` (JA 전용), `docs/manual/data/vietnamese-ner.md` (VI 전용).
+> 라벨 정의의 단일 출처: `docs/manual/data/canonical-entity-schema.md` (JA·VI 공통).
 
 ## 0. 두 파이프라인의 공통 배경
 

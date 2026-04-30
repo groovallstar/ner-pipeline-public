@@ -190,5 +190,5 @@ results/ja-phase4-bench-2026-04/
 
 각 JSON: `metrics.span_f1.{overall, per_entity}` + `latency.{total_seconds, samples_per_second, avg_per_sample, prompt_tokens, completion_tokens, total_tokens, tokens_per_second, output_tokens_per_second}`.
 
-이전 Phase 1 측정값 (시설=LOC) 은 `results/ja-5type-bench-2026-04/` 에
-보존 — 비교 분석용 데이터로만 참조.
+이전 Phase 1 측정값 (시설=LOC) 의 모델별 F1 은 §2 비교 표에 보존.
+원본 JSON 산출은 별도 보관 안 함 (재측정 시 위 명령 재실행).

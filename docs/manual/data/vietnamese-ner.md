@@ -2,7 +2,7 @@
 
 > 대상 데이터셋: WikiANN Vietnamese (`unimelb-nlp/wikiann`, config=`vi`, 원본 3종 PER/LOC/ORG)
 > 라벨러 출력 스키마: canonical 10종 평면 (NER 5종 + PII 5종)
-> 라벨 정의의 단일 출처: `docs/manual/data/japanese-canonical-entity-schema.md`
+> 라벨 정의의 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 목차
 
@@ -95,80 +95,14 @@ WikiANN test split → augmenters/wikiann_vi/__main__.py
 
 ## 3. Stage 2 — 엔티티 스키마와 WikiANN 매핑
 
-### 3.1 출력 라벨 공간 — canonical 10종 평면
+엔티티 정의·LOC/ORG 경계 규칙·WikiANN 3종 → canonical 5종 매핑·모호
+사례 결정표는 `docs/manual/data/canonical-entity-schema.md` 단일 출처.
 
-| 태그 | 의미 | 베트남어 설명 |
-|---|---|---|
-| `PER` | 인물 | Tên người (전체 이름·성·이름·별명·예명) |
-| `LOC` | 지명 (자연·행정만) | Quốc gia, thành phố, tỉnh, sông, núi, biển, đảo, vịnh — **자연지명·행정지명만** |
-| `ORG` | 조직·기관·법인·**시설** | 기업·정당·정부·군·CLB + 역·공항·병원·학교·박물관·종교시설 등 모든 인공시설 |
-| `PROD` | 제품·작품·소프트웨어 | Sản phẩm, dịch vụ, phần mềm, tác phẩm |
-| `EVT` | 1회성 사건·전쟁·조약 | Chiến tranh, hiệp ước, đại hội, giải đấu lớn |
-| `EMAIL` | 이메일 주소 | `local@domain.TLD` |
-| `PHONE` | 전화번호 | 베트남 또는 국제 형식 |
-| `DAT` | 날짜·기간 | 년·월·일·기간·시대 |
-| `ID_NUM` | 주민번호·CCCD·세무번호 | |
-| `CREDIT_CARD` | 신용카드 번호 | 13~19 자리 |
-
-**상세 정의·경계 규칙·모호 사례 처리는 `docs/manual/data/japanese-canonical-entity-schema.md` 단일 출처.**
-
-본 라벨러는 WikiANN 평가 외에 PII 주입본 평가와 코드를 공유하므로 10종 출력 공간을 유지한다. WikiANN 3종 gold 로 평가 시 PROD/EVT/PII 5종 출력은 FP 로 잡혀 precision 이 인위적으로 하락하는데, 이는 의도된 trade-off.
-
-### 3.2 WikiANN 3종 → canonical 5종 매핑
-
-```
-WikiANN PER → PER (1:1)
-WikiANN LOC → LOC  (자연지명·행정지명만)
-            → ORG  (시설 — 역·공항·병원·종교시설·박물관·도서관·체육관 등)
-WikiANN ORG → ORG  (기업·정당·정부·군·CLB·협회·대학 일체 — 본 canonical 은 모두 ORG)
-            → LOC  (드물게 wikiann ORG 가 자연지명을 잘못 라벨한 경우)
-(WikiANN 없음) → PROD · EVT (재라벨 LLM 이 신규 추출)
-```
-
-본 매핑은 silver 재라벨 파이프라인 (§7) 에서 LLM 이 자동 적용. WikiANN 시설=LOC 와 canonical 시설=ORG 의 불일치는 재라벨로 자동 해소.
-
-### 3.3 LOC vs ORG 경계 규칙 — silver 재라벨 시 적용
-
-**LOC (자연·행정만)**:
-- 국가·도시·성(tỉnh)·군(huyện)·사(xã)
-- 자연지명: Sông X / Núi X / Biển X / Đảo X / Vịnh X / Hồ X
-- 주소 (số nhà, tầng, tòa nhà 포함)
-
-**ORG (모든 조직·인공시설)**:
-- 영리법인: Công ty X / Tập đoàn X / Ngân hàng X / Hãng X / Đài truyền hình X
-- 정치·정부·군: Đảng X / Bộ X / Cục X / Quốc hội / Quân đội X / Tòa án
-- 국제기관: Liên Hợp Quốc, ASEAN, WTO
-- 학교 (대학·초중고 모두): Đại học X / Trường THCS·THPT X / Học viện X
-- 시설: Bệnh viện X / Sân bay X / Ga X / Cảng X / Bảo tàng X / Thư viện X / Chùa X / Nhà thờ X / Đền X / Sân vận động X
-- 스포츠: Hà Nội FC / V.League / Câu lạc bộ X (정기 리그 = ORG, 특정 연도판 = EVT)
-
-**PROD vs EVT vs ORG 경계 (재라벨 시 모호 케이스 해소)**:
-- 정기 리그·정기 대회 → ORG. **특정 연도판** ("World Cup 2022", "UEFA Champions League 2007-08") → EVT
-- 음악·영화·책·만화·게임·TV 프로그램 = PROD
-- "Danh sách..." (Wikipedia "List of") 는 entity 아님 → 무시
-- 학명 Latin binomial ("Bulbophyllum X") 는 entity 아님 → 무시
-- 모델 번호 단독 ("RV522") → PROD 아님. 브랜드+모델 결합 ("Galaxy S24") 만 PROD
-- 인프라 (철도·지하철 노선) → 운영주체=ORG, 경로=LOC, 노선 자체=LOC
-
-### 3.4 모호 사례 결정표
-
-| 표면형 | WikiANN 원본 | canonical 5종 | 근거 |
-|---|---|---|---|
-| `Chùa Một Cột` | LOC | **ORG** | 종교 시설 = ORG |
-| `Vịnh Hạ Long` | LOC | **LOC** | 자연 지명 |
-| `Sân bay Nội Bài` | LOC | **ORG** | 공항 시설 |
-| `Bệnh viện Bạch Mai` | ORG | **ORG** | 병원 시설 |
-| `Đại học Quốc gia Hà Nội` | ORG | **ORG** | 대학 법인·캠퍼스 모두 ORG |
-| `V.League` | ORG | **ORG** | 정기 리그 |
-| `UEFA Champions League 2007-08` | (없음) | **EVT** | 특정 연도판 → 1회성 |
-| `Hà Nội FC` | ORG | **ORG** | 스포츠 팀 |
-| `Đảng Cộng sản Việt Nam` | ORG | **ORG** | 정당 |
-| `Bộ Giáo dục và Đào tạo` | ORG | **ORG** | 정부 부처 |
-| `Vietnam Airlines` | ORG | **ORG** | 공기업·영리법인 |
-| `Doraemon` | (없음) | **PROD** | 만화·작품 |
-| `Galaxy S24` | (없음) | **PROD** | 브랜드+모델 결합 |
-| `Đường sắt xuyên Sibir` | (없음) | **LOC** | 철도 노선 자체 = LOC |
-| `Thành phố Hồ Chí Minh` | LOC | **LOC** | 행정 지명 전체 단일 LOC. "Hồ Chí Minh" 단독은 PER |
+본 라벨러는 WikiANN 평가 외에 PII 주입본 평가와 코드를 공유하므로 10종
+출력 공간(NER 5종 + PII 5종) 을 유지한다. WikiANN 3종 gold 로 평가 시
+PROD/EVT/PII 5종 출력은 FP 로 잡혀 precision 이 인위적으로 하락하는데,
+이는 의도된 trade-off (스키마 문서 §7.3 참조 — 본 항목만 본 문서 외부의
+스키마 문서가 가진 평가 주의이므로 별도 명시).
 
 ---
 
@@ -195,7 +129,7 @@ WikiANN ORG → ORG  (기업·정당·정부·군·CLB·협회·대학 일체 �
 
 ### 4.3 PROD/EVT 분기 규칙 (silver 재라벨 프롬프트 추가)
 
-silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 §3.3 의 경계 규칙을 추가 명시:
+silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-schema.md` §2~3 의 경계 규칙을 프롬프트에 추가 명시:
 
 - 정기 리그/대회 → ORG, 특정 연도판 → EVT
 - 작품(음악·영화·책·만화·게임·TV) → PROD

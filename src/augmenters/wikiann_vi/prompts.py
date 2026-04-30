@@ -2,8 +2,7 @@
 
 지시문은 베트남어(LLM의 베트남어 문맥 이해도 극대화), 엔티티 태그는 canonical
 OntoNotes 스타일 영문 축약으로 통일. 매핑·모호 사례 기준은
-`docs/manual/data/japanese-canonical-entity-schema.md`·
-`docs/manual/data/vietnamese-ner.md` §3 참조.
+`docs/manual/data/canonical-entity-schema.md` 참조.
 
 5종 canonical: PER, LOC, ORG, PROD, EVT
 

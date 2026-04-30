@@ -13,8 +13,8 @@
 - 결과를 JSON 파일로 캐시해 재실행 시 재호출 방지
 - 네트워크 실패는 개별 엔티티 단위로 소프트 폴백 (reason='network')
 
-상세 기준: `docs/manual/data/japanese-canonical-entity-schema.md`,
-`docs/manual/data/vietnamese-ner.md` §3 두 번째 검증 레이어.
+상세 기준: `docs/manual/data/canonical-entity-schema.md`
+(VI 측 silver 재라벨 두 번째 검증 레이어).
 """
 import argparse
 import json
