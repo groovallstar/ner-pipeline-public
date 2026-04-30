@@ -2,8 +2,8 @@
 
 LLM이 붙인 NER 라벨이 외부 지식 베이스(Wikipedia·Wikidata) 기준과 얼마나 정합한지 **사후(post-hoc) 검증**하는 모듈. WikiANN-vi 재라벨 품질을 독립 소스로 확인하려고 도입됐다.
 
-- 소스: `src/augmenters/wikiann_vi/wikidata_anchor.py`
-- 실행: `python -m augmenters.wikiann_vi.wikidata_anchor`
+- 소스: `src/ner/augmenters/wikiann_vi/wikidata_anchor.py`
+- 실행: `python -m ner.augmenters.wikiann_vi.wikidata_anchor`
 - 관련 리포트: `docs/reports/vietnamese-ner-schema-expansion-2026-04.md` §5
 
 ## 배경
@@ -120,7 +120,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 ```bash
 # 10K 재라벨 결과에 대한 앵커 검증
-python -m augmenters.wikiann_vi.wikidata_anchor \
+python -m ner.augmenters.wikiann_vi.wikidata_anchor \
     --input data/wikiann_vi/gemma_8type_full.jsonl \
     --cache data/wikiann_vi/wikidata_cache.json \
     --json-out data/wikiann_vi/anchor_gemma_full.json

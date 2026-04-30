@@ -11,7 +11,7 @@
 **총 엔티티**: 1,054 개 (PER 402 / LOC 351 / ORG 228 / PROD 54 / EVT 19)
 **평가지표**: 문자 오프셋 Span F1 (`metrics/span_metrics.compute_offset_span_f1`)
 **엔티티 타입**: PER · LOC · ORG · PROD · EVT
-**프롬프트**: 10종 평면 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`) — `src/labelers/vi/ner_prompts.py`
+**프롬프트**: 10종 평면 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`) — `src/ner/labelers/vi/ner_prompts.py`
 **측정 격리**: vLLM 컨테이너 단독 부팅, concurrency=32, 모델별 1000 샘플
 
 ---
@@ -142,7 +142,7 @@ WikiANN HF 원본 (PER/LOC/ORG 3종) 과 1000 ID 가 정합되도록 `id` 기준
 
 # 벤치
 source ./.env
-uv run python -m llm_eval --lang vi \
+uv run python -m ner.llm_eval --lang vi \
   --local-file data/wikiann_vi/test_canonical_5gold_1000.jsonl \
   --models vllm:cyankiwi/gemma-4-31B-it-AWQ-8bit \
   --vllm-url http://localhost:8081/v1 \

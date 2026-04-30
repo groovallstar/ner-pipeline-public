@@ -37,6 +37,6 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 - Host paths: `/data`, `/work/.huggingface`
 
 ### Internal
-- `src/llm_eval/` (benchmark CLI)
+- `src/ner/llm_eval/` (benchmark CLI)
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

@@ -13,7 +13,7 @@
 **총 엔티티**: 2,621 개 (PER 554 / LOC 400 / ORG 1,233 / PROD 229 / EVT 205)
 **평가지표**: 문자 오프셋 Span F1 (`metrics/span_metrics.compute_offset_span_f1`)
 **엔티티 타입**: PER · LOC · ORG · PROD · EVT
-**프롬프트**: 10종 평면 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`) — `src/labelers/ja/ner_prompts.py`
+**프롬프트**: 10종 평면 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`) — `src/ner/labelers/ja/ner_prompts.py`
 **측정 격리**: vLLM 컨테이너 한 번에 1개씩 단독 부팅·측정·정지 (GPU 경합 0)
 
 ---

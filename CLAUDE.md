@@ -15,14 +15,14 @@
 - **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스 전용 — 개발 컨테이너에 진입하지 않는다)
 - 패키지 관리자: **UV** (`uv sync` 또는 `uv pip install -e .` 으로 editable install)
 - `PYTHONPATH` **설정·주입 금지** — uv editable install이 `.pth`로 `src/`를 `sys.path`에 자동 등록한다
-- import 형태: `from labelers.xxx import Xxx`, `from llm_eval.xxx import Xxx`, `from classifier.xxx import Xxx` 등 (src 접두어 없이)
+- import 형태: `from ner.labelers.xxx import Xxx`, `from ner.llm_eval.xxx import Xxx`, `from ner.classifier.xxx import Xxx` 등 (src 접두어 없이)
 - 상세 원리·설정: `docs/wiki/concepts/src-layout-packaging.md`
 
 ## 핵심 디렉토리 구조
 
 ```
 src/
-├── labelers/          # NER 라벨링 모듈 (상세: src/CLAUDE.md)
+├── labelers/          # NER 라벨링 모듈 (상세: src/ner/CLAUDE.md)
 │   ├── ko/            # 한국어 (vllm, openai)
 │   ├── ja/            # 일본어 (vllm, openai)
 │   ├── vi/            # 베트남어 (vllm, openai)
@@ -30,8 +30,8 @@ src/
 │   ├── labeler_base.py
 │   ├── tag_aligner.py     # BIO 태그 정렬/정규화/span 추출
 │   └── hf_ner_labeler.py  # HuggingFace BERT NER 라벨러
-├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/llm_eval/AGENTS.md)
-│   ├── __main__.py          # CLI (python -m llm_eval --lang ja|ko ...)
+├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/ner/llm_eval/AGENTS.md)
+│   ├── __main__.py          # CLI (python -m ner.llm_eval --lang ja|ko ...)
 │   ├── benchmark_runner.py  # BenchmarkRunner (한국어 BIO / 일본어 offset-span 공용 러너)
 │   ├── report.py            # ReportGenerator (span-match, seqeval, per-entity 테이블)
 │   ├── error_analysis.py    # 문장별 오류 유형 분류 CLI
@@ -39,11 +39,11 @@ src/
 ├── metrics/           # span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유)
 │   ├── bio_metrics.py       # seqeval 기반 BIO 레벨 메트릭
 │   └── span_metrics.py      # compute_offset_span_f1 등 span 레벨 메트릭
-├── augmenters/        # 학습 데이터 증강 (상세: src/augmenters/AGENTS.md)
+├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/AGENTS.md)
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
 │   ├── crawlers/ko/   # 한국어 Yonhap RSS 크롤러 + NER 태깅
 │   └── wikiann_vi/    # WikiANN-vi 8종 canonical 재라벨 + Wikidata 검증
-├── classifier/        # BERT 토큰 분류 파인튜닝 (상세: src/classifier/AGENTS.md)
+├── classifier/        # BERT 토큰 분류 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
 │   ├── data_utils.py       # Stockmark 로딩, wordpiece/sentencepiece 정렬
 │   ├── train_eval.py       # HF Trainer, offset-span F1
 │   └── pii_benchmark.py    # 7 PII 엔티티 BERT 파인튜닝
@@ -64,11 +64,11 @@ docs/                  # 문서
 
 ## 주요 CLI 엔트리포인트
 
-- `python -m llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
-- `python -m classifier` / `python -m classifier.pii_benchmark` — BERT 파인튜닝·평가
-- `python -m augmenters.pii` — 합성 PII 주입
-- `python -m augmenters.crawlers.ko` — 한국어 뉴스 크롤러 + NER 태깅
-- `python -m augmenters.wikiann_vi` — WikiANN-vi 8종 canonical 재라벨
+- `python -m ner.llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
+- `python -m ner.classifier` / `python -m ner.classifier.pii_benchmark` — BERT 파인튜닝·평가
+- `python -m ner.augmenters.pii` — 합성 PII 주입
+- `python -m ner.augmenters.crawlers.ko` — 한국어 뉴스 크롤러 + NER 태깅
+- `python -m ner.augmenters.wikiann_vi` — WikiANN-vi 8종 canonical 재라벨
 
 상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.
 

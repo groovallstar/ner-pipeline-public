@@ -1,14 +1,14 @@
 # Canonical Entity Schema (JA · VI)
 
-`src/labelers/ja/`·`src/augmenters/pii/` (Stockmark) 와 `src/labelers/vi/`·
-`src/augmenters/wikiann_vi/` (WikiANN) 가 공유하는 통합 엔티티 라벨 공간.
+`src/ner/labelers/ja/`·`src/ner/augmenters/pii/` (Stockmark) 와 `src/ner/labelers/vi/`·
+`src/ner/augmenters/wikiann_vi/` (WikiANN) 가 공유하는 통합 엔티티 라벨 공간.
 NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약으로 표기한다.
 
-- 적용 코드: `src/labelers/{ja,vi}/`, `src/augmenters/pii/`,
-  `src/augmenters/wikiann_vi/`
+- 적용 코드: `src/ner/labelers/{ja,vi}/`, `src/ner/augmenters/pii/`,
+  `src/ner/augmenters/wikiann_vi/`
 - 적용 데이터: `data/stockmark/` (JA NER 5종 + PII 주입 10종),
   `data/wikiann_vi/` (VI silver 10종)
-- 본 스키마 적용 범위 외(별도 스키마): KO (`src/labelers/ko/**`,
+- 본 스키마 적용 범위 외(별도 스키마): KO (`src/ner/labelers/ko/**`,
   KLUE `PS/LC/OG/DT/TI/QT`)
 
 ## 변경 이력
@@ -30,7 +30,7 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
   - NER 8종 → 5종: `CORP/POL/ORG → ORG`, `FAC → LOC`
     (이후 #27에서 `FAC`가 차지하던 시설은 ORG로 재배치).
   - NER/PII 구분 섹션 제거 — 모든 라벨을 단일 테이블에 평면 나열.
-  - `src/labelers/ja/ner_prompts.py`와 `src/labelers/ja/dataset_loader.py`
+  - `src/ner/labelers/ja/ner_prompts.py`와 `src/ner/labelers/ja/dataset_loader.py`
     가 canonical 스키마를 직접 사용하도록 확장.
 - **2026-04-23 (이슈 #17)**: PII 재설계 — `ADDRESS` → `LOC` 흡수,
   `DOB` → `DAT` 개명·의미 확장.
@@ -169,7 +169,7 @@ NER 5종 경계는 다음 두 축으로 단순화한다:
 | `イベント名` | `EVT` | |
 
 구현: 1회성 재덤프 스크립트(`/tmp/regen_stockmark.py`, 이슈 #27 시점,
-작업 후 폐기). `src/labelers/ja/dataset_loader.py` 는 canonical 변환된
+작업 후 폐기). `src/ner/labelers/ja/dataset_loader.py` 는 canonical 변환된
 JSONL 덤프(`data/stockmark/{train,test}.jsonl`)를 그대로 읽기만 한다.
 
 재덤프는 다음 2단으로 진행:
@@ -193,7 +193,7 @@ JSONL 덤프(`data/stockmark/{train,test}.jsonl`)를 그대로 읽기만 한다.
 | (WikiANN 미커버) | `PROD`, `EVT` | LLM 재라벨이 신규 추출 |
 | (WikiANN 미커버) | `DAT`, `EMAIL`, `PHONE`, `ID_NUM`, `CREDIT_CARD` | PII 주입 또는 LLM 신규 추출 |
 
-매핑 적용은 `src/augmenters/wikiann_vi/` 의 silver 재라벨 파이프라인에서
+매핑 적용은 `src/ner/augmenters/wikiann_vi/` 의 silver 재라벨 파이프라인에서
 LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 산출 데이터는
 `data/wikiann_vi/{train,valid,test}.jsonl` 에 NER 5종 + PII 5종 = 10종
 canonical 형태로 저장된다.
@@ -211,7 +211,7 @@ canonical 형태로 저장된다.
 | `PROD` | `PROD` | identity |
 | `EVT` | `EVT` | identity |
 
-구현: `src/augmenters/migration/reduce_5type.py`(1회성, 적용 후 삭제).
+구현: `src/ner/augmenters/migration/reduce_5type.py`(1회성, 적용 후 삭제).
 
 ### 4.4 PII 라벨 (#17 정리)
 
@@ -279,16 +279,16 @@ canonical 형태로 저장된다.
   - `data/wikiann_vi/{train,valid,test}.jsonl` — VI silver 10종 (Stockmark 포맷)
 
 - **코드**:
-  - `src/labelers/ja/ner_prompts.py`, `src/labelers/ja/dataset_loader.py`
-  - `src/labelers/vi/ner_prompts.py`, `src/labelers/vi/dataset_loader.py`
-  - `src/augmenters/pii/` 프롬프트·verifier·generators (10종 평면)
-  - `src/augmenters/pii/config.py` 의 `DEFAULT_MERGE_RULES`
+  - `src/ner/labelers/ja/ner_prompts.py`, `src/ner/labelers/ja/dataset_loader.py`
+  - `src/ner/labelers/vi/ner_prompts.py`, `src/ner/labelers/vi/dataset_loader.py`
+  - `src/ner/augmenters/pii/` 프롬프트·verifier·generators (10종 평면)
+  - `src/ner/augmenters/pii/config.py` 의 `DEFAULT_MERGE_RULES`
     (`ADDRESS→LOC`, `DOB→DAT`, `ID_NUMBER→ID_NUM`)
-  - `src/augmenters/wikiann_vi/` (silver 재라벨 파이프라인)
+  - `src/ner/augmenters/wikiann_vi/` (silver 재라벨 파이프라인)
 
 - **본 스키마 적용 제외**:
-  - `src/llm_eval/**`, `src/classifier/**` — 후속 정리 예정
-  - `src/labelers/ko/**` — 별도 KLUE 스키마(`PS/LC/OG/DT/TI/QT`) 사용
+  - `src/ner/llm_eval/**`, `src/ner/classifier/**` — 후속 정리 예정
+  - `src/ner/labelers/ko/**` — 별도 KLUE 스키마(`PS/LC/OG/DT/TI/QT`) 사용
 
 ## 7. 평가 시 주의
 

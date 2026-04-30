@@ -2,7 +2,7 @@
 
 > 조사 일자: 2026-04-09
 > 목적: KLUE NER 외 한국어 NER 벤치마크/파인튜닝용 데이터셋의 특성과 현재 파이프라인 호환성 분석
-> 관련 코드: `src/labelers/bio_dataset.py` (REGISTRY 진입점), `src/labelers/dataset_loader.py`, `src/labelers/tag_aligner.py`
+> 관련 코드: `src/ner/labelers/bio_dataset.py` (REGISTRY 진입점), `src/ner/labelers/dataset_loader.py`, `src/ner/labelers/tag_aligner.py`
 > KLUE·KMOU 등 BIO 토큰 시퀀스 데이터셋의 1급 진입점은 `bio_dataset.py`이며,
 > 스펙 정의·BIO 변종 정규화·span 추출 규칙은 `docs/manual/data/bio-dataset-spec-registry.md` 참조.
 

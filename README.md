@@ -47,13 +47,13 @@ cd docker/dev && docker compose up -d
 
 ```bash
 # 일본어 NER 벤치마크
-python -m llm_eval --lang ja \
+python -m ner.llm_eval --lang ja \
     --models "vllm:Qwen/Qwen3.5-27B" \
     --max-samples 200 \
     --vllm-url "http://localhost:8081/v1"
 
 # 한국어 NER 벤치마크
-python -m llm_eval --lang ko \
+python -m ner.llm_eval --lang ko \
     --models "vllm:Qwen/Qwen3.5-27B" \
     --max-samples 500 \
     --vllm-url "http://localhost:8081/v1"

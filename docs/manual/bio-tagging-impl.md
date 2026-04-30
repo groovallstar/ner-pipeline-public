@@ -7,25 +7,25 @@
 
 | 역할 | 파일 |
 |------|------|
-| BIO ↔ Span 변환, 태그 정규화 | `src/labelers/tag_aligner.py` |
-| LLM 프롬프트 (span JSON 형식 지정) | `src/labelers/ko/ner_prompts.py` |
-| HuggingFace 데이터셋 로딩 | `src/labelers/dataset_loader.py` |
+| BIO ↔ Span 변환, 태그 정규화 | `src/ner/labelers/tag_aligner.py` |
+| LLM 프롬프트 (span JSON 형식 지정) | `src/ner/labelers/ko/ner_prompts.py` |
+| HuggingFace 데이터셋 로딩 | `src/ner/labelers/dataset_loader.py` |
 
 ---
 
 ## 왜 span 형식인가 — 프롬프트 설계 선택 (코드 근거)
 
-`src/labelers/ko/ner_prompts.py`의 `SINGLE_PROMPT_TEMPLATE`은 다음 세 지점에서 형식을 고정한다:
+`src/ner/labelers/ko/ner_prompts.py`의 `SINGLE_PROMPT_TEMPLATE`은 다음 세 지점에서 형식을 고정한다:
 
-- `src/labelers/ko/ner_prompts.py:15` — `"텍스트에서 개체명을 찾아 JSON 배열로만 반환하세요."`
-- `src/labelers/ko/ner_prompts.py:64` — `"JSON 배열만 출력, 다른 설명 금지"`
-- `src/labelers/ko/ner_prompts.py:67-96` — `## 예시` 섹션의 입력/출력 페어가 모두 `[{"text": ..., "type": ...}]` 형식으로 제시
+- `src/ner/labelers/ko/ner_prompts.py:15` — `"텍스트에서 개체명을 찾아 JSON 배열로만 반환하세요."`
+- `src/ner/labelers/ko/ner_prompts.py:64` — `"JSON 배열만 출력, 다른 설명 금지"`
+- `src/ner/labelers/ko/ner_prompts.py:67-96` — `## 예시` 섹션의 입력/출력 페어가 모두 `[{"text": ..., "type": ...}]` 형식으로 제시
 
 ---
 
 ## `extract_spans_from_bio` — 코드 위치 및 동작 증거
 
-`src/labelers/tag_aligner.py`의 `extract_spans_from_bio` (line 94 ~):
+`src/ner/labelers/tag_aligner.py`의 `extract_spans_from_bio` (line 94 ~):
 
 ```python
 def extract_spans_from_bio(tokens, tags, lang="ko"):
@@ -42,5 +42,5 @@ def extract_spans_from_bio(tokens, tags, lang="ko"):
 
 ## `spans_to_syllable_bio` — 코드 위치
 
-`src/labelers/tag_aligner.py`의 `spans_to_syllable_bio` (line 221 ~):
+`src/ner/labelers/tag_aligner.py`의 `spans_to_syllable_bio` (line 221 ~):
 - LLM span을 원문 character offset으로 매핑하므로 gold 토큰 단위와 무관하게 동작한다.

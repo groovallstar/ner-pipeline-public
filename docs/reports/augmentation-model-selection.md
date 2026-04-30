@@ -19,12 +19,12 @@
 
 ### 1.1 증강 방식
 
-가장 단순한 방법은 규칙 기반 주입기(`src/augmenters/pii/injector.py::PIIInjector`)로 문장의 앞·뒤·랜덤 위치에 PII 토큰을 삽입하는 것이다. 이 방식은 구현이 간단하지만 두 가지 위험이 있다.
+가장 단순한 방법은 규칙 기반 주입기(`src/ner/augmenters/pii/injector.py::PIIInjector`)로 문장의 앞·뒤·랜덤 위치에 PII 토큰을 삽입하는 것이다. 이 방식은 구현이 간단하지만 두 가지 위험이 있다.
 
 1. **문맥 부자연** — "…である。 電話 090-1234-5678" 처럼 문장과 무관하게 끼워 넣으면, BERT의 positional embedding과 `[SEP]`·구두점 경계 토큰에 대한 self-attention이 결합해 "문장 처음과 끝 근처의 숫자열·@ = PII"라는 위치 기반 shortcut을 학습한다. 결과적으로 정규식 수준의 표면 패턴만 잡고, 문장 중간에 자연스럽게 등장하는 PII에는 일반화하지 못하는 shortcut learning 문제가 발생한다.
 2. **주변 단서 결여** — 자연 문장에서 PII는 보통 「担当の○○」「連絡先は○○」처럼 trigger phrase와 함께 등장하는데, 랜덤 삽입에서는 이 단서가 사라져 실제 문서에서는 PII가 등장해도 감지하지 못할 가능성이 있다.
 
-이를 회피하기 위해 **LLM에게 "원문에 PII를 자연스러운 문맥으로 삽입하라"고 요청**해 학습 데이터를 만든다 (`src/augmenters/pii/llm_injector.py::LLMInjector`, 프롬프트 `_INJECTION_PROMPT`).
+이를 회피하기 위해 **LLM에게 "원문에 PII를 자연스러운 문맥으로 삽입하라"고 요청**해 학습 데이터를 만든다 (`src/ner/augmenters/pii/llm_injector.py::LLMInjector`, 프롬프트 `_INJECTION_PROMPT`).
 
 ### 1.2 2단계 구조 (Inject + Verify)
 
@@ -33,7 +33,7 @@
 | 1. Inject | `LLMInjector` | 원문에 PII를 자연스럽게 삽입하고 생성 텍스트에서 span offset을 추출 |
 | 2. Verify | `PIIVerifier` | 주입 결과를 **독립적으로 재라벨링**, 주입 LLM이 만든 span이 자연 문맥에 녹아들어 PII·원본 엔티티 양쪽에서 재검출되는지 교차 검증. `policy=drop_span`으로 상충 span만 제거(레코드 보존) |
 
-CLI(`src/augmenters/pii/__main__.py`)는 `--inject-url/--inject-model`과 `--verify-url/--verify-model`을 분리 지정할 수 있어, **성능이 가장 높은 상위 2개 모델을 각각 주입·검증 역할로 배치**하는 실제 워크플로우와 일치한다.
+CLI(`src/ner/augmenters/pii/__main__.py`)는 `--inject-url/--inject-model`과 `--verify-url/--verify-model`을 분리 지정할 수 있어, **성능이 가장 높은 상위 2개 모델을 각각 주입·검증 역할로 배치**하는 실제 워크플로우와 일치한다.
 
 ### 1.3 라벨 공간 · 산출물
 
@@ -60,7 +60,7 @@ WikiANN-vi는 BIO 태그 + 3종(PER/LOC/ORG)만 제공한다. 프로젝트 canon
 - **PROD/EVT** 두 타입은 원본에 부재 — 새로 어노테이션해야 함
 - **시설(역·공항·병원·학교 등)** 의 LOC/ORG 분류가 #27 경계 재정의로 ORG로 이동 — 기존 LOC 일부를 ORG로 재할당해야 함
 
-이를 인간 어노테이션 없이 해결하는 방법으로 **LLM 재라벨**을 채택한다 (`src/augmenters/wikiann_vi/relabel_8type.py::Relabeler`). LLM은 원문 전체를 받아 5종 canonical로 span을 출력하고, 매칭 단계에서 원문 문자 오프셋으로 변환한다 (`match_offsets`).
+이를 인간 어노테이션 없이 해결하는 방법으로 **LLM 재라벨**을 채택한다 (`src/ner/augmenters/wikiann_vi/relabel_8type.py::Relabeler`). LLM은 원문 전체를 받아 5종 canonical로 span을 출력하고, 매칭 단계에서 원문 문자 오프셋으로 변환한다 (`match_offsets`).
 
 > 파일·필드명의 `8type` 리터럴은 이슈 #21 축소 이후에도 데이터 호환성을 위해 유지한다(의미는 canonical 5종).
 

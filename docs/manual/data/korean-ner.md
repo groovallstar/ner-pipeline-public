@@ -1,7 +1,7 @@
 # 한국어 NER 라벨링 방법론
 
 > 대상 데이터셋: KLUE NER (6 엔티티 타입)
-> 대상 코드: `src/labelers/ko/`, `src/llm_eval/`, `src/metrics/`, `src/labelers/{dataset_loader,tag_aligner,llm_helpers}.py`
+> 대상 코드: `src/ner/labelers/ko/`, `src/ner/llm_eval/`, `src/ner/metrics/`, `src/ner/labelers/{dataset_loader,tag_aligner,llm_helpers}.py`
 
 ## 목차
 
@@ -72,10 +72,10 @@ KLUE NER 데이터셋. 두 가지 로딩 경로가 존재한다:
 | JSONL 폴백 | `/data/ner/klue/validation.jsonl` | 파일이 존재하면 우선 사용 |
 | HuggingFace | `load_dataset("klue", "ner", split="validation")` | JSONL 없을 때 |
 
-**코드:** `DatasetLoader.load()` (`src/labelers/dataset_loader.py`)
+**코드:** `DatasetLoader.load()` (`src/ner/labelers/dataset_loader.py`)
 
 > BIO 토큰 시퀀스 데이터셋(KLUE·KMOU 등)의 1급 진입점은
-> `src/labelers/bio_dataset.py`(REGISTRY 기반). 라벨러 통합용 레거시 진입점은
+> `src/ner/labelers/bio_dataset.py`(REGISTRY 기반). 라벨러 통합용 레거시 진입점은
 > `dataset_loader.py`다. 자세한 구분은 `bio-dataset-spec-registry.md` 참조.
 
 ### 출력
@@ -136,7 +136,7 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 ### 엔티티 타입 정의
 
-**코드:** `src/labelers/ko/ner_prompts.py`의 `DEFAULT_ENTITY_TYPES`
+**코드:** `src/ner/labelers/ko/ner_prompts.py`의 `DEFAULT_ENTITY_TYPES`
 
 | 태그 | 의미 | 설명 | 예시 |
 |------|------|------|------|
@@ -201,14 +201,14 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 ### 베이스 클래스 구조
 
-KO 라벨러는 공통 베이스(`src/labelers/base_vllm_labeler.py`,
-`src/labelers/base_openai_labeler.py`)의 얇은 서브클래스다. KO 별도 파일은
+KO 라벨러는 공통 베이스(`src/ner/labelers/base_vllm_labeler.py`,
+`src/ner/labelers/base_openai_labeler.py`)의 얇은 서브클래스다. KO 별도 파일은
 프롬프트 템플릿·기본 모델명·`lang='ko'` 만 주입한다.
 
 | 파일 | 클래스 | 백엔드 | 동시성 |
 |------|--------|--------|--------|
-| `src/labelers/ko/vllm_ner_labeler.py` | `VllmNERLabeler` | vLLM(AsyncOpenAI 호환) | `concurrency` (기본 32) |
-| `src/labelers/ko/openai_ner_labeler.py` | `OpenAINERLabeler` | OpenAI SDK (system/user 채팅) | `concurrency` (기본 4) |
+| `src/ner/labelers/ko/vllm_ner_labeler.py` | `VllmNERLabeler` | vLLM(AsyncOpenAI 호환) | `concurrency` (기본 32) |
+| `src/ner/labelers/ko/openai_ner_labeler.py` | `OpenAINERLabeler` | OpenAI SDK (system/user 채팅) | `concurrency` (기본 4) |
 
 ### 전체 흐름
 
@@ -236,7 +236,7 @@ KO 라벨러는 공통 베이스(`src/labelers/base_vllm_labeler.py`,
 
 ### 4.1 문장 분리
 
-**코드:** `split_sentences(text, lang='ko')` (`src/labelers/llm_helpers.py`)
+**코드:** `split_sentences(text, lang='ko')` (`src/ner/labelers/llm_helpers.py`)
 
 - 한국어/영어: `.!?` 뒤 공백 또는 줄바꿈으로 분리
 - 일본어: `。！？` 포함하여 분리
@@ -264,7 +264,7 @@ KO 라벨러는 공통 베이스(`src/labelers/base_vllm_labeler.py`,
 
 ### 4.4 JSON 파싱
 
-**코드:** `parse_spans(raw)` (`src/labelers/llm_helpers.py`)
+**코드:** `parse_spans(raw)` (`src/ner/labelers/llm_helpers.py`)
 
 ```python
 raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
@@ -285,7 +285,7 @@ OpenAI 백엔드는 한 번에 다문(`{"0":[...], "1":[...]}`) 형태를 받으
 
 ### 4.5 spans → BIO 변환
 
-**코드:** `spans_to_bio(tokens, spans)` (`src/labelers/llm_helpers.py`)
+**코드:** `spans_to_bio(tokens, spans)` (`src/ner/labelers/llm_helpers.py`)
 
 LLM이 반환한 entity spans를 토큰 레벨 BIO 태그로 변환한다. **2단계 매칭 전략**:
 
@@ -322,10 +322,10 @@ if all(sp in tokens[i + j] or tokens[i + j] in sp for j, sp in enumerate(span_to
 
 ### 평가 진입점
 
-**코드:** `src/llm_eval/__main__.py` (한·일·베 공통 dispatch)
+**코드:** `src/ner/llm_eval/__main__.py` (한·일·베 공통 dispatch)
 
 ```bash
-python -m llm_eval --lang ko --models "vllm:Qwen/Qwen3-32B" --max-samples 500
+python -m ner.llm_eval --lang ko --models "vllm:Qwen/Qwen3-32B" --max-samples 500
 ```
 
 CLI 흐름:
@@ -333,11 +333,11 @@ CLI 흐름:
 2. `DatasetLoader`로 gold records 로딩
 3. 통합 `BenchmarkRunner(eval_mode='bio')` 생성 후 labeler 추가
 4. `runner.run()` → 각 labeler에 대해 `_run_single()` 실행
-5. `ReportGenerator`(`src/llm_eval/report.py`)로 결과 출력
+5. `ReportGenerator`(`src/ner/llm_eval/report.py`)로 결과 출력
 
 ### 평가 흐름 상세
 
-**코드:** `BenchmarkRunner._run_single()` (`src/llm_eval/benchmark_runner.py`)
+**코드:** `BenchmarkRunner._run_single()` (`src/ner/llm_eval/benchmark_runner.py`)
 
 각 gold record에 대해:
 
@@ -360,7 +360,7 @@ gold record {tokens, ner_tags, sentence}
 
 ### 태그 정규화
 
-**코드:** `normalize_tag(tag, lang='ko')` (`src/labelers/tag_aligner.py`)
+**코드:** `normalize_tag(tag, lang='ko')` (`src/ner/labelers/tag_aligner.py`)
 
 LLM이 다양한 태그 형식을 출력할 수 있으므로, 모든 태그를 KLUE 표준으로 정규화한다 (`_TAG_NORMALIZE_MAP_KO`):
 
@@ -372,7 +372,7 @@ PERSON → PS, LOCATION → LC, ORGANIZATION → OG
 
 ### spans → 음절 BIO 변환
 
-**코드:** `TagAligner.spans_to_syllable_bio()` (`src/labelers/tag_aligner.py`)
+**코드:** `TagAligner.spans_to_syllable_bio()` (`src/ner/labelers/tag_aligner.py`)
 
 LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 핵심 로직:
 
@@ -385,7 +385,7 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
 
 ### 4종 메트릭
 
-**코드:** `MetricsCalculator` (`src/metrics/bio_metrics.py`) + `compute_offset_span_f1` (`src/metrics/span_metrics.py`)
+**코드:** `MetricsCalculator` (`src/ner/metrics/bio_metrics.py`) + `compute_offset_span_f1` (`src/ner/metrics/span_metrics.py`)
 
 | 메트릭 | 메서드 | 역할 | 비고 |
 |--------|--------|------|------|

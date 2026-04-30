@@ -1,7 +1,7 @@
 # 일본어 NER 라벨링 방법론
 
 > 대상 데이터셋: Stockmark NER Wikipedia (canonical 10종 평면 = 5종 NER + 5종 PII/날짜)
-> 대상 코드: `src/labelers/ja/`, `src/llm_eval/`, `src/metrics/`
+> 대상 코드: `src/ner/labelers/ja/`, `src/ner/llm_eval/`, `src/ner/metrics/`
 
 ## 목차
 
@@ -67,7 +67,7 @@ canonical Stockmark JSONL 덤프를 그대로 읽는다. HF Hub 자동 로딩·�
 | 데이터 형식 | 원본 텍스트 + 문자 오프셋 span (BIO 아님) |
 | 라벨 공간 | NER 5종 (`PER/LOC/ORG/PROD/EVT`) — PII 주입본은 10종 평면 (5종 + `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`) |
 
-**코드:** `JapaneseDatasetLoader.load()` (`src/labelers/ja/dataset_loader.py`)
+**코드:** `JapaneseDatasetLoader.load()` (`src/ner/labelers/ja/dataset_loader.py`)
 
 ```python
 loader = JapaneseDatasetLoader()
@@ -103,7 +103,7 @@ records = JapaneseDatasetLoader.load_local('data/.../pii_injected.jsonl')
 
 ### 엔티티 타입 정의
 
-**코드:** `src/labelers/ja/ner_prompts.py` (`DEFAULT_ENTITY_TYPES`) — canonical 10종 평면 목록.
+**코드:** `src/ner/labelers/ja/ner_prompts.py` (`DEFAULT_ENTITY_TYPES`) — canonical 10종 평면 목록.
 
 엔티티 정의·LOC/ORG 경계 규칙·HF 원본(`人名`/`法人名`/`施設名` 등) → canonical 매핑·모호 사례 결정표는 `docs/manual/data/canonical-entity-schema.md` 단일 출처.
 
@@ -234,7 +234,7 @@ if isinstance(data, dict):
 
 ### 4.5 span_matcher.py — 문자 오프셋 매칭
 
-**코드:** `match_spans()` (`src/labelers/ja/span_matcher.py`)
+**코드:** `match_spans()` (`src/ner/labelers/ja/span_matcher.py`)
 
 LLM은 `{"text": "東京", "type": "LOC"}` 형태로 위치 정보 없이 엔티티를 반환한다. `match_spans()`가 원문에서 해당 문자열의 문자 오프셋을 찾아 `{text, type, start, end}`를 부여한다.
 
@@ -276,10 +276,10 @@ _SUFFIXES  = ('氏', 'さん', '君', 'ちゃん', '様')
 
 ### 평가 진입점
 
-**코드:** `src/llm_eval/__main__.py`
+**코드:** `src/ner/llm_eval/__main__.py`
 
 ```bash
-python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+python -m ner.llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 ```
 
 CLI 흐름:
@@ -291,7 +291,7 @@ CLI 흐름:
 
 ### 평가 흐름
 
-**코드:** `BenchmarkRunner._run_offset_span_async()` (`src/llm_eval/benchmark_runner.py`)
+**코드:** `BenchmarkRunner._run_offset_span_async()` (`src/ner/llm_eval/benchmark_runner.py`)
 
 각 gold record에 대해:
 
@@ -313,7 +313,7 @@ gold record {id, text, gold_spans}
 
 ### 평가 메트릭: compute_offset_span_f1()
 
-**코드:** `src/metrics/span_metrics.py`
+**코드:** `src/ner/metrics/span_metrics.py`
 
 문자 오프셋 기반 span-level F1. seqeval을 사용하지 않는다.
 

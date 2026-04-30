@@ -15,7 +15,7 @@ LOC/ORG 경계 재정의(인공 시설 모두 ORG)가 적용됐다.
 Yonhap(연합뉴스) 한국어 소스를 지원한다. 상세: `crawlers/ko/AGENTS.md`.
 
 ```bash
-python -m augmenters.crawlers.ko \
+python -m ner.augmenters.crawlers.ko \
     --source yna --max-sentences 100 \
     --output-dir data/ner/raw \
     --vllm-base-url http://localhost:8081/v1 \
@@ -41,7 +41,7 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 | `llm_injector.py` | `LLMInjector` + `VllmClient` — **llm 모드**: LLM이 PII를 자연스럽게 문중에 삽입, 생성 텍스트에서 string match로 span offset 추출 |
 | `stats.py` | 라벨별 빈도·커버리지·PII 없는 샘플 비율 리포트 |
 | `verifier.py` | `PIIVerifier` — LLM 교차 검증 (confirmed/missed/conflict 분류, drop_span/drop_record/keep_all 정책). 검증 시 `label_spans(split=False)` 로 호출하여 문맥 보존 |
-| `__main__.py` | `python -m augmenters.pii` CLI 엔트리포인트 (`--mode {suffix,llm}`, `--verify vllm` 교차 검증) |
+| `__main__.py` | `python -m ner.augmenters.pii` CLI 엔트리포인트 (`--mode {suffix,llm}`, `--verify vllm` 교차 검증) |
 | `loaders.py` | Stockmark / 임의 JSONL / HF Hub → `Record` 어댑터 모음 |
 | `generators/base.py` | `PIIGenerator` Protocol, `get_generator(lang)` factory, 공용 유틸 |
 | `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일). #17 Phase 1에서 `generate_dob` → `generate_dat` 개명 |
@@ -70,11 +70,11 @@ BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있�
 
 ```bash
 # suffix 모드 (규칙 기반, 결정론적, LLM 불필요)
-python -m augmenters.pii --source stockmark --lang ja \
+python -m ner.augmenters.pii --source stockmark --lang ja \
     --output data/stockmark/pii_test.jsonl --n-samples 1000
 
 # llm 모드 (자연 삽입, vLLM 필요) + 교차 검증
-python -m augmenters.pii --source stockmark --lang ja \
+python -m ner.augmenters.pii --source stockmark --lang ja \
     --output data/stockmark/pii_test.jsonl --n-samples 1000 \
     --mode llm \
     --vllm-url http://localhost:8081/v1 \
@@ -82,11 +82,11 @@ python -m augmenters.pii --source stockmark --lang ja \
     --verify vllm --verify-policy drop_span
 
 # 임의 JSONL(크롤링 등)에 주입
-python -m augmenters.pii --source jsonl --input /data/raw/crawl.jsonl \
+python -m ner.augmenters.pii --source jsonl --input /data/raw/crawl.jsonl \
     --lang ja --output /data/ner/ja_crawl_pii.jsonl
 
 # HF Hub 데이터셋에 주입
-python -m augmenters.pii --source hf --hf-name llm-book/ner-wikipedia-dataset \
+python -m ner.augmenters.pii --source hf --hf-name llm-book/ner-wikipedia-dataset \
     --lang ja --output /data/ner/ja_wiki_pii.jsonl
 ```
 
@@ -107,9 +107,9 @@ python -m augmenters.pii --source hf --hf-name llm-book/ner-wikipedia-dataset \
 canonical 라벨 레코드(`{id, text, gold_spans}`)로 로딩된다.
 
 ## 테스트
-- `tests/augmenters/pii/test_injector.py` — suffix 모드 span 일치, 밀도 분포, seed 결정론성, 라벨 병합
-- `tests/augmenters/pii/test_llm_injector.py` — llm 모드 프롬프트 생성, span 추출(string match), 원본 엔티티 재탐색
-- `tests/augmenters/pii/test_label_merger.py` — 병합 규칙 단위 테스트 (`injector.apply_label_merge` 대상)
-- `tests/augmenters/pii/test_loader_integration.py` — JSONL → `load_local` 라운드트립
-- `tests/augmenters/pii/test_verifier.py` — 교차 검증 (confirmed/missed/conflict, 정책별 동작, 부분 매칭, 데이터셋 리포트)
-- `tests/augmenters/wikiann_vi/` — 재라벨 파서·offset 매칭·kappa·Wikidata anchor·confidence 병합
+- `tests/ner/augmenters/pii/test_injector.py` — suffix 모드 span 일치, 밀도 분포, seed 결정론성, 라벨 병합
+- `tests/ner/augmenters/pii/test_llm_injector.py` — llm 모드 프롬프트 생성, span 추출(string match), 원본 엔티티 재탐색
+- `tests/ner/augmenters/pii/test_label_merger.py` — 병합 규칙 단위 테스트 (`injector.apply_label_merge` 대상)
+- `tests/ner/augmenters/pii/test_loader_integration.py` — JSONL → `load_local` 라운드트립
+- `tests/ner/augmenters/pii/test_verifier.py` — 교차 검증 (confirmed/missed/conflict, 정책별 동작, 부분 매칭, 데이터셋 리포트)
+- `tests/ner/augmenters/wikiann_vi/` — 재라벨 파서·offset 매칭·kappa·Wikidata anchor·confidence 병합

@@ -71,7 +71,7 @@ WikiANN test split → augmenters/wikiann_vi/__main__.py
 | JSONL 폴백 | `/data/ner/unimelb-nlp_wikiann/test.jsonl` | 파일 존재 시 우선 사용 |
 | HuggingFace | `load_dataset('unimelb-nlp/wikiann', 'vi', split='test')` | JSONL 없을 때 |
 
-진입점: `_create_labeler_vi()` in `src/llm_eval/__main__.py`. 기본 split 은 `test` (KLUE 의 `validation` 과 다름 — WikiANN-vi 의 validation 은 작거나 없음).
+진입점: `_create_labeler_vi()` in `src/ner/llm_eval/__main__.py`. 기본 split 은 `test` (KLUE 의 `validation` 과 다름 — WikiANN-vi 의 validation 은 작거나 없음).
 
 ### 출력 — `NERRecord`
 
@@ -110,7 +110,7 @@ PROD/EVT/PII 5종 출력은 FP 로 잡혀 precision 이 인위적으로 하락�
 
 ### 4.1 3종 프롬프트 템플릿
 
-`src/labelers/vi/ner_prompts.py`:
+`src/ner/labelers/vi/ner_prompts.py`:
 
 | 템플릿 | 변수명 | 용도 | 형식 |
 |---|---|---|---|
@@ -140,7 +140,7 @@ silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-s
 
 ### 4.4 Few-shot 예시
 
-`src/labelers/vi/ner_prompts.py` SINGLE 템플릿에 약 9개 예시 (메인 8 + PII 종합 1):
+`src/ner/labelers/vi/ner_prompts.py` SINGLE 템플릿에 약 9개 예시 (메인 8 + PII 종합 1):
 - PER + LOC + ORG 혼합 (`Chủ tịch Nguyễn Xuân Phúc...`)
 - 정당 + 정부기관 + 대학 (`Đảng Cộng sản Việt Nam và Bộ Giáo dục...`)
 - 시설 (공항·병원) (`Vietnam Airlines vận hành chuyến bay...`)
@@ -159,11 +159,11 @@ silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-s
 
 | 파일 | 클래스 | 특징 |
 |---|---|---|
-| `src/labelers/vi/vllm_ner_labeler.py` | `VllmNERLabeler` | async 동시성 (`concurrency` 파라미터, 기본 32), AsyncOpenAI 호환, vLLM 서버용 |
-| `src/labelers/vi/openai_ner_labeler.py` | `OpenAINERLabeler` | system/user 채팅 형식, `response_format={"type": "json_object"}` |
-| `src/labelers/hf_ner_labeler.py` | `HFNERLabeler` | HuggingFace BERT 베이스라인 (`lang="vi"`) |
+| `src/ner/labelers/vi/vllm_ner_labeler.py` | `VllmNERLabeler` | async 동시성 (`concurrency` 파라미터, 기본 32), AsyncOpenAI 호환, vLLM 서버용 |
+| `src/ner/labelers/vi/openai_ner_labeler.py` | `OpenAINERLabeler` | system/user 채팅 형식, `response_format={"type": "json_object"}` |
+| `src/ner/labelers/hf_ner_labeler.py` | `HFNERLabeler` | HuggingFace BERT 베이스라인 (`lang="vi"`) |
 
-라벨러 팩토리: `src/llm_eval/__main__.py::_create_labeler_vi()`
+라벨러 팩토리: `src/ner/llm_eval/__main__.py::_create_labeler_vi()`
 
 ### 5.2 단계별 처리
 
@@ -193,12 +193,12 @@ silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-s
 ### 6.1 CLI
 
 ```bash
-python -m llm_eval --lang vi --models "vllm:cyankiwi/gemma-4-31B-it-AWQ-8bit" --max-samples 200
+python -m ner.llm_eval --lang vi --models "vllm:cyankiwi/gemma-4-31B-it-AWQ-8bit" --max-samples 200
 ```
 
 ### 6.2 평가 흐름
 
-`src/llm_eval/__main__.py` 단일 dispatch → `BenchmarkRunner` (lang="vi") 실행:
+`src/ner/llm_eval/__main__.py` 단일 dispatch → `BenchmarkRunner` (lang="vi") 실행:
 
 ```
 gold record {tokens, ner_tags}
@@ -211,7 +211,7 @@ gold record {tokens, ner_tags}
 
 ### 6.3 태그 정규화
 
-`src/labelers/tag_aligner.py::_TAG_NORMALIZE_MAP_VI` :
+`src/ner/labelers/tag_aligner.py::_TAG_NORMALIZE_MAP_VI` :
 
 ```python
 {"PERSON": "PER", "LOCATION": "LOC", "ORGANIZATION": "ORG", "MISCELLANEOUS": "MISC"}
@@ -221,7 +221,7 @@ LLM 이 풀네임을 출력하는 경우 약어로 변환. KO 와 달리 별도 
 
 ### 6.4 메트릭
 
-`src/metrics/bio_metrics.py::MetricsCalculator` + `src/metrics/span_metrics.py::compute_offset_span_f1`:
+`src/ner/metrics/bio_metrics.py::MetricsCalculator` + `src/ner/metrics/span_metrics.py::compute_offset_span_f1`:
 
 | 메트릭 | 역할 | 비고 |
 |---|---|---|

@@ -190,7 +190,7 @@ gold→pred 라벨 쌍 confusion matrix 산출.
 본 측정 시 Qwen3.6 verify 호출에서 record 의 99.96% (5,306/5,308) 에
 retry 가 1회씩 발생, 처리량이 정확히 절반으로 떨어짐.
 
-**근본 원인**: `src/labelers/base_vllm_labeler.py:76` 의 `label_spans`
+**근본 원인**: `src/ner/labelers/base_vllm_labeler.py:76` 의 `label_spans`
 sync wrapper 가 호출마다 `asyncio.run(...)` 으로 새 event loop 생성·
 종료. `AsyncOpenAI` 의 httpx connection pool 은 첫 호출 loop 에 묶임 →
 두 번째 호출부터 connection cleanup 단계(`_response_closed → aclose
@@ -199,11 +199,11 @@ closed')` → httpx 가 connection error 로 분류 → OpenAI SDK 가 retry
 발동 → 새 연결로 동일 요청 재전송 → 두 번째 200 OK. vLLM access log
 에 동일 요청 200 OK 두 번 찍히는 패턴이 이렇게 형성.
 
-`src/augmenters/pii/llm_injector.py:303-321` `_gather_inject` 가 동일
+`src/ner/augmenters/pii/llm_injector.py:303-321` `_gather_inject` 가 동일
 문제를 인지해 단일 loop 패턴으로 회피한 반면, **verifier 쪽은 이
 회피가 빠져 있었음**.
 
-**수정**: `src/augmenters/pii/verifier.py` 에 `averify_dataset` async
+**수정**: `src/ner/augmenters/pii/verifier.py` 에 `averify_dataset` async
 경로 + 단일 `asyncio.run` batch 처리 추가. `verify_dataset` 가 라벨러의
 `alabel_spans` 보유 여부로 분기. 50샘플 E2E 재측정에서 retry 0건 / Event
 loop closed 0건 확인. 처리량 약 2배 회복 예상 (`§5` 의 ~0.66/s 는 본
@@ -237,7 +237,7 @@ canonical 10종 (`PER LOC ORG PROD EVT EMAIL PHONE DAT ID_NUM CREDIT_CARD`)
 생성 명령:
 ```bash
 # train
-python -m augmenters.pii \
+python -m ner.augmenters.pii \
   --source stockmark --lang ja \
   --output data/stockmark/pii_train.jsonl \
   --mode llm --llm-concurrency 32 \
@@ -249,7 +249,7 @@ python -m augmenters.pii \
   --verify-concurrency 32
 
 # test
-python -m augmenters.pii \
+python -m ner.augmenters.pii \
   --source jsonl --input data/stockmark/test.jsonl --lang ja \
   --output data/stockmark/pii_test.jsonl \
   ... (동일 inject/verify 옵션)

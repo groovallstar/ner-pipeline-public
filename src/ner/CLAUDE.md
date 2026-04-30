@@ -2,15 +2,15 @@
 
 ## 모듈 구조
 
-현재 주요 모듈 경로는 `src/labelers/`이며, 새 모듈은 `src/` 하위에 추가한다.
+현재 주요 모듈 경로는 `src/ner/labelers/`이며, 새 모듈은 `src/` 하위에 추가한다.
 
 ### augmenters/
 
-학습 데이터 증강 모듈. 상세: `src/augmenters/AGENTS.md`.
+학습 데이터 증강 모듈. 상세: `src/ner/augmenters/AGENTS.md`.
 
 | 서브모듈 | 역할 |
 |---------|------|
-| `pii/` | 합성 PII 주입기 — 기존 NER 데이터셋에 PII 엔티티를 삽입하고 span을 재계산하여 통합 학습 데이터셋 생성 (`python -m augmenters.pii`) |
+| `pii/` | 합성 PII 주입기 — 기존 NER 데이터셋에 PII 엔티티를 삽입하고 span을 재계산하여 통합 학습 데이터셋 생성 (`python -m ner.augmenters.pii`) |
 
 ### labelers/
 
@@ -37,7 +37,7 @@
 
 ## 코딩 컨벤션
 
-- `PYTHONPATH=/work/git/ner_pipeline/src/` — import는 `from labelers.xxx import Xxx` 형태
+- `PYTHONPATH=/work/git/ner_pipeline/src/` — import는 `from ner.labelers.xxx import Xxx` 형태
 - 패키지 관리자: **UV** (`uv pip install`)
 - 타입 힌트 사용 (typing 모듈)
 - 로깅: `logging` 표준 라이브러리
