@@ -17,7 +17,7 @@
 | 정식 명칭 | KLUE Benchmark - NER | stockmark/ner-wikipedia-dataset | unimelb-nlp/wikiann (config=vi) |
 | 만든 곳 | 한국 산학 컨소시엄 (31명 저자, NeurIPS 2021) | 일본 Stockmark 사 (AI 스타트업) | Pan et al. 2017 (ACL), 멜버른대 관리 |
 | 원본 데이터 출처 | 위키트리 뉴스 + 에어비앤비 리뷰 | 일본어 위키백과 | 베트남어 위키백과 (다국어 WikiANN의 vi 서브셋) |
-| 엔티티 종류 수 | **6종** | **8종** | **3종** |
+| 엔티티 종류 수 | **6종** | **5종 NER** (PII 주입판 10종 평면) | **3종** (라벨러 출력은 10종 평면) |
 | 데이터 단위 | **음절** (한 글자씩) | **문자 오프셋** (몇 번째 글자부터 몇 번째까지) | **단어** (공백 분리) |
 | 태그 형식 | BIO 태그 (B-PS, I-PS, O…) | 문자 범위 span ({start:0, end:4}) | BIO 태그 (B-PER, I-PER, O…) |
 | 데이터 건수 | train 21,008 / validation 5,000 문장 | 총 5,343 문장 (단일 split) | train 20,000 / val 10,000 / test 10,000 문장 |
@@ -39,23 +39,28 @@
 | TI | 시간 | 오후 2시, 새벽 |
 | QT | 수량/숫자 | 100명, 50억원 |
 
-### 🇯🇵 Stockmark — 8종 (canonical 영문 축약)
+### 🇯🇵 Stockmark — 5종 NER (canonical 영문 축약, PII 주입판은 10종 평면)
 
 HuggingFace `stockmark/ner-wikipedia-dataset`의 원본 라벨은 일본어
 (`人名`/`法人名`/`地名`/…)이지만, 본 저장소의 파이프라인은
 **canonical 영문 축약**으로 통일해 사용한다 (매핑 정의:
-`docs/manual/data/canonical-entity-schema.md`).
+`docs/manual/data/japanese-canonical-entity-schema.md`).
+
+이슈 #21에서 8종(`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`)을 NER 5종으로 축소
+(`CORP/POL/ORG → ORG`, `FAC → LOC`)했고, 이슈 #27에서 시설(`FAC`)이 LOC가
+아닌 ORG로 재배치됐다. 합성 PII를 주입한 학습·평가셋은 NER 5종 + PII 5종
+= **10종 평면 목록**으로 운영한다.
 
 | 태그 | 뜻 | 쉬운 예시 |
 |------|-----|----------|
 | PER (인명) | 사람 | 織田信長 (오다 노부나가) |
-| CORP (법인명) | **회사**, 철도사, 방송국 | トヨタ自動車 (토요타) |
-| LOC (지명) | 나라, 도시, 자연물 | 東京, 富士山 |
-| FAC (시설명) | **건물**, 역, 공항, 학교, 병원 | 東京タワー, 東京駅 |
-| PROD (제품명) | 상품, 서비스, 작품명 | iPhone, プリウス |
-| EVT (이벤트명) | 대회, 사건, 전쟁 | オリンピック |
-| POL (정치 조직) | 정부, 정당, 군대, 법원 | 自民党, 米軍 |
-| ORG (기타 조직) | 대학, 스포츠팀, 협회 | 早稲田大学, FIFA |
+| LOC (지명) | **지리적 위치만** — 국가·행정구역·자연지명·주소(번지·층수 포함) | 東京, 富士山, 東京都千代田区1丁目2-3 |
+| ORG (조직·시설) | **인공 시설·조직 일체** — 회사·대학(본체·캠퍼스·부속시설)·정당·정부·군·국제기관·스포츠팀/리그 + 역·공항·병원·학교·박물관·도서관·寺·神社 | トヨタ自動車, 早稲田大学, 自民党, 東京駅, セントメアリー病院, FCバルセロナ |
+| PROD (제품·작품) | 상품, 서비스, 작품명, 방송 프로그램 | iPhone, プリウス, NHKスペシャル |
+| EVT (이벤트명) | 일회성 대회·사건·전쟁·조약 | オリンピック, 関ヶ原の戦い |
+
+PII 주입판에서 추가되는 5종(`DAT`/`EMAIL`/`PHONE`/`ID_NUM`/`CREDIT_CARD`)
+정의는 `japanese-canonical-entity-schema.md` 참조.
 
 ### 🇻🇳 WikiANN vi — 3종 (영어 약어)
 
@@ -69,12 +74,12 @@ HuggingFace `stockmark/ner-wikipedia-dataset`의 원본 라벨은 일본어
 
 - **WikiANN (3종)**: PER / LOC / ORG — 가장 단순. 모든 조직을 `ORG` 하나로 합친다.
 - **KLUE (6종)**: 조직을 `OG` 하나로 두지만, 대신 **DT·TI·QT** (날짜·시간·수량) 범주를 별도로 가진다.
-- **Stockmark (8종)**: 조직을 **CORP / FAC / POL / ORG** 4개로 쪼개고, **이벤트·제품**도 별도 범주로 구분한다.
+- **Stockmark (현재 5종)**: 조직·법인·정부·시설을 모두 **ORG** 하나로 합치는 대신, **이벤트(EVT)·제품(PROD)**을 독립 범주로 둔다. (구 8종 시절의 CORP/FAC/POL은 #21·#27을 거쳐 ORG로 통합됐다.)
 
 예: "토요타 본사 건물"이라 하면
 - WikiANN 스타일: 토요타 = ORG, 본사 건물 = LOC
 - KLUE 스타일: 토요타 = OG, 본사 건물 = LC
-- Stockmark 스타일: 토요타 = CORP, 본사 건물 = FAC
+- Stockmark 스타일(현재): 토요타 = ORG, 본사 건물 = ORG (지명은 LOC로만, 인공 시설은 ORG로 흡수)
 
 ---
 
@@ -151,10 +156,10 @@ HuggingFace `stockmark/ner-wikipedia-dataset`의 원본 라벨은 일본어
 {
   "text": "織田信長は安土城を建て、本能寺の変で明智光秀に討たれた。",
   "gold_spans": [
-    {"text": "織田信長",   "type": "PER",       "start": 0,  "end": 4},
-    {"text": "安土城",     "type": "FAC",     "start": 5,  "end": 8},
+    {"text": "織田信長",   "type": "PER", "start": 0,  "end": 4},
+    {"text": "安土城",     "type": "ORG", "start": 5,  "end": 8},
     {"text": "本能寺の変", "type": "EVT", "start": 11, "end": 16},
-    {"text": "明智光秀",   "type": "PER",       "start": 17, "end": 21}
+    {"text": "明智光秀",   "type": "PER", "start": 17, "end": 21}
   ]
 }
 ```
@@ -198,9 +203,9 @@ HuggingFace `stockmark/ner-wikipedia-dataset`의 원본 라벨은 일본어
 {
   "text": "羽生結弦が東京でトヨタ自動車のイベントに出席した。",
   "gold_spans": [
-    {"text": "羽生結弦",       "type": "PER",   "start":  0, "end":  4},
-    {"text": "東京",           "type": "LOC",   "start":  5, "end":  7},
-    {"text": "トヨタ自動車",   "type": "CORP", "start":  8, "end": 14}
+    {"text": "羽生結弦",       "type": "PER", "start":  0, "end":  4},
+    {"text": "東京",           "type": "LOC", "start":  5, "end":  7},
+    {"text": "トヨタ自動車",   "type": "ORG", "start":  8, "end": 14}
   ]
 }
 ```
