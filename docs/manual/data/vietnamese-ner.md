@@ -313,7 +313,7 @@ VI 평가는 BIO 경로 (`eval_mode='bio'`) 사용. KO 와 동일.
 ### 7.2 3중 검증 레이어
 
 1. **Cross-model agreement** — Gemma + Qwen 2개 LLM 독립 라벨링 → Cohen kappa + per-type 합의율 (`augmenters/wikiann_vi/kappa.py`)
-2. **Wikidata anchor** — 베트남어 Wikipedia → Wikidata Q-ID → P31(instance of) 으로 canonical type 역추정 (`augmenters/wikiann_vi/wikidata_anchor.py`, ~225 Q-ID 매핑)
+2. **Wikidata anchor** — 베트남어 Wikipedia → Wikidata Q-ID → P31(instance of) 으로 canonical type 역추정 (`augmenters/wikiann_vi/wikidata_anchor.py`, 약 163개 Q-ID 매핑). 상세: `docs/manual/data/wikidata-anchor-verification.md`
 3. **WikiANN 3종 gold 직접 비교** — silver PER/LOC/ORG 만 필터링해 gold 와 span F1 (`llm_eval/vi_silver_quality.py`)
 
 ### 7.3 confidence 카테고리 + 정책 (`merge_confidence.py`)
