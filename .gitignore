@@ -82,5 +82,4 @@ docker/dev/config/.env
 *.safetensors
 
 results/
-data/
-data/ner/raw/
+/data/

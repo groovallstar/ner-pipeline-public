@@ -44,12 +44,12 @@
 HuggingFace `stockmark/ner-wikipedia-dataset`의 원본 라벨은 일본어
 (`人名`/`法人名`/`地名`/…)이지만, 본 저장소의 파이프라인은
 **canonical 영문 축약**으로 통일해 사용한다 (매핑 정의:
-`docs/manual/data/japanese-canonical-entity-schema.md`).
+`docs/manual/data/canonical-entity-schema.md`).
 
-이슈 #21에서 8종(`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`)을 NER 5종으로 축소
-(`CORP/POL/ORG → ORG`, `FAC → LOC`)했고, 이슈 #27에서 시설(`FAC`)이 LOC가
-아닌 ORG로 재배치됐다. 합성 PII를 주입한 학습·평가셋은 NER 5종 + PII 5종
-= **10종 평면 목록**으로 운영한다.
+원본 8종(`PER/CORP/LOC/FAC/PROD/EVT/POL/ORG`)은 canonical NER 5종
+(`PER/LOC/ORG/PROD/EVT`, 시설은 `ORG` 로 통합)으로 사상되며, 합성 PII 를
+주입한 학습·평가셋은 NER 5종 + PII 5종 = **10종 평면 목록**으로
+운영한다 (JA·VI 공통).
 
 | 태그 | 뜻 | 쉬운 예시 |
 |------|-----|----------|
@@ -60,7 +60,7 @@ HuggingFace `stockmark/ner-wikipedia-dataset`의 원본 라벨은 일본어
 | EVT (이벤트명) | 일회성 대회·사건·전쟁·조약 | オリンピック, 関ヶ原の戦い |
 
 PII 주입판에서 추가되는 5종(`DAT`/`EMAIL`/`PHONE`/`ID_NUM`/`CREDIT_CARD`)
-정의는 `japanese-canonical-entity-schema.md` 참조.
+정의는 `canonical-entity-schema.md` 참조.
 
 ### 🇻🇳 WikiANN vi — 3종 (영어 약어)
 

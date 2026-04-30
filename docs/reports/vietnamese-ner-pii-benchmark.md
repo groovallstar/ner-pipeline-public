@@ -178,7 +178,7 @@ data/wikiann_vi/
 
 ```bash
 source ./.env
-uv run python -m augmenters.pii \
+uv run python -m ner.augmenters.pii \
   --source jsonl --input data/wikiann_vi/test_canonical_5gold_1000.jsonl \
   --lang vi --output data/wikiann_vi/test_pii_5gold_1000.jsonl \
   --n-samples 1000 --pii-max 3 --mode suffix \
@@ -191,7 +191,7 @@ uv run python -m augmenters.pii \
 ### 모델 벤치
 
 ```bash
-uv run python -m llm_eval --lang vi \
+uv run python -m ner.llm_eval --lang vi \
   --local-file data/wikiann_vi/test_pii_5gold_1000.jsonl \
   --models vllm:cyankiwi/gemma-4-31B-it-AWQ-8bit \
   --vllm-url http://localhost:8081/v1 \

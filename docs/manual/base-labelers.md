@@ -1,11 +1,11 @@
 # Base Labelers (공통 NER 라벨러 베이스)
 
-`src/labelers/` 루트에 위치한 백엔드별 추상 베이스 2종. ko/ja 라벨러는 이 베이스를
+`src/ner/labelers/` 루트에 위치한 백엔드별 추상 베이스 2종. ko/ja 라벨러는 이 베이스를
 상속받아 언어팩(`entity_types`, 프롬프트 템플릿, `lang` 코드)만 주입한다.
 
 ## BaseVllmLabeler
 
-- **파일**: `src/labelers/base_vllm_labeler.py`
+- **파일**: `src/ner/labelers/base_vllm_labeler.py`
 - **공개 메서드**:
   - `label(text: str) -> List[dict]` — 문장 분할 후 BIO 태그 레코드 반환
   - `label_spans(text: str) -> List[dict]` — BIO 변환 없이 원시 span 리스트 반환
@@ -19,7 +19,7 @@ OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrenc
 
 ## BaseOpenAILabeler
 
-- **파일**: `src/labelers/base_openai_labeler.py`
+- **파일**: `src/ner/labelers/base_openai_labeler.py`
 - **공개 메서드**: `label` (sync), `label_spans` (async concurrent), `label_records`.
 
 **주요 `__init__` 파라미터**: `model`, `entity_types`, `max_tokens_per_batch`,
@@ -27,7 +27,7 @@ OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrenc
 `OpenAI` 와 `AsyncOpenAI` 두 클라이언트를 모두 생성하여 sync/async 경로를
 병행 유지한다. `OPENAI_API_KEY` 환경변수 기반 인증(`base_url` 지정 시 생략 가능).
 
-## 공통 헬퍼 — `src/labelers/llm_helpers.py`
+## 공통 헬퍼 — `src/ner/labelers/llm_helpers.py`
 
 - `split_sentences(text, lang)` — ko/en은 `.!?`, ja는 `。！？` 포함하여 분할
 - `parse_spans(raw)` — `<think>` 제거, bare array / wrapped dict / `[...]` 정규식 폴백

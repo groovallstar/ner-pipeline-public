@@ -51,11 +51,7 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "src/augmenters",
-    "src/classifier",
-    "src/labelers",
-    "src/llm_eval",
-    "src/metrics",
+    "src/ner",
 ]
 
 [[tool.uv.index]]

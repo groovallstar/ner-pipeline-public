@@ -2,8 +2,8 @@
 
 BIO 토큰 시퀀스 NER 데이터셋을 스펙 기반으로 로드하고, BIO 변종을 정규화한 뒤 엔티티 span까지 추출하는 모듈.
 
-- 소스: `src/labelers/bio_dataset.py`
-- 테스트: `tests/test_bio_dataset.py`
+- 소스: `src/ner/labelers/bio_dataset.py`
+- 테스트: `tests/ner/test_bio_dataset.py`
 - 설계 문서: `openspec/changes/add-bio-dataset-spec-registry/`
 
 ## 배경
@@ -55,7 +55,7 @@ extract_spans(["경", "찰", "은"], ["B-OG", "I-OG", "O"], joiner="")
 REGISTRY 조회 → HF/JSONL 로드 → BIO 정규화 → span 추출을 한 번에 수행.
 
 ```python
-from labelers.bio_dataset import load
+from ner.labelers.bio_dataset import load
 
 records = load("klue", "validation", max_samples=5)
 # records[0] = {
@@ -115,7 +115,7 @@ Stockmark NER(일본어)처럼 raw text + char offset span 포맷인 데이터�
 
 ## 테스트 케이스
 
-실행: `pytest tests/test_bio_dataset.py -v`
+실행: `pytest tests/ner/test_bio_dataset.py -v`
 
 ### 단위 테스트 (21개, 캐시 독립)
 

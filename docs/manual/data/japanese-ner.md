@@ -1,7 +1,7 @@
 # 일본어 NER 라벨링 방법론
 
 > 대상 데이터셋: Stockmark NER Wikipedia (canonical 10종 평면 = 5종 NER + 5종 PII/날짜)
-> 대상 코드: `src/labelers/ja/`, `src/llm_eval/`, `src/metrics/`
+> 대상 코드: `src/ner/labelers/ja/`, `src/ner/llm_eval/`, `src/ner/metrics/`
 
 ## 목차
 
@@ -67,7 +67,7 @@ canonical Stockmark JSONL 덤프를 그대로 읽는다. HF Hub 자동 로딩·�
 | 데이터 형식 | 원본 텍스트 + 문자 오프셋 span (BIO 아님) |
 | 라벨 공간 | NER 5종 (`PER/LOC/ORG/PROD/EVT`) — PII 주입본은 10종 평면 (5종 + `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`) |
 
-**코드:** `JapaneseDatasetLoader.load()` (`src/labelers/ja/dataset_loader.py`)
+**코드:** `JapaneseDatasetLoader.load()` (`src/ner/labelers/ja/dataset_loader.py`)
 
 ```python
 loader = JapaneseDatasetLoader()
@@ -103,35 +103,9 @@ records = JapaneseDatasetLoader.load_local('data/.../pii_injected.jsonl')
 
 ### 엔티티 타입 정의
 
-**코드:** `src/labelers/ja/ner_prompts.py` (`DEFAULT_ENTITY_TYPES`)
+**코드:** `src/ner/labelers/ja/ner_prompts.py` (`DEFAULT_ENTITY_TYPES`) — canonical 10종 평면 목록.
 
-canonical 10종 평면 목록 — NER/PII 구분 섹션 없음. 정의의 단일 출처는 `docs/manual/data/japanese-canonical-entity-schema.md`.
-
-| 태그 | 의미 | 설명 | 예시 |
-|------|------|------|------|
-| PER | 인물 | 풀네임·성·이름·별명 | `織田信長`, `田中` |
-| LOC | 지명·주소 | **지리적 위치만** — 국가·행정구역·자연지명·번지 포함 물리적 주소 | `東京`, `富士山`, `東京都千代田区1丁目2-3` |
-| ORG | 조직·인공시설 | 기업·대학(본체·캠퍼스·부속시설 모두)·정당·정부·군·국제기관·스포츠팀/리그·협회 + 역·공항·병원·학교·점포·박물관·도서관·寺·神社 등 모든 인공 시설 | `トヨタ自動車`, `早稲田大学`, `自民党`, `東京駅`, `セントメアリー病院`, `FCバルセロナ` |
-| PROD | 제품·작품 | 상품·서비스·소프트웨어·작품·방송 프로그램 (조직·인물·시설은 제외) | `iPhone`, `プリウス`, `NHKスペシャル` |
-| EVT | 이벤트 | 일회성 행사·전쟁·조약·대회 | `オリンピック`, `関ヶ原の戦い` |
-| DAT | 날짜 | 연·월·일·기간·상대날짜·시대 — 생년월일·사건일·이적일 등 문맥 무관 모든 날짜 | `1985年4月3日`, `昨日`, `平安時代` |
-| EMAIL | 이메일 | `local@domain.TLD` 완전 형식. `@` 뒤에는 반드시 1개 이상의 `.`과 TLD가 있어야 함 | `taro@example.com`, `hanako@yahoo.co.jp` |
-| PHONE | 전화 | 국내·국제 전화번호 | `090-1234-5678`, `+81 80 1234 5678` |
-| ID_NUM | 식별번호 | 마이넘버·사원번호·주민번호 등 | `284257239645` |
-| CREDIT_CARD | 카드번호 | 13~19자리 카드 번호 | `4065 0551 3022 4539` |
-
-**LOC vs ORG 핵심**: LOC는 *지리적 위치만*. 인공 시설은 모두 ORG. 대학(본체·캠퍼스·부속시설), `○○大学病院`, 역·공항·병원·학교·우체국·박물관·寺·神社 모두 ORG.
-
-**HF 원본 라벨 매핑 (canonical 덤프 생성 시 적용)**: HF Stockmark의 8종 일본어 라벨은 다음 규칙으로 canonical 10종에 사상되어 JSONL 덤프에 저장된다.
-
-| HF 원본 | canonical |
-|---------|-----------|
-| `人名` | `PER` |
-| `地名` | `LOC` |
-| `施設名` | `ORG` |
-| `法人名` / `政治的組織名` / `その他の組織名` | `ORG` |
-| `製品名` | `PROD` |
-| `イベント名` | `EVT` |
+엔티티 정의·LOC/ORG 경계 규칙·HF 원본(`人名`/`法人名`/`施設名` 등) → canonical 매핑·모호 사례 결정표는 `docs/manual/data/canonical-entity-schema.md` 단일 출처.
 
 ### 핵심 라벨링 규칙
 
@@ -260,7 +234,7 @@ if isinstance(data, dict):
 
 ### 4.5 span_matcher.py — 문자 오프셋 매칭
 
-**코드:** `match_spans()` (`src/labelers/ja/span_matcher.py`)
+**코드:** `match_spans()` (`src/ner/labelers/ja/span_matcher.py`)
 
 LLM은 `{"text": "東京", "type": "LOC"}` 형태로 위치 정보 없이 엔티티를 반환한다. `match_spans()`가 원문에서 해당 문자열의 문자 오프셋을 찾아 `{text, type, start, end}`를 부여한다.
 
@@ -302,10 +276,10 @@ _SUFFIXES  = ('氏', 'さん', '君', 'ちゃん', '様')
 
 ### 평가 진입점
 
-**코드:** `src/llm_eval/__main__.py`
+**코드:** `src/ner/llm_eval/__main__.py`
 
 ```bash
-python -m llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
+python -m ner.llm_eval --lang ja --models "vllm:Qwen/Qwen3.5-27B" --max-samples 200
 ```
 
 CLI 흐름:
@@ -317,7 +291,7 @@ CLI 흐름:
 
 ### 평가 흐름
 
-**코드:** `BenchmarkRunner._run_offset_span_async()` (`src/llm_eval/benchmark_runner.py`)
+**코드:** `BenchmarkRunner._run_offset_span_async()` (`src/ner/llm_eval/benchmark_runner.py`)
 
 각 gold record에 대해:
 
@@ -339,7 +313,7 @@ gold record {id, text, gold_spans}
 
 ### 평가 메트릭: compute_offset_span_f1()
 
-**코드:** `src/metrics/span_metrics.py`
+**코드:** `src/ner/metrics/span_metrics.py`
 
 문자 오프셋 기반 span-level F1. seqeval을 사용하지 않는다.
 

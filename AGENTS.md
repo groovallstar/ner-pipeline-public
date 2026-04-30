@@ -35,13 +35,13 @@ Multilingual Named Entity Recognition (NER) pipeline built on LangChain with mul
 - Package manager is UV (`uv pip install`), not pip
 - Development happens on the host directly (Docker is for vLLM and other external services only)
 - Python version: 3.13
-- Imports use absolute paths from `src/`: `from labelers.xxx import Xxx`
+- Imports use absolute paths from `src/`: `from ner.labelers.xxx import Xxx`
 - Active development on `develop` branch; `main` is the PR target
 
 ### Testing Requirements
 - Run: `pytest tests/ -v`
 - Lint: `ruff check`
-- Benchmarks: `python -m llm_eval --lang ja|ko --models "backend:model" --max-samples N`
+- Benchmarks: `python -m ner.llm_eval --lang ja|ko --models "backend:model" --max-samples N`
 
 ### Common Patterns
 - LLM labelers share a common interface: `label(text)`, `label_spans(text)`, `label_records(records)`

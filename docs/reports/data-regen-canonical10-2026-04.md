@@ -115,7 +115,7 @@ per-type (train 기준): PER 98.9% · LOC 99.5% · ORG 90.1% · PROD 95.6%
 
 **해석**: 관측치가 이론값과 0.1pp 단위로 일치 → raw N 샘플링은
 DEFAULT_DENSITY 와 정확히 부합한다. JA 측에서 보고됐던 1.8%
-`samples_no_pii_ratio` 괴리는 `src/augmenters/pii/stats.py:21` 의
+`samples_no_pii_ratio` 괴리는 `src/ner/augmenters/pii/stats.py:21` 의
 측정 결함(NER을 포함한 entities 전체 부재만 카운트)에서 비롯된 것으로
 확정. **stats.py 수정은 본 이슈 범위 외, 별도 후속 이슈로 분리.**
 
@@ -123,10 +123,10 @@ DEFAULT_DENSITY 와 정확히 부합한다. JA 측에서 보고됐던 1.8%
 
 | 파일 | 변경 |
 |---|---|
-| `src/augmenters/pii/llm_injector.py` | `_INJECTION_PROMPT_VI` 신규(부정 예시 포함), `build_injection_prompt(..., lang)` 매개변수, `LLMInjector` 비동기 일괄 처리(`_inject_async` + `_gather_inject` + 단일 `asyncio.run`) |
-| `tests/augmenters/pii/test_llm_injector.py` | VI 단위 테스트 2건(`test_vi_prompt_contains_negative_examples`, `test_vi_empty_pii`) 추가 — 15/15 pass |
-| `src/augmenters/wikiann_vi/__main__.py` | docstring 예시 경로 `gemma_8type.jsonl → gemma_test.jsonl` |
-| `src/labelers/vi/dataset_loader.py` | docstring 경로 + `DEFAULT_PATH` 3건 `vi_wikiann_8type_recall_*.jsonl → vi_wikiann_recall_*.jsonl` |
+| `src/ner/augmenters/pii/llm_injector.py` | `_INJECTION_PROMPT_VI` 신규(부정 예시 포함), `build_injection_prompt(..., lang)` 매개변수, `LLMInjector` 비동기 일괄 처리(`_inject_async` + `_gather_inject` + 단일 `asyncio.run`) |
+| `tests/ner/augmenters/pii/test_llm_injector.py` | VI 단위 테스트 2건(`test_vi_prompt_contains_negative_examples`, `test_vi_empty_pii`) 추가 — 15/15 pass |
+| `src/ner/augmenters/wikiann_vi/__main__.py` | docstring 예시 경로 `gemma_8type.jsonl → gemma_test.jsonl` |
+| `src/ner/labelers/vi/dataset_loader.py` | docstring 경로 + `DEFAULT_PATH` 3건 `vi_wikiann_8type_recall_*.jsonl → vi_wikiann_recall_*.jsonl` |
 
 `LLMInjector` 비동기 리팩터는 본 배치 1차 시도에서 record당 `asyncio.run`
 이 새 event loop 을 닫을 때 `AsyncOpenAI` connection pool 이 cleanup

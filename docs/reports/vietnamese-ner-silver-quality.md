@@ -40,18 +40,18 @@
 | 전체 크기 | train 20,000 + validation 10,000 + test 10,000 = 40,000 |
 | Gemma (primary) | `cyankiwi/gemma-4-31B-it-AWQ-8bit`, 포트 8081, dense 31B AWQ-8 |
 | Qwen (validator) | `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit`, 포트 8082, MoE 활성 ~3B AWQ-4 |
-| 프롬프트 | `src/augmenters/wikiann_vi/prompts.py` SINGLE (~5K chars 포함 PROD/EVT 6규칙) |
+| 프롬프트 | `src/ner/augmenters/wikiann_vi/prompts.py` SINGLE (~5K chars 포함 PROD/EVT 6규칙) |
 | 요청 제어 | concurrency=16, temperature=0, max_tokens=2048, timeout=120s |
 | max_model_len | 8192 |
 | thinking | vLLM 컨테이너 기본 `enable_thinking=false` (둘 다) |
 | 앵커 소스 | `vi.wikipedia.org/w/api.php` (pageprops) + `www.wikidata.org/w/api.php` (P31) |
 
 CLI:
-- 재라벨: `python -m augmenters.wikiann_vi`
-- merge (정책별): `python -m augmenters.wikiann_vi.merge_confidence`
-- Cross-model kappa: `python -m augmenters.wikiann_vi.kappa`
-- Wikidata 앵커: `python -m augmenters.wikiann_vi.wikidata_anchor`
-- silver vs gold span F1: `python -m llm_eval.vi_silver_quality`
+- 재라벨: `python -m ner.augmenters.wikiann_vi`
+- merge (정책별): `python -m ner.augmenters.wikiann_vi.merge_confidence`
+- Cross-model kappa: `python -m ner.augmenters.wikiann_vi.kappa`
+- Wikidata 앵커: `python -m ner.augmenters.wikiann_vi.wikidata_anchor`
+- silver vs gold span F1: `python -m ner.llm_eval.vi_silver_quality`
 
 ### 1.2 두 라벨러 → 단일 silver 병합 (confidence 카테고리)
 
@@ -338,11 +338,11 @@ WikiANN-vi 는 Wikipedia 기사 첫 문장을 문장 단위로 분리한 데이�
 # 1) silver 재라벨링 (각 split, ~25분 test/val + ~50분 train per model)
 for SPLIT in test validation train; do
   N=10000; [[ $SPLIT == train ]] && N=20000
-  python -m augmenters.wikiann_vi --split $SPLIT --max-samples $N \
+  python -m ner.augmenters.wikiann_vi --split $SPLIT --max-samples $N \
     --concurrency 16 --base-url http://localhost:8081/v1 \
     --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
     --output data/wikiann_vi/gemma_${SPLIT}.jsonl
-  python -m augmenters.wikiann_vi --split $SPLIT --max-samples $N \
+  python -m ner.augmenters.wikiann_vi --split $SPLIT --max-samples $N \
     --concurrency 16 --base-url http://localhost:8082/v1 \
     --model cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit \
     --output data/wikiann_vi/qwen_${SPLIT}.jsonl
@@ -350,16 +350,16 @@ done
 
 # 2) merge (recall_strict 권장), kappa, anchor
 for SPLIT in test validation train; do
-  python -m augmenters.wikiann_vi.merge_confidence \
+  python -m ner.augmenters.wikiann_vi.merge_confidence \
     --gemma data/wikiann_vi/gemma_${SPLIT}.jsonl \
     --qwen  data/wikiann_vi/qwen_${SPLIT}.jsonl \
     --policy recall_strict \
     --output data/wikiann_vi/vi_wikiann_recall_strict_${SPLIT}.jsonl
-  python -m augmenters.wikiann_vi.kappa \
+  python -m ner.augmenters.wikiann_vi.kappa \
     --a data/wikiann_vi/gemma_${SPLIT}.jsonl \
     --b data/wikiann_vi/qwen_${SPLIT}.jsonl \
     --json-out data/wikiann_vi/kappa_${SPLIT}.json
-  python -m augmenters.wikiann_vi.wikidata_anchor \
+  python -m ner.augmenters.wikiann_vi.wikidata_anchor \
     --input data/wikiann_vi/gemma_${SPLIT}.jsonl \
     --cache data/wikiann_vi/wikidata_cache.json \
     --json-out data/wikiann_vi/wikidata_anchor_${SPLIT}.json
@@ -367,7 +367,7 @@ done
 
 # 3) silver vs gold span F1
 for PREFIX in gemma qwen vi_wikiann_recall_strict; do
-  python -m llm_eval.vi_silver_quality \
+  python -m ner.llm_eval.vi_silver_quality \
     --silver-dir data/wikiann_vi --silver-prefix $PREFIX \
     --splits test validation train \
     --output results/issue-30/silver_quality_${PREFIX}.json
@@ -387,12 +387,12 @@ rm -f kappa_*.json wikidata_anchor_*.json
 
 - 이슈: #30 (`feat/issue-30-vi-silver-quality-vs-3gold`), 선행 #10·#21·#23·#27
 - 코드:
-  - silver 평가: `src/llm_eval/wikiann_vi_gold.py`, `src/llm_eval/vi_silver_quality.py`
-  - merge 정책: `src/augmenters/wikiann_vi/merge_confidence.py`
-  - 프롬프트: `src/augmenters/wikiann_vi/prompts.py`
-  - anchor: `src/augmenters/wikiann_vi/wikidata_anchor.py`
-  - kappa: `src/augmenters/wikiann_vi/kappa.py`
-  - 라벨링 CLI: `src/augmenters/wikiann_vi/__main__.py`, `src/augmenters/wikiann_vi/relabel_8type.py`
-- 라벨 정의: `docs/manual/data/japanese-canonical-entity-schema.md`, `docs/manual/data/vietnamese-ner.md`
+  - silver 평가: `src/ner/llm_eval/wikiann_vi_gold.py`, `src/ner/llm_eval/vi_silver_quality.py`
+  - merge 정책: `src/ner/augmenters/wikiann_vi/merge_confidence.py`
+  - 프롬프트: `src/ner/augmenters/wikiann_vi/prompts.py`
+  - anchor: `src/ner/augmenters/wikiann_vi/wikidata_anchor.py`
+  - kappa: `src/ner/augmenters/wikiann_vi/kappa.py`
+  - 라벨링 CLI: `src/ner/augmenters/wikiann_vi/__main__.py`, `src/ner/augmenters/wikiann_vi/relabel_8type.py`
+- 라벨 정의: `docs/manual/data/canonical-entity-schema.md`
 - 이슈 md: `docs/issues/issue-30-vi-silver-quality-vs-3gold.md`
-- 테스트: `tests/augmenters/wikiann_vi/`, `tests/llm_eval/`
+- 테스트: `tests/ner/augmenters/wikiann_vi/`, `tests/ner/llm_eval/`

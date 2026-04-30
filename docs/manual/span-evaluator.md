@@ -2,8 +2,8 @@
 
 LLM NER 라벨링 결과를 gold 데이터와 비교하여 span 수준 메트릭을 산출하는 평가 모듈.
 
-- 소스: `src/llm_eval/span_evaluator.py`
-- 테스트: `tests/test_span_evaluator.py`
+- 소스: `src/ner/llm_eval/span_evaluator.py`
+- 테스트: `tests/ner/test_span_evaluator.py`
 
 ## 배경
 
@@ -16,9 +16,9 @@ LLM NER 라벨링 결과를 gold 데이터와 비교하여 span 수준 메트릭
 `bio_dataset.load()` 반환 레코드를 gold로, `labeler.label_spans(sentence)` 결과를 pred로 받아 span 수준 메트릭을 계산한다.
 
 ```python
-from labelers.bio_dataset import load
-from labelers.ko.vllm_ner_labeler import VllmNERLabeler
-from llm_eval.span_evaluator import evaluate
+from ner.labelers.bio_dataset import load
+from ner.labelers.ko.vllm_ner_labeler import VllmNERLabeler
+from ner.llm_eval.span_evaluator import evaluate
 
 gold = load("klue", "validation", max_samples=500)
 labeler = VllmNERLabeler(
@@ -118,7 +118,7 @@ evaluate(gold_records, labeler)
 
 ## 테스트 케이스
 
-실행: `pytest tests/test_span_evaluator.py -v`
+실행: `pytest tests/ner/test_span_evaluator.py -v`
 
 | 테스트 | 검증 내용 |
 |--------|-----------|

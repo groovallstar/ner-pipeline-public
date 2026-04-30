@@ -71,7 +71,7 @@ openspec/changes/
 
 ```markdown
 목표: vLLM NER 라벨러 파이프라인 구현
-수정한 파일: src/labelers/{ko,ja,vi}/vllm_ner_labeler.py, src/labelers/base_vllm_labeler.py, tests/test_*_labeler.py
+수정한 파일: src/ner/labelers/{ko,ja,vi}/vllm_ner_labeler.py, src/ner/labelers/base_vllm_labeler.py, tests/test_*_labeler.py
 확인한 사실: vLLM은 OpenAI 호환 API(/v1/chat/completions) 사용, AsyncOpenAI로 호출
 실패한 시도: temperature>0 설정 시 출력 불안정
 다음 작업: concurrency 파라미터 튜닝으로 처리 속도 최적화
