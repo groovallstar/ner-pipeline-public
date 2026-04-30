@@ -1,8 +1,35 @@
-# src/ — 소스 코드 가이드
+# src/ner/ — 소스 코드 가이드
 
 ## 모듈 구조
 
-현재 주요 모듈 경로는 `src/ner/labelers/`이며, 새 모듈은 `src/` 하위에 추가한다.
+패키지 루트: `src/ner/`. import는 `from ner.<모듈>.xxx import Xxx` 형태.
+
+### labelers/
+
+언어별 LLM NER 라벨러 + 공용 유틸. 상세: `src/ner/labelers/AGENTS.md`.
+
+| 파일/서브모듈 | 역할 |
+|---------|------|
+| `labeler_base.py` | 라벨러 공통 베이스 클래스, `parse_json_response()` |
+| `dataset_loader.py` | HuggingFace datasets 로딩 (`NERRecord` 반환) |
+| `tag_aligner.py` | BIO 태그 정렬·정규화·span 추출 유틸리티 |
+| `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
+| `ko/` | 한국어 NER 라벨러 (vllm, openai) — KLUE 6종 (PS/LC/OG/DT/TI/QT) |
+| `ja/` | 일본어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
+| `vi/` | 베트남어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
+
+### llm_eval/
+
+벤치마크 오케스트레이션 + 메트릭 + 리포트. 상세: `src/ner/llm_eval/AGENTS.md`.
+
+| 파일 | 역할 |
+|------|------|
+| `__main__.py` | CLI: `python -m ner.llm_eval --lang {ko,ja,vi}` |
+| `benchmark_runner.py` | KO BIO / JA·VI offset-span 공용 러너 |
+| `report.py` | span-match·seqeval·per-entity 리포트 |
+| `error_analysis.py` | 문장별 오류 유형 분류 CLI |
+| `span_evaluator.py` / `span_evaluator_cli.py` | span 단위 평가 유틸 |
+| `vi_silver_quality.py` | silver vs gold 비교 |
 
 ### augmenters/
 
@@ -10,39 +37,45 @@
 
 | 서브모듈 | 역할 |
 |---------|------|
-| `pii/` | 합성 PII 주입기 — 기존 NER 데이터셋에 PII 엔티티를 삽입하고 span을 재계산하여 통합 학습 데이터셋 생성 (`python -m ner.augmenters.pii`) |
+| `pii/` | 합성 PII 주입기 (suffix/llm 모드, vLLM 교차 검증). CLI: `python -m ner.augmenters.pii` |
+| `wikiann_vi/` | WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증. CLI: `python -m ner.augmenters.wikiann_vi` |
+| `crawlers/ko/` | 한국어 Yonhap RSS 크롤러 + NER 태깅. CLI: `python -m ner.augmenters.crawlers.ko` |
 
-### labelers/
+### classifier/
+
+BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/AGENTS.md`.
 
 | 파일 | 역할 |
 |------|------|
-| `__init__.py` | 패키지 공개 API (DatasetLoader) |
-| `dataset_loader.py` | HuggingFace datasets 로딩 (KLUE, KMounLP NER), `NERRecord` 반환 |
-| `labeler_base.py` | 라벨러 공통 베이스 클래스 |
-| `tag_aligner.py` | BIO 태그 정렬, 태그 정규화 (PER→PS 등), span 추출 유틸리티 |
-| `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
-| `ko/` | 한국어 NER 라벨러 (vllm, openai) |
-| `ja/` | 일본어 NER 라벨러 (vllm, openai) |
+| `__main__.py` | CLI: `python -m ner.classifier` |
+| `data_utils.py` | Stockmark 로딩, wordpiece/sentencepiece 정렬 |
+| `train_eval.py` | HF Trainer, offset-span F1 |
+| `pii_benchmark.py` | PII 엔티티 BERT 파인튜닝. CLI: `python -m ner.classifier.pii_benchmark` |
 
-## NER 엔티티 타입
+### metrics/
 
-| 태그 | 의미 |
+span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
+
+| 파일 | 역할 |
 |------|------|
-| PS | 인물 (Person) |
-| LC | 장소 (Location) |
-| OG | 기관 (Organization) |
-| DT | 날짜 (Date) |
-| TI | 시간 (Time) |
-| QT | 수량 (Quantity) |
+| `bio_metrics.py` | seqeval 기반 BIO 레벨 메트릭 |
+| `span_metrics.py` | `compute_offset_span_f1` 등 span 레벨 메트릭 |
+
+### scripts/
+
+보조 셸 스크립트 (`eval_spans.sh` 등).
+
+## 라벨 스키마
+
+- **KO**: KLUE 6종 = `PS, LC, OG, DT, TI, QT`
+- **JA·VI 공통**: canonical 10종 평면 = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
+- 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 코딩 컨벤션
 
-- `PYTHONPATH=/work/git/ner_pipeline/src/` — import는 `from ner.labelers.xxx import Xxx` 형태
-- 패키지 관리자: **UV** (`uv pip install`)
-- 타입 힌트 사용 (typing 모듈)
-- 로깅: `logging` 표준 라이브러리
-- **주석/문서 언어**: print/log/예외 메시지·argparse help는 영문, docstring·인라인 주석은 한국어 (상세: `docs/specs/coding-conventions.md`)
-- 문자열 리터럴은 **홑따옴표(`'`)** 를 기본으로 쓴다 (escape 필요 시 `"` 허용)
-- 한 줄은 **79자 이내**로 유지 (초과 시 줄바꿈으로 가독성 확보)
-- 메서드·함수 사이는 **한 줄만 비운다** (연속 빈 줄 금지)
-- Trailing whitespace 제거
+- `PYTHONPATH` **설정·주입 금지** — uv editable install이 `.pth`로 `src/`를 자동 등록
+- import: `from ner.labelers.xxx import Xxx` (src 접두어 없이)
+- 패키지 관리자: **UV** (`uv sync` 또는 `uv pip install -e .`)
+- 타입 힌트, `logging` 표준 라이브러리 사용
+- **주석/문서 언어**: print/log/예외·argparse help는 영문, docstring·인라인 주석은 한국어
+- 상세 규칙: `docs/specs/coding-conventions.md`

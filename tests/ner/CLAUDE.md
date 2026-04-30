@@ -19,5 +19,5 @@ pytest tests/ -v
 
 ## 주의사항
 
-- LLM 백엔드(Ollama, vLLM, OpenAI) 연동 테스트는 서버가 실행 중이어야 함
+- LLM 백엔드(vLLM, OpenAI) 연동 테스트는 서버가 실행 중이어야 함
 - GPU 의존 테스트는 CI에서 스킵될 수 있음

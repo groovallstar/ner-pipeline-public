@@ -1,75 +1,73 @@
 # NER Pipeline
 
-LangChain 기반 다국어 Named Entity Recognition(NER) 파이프라인. 멀티 백엔드 LLM을 활용한 개체명 인식 및 벤치마크 시스템.
+다국어 Named Entity Recognition(NER) 파이프라인. 멀티 백엔드 LLM 라벨링 + BERT 토큰 분류 + PII 증강.
 
-## 지원 언어 및 데이터셋
+## 지원 언어
 
-| 언어 | 데이터셋 | 엔티티 타입 | 최고 F1 |
-|------|----------|-------------|---------|
-| 한국어 | KLUE NER | PS, LC, OG, DT, TI, QT (6종) | 0.656 |
-| 일본어 | Stockmark NER Wikipedia | 人名, 法人名, 地名, 施設名, 製品名, イベント名, 政治的組織名, その他の組織名 (8종) | 0.849 |
+| 언어 | 데이터셋 | 라벨 공간 |
+|------|---------|----------|
+| 한국어 | KLUE NER | 6종 (PS, LC, OG, DT, TI, QT) |
+| 일본어 | Stockmark NER Wikipedia | canonical 5종 NER + 5종 PII = 10종 평면 |
+| 베트남어 | WikiANN-vi (silver 재라벨) | canonical 10종 평면 (JA 와 공통) |
 
-## 지원 백엔드
+라벨 정의·매핑·경계 규칙: [`docs/manual/data/canonical-entity-schema.md`](docs/manual/data/canonical-entity-schema.md)
 
-- **vLLM** — 로컬 GPU 추론 (Qwen3.5-27B, Qwen3.5-35B-A3B 등)
-- **OpenAI** — API 기반 (gpt-5-mini 등)
+## 백엔드
+
+vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
 
 ## 프로젝트 구조
 
 ```
-src/
-├── labelers/              # NER 라벨링 모듈
-│   ├── ko/                # 한국어 라벨러 (vllm, openai)
-│   ├── ja/                # 일본어 라벨러 (vllm, openai)
-│   ├── dataset_loader.py  # HuggingFace 데이터셋 로딩
-│   └── labeler_base.py    # 라벨러 베이스 클래스
-└── evaluators/            # 벤치마크 CLI 및 평가 모듈
-docker/
-├── dev/                   # 개발 컨테이너 (GPU)
-└── vllm/                  # vLLM 서비스
-results/                   # 벤치마크 결과 JSON + 리포트
-tests/                     # pytest 테스트
+src/ner/
+├── labelers/{ko,ja,vi}/   # 언어별 LLM 라벨러
+├── llm_eval/              # 벤치마크 오케스트레이션·리포트
+├── augmenters/{pii,wikiann_vi,crawlers/ko}/  # 학습 데이터 증강
+├── classifier/            # BERT 토큰 분류 파인튜닝
+├── metrics/               # span/BIO 메트릭 공용 구현
+└── scripts/               # 보조 셸 스크립트
+docker/{dev,vllm}/         # 개발 컨테이너 + vLLM 서비스
+results/                   # 벤치마크 산출 (gitignored)
+tests/ner/                 # pytest 테스트
+docs/                      # manual·reports·issues·wiki·specs
 ```
+
+상세 가이드: [`CLAUDE.md`](CLAUDE.md), 모듈 레퍼런스: [`docs/manual/`](docs/manual/)
 
 ## 설치
 
 ```bash
-# UV 패키지 매니저 사용
-uv pip install -r pyproject.toml
-
-# 또는 Docker 개발 환경
-cd docker/dev && docker compose up -d
+uv sync                # 또는: uv pip install -e .
 ```
 
 ## 사용법
 
-### 벤치마크 실행
-
 ```bash
-# 일본어 NER 벤치마크
-python -m ner.llm_eval --lang ja \
-    --models "vllm:Qwen/Qwen3.5-27B" \
-    --max-samples 200 \
+# LLM NER 벤치마크
+python -m ner.llm_eval --lang {ko,ja,vi} \
+    --models "vllm:<model>" --max-samples 200 \
     --vllm-url "http://localhost:8081/v1"
 
-# 한국어 NER 벤치마크
-python -m ner.llm_eval --lang ko \
-    --models "vllm:Qwen/Qwen3.5-27B" \
-    --max-samples 500 \
-    --vllm-url "http://localhost:8081/v1"
+# BERT 파인튜닝·평가
+python -m ner.classifier              # 일본어 NER 5종
+python -m ner.classifier.pii_benchmark  # PII 7종
+
+# 데이터 증강
+python -m ner.augmenters.pii          # 합성 PII 주입
+python -m ner.augmenters.wikiann_vi   # WikiANN-vi 재라벨
 ```
 
-### 테스트
+각 CLI 의 전체 옵션은 `--help` 참조.
+
+## 테스트
 
 ```bash
 pytest tests/ -v
 ```
 
-## 주요 의존성
+## 벤치마크 리포트
 
-- LangChain + OpenAI / HuggingFace
-- transformers, datasets, evaluate, seqeval
-- NumPy, Pandas, scikit-learn
+[`docs/reports/`](docs/reports/) — 언어·실험별 최신 측정치.
 
 ## License
 

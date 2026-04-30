@@ -28,7 +28,7 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 - Readiness check: poll `curl -s $URL/models | grep $MODEL_NAME`
 
 ### Testing Requirements
-- `load-and-bench.sh` runs `llm_eval.error_analysis` on 50 samples by default
+- `load-and-bench.sh` runs `ner.llm_eval` error analysis on 50 samples by default
 
 ## Dependencies
 
@@ -37,6 +37,6 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 - Host paths: `/data`, `/work/.huggingface`
 
 ### Internal
-- `src/ner/llm_eval/` (benchmark CLI)
+- `ner.llm_eval` (benchmark CLI: `python -m ner.llm_eval`)
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
