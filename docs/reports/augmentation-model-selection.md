@@ -80,15 +80,44 @@ JA가 inject→verify 직렬이라면 VI는 **두 모델의 독립 재라벨 + �
 
 ### 2.3 라벨 공간 · 산출물
 
-- 라벨 공간: **canonical 5종 NER** (`PER/LOC/ORG/PROD/EVT`). VI는 PII 주입 없음.
+- 라벨 공간: **canonical 5종 NER** (`PER/LOC/ORG/PROD/EVT`) — 재라벨
+  단계. 이슈 #8 의 PII 주입 단계에서는 5종 PII (`EMAIL/PHONE/DAT/
+  ID_NUM/CREDIT_CARD`) 가 추가되어 **10종 평면** 으로 확장.
 - LOC/ORG 경계: 시설=ORG (#27, `WIKIDATA_TO_CANONICAL`에서 시설 Q-ID는 ORG로 재배치)
 - 입력: HF `unimelb-nlp/wikiann` config=`vi` (BIO 3종)
-- 출력: `data/wikiann_vi/{gemma,qwen}_{train,validation,test}.jsonl` + `vi_wikiann_recall_*.jsonl` + `kappa_*.json` + `wikidata_anchor_*.json` (모두 `.gitignore`)
-- 레코드 스키마: `{id, text, gold_spans, gold_spans_8type, relabel_model}` — 원본 `gold_spans`(WikiANN 3종)과 silver `gold_spans_8type`(canonical 5종)을 한 레코드에 병행 보관
+- 출력 (재라벨): `data/wikiann_vi/{gemma,qwen}_{train,validation,test}.jsonl`
+  + `vi_wikiann_recall_*.jsonl` + `kappa_*.json` + `wikidata_anchor_*.json`
+  (모두 `.gitignore`)
+- 출력 (PII silver, #8): `data/wikiann_vi/{train,valid,test}.jsonl` (5종
+  canonical, recall_strict policy) + `pii_{train,valid,test}.jsonl` (10종)
+- 레코드 스키마: `{id, text, gold_spans, gold_spans_8type, relabel_model}`
+  — 원본 `gold_spans`(WikiANN 3종)과 silver `gold_spans_8type`(canonical
+  5종)을 한 레코드에 병행 보관
 
 ### 2.4 측정 리포트
 
-`vietnamese-ner-silver-quality.md` — Gemma vs Qwen3.6 두 재라벨 결과의 합의율(κ=0.5766, "moderate"), Wikidata 앵커 일치율(95.12%), WikiANN-vi 3-gold span F1, 타입별 신뢰도 계층(High: PER/LOC/PROD; Mid: ORG/EVT) 정량 보고. PROD 1,131건 / EVT 166건이 재라벨만으로 학습 가능 수준 확보됐음을 보여 **합성 보충 불필요**로 판정.
+| 리포트 | 단계 | 라벨 공간 | 확인하는 능력 |
+|---|---|---|---|
+| `vietnamese-ner-silver-quality.md` | 재라벨 (#30) | 5종 NER | 두 재라벨 모델의 합의율·Wikidata 앵커·WikiANN 3-gold F1. PROD/EVT 의 학습 가능 임계 검증 |
+| `vietnamese-ner-benchmark.md` | 재라벨 후 NER 벤치 (#8) | 5종 NER (silver gold) | PII 주입 전 라벨러 정당성 — 10종 통합 프롬프트 운영 시점 동작 |
+| `vietnamese-ner-pii-benchmark.md` | PII 주입 후 (#8) | 10종 평면 | suffix-mode 합성 PII silver + Qwen verifier 신뢰율 (NER 88~94% / PII 98~99%), 모델별 10종 F1 |
+
+### 2.5 PII 증강 (이슈 #8 추가)
+
+VI 도 JA 와 동일 캐노니컬 라벨 공간 (10종 평면) 을 갖도록, #30 silver
+위에 합성 PII 5종을 부착한다. JA 의 LLM-inject 방식 대신 **suffix-mode
+규칙 주입** 을 채택 — 문장 끝에 단서어 + 합성 값(`SĐT: 090...`,
+`Email: a@b.com`) 을 부착하므로 inject 단계 LLM 호출이 불필요하다.
+
+| 단계 | 모듈 | 역할 |
+|---|---|---|
+| 1. Inject | `pii/__main__.py --mode suffix` | 단서어 + 합성 값 부착 (LLM 호출 0) |
+| 2. Verify | `PIIVerifier` (Qwen3.6 단독) | 부착 결과의 span 합치성 검증, `drop_span` policy |
+
+JA 와의 차이:
+- inject LLM 미사용 — VI 라벨러의 자연도 prompting 부담 회피
+- verify 단일 모델 (Qwen3.6) — JA 의 dual (Gemma inject + Qwen verify) 대비
+  cross-bias 측정은 별도. 실측 confirmed=93.7% 로 운영 충분.
 
 ## 3. 모델 선정 기준
 
@@ -116,10 +145,10 @@ JA·VI 모두 후보 모델은 다음 조건을 동시에 만족해야 한다.
 
 ### 3.4 운영 매트릭스
 
-| 역할 분담 | JA 후보 (2026-04 기준) | VI 후보 (2026-04 기준) |
-|---|---|---|
-| Primary (recall) | gemma-4-31B-it-AWQ-8bit | gemma-4-31B-it-AWQ-8bit |
-| Secondary (precision) | Qwen3.6-35B-A3B-AWQ-4bit | Qwen3.6-35B-A3B-AWQ-4bit |
-| 비고 | inject=Primary, verify=Secondary (drop_span) | A/B 독립 재라벨 후 `recall_strict` 정책 병합 |
+| 역할 분담 | JA 후보 (2026-04 기준) | VI 재라벨 (2026-04) | VI PII inject (#8) |
+|---|---|---|---|
+| Primary (recall) | gemma-4-31B-it-AWQ-8bit | gemma-4-31B-it-AWQ-8bit | n/a (suffix 규칙 주입) |
+| Secondary (precision) | Qwen3.6-35B-A3B-AWQ-4bit | Qwen3.6-35B-A3B-AWQ-4bit | Qwen3.6-35B-A3B-AWQ-4bit (verify) |
+| 비고 | inject=Primary, verify=Secondary (drop_span) | A/B 독립 재라벨 후 `recall_strict` 정책 병합 | LLM inject 미사용 → 운영 비용 ↓ |
 
 상세 권장 설정·전체 모델 비교는 각 리포트의 최종 섹션("권장 설정")을 참조한다.

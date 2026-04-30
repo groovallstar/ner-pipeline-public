@@ -103,6 +103,25 @@ def _truncate_density(
     return {k: v / total for k, v in kept.items()}
 
 
+def _build_verify_labeler(
+    lang: str, base_url: str, model: str, concurrency: int,
+):
+    """언어별 vLLM NER 라벨러를 생성한다.
+
+    verifier 자체는 lang-agnostic 이지만 호출 측에서 ja/vi 라벨러를
+    선택해 주입해야 한다. 미지원 lang 은 `ValueError`.
+    """
+    if lang == 'ja':
+        from labelers.ja.vllm_ner_labeler import VllmNERLabeler
+    elif lang == 'vi':
+        from labelers.vi.vllm_ner_labeler import VllmNERLabeler
+    else:
+        raise ValueError(f'unsupported lang for verify: {lang!r}')
+    return VllmNERLabeler(
+        base_url=base_url, model=model, concurrency=concurrency,
+    )
+
+
 def _load_records(args: argparse.Namespace):
     from augmenters.pii.loaders import load_hf, load_jsonl, load_stockmark
     if args.source == 'stockmark':
@@ -179,10 +198,10 @@ def main(argv: list[str] | None = None) -> int:
     # 교차 검증
     if args.verify == 'vllm':
         from augmenters.pii.verifier import PIIVerifier, VerifyPolicy
-        from labelers.ja.vllm_ner_labeler import VllmNERLabeler
         verify_url = args.verify_url or args.vllm_url
         verify_model = args.verify_model or args.vllm_model
-        labeler = VllmNERLabeler(
+        labeler = _build_verify_labeler(
+            lang=args.lang,
             base_url=verify_url,
             model=verify_model,
             concurrency=args.verify_concurrency,
