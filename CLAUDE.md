@@ -4,11 +4,11 @@
 
 ## 프로젝트 개요
 
-**다국어 NER(Named Entity Recognition) 파이프라인** — LangChain 기반 멀티 백엔드 LLM 지원 + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 기반 학습 데이터 생성.
+**다국어 NER(Named Entity Recognition) 파이프라인** — 멀티 백엔드 LLM 지원(OpenAI 호환 API) + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 기반 학습 데이터 생성.
 
 - 한국어: KLUE NER (6 엔티티: PS, LC, OG, DT, TI, QT)
-- 일본어: Stockmark NER Wikipedia (8 엔티티) + 합성 PII 6종 통합 학습
-- 베트남어: 3 엔티티 (PER, LOC, ORG)
+- 일본어·베트남어: canonical 10종 평면 = NER 5종(PER/LOC/ORG/PROD/EVT) + PII 5종(DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD)
+- 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 개발 환경
 
@@ -21,8 +21,8 @@
 ## 핵심 디렉토리 구조
 
 ```
-src/
-├── labelers/          # NER 라벨링 모듈 (상세: src/ner/CLAUDE.md)
+src/ner/
+├── labelers/          # NER 라벨링 모듈 (상세: src/ner/labelers/AGENTS.md)
 │   ├── ko/            # 한국어 (vllm, openai)
 │   ├── ja/            # 일본어 (vllm, openai)
 │   ├── vi/            # 베트남어 (vllm, openai)
@@ -31,8 +31,8 @@ src/
 │   ├── tag_aligner.py     # BIO 태그 정렬/정규화/span 추출
 │   └── hf_ner_labeler.py  # HuggingFace BERT NER 라벨러
 ├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/ner/llm_eval/AGENTS.md)
-│   ├── __main__.py          # CLI (python -m ner.llm_eval --lang ja|ko ...)
-│   ├── benchmark_runner.py  # BenchmarkRunner (한국어 BIO / 일본어 offset-span 공용 러너)
+│   ├── __main__.py          # CLI (python -m ner.llm_eval --lang ko|ja|vi ...)
+│   ├── benchmark_runner.py  # BenchmarkRunner (한국어 BIO / JA·VI offset-span 공용 러너)
 │   ├── report.py            # ReportGenerator (span-match, seqeval, per-entity 테이블)
 │   ├── error_analysis.py    # 문장별 오류 유형 분류 CLI
 │   └── span_evaluator.py / span_evaluator_cli.py
@@ -42,17 +42,17 @@ src/
 ├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/AGENTS.md)
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
 │   ├── crawlers/ko/   # 한국어 Yonhap RSS 크롤러 + NER 태깅
-│   └── wikiann_vi/    # WikiANN-vi 8종 canonical 재라벨 + Wikidata 검증
+│   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
 ├── classifier/        # BERT 토큰 분류 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
 │   ├── data_utils.py       # Stockmark 로딩, wordpiece/sentencepiece 정렬
 │   ├── train_eval.py       # HF Trainer, offset-span F1
-│   └── pii_benchmark.py    # 7 PII 엔티티 BERT 파인튜닝
+│   └── pii_benchmark.py    # PII 엔티티 BERT 파인튜닝
 └── scripts/           # 보조 셸 스크립트 (eval_spans.sh 등)
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
 └── vllm/              # vLLM 서비스
 results/               # 벤치마크 결과 JSON + 리포트
-tests/                 # 테스트 (상세: tests/CLAUDE.md)
+tests/                 # 테스트 (상세: tests/ner/CLAUDE.md)
 docs/                  # 문서
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
 │   ├── specs/         # 개발 규약·템플릿 (코딩 컨벤션, 신규 저장소 템플릿)
@@ -68,7 +68,7 @@ docs/                  # 문서
 - `python -m ner.classifier` / `python -m ner.classifier.pii_benchmark` — BERT 파인튜닝·평가
 - `python -m ner.augmenters.pii` — 합성 PII 주입
 - `python -m ner.augmenters.crawlers.ko` — 한국어 뉴스 크롤러 + NER 태깅
-- `python -m ner.augmenters.wikiann_vi` — WikiANN-vi 8종 canonical 재라벨
+- `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
 
 상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.
 

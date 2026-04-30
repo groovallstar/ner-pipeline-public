@@ -1,6 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-08 | Updated: 2026-04-08 -->
-
 # ko
 
 ## Purpose
@@ -34,9 +31,9 @@ Korean NER labelers targeting KLUE NER annotation guidelines with 6 entity types
 ## Dependencies
 
 ### Internal
-- `labelers.ko.ner_prompts`
+- `ner.labelers.ko.ner_prompts`
 
 ### External
-- `openai` (vllm + openai backends), `langchain_core`
+- `openai` (vllm + openai backends)
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

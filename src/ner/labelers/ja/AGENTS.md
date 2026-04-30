@@ -1,17 +1,17 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-08 | Updated: 2026-04-08 -->
-
 # ja
 
 ## Purpose
-Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entity types (person, corporate, location, facility, product, event, political org, other org). Two backend implementations (vLLM, OpenAI) plus a Japanese-specific dataset loader and character-offset span matcher.
+일본어 NER 라벨러. Stockmark NER Wikipedia 데이터셋 기반, canonical 10종 평면
+(NER 5종 + PII 5종) 출력. vLLM·OpenAI 백엔드 2종 구현 + 일본어 전용 데이터셋
+로더 + character-offset span matcher 포함.
+라벨 스키마 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, and match_spans |
-| `ner_prompts.py` | Japanese NER prompts with 8 entity types and disambiguation rules (e.g., railroad=corporate, military=political, sports league=other org) |
+| `ner_prompts.py` | Japanese NER prompts — canonical 10종 평면 엔티티 타입 정의 및 disambiguation 규칙 |
 | `dataset_loader.py` | `JapaneseDatasetLoader` — reads canonical Stockmark JSONL dumps (`data/stockmark/{train,test}.jsonl`). No HF fetch, no label mapping — fails fast if dumps are missing (issue #21) |
 | `span_matcher.py` | `match_spans()` — converts LLM text spans to character offsets using longest-first matching with overlap prevention and Japanese particle stripping |
 | `vllm_ner_labeler.py` | Japanese vLLM labeler — sentence splitting includes Japanese punctuation `。！？` |
@@ -38,9 +38,9 @@ Japanese NER labelers targeting the Stockmark NER Wikipedia dataset with 8 entit
 ## Dependencies
 
 ### Internal
-- `labelers.ja.ner_prompts`, `labelers.ja.span_matcher`, `labelers.ja.dataset_loader`
+- `ner.labelers.ja.ner_prompts`, `ner.labelers.ja.span_matcher`, `ner.labelers.ja.dataset_loader`
 
 ### External
-- `openai`, `langchain_core`, `datasets`
+- `openai`, `datasets`
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

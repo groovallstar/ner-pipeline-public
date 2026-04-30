@@ -1,36 +1,43 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-08 | Updated: 2026-04-08 -->
-
-# tests
+# tests/ner
 
 ## Purpose
-pytest-based unit tests for core NER pipeline components: span matching logic (Japanese) and span-level F1 metric computation (Korean KLUE).
+pytest 기반 단위·통합 테스트. augmenters(pii, wikiann_vi), labelers(ja, ko, vi),
+llm_eval, metrics 등 NER 파이프라인 전반을 커버한다.
 
-## Key Files
+## 구조
 
-| File | Description |
-|------|-------------|
-| `CLAUDE.md` | Test guide: run command, framework, strategy, caveats |
-| `test_span_matcher.py` | 6 tests for `match_spans()`: perfect match, duplicates, substring overlap, not found, empty, multi-type |
-| `test_span_f1.py` | 5 tests for `MetricsCalculator.compute_span_f1()`: perfect match, partial mismatch, wrong type, empty, multi-sentence |
+```
+tests/ner/
+├── CLAUDE.md
+├── AGENTS.md
+├── augmenters/
+│   ├── pii/           # suffix·llm injector, label merger, loader, verifier
+│   └── wikiann_vi/    # 재라벨 파서·offset 매칭·kappa·Wikidata anchor·confidence 병합
+├── labelers/
+│   └── ja/            # span_matcher (match_spans) 테스트
+└── llm_eval/          # MetricsCalculator (span_f1, span_match 등) 테스트
+```
 
 ## For AI Agents
 
 ### Working In This Directory
 - Run: `pytest tests/ -v`
-- `test_span_matcher.py` imports from `labelers.ja.span_matcher`
-- `test_span_f1.py` uses hardcoded `sys.path.insert(0, "/work/git/ner_pipeline/src")` — only works in dev container
-- Test coverage is minimal: no tests for labelers, dataset loading, or classifier
+- Lint: `ruff check`
+- LLM 백엔드(vLLM, OpenAI) 연동 테스트는 서버 실행 중이어야 함
+- GPU 의존 테스트는 CI에서 스킵될 수 있음
+- 테스트는 `PYTHONPATH` 설정 없이 동작 (uv editable install 기준)
 
 ### Testing Requirements
-- Lint: `ruff check`
-- All tests should pass before committing
+- 단위 테스트: LLM API 호출 mock 처리
+- 통합 테스트: 데이터셋 로딩 → 라벨링 → 평가 파이프라인 검증
+- 새 테스트 추가 시 기존 패턴 참고 (`mock AsyncOpenAI`, fixture 공유)
 
 ## Dependencies
 
 ### Internal
-- `metrics.bio_metrics` (MetricsCalculator)
-- `labelers.ja.span_matcher`
+- `ner.metrics.bio_metrics` (MetricsCalculator)
+- `ner.labelers.ja.span_matcher`
+- `ner.augmenters.pii.*`, `ner.augmenters.wikiann_vi.*`
 
 ### External
 - `pytest`, `ruff`
