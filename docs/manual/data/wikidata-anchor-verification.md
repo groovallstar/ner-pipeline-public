@@ -13,7 +13,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 중요 원칙:
 - **검증은 라벨을 바꾸지 않는다.** 통계(일치율·per-type agreement)와 불일치 샘플을 리포트로 남길 뿐, 원본 JSONL은 불변이다.
 - **매핑된 엔티티만 집계된다.** Wikipedia에 페이지가 없거나 P31이 비어 있거나 `WIKIDATA_TO_CANONICAL` 테이블에 없는 Q-ID는 검증에서 제외된다 (10K에서 약 49%만 검증 가능).
-- **앵커 라벨 공간은 canonical 5종**(PER/LOC/ORG/PROD/EVT). 이슈 #21에서 8종(PER/LOC/FAC/CORP/PROD/EVT/POL/ORG) → 5종으로 축소되었고, 이슈 #27에서 시설 카테고리(`FAC`)가 LOC가 아닌 ORG로 재배치됐다. 테이블 내 섹션 헤더(`# FAC`, `# CORP`, `# POL`)는 이력 추적용으로 남아 있되 매핑 값은 모두 5종 중 하나다.
+- **앵커 라벨 공간은 canonical 5종**(PER/LOC/ORG/PROD/EVT). 매핑 테이블 내부의 섹션 헤더(`# FAC`, `# CORP`, `# POL` 등)는 의미 그룹을 묶기 위한 가독성용 라벨일 뿐이며, 매핑 값은 모두 5종(PER/LOC/ORG/PROD/EVT) 중 하나다 (`FAC/CORP/POL → ORG`, 시설은 LOC가 아닌 ORG).
 
 ## 조사 범위 — 무엇을 조사하고 무엇을 조사하지 않는가
 
@@ -85,7 +85,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 
 - `WIKIDATA_TO_CANONICAL` 수작업 큐레이션 테이블에서 조회 (현재 약 163개 Q-ID)
 - P31 리스트를 **순차 스캔해 첫 매칭**을 반환. 여러 P31 중 하나라도 5종에 매핑되면 그 타입 채택
-- 테이블 섹션 헤더는 축소 전 8종 분류(`# PER`, `# LOC`, `# FAC`, `# CORP`, `# PROD`, `# EVT`, `# POL`, `# ORG`)를 이력 추적용으로 보존하되, 매핑 값은 모두 5종(`PER/LOC/ORG/PROD/EVT`) 중 하나로 축소돼 있다(`FAC/CORP/POL → ORG`).
+- 테이블 섹션 헤더(`# PER`, `# LOC`, `# FAC`, `# CORP`, `# PROD`, `# EVT`, `# POL`, `# ORG`)는 의미 그룹을 묶기 위한 가독성용 라벨이며, 매핑 값은 모두 5종(`PER/LOC/ORG/PROD/EVT`) 중 하나다(`FAC/CORP/POL → ORG`).
 
 예: `['Q5119', 'Q515'] → 'LOC'` (Q515=city가 테이블에 있음).
 
@@ -150,7 +150,7 @@ Top unmapped P31 Q-IDs (to consider for table expansion):
 |---|---|---|
 | `_VI_WIKI_API` | `https://vi.wikipedia.org/w/api.php` | 베트남어 위키 엔드포인트 |
 | `_WIKIDATA_API` | `https://www.wikidata.org/w/api.php` | Wikidata 엔드포인트 |
-| `_UA` | `ner_pipeline/issue-13 ...` | User-Agent (Wikimedia 권장) |
+| `_UA` | `ner_pipeline (research; …)` | User-Agent (Wikimedia 권장) |
 | `_BATCH` | 50 | 1 요청당 최대 제목/Q-ID 수 |
 | `_SLEEP` | 0.2s | 배치 간 대기 |
 
