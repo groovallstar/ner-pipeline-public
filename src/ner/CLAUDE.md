@@ -43,14 +43,13 @@
 
 ### classifier/
 
-BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/AGENTS.md`.
+JA·VI canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/AGENTS.md`.
 
 | 파일 | 역할 |
 |------|------|
-| `__main__.py` | CLI: `python -m ner.classifier` |
-| `data_utils.py` | Stockmark 로딩, wordpiece/sentencepiece 정렬 |
-| `train_eval.py` | HF Trainer, offset-span F1 |
-| `pii_benchmark.py` | PII 엔티티 BERT 파인튜닝. CLI: `python -m ner.classifier.pii_benchmark` |
+| `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
+| `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / JA(slow)·VI(fast) tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
+| `train_eval.py` | HF Trainer 래퍼 + char-offset span F1 (`src/ner/metrics` 공용) |
 
 ### metrics/
 

@@ -11,15 +11,15 @@ def test_name_to_per():
 
 
 def test_address_simple_mapped_to_loc():
-    # 단일 토큰 주소도 LOC로 병합된다 (#17 Phase 1에서 무조건 병합).
+    # 단일 토큰 주소도 LOC로 무조건 병합된다.
     e = Entity(label='ADDRESS', start_char=0, end_char=3, text='東京')
     r = apply_label_merge(e, {'ADDRESS': 'LOC'})
     assert r.label == 'LOC'
 
 
 def test_address_complex_also_mapped_to_loc():
-    # 복합 주소도 무조건 LOC. 이전에는 단일 토큰만 병합했으나 #17 Phase 1
-    # 이후 canonical에서 ADDRESS 라벨 자체를 제거하므로 일괄 흡수한다.
+    # 복합 주소도 무조건 LOC. canonical에서 ADDRESS 라벨 자체를 제거하므로
+    # 단일/복합 구분 없이 일괄 흡수한다.
     addr = '東京都 新宿区 1-2-3'
     e = Entity(label='ADDRESS', start_char=0, end_char=len(addr), text=addr)
     r = apply_label_merge(e, {'ADDRESS': 'LOC'})

@@ -14,9 +14,9 @@ def load_stockmark(
 ) -> list[Record]:
     """Stockmark canonical 덤프를 Record 리스트로 로드한다.
 
-    이슈 #21 이후 로더는 `data/stockmark/{train,test}.jsonl` canonical
-    덤프를 직접 읽는다. 분할 seed·비율 파라미터는 더 이상 런타임에서
-    지정하지 않으며, 덤프 시점에 고정된다.
+    로더는 `data/stockmark/{train,test}.jsonl` canonical 덤프를 직접
+    읽는다. 분할 seed·비율 파라미터는 런타임에서 지정하지 않으며,
+    덤프 시점에 고정된다.
     """
     from ner.labelers.ja.dataset_loader import JapaneseDatasetLoader
     loader = JapaneseDatasetLoader()

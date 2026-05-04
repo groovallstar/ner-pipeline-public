@@ -31,16 +31,16 @@ logger = logging.getLogger(__name__)
 
 _VI_WIKI_API = 'https://vi.wikipedia.org/w/api.php'
 _WIKIDATA_API = 'https://www.wikidata.org/w/api.php'
-_UA = 'ner_pipeline/issue-13 (research; https://github.com/groovallstar/ner_pipeline)'
+_UA = 'ner_pipeline (research; https://github.com/groovallstar/ner_pipeline)'
 _BATCH = 50
 _SLEEP = 0.2
 
 
 # Wikidata Q-ID → canonical 5종 (수작업 curated, 주요 케이스).
-# 축소 매핑 이력:
-#   - 이슈 #21: 과거 CORP/POL → ORG, FAC → LOC.
-#   - 이슈 #27: FAC(시설) → ORG 재배치. LOC 는 지명·주소만 보유.
-# 섹션 헤더는 축소 전 원조 분류를 보존해 이력 추적 용도로 남겨둔다.
+# 매핑 원칙: CORP/POL → ORG (회사·정부·軍·정당·국제기구), FAC(시설) → ORG,
+# LOC 는 지명·주소만 보유.
+# 섹션 헤더는 축소 전 원조 분류(CORP/POL/FAC 등)를 보존해 매핑 의도를
+# 가독성 있게 묶기 위한 용도다.
 # 본 테이블에 없는 Q-ID는 '미매핑(unmapped)'으로 집계되며, 리포트에 상위
 # unmapped Q-ID가 기록돼 후속 확장의 판단 근거가 된다.
 WIKIDATA_TO_CANONICAL: Dict[str, str] = {
@@ -84,7 +84,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q1289426': 'LOC',       # county of China
     'Q24764': 'LOC',         # municipality of the Philippines
 
-    # FAC (물리적 개별 건축물·교통시설) — 이슈 #27: 시설명 LOC → ORG
+    # FAC (물리적 개별 건축물·교통시설) — 시설명은 LOC가 아닌 ORG
     'Q41176': 'ORG',         # building
     'Q811979': 'ORG',        # architectural structure
     'Q16917': 'ORG',         # hospital
@@ -130,7 +130,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q38723': 'ORG',        # higher education institution
     'Q875538': 'ORG',       # public university
 
-    # PROD (물건·작품·소프트웨어) — 이슈 #30 §8.4: PROD 합의율 47% 보정
+    # PROD (물건·작품·소프트웨어) — PROD 합의율 보정 차원에서 커버리지 확대
     'Q2424752': 'PROD',      # product
     'Q7397': 'PROD',         # software
     'Q9143': 'PROD',         # programming language
@@ -147,7 +147,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q3405677': 'PROD',      # automobile model
     'Q105543609': 'PROD',    # musical work / composition
     'Q21198342': 'PROD',     # manga series
-    # 이슈 #30 추가: 작품·미디어 커버리지 확대
+    # 작품·미디어 커버리지 확대
     'Q7366': 'PROD',         # song
     'Q838948': 'PROD',       # work of art
     'Q47461344': 'PROD',     # written work
@@ -165,7 +165,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q4502142': 'PROD',      # visual artwork
     'Q1339864': 'PROD',      # video game franchise
 
-    # EVT (일회성 사건·전쟁·조약) — 이슈 #30 §8.4: EVT 합의율 56% 보정
+    # EVT (일회성 사건·전쟁·조약) — EVT 합의율 보정 차원에서 커버리지 확대
     'Q1190554': 'EVT',       # occurrence (event)
     'Q178561': 'EVT',        # battle
     'Q198': 'EVT',           # war
@@ -178,7 +178,7 @@ WIKIDATA_TO_CANONICAL: Dict[str, str] = {
     'Q131569': 'EVT',        # treaty
     'Q1407217': 'EVT',       # national sports competition (일회 대회)
     'Q27020041': 'EVT',      # sports season
-    # 이슈 #30 추가: 1회성 사건 커버리지 확대
+    # 1회성 사건 커버리지 확대
     'Q40231': 'EVT',         # election
     'Q3306904': 'EVT',       # peace agreement
     'Q1768295': 'EVT',       # uprising / rebellion

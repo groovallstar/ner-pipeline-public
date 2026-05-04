@@ -1,6 +1,6 @@
 """Stockmark 엔티티 타입용 일본어 NER 프롬프트 템플릿.
 
-canonical 10종 (이슈 #21 축소 · 이슈 #27 LOC/ORG 경계 재정의):
+canonical 10종 (LOC = 지명·주소만, ORG = 인공 시설·조직 일체):
   PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD
 
 LOC = 지명·주소만 (국가·행정구역·자연지명·주소).
@@ -11,7 +11,7 @@ ORG = 모든 인공 시설·조직 (역·공항·병원·초중고·대학(본�
 과거 8종 Japanese 라벨과의 매핑:
   人名 → PER
   地名 → LOC
-  施設名 → ORG (이슈 #27, 이전 LOC)
+  施設名 → ORG (시설은 LOC가 아닌 ORG로 분류)
   法人名 + 政治的組織名 + その他の組織名 → ORG
   製品名 → PROD
   イベント名 → EVT

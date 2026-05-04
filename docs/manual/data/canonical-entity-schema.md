@@ -287,8 +287,9 @@ canonical 형태로 저장된다.
   - `src/ner/augmenters/wikiann_vi/` (silver 재라벨 파이프라인)
 
 - **본 스키마 적용 제외**:
-  - `src/ner/llm_eval/**`, `src/ner/classifier/**` — 후속 정리 예정
+  - `src/ner/llm_eval/**` — 후속 정리 예정
   - `src/ner/labelers/ko/**` — 별도 KLUE 스키마(`PS/LC/OG/DT/TI/QT`) 사용
+  - 참고: `src/ner/classifier/**` 는 issue #40 에서 본 스키마(canonical 10종 평면)로 정합 완료
 
 ## 7. 평가 시 주의
 

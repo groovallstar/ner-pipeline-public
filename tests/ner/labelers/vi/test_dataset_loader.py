@@ -1,7 +1,7 @@
 """WikiANN-vi dataset_loader 테스트.
 
-이슈 #21 이후 `load()`는 canonical 덤프 JSONL을 읽는다. HF 원본 로딩은
-본 모듈에서 제거됐다. BIO↔offset span 유틸은 재라벨 파이프라인
+`load()`는 canonical 덤프 JSONL을 읽는다. HF 원본 로딩은 본 모듈에서
+제거됐다. BIO↔offset span 유틸은 재라벨 파이프라인
 (augmenters/wikiann_vi) 용도로 유지된다.
 """
 import json

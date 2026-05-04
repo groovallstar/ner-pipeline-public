@@ -44,6 +44,8 @@ dependencies = [
     "tavily-python",
     # NLP tokenization
     "spacy",
+    "fugashi>=1.5.2",
+    "unidic-lite>=1.0.8",
 ]
 
 [tool.uv]

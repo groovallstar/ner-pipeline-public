@@ -5,7 +5,7 @@ offset별로 모델 A와 모델 B의 타입을 쌍으로 수집한다. 한쪽만
 없는 쪽을 `O`로 간주해 pair에 포함한다. 이렇게 얻은 pair 리스트에 대해
 Cohen's kappa, agreement ratio, per-type 일치율을 계산한다.
 
-이슈 #10 3d·4단계 검증 레이어의 cross-model agreement 지표를 담당한다.
+검증 레이어의 cross-model agreement 지표를 담당한다.
 상세 기준: `docs/manual/data/vietnamese-ner.md` §3.
 """
 import argparse

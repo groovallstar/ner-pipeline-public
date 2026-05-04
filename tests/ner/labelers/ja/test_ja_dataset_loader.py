@@ -1,6 +1,6 @@
 """Stockmark JA canonical 덤프 로더 테스트.
 
-HF 원본 로딩과 JA→canonical 매핑은 이슈 #21 이후 본 모듈에서 제거됐다.
+HF 원본 로딩과 JA→canonical 매핑은 본 모듈에서 제거됐다.
 테스트는 canonical JSONL 덤프 스키마 기반으로 load/load_local 왕복만
 검증한다.
 """
