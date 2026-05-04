@@ -1,6 +1,6 @@
 """Stockmark NER canonical 덤프 로더.
 
-이슈 #21에서 canonical 5종으로 축소된 JSONL 덤프
+canonical 5종으로 축소된 JSONL 덤프
 (`data/stockmark/{train,test}.jsonl`)를 그대로 읽는다. HF 원본 로딩과
 라벨 매핑은 본 모듈의 책임이 아니다 — 원본 재덤프가 필요한 경우는 1회성
 마이그레이션 도구의 영역이다. 폴백·자동 매핑 없음.

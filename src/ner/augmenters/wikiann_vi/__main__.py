@@ -11,8 +11,8 @@
 JSONL 출력 스키마(레코드별):
     {id, text, gold_spans, gold_spans_8type, relabel_model}
 
-파일·필드의 ``8type`` 리터럴은 이슈 #21 축소 이후에도 데이터 호환성을 위해
-유지한다(의미는 canonical 5종: PER·LOC·ORG·PROD·EVT).
+파일·필드의 ``8type`` 리터럴은 데이터 호환성을 위해 유지한다
+(의미는 canonical 5종: PER·LOC·ORG·PROD·EVT).
 """
 import argparse
 import json
@@ -34,8 +34,8 @@ def _load_wikiann_hf(
 ) -> list[dict]:
     """HF WikiANN 원본(BIO 3종)을 재라벨 입력용 레코드로 변환.
 
-    labelers/vi 로더는 canonical 덤프 전용이므로(이슈 #21), 재라벨
-    파이프라인 고유의 HF 원본 읽기는 본 CLI가 직접 책임진다.
+    labelers/vi 로더는 canonical 덤프 전용이므로, 재라벨 파이프라인
+    고유의 HF 원본 읽기는 본 CLI가 직접 책임진다.
     """
     import os
     cache = cache_dir or os.environ.get(

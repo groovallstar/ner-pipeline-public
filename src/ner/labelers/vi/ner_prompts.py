@@ -1,6 +1,6 @@
 """베트남어 LLM 라벨러용 공통 NER 프롬프트 템플릿.
 
-canonical 10종 평면 목록(이슈 #21·#27 LOC/ORG 경계 재정의):
+canonical 10종 평면 목록(LOC = 지명·주소만, ORG = 인공 시설·조직 일체):
   PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD
 
 LOC = 지명·주소만 (국가·행정구역·자연지명·주소).

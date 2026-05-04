@@ -17,8 +17,8 @@
 - `recall_strict` : recall 정책 + PROD/EVT 는 high 만 (PROD/EVT 합의율
                     낮은 점을 보정하기 위해 신규 type 의 medium 을 drop)
 
-이슈 #10 §10.2 신뢰도 계층별 학습 데이터 활용 구조의 단일-파일 구현.
-이슈 #30 §8.2 — 타입별 신뢰도 격차를 반영한 type-aware 필터(`recall_strict`).
+신뢰도 계층별 학습 데이터 활용 구조의 단일-파일 구현.
+타입별 신뢰도 격차를 반영한 type-aware 필터(`recall_strict`)를 함께 제공한다.
 """
 import argparse
 import json

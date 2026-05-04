@@ -5,8 +5,8 @@
 라벨 스키마는 canonical 영문 축약 **10종 평면 목록**
 (`docs/manual/data/canonical-entity-schema.md`). NER 5종
 (`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`).
-JA·VI 공통 스키마이며, 이슈 #21 에서 13종 → 10종 평면화, 이슈 #27 에서
-LOC/ORG 경계 재정의(인공 시설 모두 ORG)가 적용됐다.
+JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 재정의돼
+인공 시설은 모두 ORG로 분류된다.
 
 ## 서브 모듈
 
@@ -44,8 +44,8 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 | `__main__.py` | `python -m ner.augmenters.pii` CLI 엔트리포인트 (`--mode {suffix,llm}`, `--verify vllm` 교차 검증) |
 | `loaders.py` | Stockmark / 임의 JSONL / HF Hub → `Record` 어댑터 모음 |
 | `generators/base.py` | `PIIGenerator` Protocol, `get_generator(lang)` factory, 공용 유틸 |
-| `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일). #17 Phase 1에서 `generate_dob` → `generate_dat` 개명 |
-| `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜/ID/이메일). #17 Phase 2에서 `generate_dob` → `generate_dat` 개명 완료 |
+| `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
+| `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
 
 #### 라벨 스키마
 - **내부 PII 토큰**(생성·병합 전): `NAME`, `PHONE`, `ADDRESS`, `DAT`,
@@ -60,11 +60,11 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 CLI `--pii-max` 로 상한 조정 가능. 결정론성은 `--seed` 로 보장.
 
 ### wikiann_vi/
-WikiANN-vi를 canonical 5종(이슈 #21)으로 재라벨하는 async LLM 클라이언트
+WikiANN-vi를 canonical 5종으로 재라벨하는 async LLM 클라이언트
 + 검증 유틸(kappa·Wikidata anchor·confidence 병합). HF 원본(WikiANN 3종
 BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있으며,
 평가용 canonical 덤프 로더(`labelers/vi/dataset_loader.py`)는 HF를
-호출하지 않는다. 상세: 이슈 #10, #13, #21 문서.
+호출하지 않는다. 상세: `docs/manual/data/vietnamese-ner.md`.
 
 ## 사용 예
 

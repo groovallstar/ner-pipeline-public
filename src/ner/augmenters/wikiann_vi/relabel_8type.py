@@ -2,8 +2,8 @@
 
 vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 5종 엔티티를 추출하고,
 원본 텍스트에서 문자 오프셋을 매칭해 `gold_spans_8type` 필드로 반환한다.
-파일·필드명의 `8type` 리터럴은 이슈 #21 축소 이후에도 데이터 호환성을 위해
-유지한다(의미는 canonical 5종 PER·LOC·ORG·PROD·EVT).
+파일·필드명의 `8type` 리터럴은 데이터 호환성을 위해 유지한다
+(의미는 canonical 5종 PER·LOC·ORG·PROD·EVT).
 
 주요 구성:
 - `parse_spans`: LLM 원문 출력에서 JSON span 리스트 추출 (think 제거·정규식 폴백).

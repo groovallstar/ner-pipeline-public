@@ -18,7 +18,7 @@ def apply_label_merge(entity: Entity, rules: dict[str, str]) -> Entity:
     """단일 엔티티에 병합 규칙을 적용한 새 엔티티를 반환한다.
 
     `NAME → PER`, `ADDRESS → LOC` 등 내부 생성 토큰을 canonical 라벨로
-    무조건 변환한다 (#17 Phase 1에서 `ADDRESS` 병합 조건부 로직 제거).
+    무조건 변환한다.
     """
     new_label = rules.get(entity.label, entity.label)
     if new_label == entity.label:
