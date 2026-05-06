@@ -18,7 +18,10 @@ from transformers import (
 )
 
 from ner.classifier.data_utils import NER_TYPES, decode_bio_to_spans
-from ner.metrics.span_metrics import compute_offset_span_f1
+from ner.metrics.span_metrics import (
+    compute_offset_span_f1,
+    compute_offset_span_f1_relaxed,
+)
 
 
 class WeightedTrainer(Trainer):
@@ -189,10 +192,15 @@ def evaluate_model(*, model_path: str,
                    eval_rows: List[dict],
                    id2label: Dict[int, str],
                    batch_size: int = 32) -> dict:
-    """best 모델 로드 → predict → BIO decode → span F1 계산.
+    """best 모델 로드 → predict → BIO decode → strict + relaxed span F1 계산.
 
     eval_rows 는 augmenters JSONL 형식 그대로 (label/start_char/end_char).
     내부에서 metrics 모듈이 요구하는 (type/start/end) 형식으로 변환.
+
+    Returns:
+        {"strict": {overall, per_entity}, "relaxed": {overall, per_entity}}
+        strict = (start, end, type) 정확 일치 (게이트 측정 default).
+        relaxed = SemEval'13 Partial — type 일치 + char-offset overlap 시 0.5점.
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # 평가는 항상 float32 로 (DeBERTa-v3 family 의 fp16 NaN underflow 회피)
@@ -230,4 +238,9 @@ def evaluate_model(*, model_path: str,
                 ]
                 gold_spans_list.append(gold)
 
-    return compute_offset_span_f1(gold_spans_list, pred_spans_list)
+    return {
+        'strict': compute_offset_span_f1(gold_spans_list, pred_spans_list),
+        'relaxed': compute_offset_span_f1_relaxed(
+            gold_spans_list, pred_spans_list
+        ),
+    }
