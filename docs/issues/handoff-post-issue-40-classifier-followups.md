@@ -8,7 +8,7 @@
 >   분석 / 누적 변종 v2~v4 / SOTA 모델 sweep 12회 / DeBERTa family 학습 실패
 >   패턴 / 데이터 천장)
 > 목적: 0.95 게이트 도달이 본 측정 셋업·모델 후보로는 불가능에 가까움이
->   실측 확인됨. 후속 이슈 6개 후보를 효과·비용·의존성 기준으로 정리하고,
+>   실측 확인됨. 후속 이슈 5개 후보를 효과·비용·의존성 기준으로 정리하고,
 >   각 이슈에 진입할 때의 진입 조건·범위·성공 기준·위험을 동결한다.
 
 ---
@@ -16,7 +16,7 @@
 ## 0. 진입 조건
 
 - PR #41 머지 후 develop 기준으로 새 이슈 브랜치를 분기한다 (`feat/issue-{N}-slug`).
-- 본 핸드오프의 6개 후속 항목은 *상호 독립* 또는 *데이터→모델→앙상블* 의
+- 본 핸드오프의 5개 후속 항목은 *상호 독립* 또는 *데이터→모델* 의
   단방향 의존만 가지므로 병렬 진행이 가능하다. 본 문서의 권장 순서는 그
   의존성 + 효과·비용 ROI 기반.
 - 각 후속 이슈는 GitHub Issue 등록 + `docs/issues/issue-{N}-{slug}.md` 단일
@@ -26,46 +26,27 @@
 
 | 후속 | 예상 효과 | 비용 | ROI | 의존성 |
 |---|---|---|---|---|
-| F1. 다중 seed 앙상블 | +1~2pp 안정 | ★ | **★★★ 최고** | 없음 |
 | F2. PHONE 오류 진단 + 조건부 정규화 (VI) | VI PHONE +0~5pp | ★ | ★★ | 없음 |
-| F3. DeBERTa-v3 hyperparameter sweep | ? (잠재력 미확인) | ★★ | ★★ | 없음 |
+| F3. DeBERTa-v3 hyperparameter sweep (VI) | ? (잠재력 미확인) | ★★ | ★★ | 없음 |
 | F4. PhoBERT 통합 (VI) | VI +0~3pp | ★★★ | ★★ | 없음 |
 | F5. EVT/PROD oversampling (VI) | VI EVT/PROD +5~15pp | ★★ | ★★ | 없음 |
-| F6. 외부 코퍼스 통합 (데이터 보강) | **+5~10pp 양 언어** | ★★★★ | ★★★ | augmenters 측 |
+| F6. 외부 코퍼스 통합 (VI 데이터 보강) | VI +5~10pp | ★★★★ | ★★★ | augmenters 측 |
 
-**우선 권장**: F1 → F5 → F2 → (F3 ‖ F4) → F6.
+> JA 측 트랙은 이슈 #45 에서 종결. F6-JA 는 28회 sweep + Tier 1.B 8 variant
+> 재평가로 데이터 천장·평가 천장 양쪽 확정. F3-JA 는 본 결과로 진입 무의미
+> (베이스라인이 SOTA 후보 능가 확정 + augmentation 회귀 확정).
 
-핵심 근거: F1·F5·F2 는 단발성 학습/스크립트 추가만으로 검증 가능하고 즉시
+**우선 권장**: F5 → F2 → (F3 ‖ F4) → F6 (모두 VI 트랙).
+
+핵심 근거: F5·F2 는 단발성 학습/스크립트 추가만으로 검증 가능하고 즉시
 효과가 보이는 반면, F6 (데이터 보강) 은 별도 augmenters 작업이 선행되어야
 하므로 시간 비용이 가장 크다. F3·F4 는 잠재력은 있지만 본 sweep 에서
 이미 베이스라인이 SOTA 후보를 능가했으므로 모델 측 추가 작업의 ROI 가
-상대적으로 낮다.
+상대적으로 낮다 (이슈 #45 JA 측 결과로 동일 패턴 확정).
 
 ---
 
 ## 2. 후속별 상세 가이드
-
-### F1. 다중 seed 앙상블
-
-**목적**: seed 별 학습 결과의 분산을 평균/투표로 흡수해 +1~2pp 안정 향상.
-
-**범위**:
-- 같은 모델·데이터·하이퍼파라미터로 seed ∈ {42, 123, 2024} 3회 학습 (또는 5 seed)
-- 각 best 모델로 test 셋 inference → token-level argmax voting 또는 logit averaging
-- 산출물: `results/classifier/{ja,vi}/ensemble/metrics.json`, 통합 리포트 추가
-
-**구현 힌트**:
-- `src/ner/classifier/__main__.py` 의 `--seed` 플래그 이미 존재
-- 앙상블 inference 는 `train_eval.evaluate_model` 의 single-model 버전을 N-model 버전으로 확장. logit averaging 이 vote 보다 일반적으로 안정
-- 추가 모듈: `src/ner/classifier/ensemble.py` (학습은 기존 `__main__` N회 실행, 평가만 새 함수)
-
-**성공 기준**:
-- 단일 seed 베이스라인 대비 +1pp 이상 평균 향상
-- per-entity F1 분산 (std) 감소
-
-**위험**:
-- 학습 시간 N배 (VI 의 경우 5×800s ≈ 4000s/seed × 3 = 3.3시간)
-- 효과는 검증되어 있으나 0.95 게이트 도달 단독으론 부족 — F5·F6 와 조합 필요
 
 ### F2. PHONE 오류 진단 + 조건부 정규화 (VI 한정)
 
@@ -98,23 +79,22 @@ precision 이 더 떨어질 수 있다.
 
 **위험**:
 - 정규화는 surface form 정보 손실 → CREDIT_CARD/ID_NUM 오라벨 위험. 진단 없이 정규화 강행 금지
-- (a) 가 대부분이면 PHONE 0.81 자체가 천장 — F1 (앙상블) 이나 F6 으로 합류
+- (a) 가 대부분이면 PHONE 0.81 자체가 천장 — F6 으로 합류
 
-### F3. DeBERTa-v3 family hyperparameter sweep
+### F3. DeBERTa-v3 family hyperparameter sweep (VI)
 
 **목적**: 본 sweep 에서 학습 실패 (loss 떨어지지만 평가 prediction 모두 'O')
-한 DeBERTa-v3 / DeBERTa-v2 family 의 잠재력 검증.
+한 DeBERTa-v3 / DeBERTa-v2 family 의 VI 측 잠재력 검증.
 
 **범위**:
-- 대상 모델: `microsoft/mdeberta-v3-base`, `ku-nlp/deberta-v3-base-japanese`,
-  `Fsoft-AIC/videberta-base`
+- 대상 모델: `microsoft/mdeberta-v3-base`, `Fsoft-AIC/videberta-base`
 - Hyperparameter 그리드:
   - `lr` ∈ {1e-5, 2e-5, 3e-5}
   - `warmup_ratio` ∈ {0.06, 0.1, 0.15}
   - `weight_decay` ∈ {0.0, 0.01, 0.1}
   - `max_grad_norm` ∈ {1.0, 0.5}
 - 각 조합 1 epoch smoke + 5 epoch full → 베스트 5 조합 만 full eval
-- 산출: `docs/reports/deberta-v3-hyperparam-sweep-2026-XX.md`
+- 산출: `docs/reports/deberta-v3-hyperparam-sweep-vi-{날짜}.md`
 
 **구현 힌트**:
 - `train_eval.fine_tune` 에 `warmup_ratio`, `weight_decay`, `max_grad_norm`
@@ -122,11 +102,11 @@ precision 이 더 떨어질 수 있다.
 - 초기 1-epoch smoke 로 collapse 여부 빠른 검증 (현재는 5 epoch 후에야 알 수 있음)
 
 **성공 기준**:
-- 적어도 한 모델·한 조합에서 베이스라인(JA 0.9058, VI 0.8985) 동급 또는 초과
+- 적어도 한 모델·한 조합에서 VI 베이스라인 (xlm-roberta-base 0.8985) 동급 또는 초과
 - 미달 시 "DeBERTa family 는 본 데이터셋·셋업과 호환 안 됨" 으로 결론 동결
 
 **위험**:
-- 그리드 27 조합 × 모델 3 × 언어 2 = 162 회 학습. 1-epoch smoke 로 줄여도 30+ 시간
+- 그리드 27 조합 × 모델 2 = 54 회 학습. 1-epoch smoke 로 줄여도 10+ 시간
 - 결과적으로 베이스라인 동급에 그칠 가능성 있음 — *결론 동결* 자체가 가치
 
 ### F4. PhoBERT 통합 (VI 단일언어 SOTA)
@@ -188,46 +168,43 @@ oversampling 으로 보강. 본 sweep 에서 이 두 클래스가 단일 최대 
 - Oversampling 은 일반 클래스 (PER/LOC/ORG) 가 적게 학습되어 회귀 위험
 - 합성 데이터는 silver 노이즈 추가 가능성 — augmenters/pii 의 verifier 적용 필수
 
-### F6. 외부 코퍼스 통합 (데이터 보강)
+### F6. 외부 코퍼스 통합 (VI 데이터 보강)
 
-**목적**: 본질적 천장 (PROD/EVT 어휘 다양성, EVT 절대 support, silver 노이즈)
-은 모델 측 변경으로 풀리지 않음. 외부 gold 코퍼스 통합이 0.95 도달 가장
-확실한 경로.
+**목적**: VI 데이터 천장 (PROD/EVT 어휘 다양성, EVT 절대 support, WikiANN-vi
+silver 노이즈) 을 외부 gold 코퍼스 통합으로 들어올린다. JA 측 동등 트랙은
+이슈 #45 에서 종결 (외부 무료 코퍼스 부재 + augmentation 회귀 8/8).
 
-**범위 (JA)**:
-- KWDLC (Kyoto University Web Document Leads Corpus) — NER 5종 풍부
-- BCCWJ NER (現代日本語書き言葉均衡コーパス) — 10종+ 라벨, canonical 10종 매핑 필요
-- OntoNotes JA — 다국어 OntoNotes 의 JA 부분
-- Stockmark canonical 10종 평면과 라벨 정합 (entity merging) — augmenters 측 작업
-
-**범위 (VI)**:
+**범위**:
 - VLSP 2018·2021 NER — 베트남어 NER 표준
 - PhoNER — VI 단일언어 NER 코퍼스
-- WikiANN-vi silver→gold 정제 — 기존 silver 라벨에 LLM verifier 재적용 (augmenters/wikiann_vi 확장) 또는 사람 검수
+- WikiANN-vi silver→gold 정제 — 기존 silver 라벨에 LLM verifier 재적용
+  (augmenters/wikiann_vi 확장) 또는 사람 검수
 - ViMQ, ViNERX 등 추가 후보 검토
 
 **구현 힌트**:
-- augmenters 모듈에 새 서브패키지 추가 (`augmenters/external_corpus/`)
+- augmenters 모듈에 새 서브패키지 추가 (`augmenters/external_corpus/vi/`)
 - 각 외부 코퍼스의 라벨 체계 → canonical 10종 매핑 표 (`docs/manual/data/`)
-- 통합 학습 데이터 스펙: `data/{stockmark,wikiann_vi,external_*}/pii_all.jsonl`
-  → `data/combined/{ja,vi}_pii_all.jsonl` 형태로 union 후 학습
+- 통합 학습 데이터 스펙: `data/{wikiann_vi,external_vi_*}/pii_all.jsonl`
+  → `data/combined/vi_pii_all.jsonl` 형태로 union 후 학습
 
 **성공 기준**:
-- 외부 코퍼스 통합 학습 데이터로 베이스라인 모델 학습 → F1 ≥ 0.95 (JA·VI 양쪽)
+- 외부 코퍼스 통합 학습 데이터로 베이스라인 모델 학습 → F1 ≥ 0.95
 - 또는 미달 시 새 베이스라인 + 천장 분석 문서화
 
 **위험**:
-- 라이선스 문제 (특히 BCCWJ, VLSP) — 사전 검토 필수
-- 라벨 매핑 비용 — 외부 코퍼스의 entity 정의가 canonical 10종과 1:1 매핑되지 않음. PROD/EVT 같은 본 프로젝트 정의에 외부 라벨이 부분만 해당
+- 라이선스 문제 (특히 VLSP) — 사전 검토 필수
+- 라벨 매핑 비용 — 외부 코퍼스의 entity 정의가 canonical 10종과 1:1 매핑되지
+  않음. PROD/EVT 같은 본 프로젝트 정의에 외부 라벨이 부분만 해당
 - 코퍼스 크기 차이 — domain shift 위험 (도메인 균형 sample weight 필요)
+- silver 노이즈: 이슈 #45 의 KWDLC type drift -9.96pp 사례 — gold 라벨이라도
+  type 정의 mismatch 시 보강 효과 없이 회귀. 라벨 매핑 사전 검증 필수.
 
 ---
 
 ## 3. 의존성·병렬성 다이어그램
 
 ```
-F1 다중 seed 앙상블 ───────┐
-F2 PHONE 진단 → 정규화 ──┤
+F2 PHONE 진단 → 정규화 ──┐
 F3 DeBERTa hyperparam ─┤───→ 모두 F6 와 독립, 즉시 진행 가능
 F4 PhoBERT 통합 ──────┤
 F5 EVT/PROD oversample ┘
@@ -235,20 +212,21 @@ F5 EVT/PROD oversample ┘
 F6 외부 코퍼스 통합 ────────→ augmenters 측 선행 작업, 독립 트랙
 ```
 
-F1·F2·F3·F4·F5 는 모두 같은 코드 모듈 (`src/ner/classifier/`) 변경이라
+F2·F3·F4·F5 는 모두 같은 코드 모듈 (`src/ner/classifier/`) 변경이라
 브랜치 병렬은 어려움. 순차 진행 권장. F6 는 augmenters 모듈 작업이라 별도
 브랜치에서 병렬 가능.
 
 ## 4. 작성 원칙 (모든 후속 이슈 공통)
 
-1. **베이스라인 비교 의무** — 각 후속 이슈는 PR #41 의 베이스라인
-   (JA 0.9058 / VI 0.8985) 대비 Δ 를 per-entity 표로 보고. `docs/reports/bert-classifier-benchmark.md` 의 표 그대로 인용 또는 새 열로 추가.
-2. **단일 변경 원칙** — 한 후속 이슈에서 *한 가지 가설* 만 검증. F1 + F5 같은
+1. **베이스라인 비교 의무** — 각 후속 이슈는 VI 베이스라인 (PR #41 의
+   xlm-roberta-base 0.8985) 대비 Δ 를 per-entity 표로 보고.
+   `docs/reports/bert-classifier-benchmark.md` 의 표 그대로 인용 또는 새 열로 추가.
+2. **단일 변경 원칙** — 한 후속 이슈에서 *한 가지 가설* 만 검증. F2 + F5 같은
    조합은 새 후속으로 분리 (혹은 본 후속 완료 후 통합 이슈).
 3. **3-way split 보존** — 80/10/10 (`seed=42`) 그대로 사용. test 셋은 어떤
    후속 이슈에서도 학습/모델 선택에 노출되지 않는다. 분할 변경이 필요하면
    별도 이슈로 분리.
-4. **DeBERTa family 학습 실패 시** — F3 외 후속 (F1·F5·F4 등) 에서 DeBERTa
+4. **DeBERTa family 학습 실패 시** — F3 외 후속 (F5·F4 등) 에서 DeBERTa
    family 모델을 시험할 때, 학습 loss 가 정상 감소하지만 평가 prediction
    = 'O' 인 majority-class collapse 패턴이 재현되면 본 핸드오프 §F3 의
    hyperparameter 그리드 적용 후 재시도. 단순 lr=2e-5 + bf16 으로는 부족함이
@@ -258,7 +236,7 @@ F1·F2·F3·F4·F5 는 모두 같은 코드 모듈 (`src/ner/classifier/`) 변�
 
 ## 5. 게이트 미달 종결 시점 결정
 
-본 핸드오프의 6개 후속을 모두 진행해도 0.95 게이트에 도달하지 못할 가능성도
+본 핸드오프의 후속을 모두 진행해도 0.95 게이트에 도달하지 못할 가능성도
 있다. 그 경우의 종결 옵션:
 
 - **(A) 게이트 완화**: deep-interview 에서 0.95 → 0.90 또는 NER/PII 분리 게이트
@@ -268,5 +246,10 @@ F1·F2·F3·F4·F5 는 모두 같은 코드 모듈 (`src/ner/classifier/`) 변�
 - **(C) 모델 외부 보완**: 추론 시 rule-based PII detector (regex 정규화) 와
   union → BERT NER 5종 + regex PII 5종 조합으로 0.95 도달 시도. classifier
   모듈은 NER 5종에만 집중.
+
+> JA 측 종결 (이슈 #45) — 28회 sweep + Tier 1.B 8 variant 재평가로 (B) 데이터셋
+> 천장 동결 채택 (baseline strict F1 = 0.9077 / relaxed F1 = 0.9177 production
+> 후보, 합격선 정의는 사용자 권한). VI 측은 본 핸드오프 F2~F6 트랙으로 별도
+> 진행 후 같은 종결 옵션 적용.
 
 종결 결정은 사용자 승인 후 별도 이슈로 명문화.

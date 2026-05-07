@@ -91,6 +91,12 @@ def main():
         '--precision', choices=['fp16', 'bf16'], default='fp16',
         help='Mixed precision (use bf16 for DeBERTa-v3 family)',
     )
+    parser.add_argument(
+        '--metric-mode', choices=['strict', 'relaxed', 'both'], default='both',
+        help='Span F1 mode shown in console. metrics.json always stores both. '
+             'strict=(start,end,type) exact match (default gate). '
+             "relaxed=SemEval'13 Partial (type match + overlap = 0.5).",
+    )
     args = parser.parse_args()
 
     data_path = args.data or DEFAULT_DATA[args.lang]
@@ -226,6 +232,8 @@ def main():
         id2label=id2label,
     )
 
+    strict_m = metrics['strict']
+    relaxed_m = metrics['relaxed']
     summary = {
         'lang': args.lang,
         'model_name': model_name,
@@ -246,36 +254,56 @@ def main():
         'curriculum': args.curriculum,
         'curriculum_stage1_epochs': args.curriculum_stage1_epochs if args.curriculum else None,
         'train_time_sec': round(elapsed, 1),
-        'overall': metrics['overall'],
-        'per_entity': metrics['per_entity'],
+        # 게이트 lock-in (strict) 호환 키
+        'overall': strict_m['overall'],
+        'per_entity': strict_m['per_entity'],
+        # 명시 키 (strict + SemEval'13 Partial)
+        'overall_strict': strict_m['overall'],
+        'per_entity_strict': strict_m['per_entity'],
+        'overall_relaxed': relaxed_m['overall'],
+        'per_entity_relaxed': relaxed_m['per_entity'],
     }
 
     metrics_path = os.path.join(output_dir, 'metrics.json')
     with open(metrics_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    o = metrics['overall']
     print(f"\n{'='*72}")
     print(f"  {args.lang.upper()} BERT NER (canonical 10-class)")
     print(f"{'='*72}")
     print(f"  Model    : {model_name}")
     print(f"  Data     : {data_path}")
     print(f"  Train/Valid/Test : {len(train_rows)} / {len(valid_rows)} / {len(test_rows)}  (epochs={args.epochs})")
-    print(f"  F1={o['f1']:.4f}  Precision={o['precision']:.4f}  "
-          f"Recall={o['recall']:.4f}  Support={o['support']}")
     print(f"  Train time: {elapsed:.1f}s")
-    print()
-    print(f"  {'Entity':<14} {'F1':>8} {'Prec':>8} {'Recall':>8} {'Support':>8}")
-    print(f"  {'-'*52}")
-    for etype, em in sorted(metrics['per_entity'].items(), key=lambda x: -x[1]['f1']):
-        print(f"  {etype:<14} {em['f1']:>8.4f} {em['precision']:>8.4f} "
-              f"{em['recall']:>8.4f} {em['support']:>8}")
+    show_strict = args.metric_mode in ('strict', 'both')
+    show_relaxed = args.metric_mode in ('relaxed', 'both')
+    if show_strict:
+        _print_metrics_block('strict', strict_m)
+    if show_relaxed:
+        _print_metrics_block("relaxed (SemEval'13 Partial)", relaxed_m)
     print(f"\n  Saved to {metrics_path}")
 
-    if o['f1'] >= F1_GATE:
-        print(f"\n  PASS  F1 {o['f1']:.4f} >= gate {F1_GATE}")
+    gate_o = strict_m['overall']
+    if gate_o['f1'] >= F1_GATE:
+        print(f"\n  PASS  strict F1 {gate_o['f1']:.4f} >= gate {F1_GATE}")
     else:
-        print(f"\n  FAIL  F1 {o['f1']:.4f} <  gate {F1_GATE}  (gap {F1_GATE - o['f1']:.4f})")
+        print(f"\n  FAIL  strict F1 {gate_o['f1']:.4f} <  gate {F1_GATE}  "
+              f"(gap {F1_GATE - gate_o['f1']:.4f})")
+    print(f"  relaxed F1 {relaxed_m['overall']['f1']:.4f}  "
+          f"(Δ vs strict {relaxed_m['overall']['f1'] - gate_o['f1']:+.4f})")
+
+
+def _print_metrics_block(label: str, m: dict) -> None:
+    """strict / relaxed 메트릭 블록 콘솔 출력."""
+    o = m['overall']
+    print(f"\n  [{label}]")
+    print(f"  F1={o['f1']:.4f}  Precision={o['precision']:.4f}  "
+          f"Recall={o['recall']:.4f}  Support={o['support']}")
+    print(f"  {'Entity':<14} {'F1':>8} {'Prec':>8} {'Recall':>8} {'Support':>8}")
+    print(f"  {'-'*52}")
+    for etype, em in sorted(m['per_entity'].items(), key=lambda x: -x[1]['f1']):
+        print(f"  {etype:<14} {em['f1']:>8.4f} {em['precision']:>8.4f} "
+              f"{em['recall']:>8.4f} {em['support']:>8}")
 
 
 if __name__ == '__main__':
