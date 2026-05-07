@@ -241,6 +241,27 @@ def class_weights_tensor(label2id: Dict[str, int],
     return torch.tensor(weights, dtype=torch.float32)
 
 
+def boundary_weights_tensor(label2id: Dict[str, int],
+                            w_b: float = 1.0,
+                            w_i: float = 1.0,
+                            w_o: float = 1.0):
+    """B-/I-/O 토큰별 weight tensor — entity 경계 학습 강조용.
+
+    `B-XXX` (entity 시작) 에 w_b, `I-XXX` (내부) 에 w_i, `O` 에 w_o.
+    `class_weights_tensor` 와 elementwise 곱으로 결합 가능.
+    """
+    import torch
+    weights = [w_o] * len(label2id)
+    for label, idx in label2id.items():
+        if label == 'O':
+            weights[idx] = w_o
+        elif label.startswith('B-'):
+            weights[idx] = w_b
+        elif label.startswith('I-'):
+            weights[idx] = w_i
+    return torch.tensor(weights, dtype=torch.float32)
+
+
 def mask_pii_in_features(features: List[dict], label2id: Dict[str, int]) -> List[dict]:
     """features 의 labels 에서 PII BIO 라벨을 모두 O 로 치환한 새 features 리스트.
 
