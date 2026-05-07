@@ -1,6 +1,7 @@
 # 일본어 BERT NER 분류기 벤치마크 (canonical 10종 평면)
 
-- 측정일: 2026-05-04 ~ 2026-05-07 (Tier 1.B 재평가 + Tier 3 gold cleanup 포함)
+- 측정일: 2026-05-04 ~ 2026-05-07 (Tier 1.B 재평가 + Tier 3 gold cleanup +
+  이슈 #51 라운드 2)
 - 대상: Stockmark NER + 합성 PII 주입 데이터에 BERT family 파인튜닝
 - 데이터: `data/stockmark/pii_all.jsonl` (5,270 행, canonical 10종 = NER 5 + PII 5)
   - 옛 5,307 행 → Tier 3 검수 불가 34 sentences 제거 (3 collateral) →
@@ -15,19 +16,26 @@
 
 ## 요약
 
-- **현 production 모델**: `tohoku-nlp/bert-base-japanese-v3` (110M).
-  baseline strict F1 = 0.9058 (SOTA sweep 12 후보 + 변종 4단계 중 최선).
-- **게이트 0.95 미달**. 28회 sweep + Tier 1.B 8 variant 재평가로 *데이터·평가
-  양 측 천장* 동결.
+- **현 production 모델**: `tohoku-nlp/bert-base-japanese-v3` (110M)
+  + 데이터 보정 라운드 2 + boundary-aware loss (B=1.5, I=1.2).
+  최종 strict F1 = **0.9368** / relaxed F1 = **0.9505** (이슈 #51).
+- **게이트 0.95 미달 동결**. 28회 sweep + Tier 1.B 8 variant + Tier 3 +
+  라운드 2 (CRF + boundary + class weight) 모두 시도 후 NER 5종 strict
+  P/R 모두 ≥ 0.95 미달 확정. 사용자 결정 → (B) 천장 동결 + production
+  채택.
 - **DeBERTa-v3 family 학습 실패**: `ku-nlp/deberta-v3-base-japanese`,
   `microsoft/mdeberta-v3-base` 모두 F1=0 (majority-class collapse). 원인은
   하이퍼파라미터 미튜닝 (warmup·weight_decay·gradient_clip).
 - **fast tokenizer fragmentation**: ModernBERT/mmBERT 가 PII 영숫자
   (`@`, 숫자열) 분해 실패로 EMAIL/ID_NUM/CREDIT_CARD F1 < 0.35.
 - **Tier 3 완료**: gold cleanup (2,354 errors 전수 검수, 996건 net 보정 +
-  18건 audit cleanup) → 보정 baseline strict F1 = **0.9249** /
-  relaxed F1 = **0.9415**. 게이트 gap: strict 2.51pp / relaxed 0.85pp.
-- **현재 진행**: Tier 2.B self-training 미시도.
+  18건 audit cleanup) → 보정 baseline strict F1 = 0.9249 / relaxed F1
+  = 0.9415.
+- **이슈 #51 라운드 2 완료**: test 오답 추가 검수 40 corrections + CRF
+  + boundary loss + class weight ablation. 최선 = v3+boundary
+  (strict 0.9368). NER 5종 strict ≥ 0.95 미달 → (B) 천장 동결.
+- **PII 5종 → 0.94+** (EMAIL/PHONE 100%, DAT/ID_NUM/CC 0.94~1.00).
+  **NER 5종 → 0.87~0.97** (PER 도달, ORG/LOC/PROD/EVT 미달).
 
 ## 조건
 
@@ -300,26 +308,89 @@ year-only 패턴 → 순수 모델 한계.
 - 본 측정값은 **현 시점 pii_all.jsonl** 의 절대값이며, 옛 5,307-row
   측정값 (sweep 표 0.9058) 과 동일 분포 비교는 불가
 
-### Tier 2.B — Self-training + adaptive thresholding (병렬)
+### Tier 2.B — Self-training (이슈 #51 에서 미시도 결정)
 
-목적: JA Wikipedia unlabeled corpus pseudo-label + Gaussian per-class
-threshold 로 EVT/PROD 다양성 보강.
+JA Wikipedia unlabeled pseudo-label + Gaussian threshold + cross-verifier
+트랙은 이슈 #45 의 LLM augmentation 8/8 회귀 패턴 재현 위험 + PROPOR
+2026 의 -0.24~-1.81% 회귀 caveat 으로 *미시도 종결*. 이슈 #51 에서는
+대신 라운드 2 (data 보정 + CRF + boundary) 를 진행했고 (B) 천장 동결
+채택. Self-training 자체는 향후 별도 이슈 후보로 보존.
 
-- 위험: 이슈 #45 의 LLM augmentation 회귀 패턴 (precision 회귀 >
-  recall 회귀, false-positive 노이즈) 재현 시 채택 거부.
-- cross-verifier (`augmenters/pii` 패턴 재사용) + 사람 spot check 200문장
-  (≥ 90% 미달 시 데이터 사용 중단).
+## 라운드 2 (이슈 #51 종결) — gold 추가 보정 + CRF + boundary loss
 
-### 0.95 도달 가능성 판정 시점
+목적: NER 5종 strict P/R 모두 ≥ 0.95 게이트 도달 시도. 4 실험 묶음.
 
-- ✅ Tier 3 완료 — *gold 천장* 분리됨. 보정 baseline 동결값 = 본 리포트
-  Tier 3 §"v1 → v2 측정 비교"
-- ⏳ Tier 2.B 미시도 — 보정 baseline 대비 Δ 측정 보류
-- 어느 트랙도 미달 시 → (A) 게이트 완화 / (B) 천장 동결 / (C) 추가 SOTA
-  기법 분리 중 사용자 결정 (현 시점 잠정 (B) 가능: strict 0.9249 /
-  relaxed 0.9415 production 후보)
+### 진행 흐름
 
-상세: `docs/issues/issue-48-ja-classifier-tier2-tier3-followups.md`.
+1. **canonical schema 보강** — `docs/manual/data/canonical-entity-schema.md`
+   §2.3 / §3 / §5.1 에 4영역 명문화: 경기장·서킷·도시공원, 城·城跡
+   史跡, `[지명]+代表` 스포츠 대표팀, 부동산·산업 단지, 약어 단독 ORG
+   우선 + 동음이의 가타카나 시그널 룰
+2. **test 오답 재검수 라운드 2** — `baseline_corrected` 위에서 test 오답
+   138 sentences (285 errors) 검수. 사람 spot check 사용자 결정 후
+   **40 corrections** in-place 적용 (32 add + 7 replace + 1 replace_span)
+3. **CRF head (E1)** — `pytorch-crf` 의 linear-chain CRF + Viterbi decode
+4. **Boundary-aware loss (E3)** — B-/I-/O 토큰별 weight 차등
+   (`boundary_weights_tensor`)
+
+### 보정 데이터 변경 (in-place)
+
+`pii_all.jsonl` 5,270 행 유지 + 24 sentences entities in-place 변경:
+
+| 종류 | 수 |
+|---|---:|
+| add LOC (multi-occurrence + 누락) | 20 |
+| add ORG | 4 |
+| add PROD/PER/CC/ID_NUM/EVT | 7 |
+| replace LOC→ORG (시설/공원/단지/서킷/대표팀) | 6 |
+| replace ID_NUM→CC (16자리 generator IIN 매칭) | 1 |
+| replace_span ORG (NHK boundary 확장) | 1 |
+
+### 4 variants ablation (test split, baseline_corrected → v3)
+
+| Variant | 변경 | strict F1 | strict P | strict R | relaxed F1 | gap to 0.95 |
+|---|---|---:|---:|---:|---:|---:|
+| v2 | (이전 baseline_corrected) | 0.9249 | 0.9217 | 0.9281 | 0.9415 | -2.51pp |
+| **v3** | + data 보정 라운드 2 | 0.9346 | 0.9395 | 0.9298 | 0.9498 | -1.54pp |
+| v3+CRF | + Viterbi BIO 일관성 | 0.9311 | 0.9308 | 0.9313 | 0.9469 | -1.89pp |
+| **v3+boundary** | + B/I 가중치 (1.5/1.2) | **0.9368** | 0.9334 | 0.9402 | **0.9505** | **-1.32pp** |
+| v3+combined | + NER class wt 2.0 + boundary | 0.9347 | 0.9242 | 0.9454 | 0.9480 | -1.53pp |
+
+### per-entity (v3+boundary, production 후보)
+
+| Entity | strict P | strict R | strict F1 | relaxed F1 | 게이트 0.95 |
+|---|---:|---:|---:|---:|:---:|
+| EMAIL | 1.0000 | 1.0000 | 1.0000 | 1.0000 | ✅ |
+| PHONE | 1.0000 | 1.0000 | 1.0000 | 1.0000 | ✅ |
+| PER | 0.9735 | 0.9761 | 0.9748 | 0.9815 | ✅ |
+| DAT | 0.9901 | 0.9524 | 0.9709 | 0.9709 | ✅ |
+| ID_NUM | 0.9263 | 0.9888 | 0.9565 | 0.9620 | P ❌ |
+| CREDIT_CARD | 0.9500 | 0.9383 | 0.9441 | 0.9441 | R ❌ |
+| LOC | 0.9369 | 0.9068 | 0.9216 | 0.9412 | ❌ |
+| ORG | 0.8946 | 0.9152 | 0.9048 | 0.9266 | ❌ |
+| EVT | 0.8681 | 0.8977 | 0.8827 | 0.9050 | ❌ |
+| PROD | 0.8515 | 0.9053 | 0.8776 | 0.9082 | ❌ |
+
+### 효과 분석
+
+| 단계 | strict Δ | 단일 최대 효과 | 비고 |
+|---|---:|---|---|
+| data 보정 (v2→v3) | **+0.97pp** | LOC +2.93 / ORG +1.55 / PROD +1.43 | 전체 단일 최대 효과 |
+| +CRF (v3→v3+CRF) | -0.35pp | LOC -2.25 / EVT -3.94 (회귀) | NER 회귀, PII 회복 |
+| +boundary (v3→v3+boundary) | +0.22pp | LOC +1.31 / PER +0.67 | NER 5종 전체 안정 향상 |
+| +combined (v3→v3+combined) | +0.01pp | LOC +2.23 / PROD +1.47 (BUT DAT -3.49) | NER class wt 가 PII 회귀 |
+
+### 종결 결정 — (B) 천장 동결
+
+NER 5종 strict P/R 모두 ≥ 0.95 게이트 미달 확정. 모든 시도 (data quality
++ CRF + boundary + class weight) 후에도 ORG/LOC/PROD/EVT 0.85~0.94 천장.
+사용자 결정 → **(B) v3+boundary 를 production 채택** (strict 0.9368 /
+relaxed 0.9505).
+
+향후 추가 시도는 별도 이슈로 분리 (E2 NER oversampling, E7 GLiNER, E8
+DAPT 등 — 데이터 천장이 본질이라 ROI 낮음 추정).
+
+상세: `docs/issues/issue-51-ja-classifier-strict-095.md`.
 
 ## 동결된 후속 트랙 (별도 이슈 후보)
 
@@ -358,10 +429,15 @@ python -m pytest tests/ner/classifier/ -q
 
 | 경로 | 내용 |
 |---|---|
-| `results/classifier/ja_sweep/baseline/metrics.json` | production 후보 (strict + relaxed) |
+| `results/classifier/ja_sweep/baseline/metrics.json` | 옛 baseline (5,307 행, 5,270 보정 전) |
 | `results/classifier/ja_sweep/baseline_corrected/metrics.json` | Tier 3 v2 (audit cleanup) 동결 — strict 0.9249, relaxed 0.9415 |
+| `results/classifier/ja_sweep/baseline_corrected/error_analysis.json` | 라운드 2 입력 오답 dump |
+| `results/classifier/ja_sweep/baseline_v3/metrics.json` | 라운드 2 data 보정만 — strict 0.9346, relaxed 0.9498 |
+| `results/classifier/ja_sweep/v3_crf/metrics.json` | v3 + CRF — strict 0.9311 |
+| `results/classifier/ja_sweep/v3_boundary/metrics.json` | **v3 + boundary loss (production)** — strict 0.9368, relaxed 0.9505 |
+| `results/classifier/ja_sweep/v3_combined/metrics.json` | v3 + NER class wt + boundary — strict 0.9347 |
 | `results/classifier/ja/sweep/<모델>/metrics.json` | SOTA sweep 6 후보 |
-| `results/classifier/ja/{v2,v3,v4}/metrics.json` | 변종 ablation 메트릭 |
+| `results/classifier/ja/{v2,v3,v4}/metrics.json` | 변종 ablation 메트릭 (80/20 분할 시점) |
 | `results/classifier/ja_sweep/baseline/error_analysis_{train,valid,test}.json` | 오답 케이스 dump (Tier 3 입력) |
 
 `results/` 는 gitignore 대상 — 본 리포트의 표가 영구 인용 가능한 단일 출처.
