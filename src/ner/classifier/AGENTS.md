@@ -16,6 +16,7 @@ span F1 을 측정한다.
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / JA·VI tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`) |
+| `error_analysis.py` | baseline 모델의 test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. CLI: `python -m ner.classifier.error_analysis` |
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
 
 ## CLI
@@ -98,7 +99,8 @@ results/classifier/{ja,vi}/
 ├── checkpoint-*/               # 중간 체크포인트 (save_total_limit=1 로 정리)
 └── metrics.json                # 학습 설정 + overall + per-entity F1
 
-docs/reports/bert-classifier-benchmark.md           # 사람이 읽는 리포트 (JA·VI 통합)
+docs/reports/japanese-bert-classifier-benchmark.md      # JA 리포트
+docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 
 ## 합격선
@@ -114,8 +116,9 @@ deep-interview 결과: **overall span F1 ≥ 0.95** (시간·모델 크기 미�
 python -m pytest tests/ner/classifier/ -q
 ```
 
-- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 (8 테스트)
-- `test_encode.py` — 실제 토크나이저(JA·VI)로 round-trip 검증 (3 테스트)
+- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / class weight / curriculum mask
+- `test_encode.py` — 실제 토크나이저(JA·VI)로 round-trip 검증
+- `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
 
 ## 주의
 
