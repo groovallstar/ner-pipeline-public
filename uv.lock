@@ -1589,6 +1589,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pymilvus" },
+    { name = "pytorch-crf" },
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "seaborn" },
@@ -1632,6 +1633,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pymilvus" },
+    { name = "pytorch-crf", specifier = ">=0.7.2" },
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "seaborn" },
@@ -2413,6 +2415,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
+]
+
+[[package]]
+name = "pytorch-crf"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/8c/aa58618f8c9cc8b2ddd22d4e700028101ec331d4c65c8cca663844a9dc24/pytorch-crf-0.7.2.tar.gz", hash = "sha256:e6456e22ccfc99a3d4fe1e03e996103b1b39e9830bf3c7e12e7a9077d3be866d", size = 5996, upload-time = "2019-02-04T01:44:15.85Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/7d/4c4688e26ea015fc118a0327e5726e6596836abce9182d3738be8ec2e32a/pytorch_crf-0.7.2-py3-none-any.whl", hash = "sha256:1b2d7d5eea3255f6e0cac09ab8b645472e76ff70d9333bc88762cf7317a4992d", size = 9501, upload-time = "2019-02-04T01:44:14.387Z" },
 ]
 
 [[package]]

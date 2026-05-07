@@ -18,6 +18,7 @@ from transformers import AutoTokenizer
 
 from ner.classifier.data_utils import (
     build_label_maps,
+    boundary_weights_tensor,
     class_weights_tensor,
     encode_dataset,
     load_jsonl,
@@ -97,6 +98,20 @@ def main():
              'strict=(start,end,type) exact match (default gate). '
              "relaxed=SemEval'13 Partial (type match + overlap = 0.5).",
     )
+    parser.add_argument(
+        '--use-crf', action='store_true',
+        help='Add a linear-chain CRF head on top of token classification. '
+             'Decoding uses Viterbi for BIO consistency. class_weights '
+             'are ignored when CRF loss is used.',
+    )
+    parser.add_argument(
+        '--boundary-b-weight', type=float, default=None,
+        help='Loss weight for B- tokens (entity start). Default 1.0 = no effect.',
+    )
+    parser.add_argument(
+        '--boundary-i-weight', type=float, default=None,
+        help='Loss weight for I- tokens (entity inside). Default 1.0 = no effect.',
+    )
     args = parser.parse_args()
 
     data_path = args.data or DEFAULT_DATA[args.lang]
@@ -157,6 +172,20 @@ def main():
             args.class_weight_ner, args.class_weight_pii,
         )
 
+    # Boundary-aware weight (B/I/O 차등) — class weight 와 elementwise 곱
+    if args.boundary_b_weight is not None or args.boundary_i_weight is not None:
+        bw = boundary_weights_tensor(
+            label2id,
+            w_b=args.boundary_b_weight if args.boundary_b_weight is not None else 1.0,
+            w_i=args.boundary_i_weight if args.boundary_i_weight is not None else 1.0,
+            w_o=1.0,
+        )
+        cw = bw if cw is None else cw * bw
+        logger.info(
+            'Boundary weights: B=%s, I=%s, O=1.0',
+            args.boundary_b_weight, args.boundary_i_weight,
+        )
+
     if args.curriculum:
         # Stage 1: PII 라벨을 O 로 마스킹하고 NER warmup
         stage1_dir = os.path.join(output_dir, 'stage1')
@@ -201,6 +230,7 @@ def main():
             metric_for_best=args.metric_for_best,
             init_model_path=s1_best,
             precision=args.precision,
+            use_crf=args.use_crf,
         )
         elapsed = s1_elapsed + s2_elapsed
         logger.info('Curriculum total time: %.1fs (stage1=%.1f + stage2=%.1f)',
@@ -220,6 +250,7 @@ def main():
             class_weights=cw,
             metric_for_best=args.metric_for_best,
             precision=args.precision,
+            use_crf=args.use_crf,
         )
         logger.info('Train time: %.1fs', elapsed)
 
