@@ -233,8 +233,6 @@ EVT 0건·ARTIFACT type drift) — F6 단독으론 실현 어려움 확인. 이�
 - production 합격선 정의는 사용자 권한 — 본 이슈는 모델 천장의 *측정·동결* 까지 책임
 
 ### 후속 트랙 (별도 이슈 후보)
-- **Tier 2.A — GLiNER (multilingual span-extraction)**: 현 token-classification
-  파이프라인과 다른 span-based extraction. 1~2일 통합 + 1~2회 학습. 기대 +3~+8pp.
 - **Tier 2.B — Self-training with adaptive thresholding**: JA Wikipedia
   unlabeled corpus pseudo-label + Gaussian per-class threshold. 2~3일.
 - **Tier 3 — test-set error analysis 후 gold cleanup**: baseline 의 test
