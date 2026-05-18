@@ -9,7 +9,9 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
+from torchcrf import CRF
 from transformers import (
     AutoModelForTokenClassification,
     AutoTokenizer,
@@ -24,6 +26,86 @@ from ner.metrics.span_metrics import (
 )
 
 
+class BertCRFForTokenClassification(nn.Module):
+    """BERT token-classification + linear-chain CRF head.
+
+    학습: -log_likelihood (Viterbi forward).
+    평가: Viterbi decode 로 BIO 일관성 강제.
+    save/load 는 base HF 모델과 CRF transition matrix 를 별개로 저장.
+
+    HuggingFace Trainer 가 PreTrainedModel attribute 를 일부 가정하므로
+    호환용 더미 속성을 노출한다.
+    """
+
+    # Trainer._issue_warnings_after_load 가 PreTrainedModel 가정 attribute
+    _keys_to_ignore_on_save: Optional[list] = None
+
+    def __init__(self,
+                 base_model_name_or_path: str,
+                 num_labels: int,
+                 id2label: Optional[Dict[int, str]] = None,
+                 label2id: Optional[Dict[str, int]] = None) -> None:
+        super().__init__()
+        self.base = AutoModelForTokenClassification.from_pretrained(
+            base_model_name_or_path,
+            num_labels=num_labels,
+            id2label=id2label or {},
+            label2id=label2id or {},
+            ignore_mismatched_sizes=True,
+        )
+        self.crf = CRF(num_labels, batch_first=True)
+        self.num_labels = num_labels
+
+    def forward(self, input_ids, attention_mask, labels=None, **kwargs):
+        outputs = self.base(
+            input_ids=input_ids, attention_mask=attention_mask
+        )
+        emissions = outputs.logits
+
+        if labels is None:
+            return {'logits': emissions}
+
+        # CRF mask: -100 (ignore_index) 위치 제외 + attention mask 적용.
+        # CRF 는 첫 step 이 항상 valid 여야 함 (CLS 토큰).
+        mask = (labels != -100) & (attention_mask == 1)
+        mask[:, 0] = True
+        safe_labels = labels.masked_fill(labels == -100, 0)
+        loss = -self.crf(
+            emissions, safe_labels, mask=mask, reduction='mean'
+        )
+        return {'loss': loss, 'logits': emissions}
+
+    def decode(self, input_ids, attention_mask) -> List[List[int]]:
+        """Viterbi decode. attention_mask 가 1 인 토큰만 디코드."""
+        with torch.no_grad():
+            emissions = self.base(
+                input_ids=input_ids, attention_mask=attention_mask
+            ).logits
+            return self.crf.decode(emissions, mask=attention_mask.bool())
+
+    def save_pretrained(self, output_dir: str) -> None:
+        os.makedirs(output_dir, exist_ok=True)
+        self.base.save_pretrained(output_dir)
+        torch.save(
+            self.crf.state_dict(), os.path.join(output_dir, 'crf.pt')
+        )
+
+    @classmethod
+    def from_pretrained(cls,
+                        model_path: str,
+                        num_labels: int,
+                        id2label: Optional[Dict[int, str]] = None,
+                        label2id: Optional[Dict[str, int]] = None
+                        ) -> 'BertCRFForTokenClassification':
+        instance = cls(model_path, num_labels, id2label, label2id)
+        crf_path = os.path.join(model_path, 'crf.pt')
+        if os.path.exists(crf_path):
+            instance.crf.load_state_dict(
+                torch.load(crf_path, weights_only=True, map_location='cpu')
+            )
+        return instance
+
+
 class WeightedTrainer(Trainer):
     """class-weighted cross-entropy 를 적용하는 Trainer 변형.
 
@@ -34,8 +116,51 @@ class WeightedTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights
 
+    def _save(self, output_dir: Optional[str] = None,
+              state_dict=None) -> None:
+        # BertCRFForTokenClassification 은 nn.Module 직속이라 safetensors
+        # 의 contiguous 검사에 걸린다. CRF wrapper 의 save_pretrained 로
+        # base 모델 + crf.pt 분리 저장.
+        if isinstance(self.model, BertCRFForTokenClassification):
+            os.makedirs(output_dir, exist_ok=True)
+            self.model.save_pretrained(output_dir)
+            torch.save(
+                self.args, os.path.join(output_dir, 'training_args.bin')
+            )
+            return
+        super()._save(output_dir, state_dict)
+
+    def _load_best_model(self) -> None:
+        # CRF wrapper 는 base + crf.pt 분리 저장이라 기본 _load_best_model
+        # (model.safetensors 만) 으로는 CRF transition matrix 가 누락된다.
+        if isinstance(self.model, BertCRFForTokenClassification):
+            best = self.state.best_model_checkpoint
+            if not best:
+                return
+            device = next(self.model.parameters()).device
+            new_base = AutoModelForTokenClassification.from_pretrained(
+                best,
+                num_labels=self.model.num_labels,
+                ignore_mismatched_sizes=True,
+            ).to(device)
+            self.model.base = new_base
+            crf_path = os.path.join(best, 'crf.pt')
+            if os.path.exists(crf_path):
+                self.model.crf.load_state_dict(
+                    torch.load(crf_path, weights_only=True,
+                               map_location=device)
+                )
+            return
+        super()._load_best_model()
+
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.pop('labels')
+        # CRF 모델은 forward 에서 -log_likelihood 를 직접 계산하므로
+        # labels 를 전달하고 outputs['loss'] 를 그대로 사용한다.
+        if isinstance(model, BertCRFForTokenClassification):
+            outputs = model(**inputs, labels=labels)
+            loss = outputs['loss']
+            return (loss, outputs) if return_outputs else loss
         outputs = model(**inputs)
         logits = outputs.logits
         weight = (self.class_weights.to(logits.device)
@@ -126,25 +251,36 @@ def fine_tune(*, model_name: str,
               class_weights: Optional[torch.Tensor] = None,
               metric_for_best: str = 'eval_loss',
               init_model_path: Optional[str] = None,
-              precision: str = 'fp16') -> Tuple[float, str]:
+              precision: str = 'fp16',
+              use_crf: bool = False) -> Tuple[float, str]:
     """HF Trainer 로 fine-tune. best 모델을 output_dir/best 에 저장.
 
     Args:
         class_weights: BIO 21 라벨용 weight tensor (None = 표준 CE)
         metric_for_best: 'eval_loss' (낮을수록 좋음) 또는 'ner_f1' / 'overall_f1' (높을수록 좋음)
         init_model_path: None 또는 기존 HF 모델 경로 (curriculum stage 2 용)
+        use_crf: True 면 BertCRFForTokenClassification 으로 학습.
+            CRF loss 가 -log_likelihood 라 class_weights 는 무시된다.
 
     Returns:
         (학습 시간 sec, best 모델 디렉토리 경로)
     """
     init_path = init_model_path if init_model_path is not None else model_name
-    model = AutoModelForTokenClassification.from_pretrained(
-        init_path,
-        num_labels=len(label2id),
-        id2label=id2label,
-        label2id=label2id,
-        ignore_mismatched_sizes=True,
-    )
+    if use_crf:
+        model = BertCRFForTokenClassification(
+            init_path,
+            num_labels=len(label2id),
+            id2label=id2label,
+            label2id=label2id,
+        )
+    else:
+        model = AutoModelForTokenClassification.from_pretrained(
+            init_path,
+            num_labels=len(label2id),
+            id2label=id2label,
+            label2id=label2id,
+            ignore_mismatched_sizes=True,
+        )
 
     greater_is_better = (metric_for_best != 'eval_loss')
     needs_compute_metrics = (metric_for_best in ('ner_f1', 'overall_f1'))
@@ -203,10 +339,21 @@ def evaluate_model(*, model_path: str,
         relaxed = SemEval'13 Partial — type 일치 + char-offset overlap 시 0.5점.
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # 평가는 항상 float32 로 (DeBERTa-v3 family 의 fp16 NaN underflow 회피)
-    model = AutoModelForTokenClassification.from_pretrained(
-        model_path, torch_dtype=torch.float32
-    ).to(device).eval()
+    # CRF 모델 감지: best 디렉토리에 crf.pt 가 있으면 CRF wrapper 로 로드.
+    is_crf = os.path.exists(os.path.join(model_path, 'crf.pt'))
+    if is_crf:
+        label2id = {v: k for k, v in id2label.items()}
+        model = BertCRFForTokenClassification.from_pretrained(
+            model_path,
+            num_labels=len(id2label),
+            id2label=id2label,
+            label2id=label2id,
+        ).to(device).eval()
+    else:
+        # 평가는 항상 float32 로 (DeBERTa-v3 family 의 fp16 NaN underflow 회피)
+        model = AutoModelForTokenClassification.from_pretrained(
+            model_path, torch_dtype=torch.float32
+        ).to(device).eval()
 
     pred_spans_list: List[List[dict]] = []
     gold_spans_list: List[List[dict]] = []
@@ -221,22 +368,38 @@ def evaluate_model(*, model_path: str,
             attention_mask = torch.tensor(
                 [f['attention_mask'] for f in batch], dtype=torch.long
             ).to(device)
-            logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
-            preds = logits.argmax(dim=-1).cpu().numpy()
-
-            for j, pred_ids in enumerate(preds):
-                offs = eval_offsets[i + j]
-                pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
-                spans = decode_bio_to_spans(pred_ids_list, offs, id2label)
-                pred_spans_list.append(spans)
-
-                gold = [
-                    {'type': e['label'],
-                     'start': e['start_char'],
-                     'end': e['end_char']}
-                    for e in eval_rows[i + j]['entities']
-                ]
-                gold_spans_list.append(gold)
+            if is_crf:
+                # Viterbi decode — variable-length tag list per sentence
+                pred_lists = model.decode(input_ids, attention_mask)
+                for j, pred_ids in enumerate(pred_lists):
+                    offs = eval_offsets[i + j]
+                    pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
+                    spans = decode_bio_to_spans(pred_ids_list, offs, id2label)
+                    pred_spans_list.append(spans)
+                    gold = [
+                        {'type': e['label'],
+                         'start': e['start_char'],
+                         'end': e['end_char']}
+                        for e in eval_rows[i + j]['entities']
+                    ]
+                    gold_spans_list.append(gold)
+            else:
+                logits = model(
+                    input_ids=input_ids, attention_mask=attention_mask
+                ).logits
+                preds = logits.argmax(dim=-1).cpu().numpy()
+                for j, pred_ids in enumerate(preds):
+                    offs = eval_offsets[i + j]
+                    pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
+                    spans = decode_bio_to_spans(pred_ids_list, offs, id2label)
+                    pred_spans_list.append(spans)
+                    gold = [
+                        {'type': e['label'],
+                         'start': e['start_char'],
+                         'end': e['end_char']}
+                        for e in eval_rows[i + j]['entities']
+                    ]
+                    gold_spans_list.append(gold)
 
     return {
         'strict': compute_offset_span_f1(gold_spans_list, pred_spans_list),

@@ -46,6 +46,7 @@ dependencies = [
     "spacy",
     "fugashi>=1.5.2",
     "unidic-lite>=1.0.8",
+    "pytorch-crf>=0.7.2",
 ]
 
 [tool.uv]

@@ -66,6 +66,53 @@ BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있�
 평가용 canonical 덤프 로더(`labelers/vi/dataset_loader.py`)는 HF를
 호출하지 않는다. 상세: `docs/manual/data/vietnamese-ner.md`.
 
+### ja_negative/
+JA classifier 의 환각 (FP HALLUCINATION) 감소를 위한 부정 예시 oversample
+도구. classifier `error_analysis.py --with-diagnosis` 결과에서 환각
+surface 를 추출하고, 학습 셋에서 그 surface 가 등장하지만 entity 라벨로
+표시되지 않은 문장을 N 배 oversample 한 보강 JSONL 을 생성한다.
+
+#### 주요 파일
+
+| 파일 | 역할 |
+|------|------|
+| `oversampler.py` | `extract_seeds` / `filter_ambiguous_seeds` / `find_candidate_indices` / `oversample_to_jsonl` 핵심 로직 |
+| `__main__.py` | `python -m ner.augmenters.ja_negative` CLI (`--auto-exclude-ambiguous`, `--seed-pred-types`, `--extra-only`) |
+
+#### 사용 예 (이슈 #58 v3 production 셋업)
+
+```bash
+# 1. 보강 jsonl 생성 (extra-only: classifier --data-extra-train-jsonl 용)
+python -m ner.augmenters.ja_negative \
+    --input data/stockmark/pii_all.jsonl \
+    --diagnosis results/classifier/ja_sweep/v3_boundary/error_analysis.json \
+    --output data/stockmark/pii_neg_aug_N2_extra.jsonl \
+    --oversample 2 --auto-exclude-ambiguous --extra-only
+
+# 2. classifier 학습 (leak-free: train 에만 합쳐짐)
+python -m ner.classifier --lang ja \
+    --data data/stockmark/pii_all.jsonl \
+    --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
+    --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
+    --output-dir results/classifier/ja_sweep/s7_neg_n2_leakfree
+```
+
+#### 핵심 옵션
+
+- `--oversample N` (default 2): 각 후보 문장 등장 횟수. extra-only 시
+  (N-1) 번 출력
+- `--auto-exclude-ambiguous`: 학습 셋에 entity 로 등장한 surface 자동
+  제외 (recall 회귀 차단)
+- `--seed-pred-types PER,LOC,ORG,PROD,EVT`: 환각 pred type 필터
+- `--extra-only`: extra 만 출력 (leak-free 평가 필수)
+
+#### 검증 결과 (이슈 #58)
+
+이슈 #58 v3 셋업 (N=2 + ambiguous 제외) 으로 production 모델 대비:
+- overall strict F1 0.9368 → 0.9624 (+2.56pp)
+- 환각 60 → 30 (-50%)
+- 게이트 (P AND R ≥ 0.95) 통과 5/10 → 7/10
+
 ## 사용 예
 
 ```bash

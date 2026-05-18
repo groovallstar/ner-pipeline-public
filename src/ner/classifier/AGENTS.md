@@ -36,7 +36,18 @@ python -m ner.classifier --lang vi \
     --model-name vinai/phobert-base \
     --data data/wikiann_vi/pii_all.jsonl \
     --max-length 256 --lr 5e-5
+
+# train 셋만 보강 (leak-free, augmenters/ja_negative 와 조합)
+python -m ner.classifier --lang ja \
+    --data data/stockmark/pii_all.jsonl \
+    --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
+    --boundary-b-weight 1.5 --boundary-i-weight 1.2
 ```
+
+`--data-extra-train-jsonl PATH` 는 별 JSONL 을 train split 에만 합치고
+valid/test 는 `--data` 의 원본 split 그대로 유지한다 (학습 데이터
+oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 시
+기존 단일 jsonl 학습과 동일.
 
 기본값:
 - `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`

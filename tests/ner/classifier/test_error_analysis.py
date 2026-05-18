@@ -4,9 +4,12 @@
 """
 
 from ner.classifier.error_analysis import (
+    NULL,
     aggregate_errors,
+    build_confusion_matrix,
     classify_span_errors,
     sample_for_review,
+    top_errors_by_type,
 )
 
 
@@ -121,6 +124,98 @@ def test_sample_for_review_deterministic():
     s2 = sample_for_review(sentence_results, ratio=0.1, seed=42)
     assert [x['sent_idx'] for x in s1] == [x['sent_idx'] for x in s2]
     assert 5 <= len(s1) <= 15  # ratio + min_per_type 조합
+
+
+def test_confusion_matrix_exact_and_boundary():
+    # EXACT 1건 + BOUNDARY 1건 모두 대각선 (gold_type == pred_type)
+    sr = [{
+        'sent_idx': 0, 'text': '...',
+        'gold_spans': [], 'pred_spans': [],
+        'exact': [{'gold': _g('PER', 0, 3), 'pred': _g('PER', 0, 3)}],
+        'fn': [{'error_class': 'BOUNDARY', 'gold': _g('PER', 5, 10),
+                'matched_pred': _g('PER', 5, 12)}],
+        'fp': [{'error_class': 'BOUNDARY', 'pred': _g('PER', 5, 12),
+                'matched_gold': _g('PER', 5, 10)}],
+        'counts': {'gold': 2, 'pred': 2, 'exact': 1, 'fn': 1, 'fp': 1},
+    }]
+    m = build_confusion_matrix(sr)
+    # EXACT 1 + BOUNDARY 1 = 2 (모두 PER→PER)
+    assert m['PER']['PER'] == 2
+    assert NULL not in m  # MISS/HALL 없음
+    assert 'PER' in m and len(m['PER']) == 1
+
+
+def test_confusion_matrix_type_mismatch_no_double_count():
+    # FN/FP 양쪽에 TYPE_MISMATCH entry 동일 — FN side 만 카운트되어 1번만 잡힘
+    sr = [{
+        'sent_idx': 0, 'text': '...',
+        'gold_spans': [], 'pred_spans': [],
+        'exact': [],
+        'fn': [{'error_class': 'TYPE_MISMATCH', 'gold': _g('ORG', 0, 5),
+                'matched_pred': _g('PROD', 0, 5)}],
+        'fp': [{'error_class': 'TYPE_MISMATCH', 'pred': _g('PROD', 0, 5),
+                'matched_gold': _g('ORG', 0, 5)}],
+        'counts': {'gold': 1, 'pred': 1, 'exact': 0, 'fn': 1, 'fp': 1},
+    }]
+    m = build_confusion_matrix(sr)
+    assert m['ORG']['PROD'] == 1
+    assert m.get('PROD', {}).get('ORG', 0) == 0  # 반대 방향 카운트 없음
+
+
+def test_confusion_matrix_miss_and_hallucination():
+    # MISS → gold→NULL, HALLUCINATION → NULL→pred
+    sr = [{
+        'sent_idx': 0, 'text': '...',
+        'gold_spans': [], 'pred_spans': [],
+        'exact': [],
+        'fn': [{'error_class': 'MISS', 'gold': _g('LOC', 0, 3)}],
+        'fp': [{'error_class': 'HALLUCINATION', 'pred': _g('PROD', 10, 13)}],
+        'counts': {'gold': 1, 'pred': 1, 'exact': 0, 'fn': 1, 'fp': 1},
+    }]
+    m = build_confusion_matrix(sr)
+    assert m['LOC'][NULL] == 1
+    assert m[NULL]['PROD'] == 1
+
+
+def test_top_errors_by_type_surface_frequency_and_context():
+    # 'abc' 3번 + 'def' 1번 → 'abc' 빈도 우선
+    sr = []
+    for i in range(3):
+        sr.append({
+            'sent_idx': i,
+            'text': 'XXX abc YYY',
+            'gold_spans': [], 'pred_spans': [],
+            'exact': [], 'fn': [],
+            'fp': [{
+                'error_class': 'HALLUCINATION',
+                'pred': {'type': 'PROD', 'start': 4, 'end': 7, 'text': 'abc'},
+            }],
+            'counts': {'gold': 0, 'pred': 1, 'exact': 0, 'fn': 0, 'fp': 1},
+        })
+    sr.append({
+        'sent_idx': 99,
+        'text': 'YYY def ZZZ',
+        'gold_spans': [], 'pred_spans': [],
+        'exact': [], 'fn': [],
+        'fp': [{
+            'error_class': 'TYPE_MISMATCH',
+            'pred': {'type': 'PROD', 'start': 4, 'end': 7, 'text': 'def'},
+            'matched_gold': {'type': 'ORG', 'start': 4, 'end': 7, 'text': 'def'},
+        }],
+        'counts': {'gold': 1, 'pred': 1, 'exact': 0, 'fn': 0, 'fp': 1},
+    })
+    top = top_errors_by_type(
+        sr, side='fp', type_='PROD', n=10, ctx_chars=4,
+    )
+    assert len(top) == 4
+    assert top[0]['surface'] == 'abc'  # 빈도 3 우선
+    assert top[0]['left_ctx'] == 'XXX '  # ctx_chars=4
+    assert top[0]['right_ctx'] == ' YYY'
+    assert top[0]['counter_type'] == NULL  # HALLUCINATION
+    # def 항목은 TYPE_MISMATCH 로 ORG counter
+    def_entries = [r for r in top if r['surface'] == 'def']
+    assert len(def_entries) == 1
+    assert def_entries[0]['counter_type'] == 'ORG'
 
 
 def test_sample_for_review_skips_clean_sentences():
