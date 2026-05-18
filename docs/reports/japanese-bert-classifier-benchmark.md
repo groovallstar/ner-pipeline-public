@@ -17,12 +17,13 @@
 ## 요약
 
 - **현 production 모델**: `tohoku-nlp/bert-base-japanese-v3` (110M)
-  + 데이터 보정 라운드 2 + boundary-aware loss (B=1.5, I=1.2).
-  최종 strict F1 = **0.9368** / relaxed F1 = **0.9505** (이슈 #51).
-- **게이트 0.95 미달 동결**. 28회 sweep + Tier 1.B 8 variant + Tier 3 +
-  라운드 2 (CRF + boundary + class weight) 모두 시도 후 NER 5종 strict
-  P/R 모두 ≥ 0.95 미달 확정. 사용자 결정 → (B) 천장 동결 + production
-  채택.
+  + 데이터 보정 라운드 2 + boundary-aware loss (B=1.5, I=1.2)
+  + **S7 환각 부정 예시 oversample (N=2, ambiguous 제외, 이슈 #58)**.
+  최종 strict F1 = **0.9624** / relaxed F1 = **0.9697**.
+  이전 production (v3+boundary, 이슈 #51, strict 0.9368) 대비 +2.56pp.
+- **게이트 0.95 미달 일부 잔존**. 라운드 3 (S0 진단 #56 + S7 부정 예시
+  #58) 으로 게이트 통과 5/10 → 7/10. 잔여 미달 3 클래스: LOC P -0.4pp /
+  ORG R -0.8pp / PROD R -3.4pp.
 - **DeBERTa-v3 family 학습 실패**: `ku-nlp/deberta-v3-base-japanese`,
   `microsoft/mdeberta-v3-base` 모두 F1=0 (majority-class collapse). 원인은
   하이퍼파라미터 미튜닝 (warmup·weight_decay·gradient_clip).
@@ -380,26 +381,141 @@ JA Wikipedia unlabeled pseudo-label + Gaussian threshold + cross-verifier
 | +boundary (v3→v3+boundary) | +0.22pp | LOC +1.31 / PER +0.67 | NER 5종 전체 안정 향상 |
 | +combined (v3→v3+combined) | +0.01pp | LOC +2.23 / PROD +1.47 (BUT DAT -3.49) | NER class wt 가 PII 회귀 |
 
-### 종결 결정 — (B) 천장 동결
+### 종결 결정 — (B) 천장 동결 → 라운드 3 (S0/S7) 으로 갱신
 
-NER 5종 strict P/R 모두 ≥ 0.95 게이트 미달 확정. 모든 시도 (data quality
-+ CRF + boundary + class weight) 후에도 ORG/LOC/PROD/EVT 0.85~0.94 천장.
-사용자 결정 → **(B) v3+boundary 를 production 채택** (strict 0.9368 /
-relaxed 0.9505).
+이슈 #51 시점 결정: NER 5종 strict P/R 모두 ≥ 0.95 게이트 미달 확정. 모든
+시도 (data quality + CRF + boundary + class weight) 후에도 ORG/LOC/PROD/
+EVT 0.85~0.94 천장. 사용자 결정 → **(B) v3+boundary 채택** (strict 0.9368
+/ relaxed 0.9505).
 
-향후 추가 시도는 별도 이슈로 분리 (E2 NER oversampling, E7 GLiNER, E8
-DAPT 등 — 데이터 천장이 본질이라 ROI 낮음 추정).
+라운드 3 (post-#51): #56 S0 진단으로 *환각이 단일 최대 leak (60건 중 ORG
+28)* 확인 → #58 S7 환각 부정 예시 oversample 로 **production 갱신**
+(v3+boundary → **v3+boundary+S7N2**, strict 0.9624). 상세 §라운드 3.
 
-상세: `docs/issues/issue-51-ja-classifier-strict-095.md`.
+상세: `docs/issues/issue-51-ja-classifier-strict-095.md`,
+`docs/issues/issue-56-ja-classifier-ceiling-diagnosis.md`,
+`docs/issues/issue-58-ja-classifier-s7-negative-augment.md`.
+
+## 라운드 3 (이슈 #56 + #58 종결) — 진단 기반 환각 부정 예시 oversample
+
+라운드 2 종결 후 진단 기반 후속 사이클. 두 단계로 진행:
+
+### 1) S0 진단 (이슈 #56)
+
+`error_analysis.py --with-diagnosis` 신규 — confusion matrix + per-class
+FP/FN top dump. v3+boundary 진단 결과:
+- TYPE_MISMATCH ≤ 12% — 종류 혼동은 본질 아님
+- 환각 60건 중 **ORG 28건 (47%) = 단일 최대 leak**
+- 환각 + 경계 어긋남 = 잘못 짚음의 88%
+
+### 2) S1 threshold + asymmetric focal 검증 (이슈 #57 not-planned)
+
+S0 진단으로 PROD/EVT/ORG over-predict 확인 후, 사후 (post-hoc) threshold
+tuning 으로 precision 회복 가능성 검증. valid 셋의 per-class confidence
+분포에서 strict precision ≥ 0.95 충족 최저 threshold 탐색:
+
+| calibration | PROD threshold | EVT | ORG | test 결과 |
+|---|---:|---:|---:|---|
+| valid-only (84 PROD pred) | 0.9882 | 0.7855 | 0.7344 | PROD recall **0.34** (붕괴) |
+| train+valid (~850 PROD) | 0.6951 | 0.5895 | 0.6287 | overall F1 +0.41pp, ORG/EVT P ≥ 0.95 도달, PROD R 0.82 |
+
+검증 결론:
+- threshold 자체는 *예측을 거름* → recall 무조건 ↓ (또는 동등)
+- 게이트 정의 (P AND R ≥ 0.95) 와 **구조적 부합 불가능**
+- valid-only 표본 부족 (PROD valid ~28건) → threshold 과대추정 → test
+  일반화 실패
+- train+valid 합본 (~850 PROD) 도 게이트 미달 (PROD P 0.94 / R 0.82)
+
+**결정**: 이슈 #57 **not-planned close**. P/R 동시 천장은 *데이터 측 처방*
+으로만 도달 가능 확정 → S7 진행. asymmetric focal loss 2단계도 동일 한계
+(학습 측 calibration) → 시도 안 함.
+
+### 3) S7 환각 부정 예시 oversample (이슈 #58)
+
+신규 도구 `python -m ner.augmenters.ja_negative` + classifier
+`--data-extra-train-jsonl` 옵션 (leak-free 학습). 5 variant 비교:
+
+| variant | seed | N | F1 strict | HALL | 게이트 |
+|---|---|---:|---:|---:|---:|
+| (production) v3+boundary | - | - | 0.9368 | 60 | 5/10 |
+| v1 leak-free | 57 | 3 | 0.9597 | 32 | 6/10 |
+| v2 ambig 제외 | 49 | 3 | 0.9552 | 22 | 6/10 |
+| **v3 = S7N2 (채택)** | 49 | **2** | **0.9624** | 30 | **7/10** |
+| v4 NER-only | 41 | 3 | 0.9572 | 31 | 5/10 |
+| v5 PROD 제거 | 35 | 2 | 0.9525 | 32 | 4/10 |
+
+### per-entity (v3+boundary+S7N2, **갱신된 production**)
+
+| 종류 | strict P | ΔP vs prod | strict R | ΔR vs prod | 게이트 |
+|---|---:|---:|---:|---:|---|
+| PER | 0.9734 | +0.00 | 0.9708 | -0.53 | ✅ |
+| LOC | 0.9459 | +0.91 | 0.9550 | +4.83 | ❌ P -0.4pp |
+| ORG | 0.9501 | +5.55 | 0.9417 | +2.65 | ❌ R -0.8pp |
+| PROD | 0.9775 | +12.60 | 0.9158 | +1.05 | ❌ R -3.4pp |
+| EVT | 0.9659 | +9.78 | 0.9659 | +6.82 | ✅ |
+| DAT | 0.9712 | -1.88 | 0.9619 | +0.95 | ✅ |
+| EMAIL | 1.0000 | =0 | 1.0000 | =0 | ✅ |
+| PHONE | 1.0000 | =0 | 1.0000 | =0 | ✅ |
+| ID_NUM | 0.9886 | +6.23 | 0.9775 | -1.13 | ✅ |
+| CREDIT_CARD | 0.9518 | +0.18 | 0.9753 | +3.70 | ✅ |
+| **overall** | **0.9594** | **+2.61** | **0.9599** | **+1.97** | |
+
+### 핵심 발견 (S7 검증)
+
+- N=2 (보수적) 가 N=3 보다 우월 — recall 손실 완화 + 환각 효과 유지
+- ambiguous 자동 제외 (학습 셋에 entity 로 등장한 surface) 가 회귀
+  방지에 필수
+- PROD seed 제거 (v5) 가 오히려 PROD 자체 악화 — 환각 surface 가 다른
+  entity calibration 에도 기여하는 ripple 효과
+- NER-only 분리 (PII 환각 제외, v4) 효과 없음 — PII 환각 surface 는 무해
+
+### 다음 작업 + Fallback
+
+잔여 미달 3 클래스 (LOC P -0.4pp / ORG R -0.8pp / PROD R -3.4pp) — 모두
+작은 gap. v3+boundary+S7N2 재진단 결과 BOUNDARY 30건이 가장 큰 잔존
+표적.
+
+후속 후보:
+- **S6** 경계 규칙 명문화 + 데이터 보정 (BOUNDARY 30 직격)
+  - `docs/manual/data/canonical-entity-schema.md` 에 정책 추가:
+    인용부호 (「」, 『』) 안 entity 범위 / 우편번호 prefix (`〒...`)
+    LOC 포함 여부 / 영문 모델명·버전 번호 자르는 기준 / 복합 조직명
+    (`国土交通省道路局`) 분리 정책
+  - 학습 셋 일괄 보정 (자동 + 표본 검수)
+  - 효과 목표: BOUNDARY 30 → < 15, 게이트 통과 8/10 이상
+- **S2** Wikidata gazetteer (LOC 한정) — LOC P/R 추가 회복
+- (옵션) **S4** targeted annotation — 라운드 2 에서 이미 40 corrections,
+  추가 marginal
+- (옵션) **S5** backbone swap (xlm-r-large / deberta-ja-v3-mc4) — 최후
+
+Fallback (S6/S2 미달 시):
+- **(A)** 게이트 완화 0.95 → 0.93 또는 NER/PII 분리 게이트
+- **(C)** rule-based PII union + NER 단독 (EMAIL/PHONE regex 대체)
+
+별도 트랙:
+- VI: `handoff-post-issue-40-classifier-followups.md`
 
 ## 동결된 후속 트랙 (별도 이슈 후보)
 
-이슈 #45 종결로 다음은 **현 데이터·모델 셋업에서 효과 없음** 으로 동결:
+이슈 #45 / #53 / #54 / #55 종결로 다음은 **현 데이터·모델 셋업에서 효과 없음** 으로 동결:
 
 - F6-JA — 외부 코퍼스 통합 (SHINRA / KWDLC / UNER JA 등): 무료 + 네이티브
-  EVT/PROD span 라벨 코퍼스 사실상 부재
+  EVT/PROD span 라벨 코퍼스 사실상 부재 (이슈 #45)
 - F3-JA — DeBERTa-v3 hyperparameter sweep (warmup·weight_decay·grad_clip):
   잠재력 미검증 상태로 *분리 이슈 후보* (본 sweep 에서 학습 실패만 확인)
+- E2-JA — NER 5종 oversampling (PROD/EVT 4x 단순 복제, 이슈 #53):
+  overall strict F1 -0.06pp (사실상 동등) + EVT 양방향 +5.5pp 단일 성과 /
+  PROD precision↔recall trade-off (P +7.87 / R -6.32) + 일반 NER (PER F1
+  -1.09, LOC P -2.02) / PII (ID_NUM R -6.74, CREDIT_CARD F1 -0.51) 회귀
+  가드 광범위 위반. CLI 미흡수
+- F1-JA — ambiguous 라운드 3 검수 (이슈 #54): v3+boundary inference 의
+  BOUNDARY/TYPE_MISMATCH 69 pairs 중 schema 4영역 룰로 in-place 보정 가능
+  = **4건 / 1922 spans = 0.2%**. 회수 가능 entity 부족 실측 → 즉시 천장 동결
+- E7-JA — GLiNER-Japanese span-based extraction (이슈 #55):
+  `urchade/gliner_multi-v2.1` zero-shot overall strict F1 = **0.1134**
+  (v3+boundary 대비 -82.34pp). canonical schema (ORG=시설 통합, PII 합성)
+  vs GLiNER 일반 정의 mismatch 가 핵심. fine-tune 으로 +80pp 회복 비대칭 +
+  학습 실패 패턴 위험. inference 38x 슬로우 (76 ms/sent)
 - LUKE-japanese 통합: tokenizer 어댑터 신규 작성 비용
 
 ## 재현

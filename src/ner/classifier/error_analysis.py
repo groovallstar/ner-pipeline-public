@@ -25,7 +25,12 @@ import random
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional
 
+from ner.classifier.data_utils import CANONICAL_LABELS
+
 logger = logging.getLogger(__name__)
+
+# confusion matrix 에서 'gold 누락 (HALL)' / 'pred 누락 (MISS)' 자리 표시자
+NULL = '∅'
 
 
 def _overlap_len(a: dict, b: dict) -> int:
@@ -211,6 +216,156 @@ def aggregate_errors(sentence_results: List[dict]) -> dict:
         'fn_by_type': {t: dict(c) for t, c in fn_by_type.items()},
         'fp_by_type': {t: dict(c) for t, c in fp_by_type.items()},
     }
+
+
+def build_confusion_matrix(sentence_results: List[dict]) -> Dict[str, Dict[str, int]]:
+    """전체 sentence_results → (gold_type × pred_type) span-level confusion matrix.
+
+    매칭 카운트 규칙 (이중계산 방지):
+    - EXACT: matrix[t][t] += 1
+    - BOUNDARY: matrix[t][t] += 1 (type 동일, offset 차이만 무시한 대각선)
+    - TYPE_MISMATCH: matrix[gold_type][pred_type] += 1 (FN side 만 카운트)
+    - MISS: matrix[gold_type][NULL] += 1
+    - HALLUCINATION: matrix[NULL][pred_type] += 1
+
+    NULL ('∅') 은 'gold 부재 (FP 환각)' / 'pred 부재 (FN 누락)' 자리 표시자.
+    TYPE_MISMATCH 와 BOUNDARY 는 FN/FP 양쪽에 동일 entry 가 들어가므로 FN side
+    에서만 집계해 이중계산을 막는다.
+    """
+    matrix: Dict[str, Counter] = defaultdict(Counter)
+
+    for sr in sentence_results:
+        for ex in sr.get('exact', []):
+            t = ex['gold']['type']
+            matrix[t][t] += 1
+
+        for entry in sr.get('fn', []):
+            cls = entry['error_class']
+            gold_type = entry['gold']['type']
+            if cls == 'MISS':
+                matrix[gold_type][NULL] += 1
+            elif cls == 'BOUNDARY':
+                matrix[gold_type][gold_type] += 1
+            elif cls == 'TYPE_MISMATCH':
+                pred_type = entry['matched_pred']['type']
+                matrix[gold_type][pred_type] += 1
+
+        for entry in sr.get('fp', []):
+            cls = entry['error_class']
+            if cls == 'HALLUCINATION':
+                matrix[NULL][entry['pred']['type']] += 1
+            # BOUNDARY/TYPE_MISMATCH 는 FN side 에서 카운트 완료
+
+    return {t: dict(c) for t, c in matrix.items()}
+
+
+def top_errors_by_type(
+    sentence_results: List[dict],
+    side: str,
+    type_: str,
+    n: int = 50,
+    ctx_chars: int = 20,
+) -> List[dict]:
+    """특정 entity type 의 FP 또는 FN 항목을 surface + 좌우 context 와 함께 추출.
+
+    Args:
+        side: 'fp' 또는 'fn'
+        type_: 추출 대상 entity type. side='fp' 시 pred type, side='fn' 시
+               gold type 기준
+        n: 최대 추출 건수
+        ctx_chars: 좌우 context 문자 수
+
+    Returns:
+        [{'sent_idx', 'surface', 'left_ctx', 'right_ctx', 'error_class',
+          'counter_type', 'span': (start, end)}, ...]
+        counter_type: TYPE_MISMATCH/BOUNDARY 면 매칭 상대 type, MISS/HALLUCINATION
+        면 NULL.
+
+    정렬: 같은 surface 빈도가 높은 항목 우선 (반복 패턴 식별), 동률 시 sent_idx.
+    """
+    if side not in ('fp', 'fn'):
+        raise ValueError(f"side must be 'fp' or 'fn', got {side!r}")
+
+    primary_key = 'pred' if side == 'fp' else 'gold'
+    counter_key = 'matched_gold' if side == 'fp' else 'matched_pred'
+
+    out: List[dict] = []
+    for sr in sentence_results:
+        text = sr.get('text', '')
+        for entry in sr.get(side, []):
+            primary = entry.get(primary_key)
+            if primary is None or primary['type'] != type_:
+                continue
+            cls = entry['error_class']
+            if cls in ('TYPE_MISMATCH', 'BOUNDARY'):
+                counter = entry.get(counter_key)
+                counter_type = counter['type'] if counter else NULL
+            else:
+                counter_type = NULL
+
+            s, e = primary['start'], primary['end']
+            out.append({
+                'sent_idx': sr.get('sent_idx', -1),
+                'surface': text[s:e],
+                'left_ctx': text[max(0, s - ctx_chars):s],
+                'right_ctx': text[e:e + ctx_chars],
+                'error_class': cls,
+                'counter_type': counter_type,
+                'span': (s, e),
+            })
+
+    freq = Counter(r['surface'] for r in out)
+    out.sort(key=lambda r: (-freq[r['surface']], r['sent_idx']))
+    return out[:n]
+
+
+def render_confusion_matrix_md(
+    matrix: Dict[str, Dict[str, int]],
+    types: Optional[List[str]] = None,
+) -> str:
+    """confusion matrix → markdown 표 (gold 행 × pred 열, NULL 컬럼 포함)."""
+    if types is None:
+        types = list(CANONICAL_LABELS)
+    rows = list(types) + [NULL]
+    cols = list(types) + [NULL]
+
+    lines: List[str] = []
+    lines.append('| gold \\ pred | ' + ' | '.join(cols) + ' | row_sum |')
+    lines.append('|' + '|'.join(['---'] * (len(cols) + 2)) + '|')
+
+    col_sums = {c: 0 for c in cols}
+    for r in rows:
+        cells = []
+        row_sum = 0
+        for c in cols:
+            v = matrix.get(r, {}).get(c, 0)
+            cells.append(str(v) if v else '-')
+            row_sum += v
+            col_sums[c] += v
+        cells.append(str(row_sum))
+        lines.append(f'| {r} | ' + ' | '.join(cells) + ' |')
+
+    total = sum(col_sums.values())
+    bottom = [str(col_sums[c]) for c in cols] + [str(total)]
+    lines.append('| **col_sum** | ' + ' | '.join(bottom) + ' |')
+    return '\n'.join(lines)
+
+
+def render_top_errors_md(top: List[dict], title: str) -> str:
+    """top_errors_by_type 결과 → markdown 표 (surface + context + counter)."""
+    lines = [f'# {title}', '']
+    lines.append('| # | surface | error_class | counter | context |')
+    lines.append('|---|---|---|---|---|')
+    for i, r in enumerate(top, 1):
+        surface_safe = r['surface'].replace('|', '\\|').replace('\n', ' ')
+        left = r['left_ctx'].replace('|', '\\|').replace('\n', ' ')
+        right = r['right_ctx'].replace('|', '\\|').replace('\n', ' ')
+        ctx = f'{left}【{surface_safe}】{right}'
+        lines.append(
+            f"| {i} | {surface_safe} | {r['error_class']} | "
+            f"{r['counter_type']} | {ctx} |"
+        )
+    return '\n'.join(lines)
 
 
 def sample_for_review(
@@ -465,6 +620,11 @@ def run_error_analysis(
     test_ratio: float = 0.1,
     max_length: int = 256,
     batch_size: int = 32,
+    with_diagnosis: bool = False,
+    diagnosis_fp_types: Optional[List[str]] = None,
+    diagnosis_fn_types: Optional[List[str]] = None,
+    diagnosis_top_n: int = 50,
+    diagnosis_ctx_chars: int = 20,
 ) -> dict:
     """전체 파이프라인: 추론 → 분류 → 집계 → 검수 샘플 → 산출물 저장.
 
@@ -558,7 +718,55 @@ def run_error_analysis(
         print(f"    {k:18s} {v:4d}")
     print(f"\n  Review {review_label}: {len(review)} sentences → {review_path}")
 
-    return {'aggregate': agg, 'review_size': len(review)}
+    diagnosis_paths: List[str] = []
+    if with_diagnosis:
+        fp_types = diagnosis_fp_types or ['PROD', 'EVT', 'ORG']
+        fn_types = diagnosis_fn_types or ['LOC']
+
+        matrix = build_confusion_matrix(sentence_results)
+        cm_path = os.path.join(output_dir, f'confusion_matrix{suffix}.md')
+        with open(cm_path, 'w', encoding='utf-8') as f:
+            f.write('# Confusion matrix — gold (행) × pred (열)\n\n')
+            f.write(
+                '대각선 = (EXACT + BOUNDARY) 합. off-diagonal = TYPE_MISMATCH '
+                '(FN side 만 카운트). 우측 마지막 열 ∅ = MISS, 하단 마지막 행 '
+                '∅ = HALLUCINATION.\n\n'
+            )
+            f.write(render_confusion_matrix_md(matrix) + '\n')
+        logger.info('Saved %s', cm_path)
+        diagnosis_paths.append(cm_path)
+
+        for t in fp_types:
+            top = top_errors_by_type(
+                sentence_results, side='fp', type_=t,
+                n=diagnosis_top_n, ctx_chars=diagnosis_ctx_chars,
+            )
+            path = os.path.join(output_dir, f'fp_top_{t}{suffix}.md')
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(render_top_errors_md(top, f'{t} FP top {len(top)}'))
+                f.write('\n')
+            logger.info('Saved %s', path)
+            diagnosis_paths.append(path)
+
+        for t in fn_types:
+            top = top_errors_by_type(
+                sentence_results, side='fn', type_=t,
+                n=diagnosis_top_n, ctx_chars=diagnosis_ctx_chars,
+            )
+            path = os.path.join(output_dir, f'fn_top_{t}{suffix}.md')
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(render_top_errors_md(top, f'{t} FN top {len(top)}'))
+                f.write('\n')
+            logger.info('Saved %s', path)
+            diagnosis_paths.append(path)
+
+        print(f"\n  Diagnosis: {len(diagnosis_paths)} files → {output_dir}")
+
+    return {
+        'aggregate': agg,
+        'review_size': len(review),
+        'diagnosis_paths': diagnosis_paths,
+    }
 
 
 def main():
@@ -596,6 +804,27 @@ def main():
     parser.add_argument('--test-ratio', type=float, default=0.1)
     parser.add_argument('--max-length', type=int, default=256)
     parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument(
+        '--with-diagnosis', action='store_true',
+        help='Generate confusion_matrix.md + fp_top/fn_top per-type dumps '
+             '(default fp=PROD,EVT,ORG / fn=LOC).',
+    )
+    parser.add_argument(
+        '--diagnosis-fp-types', default='PROD,EVT,ORG',
+        help='Comma-separated entity types for FP top dump (with --with-diagnosis).',
+    )
+    parser.add_argument(
+        '--diagnosis-fn-types', default='LOC',
+        help='Comma-separated entity types for FN top dump (with --with-diagnosis).',
+    )
+    parser.add_argument(
+        '--diagnosis-top-n', type=int, default=50,
+        help='Max entries per top-N dump (default: 50).',
+    )
+    parser.add_argument(
+        '--diagnosis-ctx-chars', type=int, default=20,
+        help='Surrounding context chars per side in top dumps (default: 20).',
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -608,6 +837,9 @@ def main():
         'vi': 'data/wikiann_vi/pii_all.jsonl',
     }
     data_path = args.data or default_data[args.lang]
+
+    fp_types = [t.strip() for t in args.diagnosis_fp_types.split(',') if t.strip()]
+    fn_types = [t.strip() for t in args.diagnosis_fn_types.split(',') if t.strip()]
 
     run_error_analysis(
         lang=args.lang,
@@ -623,6 +855,11 @@ def main():
         test_ratio=args.test_ratio,
         max_length=args.max_length,
         batch_size=args.batch_size,
+        with_diagnosis=args.with_diagnosis,
+        diagnosis_fp_types=fp_types,
+        diagnosis_fn_types=fn_types,
+        diagnosis_top_n=args.diagnosis_top_n,
+        diagnosis_ctx_chars=args.diagnosis_ctx_chars,
     )
 
 
