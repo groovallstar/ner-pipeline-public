@@ -5,8 +5,8 @@
     2. 본 CLI 로 보강 jsonl 생성 (--extra-only 권장)
     3. classifier 학습에 --data-extra-train-jsonl 로 주입
 
-예 (이슈 #58 v3 셋업, JA production 후보):
-    python -m ner.augmenters.ja_negative \\
+예 (JA classifier 천장 회복 셋업, leak-free):
+    python -m ner.augmenters.ja.negative \\
         --input data/stockmark/pii_all.jsonl \\
         --diagnosis results/classifier/ja_sweep/v3_boundary/error_analysis.json \\
         --output data/stockmark/pii_neg_aug_N2_extra.jsonl \\
@@ -22,7 +22,7 @@
 import argparse
 import logging
 
-from ner.augmenters.ja_negative.oversampler import oversample_to_jsonl
+from ner.augmenters.ja.negative.oversampler import oversample_to_jsonl
 
 
 def main():

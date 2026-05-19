@@ -1,4 +1,4 @@
-"""ja_negative.oversampler 단위 테스트.
+"""ja.negative.oversampler 단위 테스트.
 
 순수 함수 + 통합 (oversample_to_jsonl) 모두 cover. classifier 학습 경로는
 별 통합 테스트로 분리.
@@ -6,7 +6,7 @@
 
 import json
 
-from ner.augmenters.ja_negative.oversampler import (
+from ner.augmenters.ja.negative.oversampler import (
     extract_seeds,
     filter_ambiguous_seeds,
     find_candidate_indices,

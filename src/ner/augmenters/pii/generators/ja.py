@@ -49,21 +49,83 @@ def generate_name(rng: random.Random | None = None) -> str:
     return family + given
 
 
+JAPANESE_LANDLINE_AREAS_2D = ['3', '6']
+# 도쿄·오사카 (2자리 시외국번 → 가입자번호 4-4)
+JAPANESE_LANDLINE_AREAS_3D = ['11', '22', '45', '52', '75', '92', '96', '78']
+# 札幌·仙台·横浜·名古屋·京都·福岡·熊本·神戸 (3자리 시외국번 → 3-4)
+MOBILE_CARRIERS = ['70', '80', '90']
+TOLLFREE_PREFIXES = ['0120', '0800']
+IP_PHONE_PREFIX = '050'
+
+
 def generate_phone(rng: random.Random | None = None) -> str:
-    """일본식 전화번호(하이픈/+81 등 다양한 포맷)."""
+    """일본식 전화번호.
+
+    휴대(070/080/090) + 固定電話(03/06/045/052/075/092 등) +
+    フリーダイヤル(0120/0800) + IP phone(050) 의 4 카테고리를 가중치로 섞고,
+    구분자(하이픈/공백/도트/슬래시/괄호) 변형까지 다양화한다.
+    """
     r = rng or random
-    carrier = r.choice(['80', '90', '70'])
+    # 카테고리 가중치 — mobile 다수, 나머지 균등 (실제 PII 분포 근사)
+    kind = r.choices(
+        ['mobile', 'landline', 'tollfree', 'ip'],
+        weights=[60, 22, 10, 8],
+        k=1,
+    )[0]
+
+    if kind == 'mobile':
+        carrier = r.choice(MOBILE_CARRIERS)
+        b2 = random_digits(4, r)
+        b3 = random_digits(4, r)
+        pattern = r.choice([
+            '0{b1}-{b2}-{b3}',
+            '0{b1}{b2}{b3}',
+            '+81-{b1}-{b2}-{b3}',
+            '+81(0){b1}-{b2}-{b3}',
+            '+81 {b1} {b2} {b3}',
+            '(0{b1}){b2}-{b3}',
+            '0{b1}.{b2}.{b3}',
+            '0{b1}/{b2}/{b3}',
+        ])
+        return pattern.format(b1=carrier, b2=b2, b3=b3)
+
+    if kind == 'landline':
+        # 시외국번 자리 수에 따라 가입자번호 자리 수 가변
+        if r.random() < 0.5:
+            area = r.choice(JAPANESE_LANDLINE_AREAS_2D)
+            b2 = random_digits(4, r)
+        else:
+            area = r.choice(JAPANESE_LANDLINE_AREAS_3D)
+            b2 = random_digits(3, r)
+        b3 = random_digits(4, r)
+        pattern = r.choice([
+            '0{a}-{b2}-{b3}',
+            '+81-{a}-{b2}-{b3}',
+            '(0{a}){b2}-{b3}',
+            '0{a}{b2}{b3}',
+        ])
+        return pattern.format(a=area, b2=b2, b3=b3)
+
+    if kind == 'tollfree':
+        prefix = r.choice(TOLLFREE_PREFIXES)
+        b2 = random_digits(3, r)
+        b3 = random_digits(3 if prefix == '0120' else 4, r)
+        pattern = r.choice([
+            '{p}-{b2}-{b3}',
+            '{p}{b2}{b3}',
+            '{p} {b2} {b3}',
+        ])
+        return pattern.format(p=prefix, b2=b2, b3=b3)
+
+    # IP phone
     b2 = random_digits(4, r)
     b3 = random_digits(4, r)
     pattern = r.choice([
-        '0{b1}-{b2}-{b3}',
-        '0{b1}{b2}{b3}',
-        '+81-{b1}-{b2}-{b3}',
-        '+81(0){b1}-{b2}-{b3}',
-        '+81 {b1} {b2} {b3}',
-        '(0{b1}){b2}-{b3}',
+        f'{IP_PHONE_PREFIX}-{{b2}}-{{b3}}',
+        '+81-50-{b2}-{b3}',
+        f'{IP_PHONE_PREFIX}{{b2}}{{b3}}',
     ])
-    return pattern.format(b1=carrier, b2=b2, b3=b3)
+    return pattern.format(b2=b2, b3=b3)
 
 
 def generate_address(rng: random.Random | None = None) -> str:
