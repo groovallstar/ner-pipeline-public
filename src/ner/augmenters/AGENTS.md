@@ -66,24 +66,30 @@ BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있�
 평가용 canonical 덤프 로더(`labelers/vi/dataset_loader.py`)는 HF를
 호출하지 않는다. 상세: `docs/manual/data/vietnamese-ner.md`.
 
-### ja_negative/
-JA classifier 의 환각 (FP HALLUCINATION) 감소를 위한 부정 예시 oversample
-도구. classifier `error_analysis.py --with-diagnosis` 결과에서 환각
-surface 를 추출하고, 학습 셋에서 그 surface 가 등장하지만 entity 라벨로
-표시되지 않은 문장을 N 배 oversample 한 보강 JSONL 을 생성한다.
+### ja/ — JA classifier 천장 회복 도구 모음
 
-#### 주요 파일
+JA NER classifier 의 잔여 미달 클래스 (PROD recall · ORG/PROD precision)
+회복을 위한 oversample 도구 서브패키지 모음. classifier
+`error_analysis.py --with-diagnosis` 산출물을 입력으로 받아 leak-free
+보강 JSONL 을 생성한다. 학습 시 `classifier --data-extra-train-jsonl`
+옵션과 조합해 train split 에만 합치고 valid/test 는 원본 split 그대로
+유지하는 평가 무결성을 지킨다.
+
+#### ja/negative/ — 환각 부정 예시 oversample
+
+환각 (FP HALLUCINATION) 감소용. 환각 surface 를 학습 셋에서 entity
+라벨로 표시되지 않은 위치에 가진 문장을 N 배 oversample 한다.
 
 | 파일 | 역할 |
 |------|------|
 | `oversampler.py` | `extract_seeds` / `filter_ambiguous_seeds` / `find_candidate_indices` / `oversample_to_jsonl` 핵심 로직 |
-| `__main__.py` | `python -m ner.augmenters.ja_negative` CLI (`--auto-exclude-ambiguous`, `--seed-pred-types`, `--extra-only`) |
+| `__main__.py` | `python -m ner.augmenters.ja.negative` CLI (`--auto-exclude-ambiguous`, `--seed-pred-types`, `--extra-only`) |
 
-#### 사용 예 (이슈 #58 v3 production 셋업)
+사용 예 (production 셋업, leak-free):
 
 ```bash
 # 1. 보강 jsonl 생성 (extra-only: classifier --data-extra-train-jsonl 용)
-python -m ner.augmenters.ja_negative \
+python -m ner.augmenters.ja.negative \
     --input data/stockmark/pii_all.jsonl \
     --diagnosis results/classifier/ja_sweep/v3_boundary/error_analysis.json \
     --output data/stockmark/pii_neg_aug_N2_extra.jsonl \
@@ -93,12 +99,10 @@ python -m ner.augmenters.ja_negative \
 python -m ner.classifier --lang ja \
     --data data/stockmark/pii_all.jsonl \
     --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
-    --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
-    --output-dir results/classifier/ja_sweep/s7_neg_n2_leakfree
+    --boundary-b-weight 1.5 --boundary-i-weight 1.2
 ```
 
-#### 핵심 옵션
-
+핵심 옵션:
 - `--oversample N` (default 2): 각 후보 문장 등장 횟수. extra-only 시
   (N-1) 번 출력
 - `--auto-exclude-ambiguous`: 학습 셋에 entity 로 등장한 surface 자동
@@ -106,12 +110,39 @@ python -m ner.classifier --lang ja \
 - `--seed-pred-types PER,LOC,ORG,PROD,EVT`: 환각 pred type 필터
 - `--extra-only`: extra 만 출력 (leak-free 평가 필수)
 
-#### 검증 결과 (이슈 #58)
+#### ja/prod_seed/ — PROD 도메인 휴리스틱 seed oversample
 
-이슈 #58 v3 셋업 (N=2 + ambiguous 제외) 으로 production 모델 대비:
-- overall strict F1 0.9368 → 0.9624 (+2.56pp)
-- 환각 60 → 30 (-50%)
-- 게이트 (P AND R ≥ 0.95) 통과 5/10 → 7/10
+PROD recall 의 long-tail 도메인 (법안·서적·식품·교통·음악) 신호 보강용.
+random PROD-positive oversample 은 surface 분포가 famous media·software 에
+편중되어 test PROD FN 과 substring overlap 0% → 천장 그대로. 본 도구는
+도메인 suffix·키워드 정규식 (`DOMAIN_PATTERNS`) 으로 train+valid PROD-pos
+문장을 정밀 선별·N 배 oversample 한다.
+
+| 파일 | 역할 |
+|------|------|
+| `seed_selector.py` | `DOMAIN_PATTERNS` (law/book/food/transit_card/music_work 5종) / `categorize_prod_surface` / `select_domain_seed_indices` / `select_long_seed_indices` / `oversample_to_jsonl` |
+| `__main__.py` | `python -m ner.augmenters.ja.prod_seed` CLI (`--include-domain`, `--include-long`, `--base-extra`, `--oversample`, `--extra-only`) |
+
+사용 예 (PROD 도메인 + base extra = S7N2 negative):
+
+```bash
+python -m ner.augmenters.ja.prod_seed \
+    --input data/stockmark/pii_all_phonediv.jsonl \
+    --base-extra data/stockmark/pii_neg_aug_N2_extra.jsonl \
+    --output data/stockmark/pii_extra_s8_prod_domain_N5.jsonl \
+    --oversample 5 --extra-only
+```
+
+핵심 옵션:
+- `--include-domain` (default on): law/book/food/transit_card/music_work
+  5종 도메인 휴리스틱 매칭 seed 풀
+- `--include-long` (default off): 도메인 미매칭이지만 LONG (`--long-min-length`
+  default 6) surface 풀 (`DEFAULT_LONG_EXCLUDE_KEYWORDS` 로 famous media 제외)
+- `--base-extra PATH`: prefix 로 prepend 할 기존 extra (예: ja.negative 의
+  출력) — 두 보강을 한 jsonl 로 합쳐 classifier 에 단일 주입
+- `--oversample N` (default 5): seed-major 패턴으로 각 후보 N 회 연속 출력
+  (HF Trainer shuffle 입력 순서 결정성 유지)
+- `--extra-only` (default on): leak-free 평가 필수
 
 ## 사용 예
 

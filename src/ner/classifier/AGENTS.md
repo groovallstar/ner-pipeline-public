@@ -37,7 +37,7 @@ python -m ner.classifier --lang vi \
     --data data/wikiann_vi/pii_all.jsonl \
     --max-length 256 --lr 5e-5
 
-# train 셋만 보강 (leak-free, augmenters/ja_negative 와 조합)
+# train 셋만 보강 (leak-free, augmenters/ja.negative 와 조합)
 python -m ner.classifier --lang ja \
     --data data/stockmark/pii_all.jsonl \
     --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
