@@ -1,15 +1,17 @@
-# 핸드오프: classifier F1≥0.95 후속 작업 (post-#40)
+# 핸드오프: VI classifier F1≥0.95 후속 작업 (post-#40)
 
-> 작성일: 2026-05-04
+> 작성일: 2026-05-04 (VI 트랙으로 범위 좁힘)
 > 선행 작업: PR #41 (`feat/issue-40-classifier-restore`) — classifier CLI 복구 +
 >   canonical 10종 정합 + 3-way split + SOTA 모델 sweep
 > 베이스라인 결과: `docs/reports/bert-classifier-benchmark.md`
+>   (VI baseline: xlm-roberta-base 0.8985)
 > 분석·sweep 결과: `docs/issues/issue-40-classifier-restore.md` (게이트 미달
 >   분석 / 누적 변종 v2~v4 / SOTA 모델 sweep 12회 / DeBERTa family 학습 실패
 >   패턴 / 데이터 천장)
-> 목적: 0.95 게이트 도달이 본 측정 셋업·모델 후보로는 불가능에 가까움이
->   실측 확인됨. 후속 이슈 5개 후보를 효과·비용·의존성 기준으로 정리하고,
->   각 이슈에 진입할 때의 진입 조건·범위·성공 기준·위험을 동결한다.
+> 목적: VI 측 0.95 게이트 도달이 본 측정 셋업·모델 후보로는 불가능에
+>   가까움이 실측 확인됨. 후속 이슈 5개 후보를 효과·비용·의존성 기준으로
+>   정리하고, 각 이슈에 진입할 때의 진입 조건·범위·성공 기준·위험을 동결한다.
+> JA 트랙은 본 문서 범위 밖 — 별도 문서로 관리.
 
 ---
 
@@ -32,17 +34,13 @@
 | F5. EVT/PROD oversampling (VI) | VI EVT/PROD +5~15pp | ★★ | ★★ | 없음 |
 | F6. 외부 코퍼스 통합 (VI 데이터 보강) | VI +5~10pp | ★★★★ | ★★★ | augmenters 측 |
 
-> JA 측 트랙은 이슈 #45 에서 종결. F6-JA 는 28회 sweep + Tier 1.B 8 variant
-> 재평가로 데이터 천장·평가 천장 양쪽 확정. F3-JA 는 본 결과로 진입 무의미
-> (베이스라인이 SOTA 후보 능가 확정 + augmentation 회귀 확정).
-
 **우선 권장**: F5 → F2 → (F3 ‖ F4) → F6 (모두 VI 트랙).
 
 핵심 근거: F5·F2 는 단발성 학습/스크립트 추가만으로 검증 가능하고 즉시
 효과가 보이는 반면, F6 (데이터 보강) 은 별도 augmenters 작업이 선행되어야
 하므로 시간 비용이 가장 크다. F3·F4 는 잠재력은 있지만 본 sweep 에서
 이미 베이스라인이 SOTA 후보를 능가했으므로 모델 측 추가 작업의 ROI 가
-상대적으로 낮다 (이슈 #45 JA 측 결과로 동일 패턴 확정).
+상대적으로 낮다.
 
 ---
 
@@ -171,8 +169,7 @@ oversampling 으로 보강. 본 sweep 에서 이 두 클래스가 단일 최대 
 ### F6. 외부 코퍼스 통합 (VI 데이터 보강)
 
 **목적**: VI 데이터 천장 (PROD/EVT 어휘 다양성, EVT 절대 support, WikiANN-vi
-silver 노이즈) 을 외부 gold 코퍼스 통합으로 들어올린다. JA 측 동등 트랙은
-이슈 #45 에서 종결 (외부 무료 코퍼스 부재 + augmentation 회귀 8/8).
+silver 노이즈) 을 외부 gold 코퍼스 통합으로 들어올린다.
 
 **범위**:
 - VLSP 2018·2021 NER — 베트남어 NER 표준
@@ -196,8 +193,9 @@ silver 노이즈) 을 외부 gold 코퍼스 통합으로 들어올린다. JA 측
 - 라벨 매핑 비용 — 외부 코퍼스의 entity 정의가 canonical 10종과 1:1 매핑되지
   않음. PROD/EVT 같은 본 프로젝트 정의에 외부 라벨이 부분만 해당
 - 코퍼스 크기 차이 — domain shift 위험 (도메인 균형 sample weight 필요)
-- silver 노이즈: 이슈 #45 의 KWDLC type drift -9.96pp 사례 — gold 라벨이라도
-  type 정의 mismatch 시 보강 효과 없이 회귀. 라벨 매핑 사전 검증 필수.
+- silver 노이즈 / type drift: 외부 gold 코퍼스라도 entity 정의가 canonical 10종
+  과 mismatch 시 보강 효과 없이 회귀 (선례: KWDLC 통합 시 type drift -9.96pp).
+  라벨 매핑 사전 검증 필수.
 
 ---
 
@@ -246,10 +244,5 @@ F2·F3·F4·F5 는 모두 같은 코드 모듈 (`src/ner/classifier/`) 변경이
 - **(C) 모델 외부 보완**: 추론 시 rule-based PII detector (regex 정규화) 와
   union → BERT NER 5종 + regex PII 5종 조합으로 0.95 도달 시도. classifier
   모듈은 NER 5종에만 집중.
-
-> JA 측 종결 (이슈 #45) — 28회 sweep + Tier 1.B 8 variant 재평가로 (B) 데이터셋
-> 천장 동결 채택 (baseline strict F1 = 0.9077 / relaxed F1 = 0.9177 production
-> 후보, 합격선 정의는 사용자 권한). VI 측은 본 핸드오프 F2~F6 트랙으로 별도
-> 진행 후 같은 종결 옵션 적용.
 
 종결 결정은 사용자 승인 후 별도 이슈로 명문화.
