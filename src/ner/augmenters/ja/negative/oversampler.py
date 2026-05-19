@@ -12,11 +12,6 @@ N 배 oversample 한 보강 데이터셋을 생성한다.
        (`results/.../v3_boundary/error_analysis.json` 생성)
     2. 본 모듈로 보강 jsonl 생성 (--extra-only 권장 — leak-free 학습용)
     3. classifier 학습에 --data-extra-train-jsonl 로 주입
-
-이슈 #58 검증 결과 (v3 / N=2 / ambiguous 제외)
-    overall strict F1: 0.9368 → 0.9624 (+2.56pp vs production)
-    환각 (FP HALL): 60 → 30 (-50%)
-    게이트 통과 (P AND R ≥ 0.95): 5/10 → 7/10
 """
 
 import json
@@ -60,7 +55,7 @@ def filter_ambiguous_seeds(
 ) -> Tuple[Set[str], Set[str]]:
     """학습 셋에서 entity surface 로 등장한 seed 를 제외한다.
 
-    가설 검증 (이슈 #58):
+    설계 의도:
         ambiguous surface (학습 셋에 entity 라벨로 등장하면서 동시에 다른
         위치에서 환각으로 잡힌 것) 를 부정 예시로 강화하면 모델이 그
         surface 자체를 entity 회피 → recall 회귀. 자동 제외로 회귀 차단.
