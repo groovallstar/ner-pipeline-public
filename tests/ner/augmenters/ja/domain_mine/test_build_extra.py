@@ -65,6 +65,30 @@ def test_prod_count_helper():
     assert be._prod_count(test) == 1
 
 
+def test_confirmed_split_feeds_train():
+    # confirmed_test_frac=0.5 → confirmed 절반은 train 으로 주입
+    recs = [_rec(f'確認文{i}である長め', 'confirmed',
+                 [_prod(f'確認文{i}である長め', 0, 3)]) for i in range(4)]
+    recs.append(_rec('anchorのみ文だよ', 'anchor_only',
+                     [_prod('anchorのみ文だよ', 0, 6)]))
+    test, train = be.build_extra(recs, confirmed_test_frac=0.5)
+    # 4 confirmed → 2 test + 2 train, anchor_only 1 → train. train=3
+    assert len(test) == 2
+    assert len(train) == 3
+    # leak-free: test 와 train 문장 비중복
+    tset = {r['text'] for r in test}
+    trset = {r['text'] for r in train}
+    assert tset.isdisjoint(trset)
+
+
+def test_confirmed_split_deterministic():
+    recs = [_rec(f'確認文{i}である長め', 'confirmed',
+                 [_prod(f'確認文{i}である長め', 0, 3)]) for i in range(6)]
+    a = be.build_extra(recs, confirmed_test_frac=0.5, seed=7)
+    b = be.build_extra(recs, confirmed_test_frac=0.5, seed=7)
+    assert [r['text'] for r in a[0]] == [r['text'] for r in b[0]]
+
+
 def test_train_internal_dedup():
     text = '繰り返す文章だよ'
     recs = [

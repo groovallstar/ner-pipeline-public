@@ -14,6 +14,7 @@ merged_spans 를 classifier contract entity 로 변환하고 validate_record
 import argparse
 import json
 import logging
+import random
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -34,46 +35,58 @@ def _valid_entities(text: str, spans: List[Dict]) -> Optional[List[Dict]]:
     return entities
 
 
-def build_extra(records: List[Dict], id_prefix: str = 'dm'
+def build_extra(records: List[Dict], id_prefix: str = 'dm',
+                confirmed_test_frac: float = 1.0, seed: int = 42
                 ) -> Tuple[List[Dict], List[Dict]]:
     """relabeled 레코드 → (test_records, train_records). 순수 함수.
 
-    confirmed → test, anchor_only → train, conflict → drop. 문장 중복은
+    confirmed 는 test/train 으로 분할(`confirmed_test_frac`), anchor_only 는
+    train, conflict 는 드롭. 분할은 seed shuffle 로 결정적. 문장 중복은
     test 우선으로 dedup 해 train 과 leak 되지 않게 한다.
+
+    confirmed_test_frac=1.0 이면 confirmed 전부 test (train=anchor_only only).
+    0.5 면 confirmed 절반은 test, 절반은 train 으로 보내 학습에도 주입.
     """
-    test_seen = set()
-    test_pairs: List[Tuple[str, List[Dict]]] = []
-    train_pairs: List[Tuple[str, List[Dict]]] = []
+    confirmed: List[Tuple[str, List[Dict]]] = []
+    anchor_only: List[Tuple[str, List[Dict]]] = []
+    seen_conf = set()
     for r in records:
         status = r.get('anchor_status')
         text = r['text']
         if status == 'confirmed':
-            if text in test_seen:
+            if text in seen_conf:
                 continue
             entities = _valid_entities(text, r.get('merged_spans', []))
             if entities is None:
                 continue
-            test_seen.add(text)
-            test_pairs.append((text, entities))
+            seen_conf.add(text)
+            confirmed.append((text, entities))
         elif status == 'anchor_only':
             entities = _valid_entities(text, r.get('merged_spans', []))
             if entities is None:
                 continue
-            train_pairs.append((text, entities))
+            anchor_only.append((text, entities))
         # conflict: drop
 
+    shuffled = confirmed[:]
+    random.Random(seed).shuffle(shuffled)
+    n_test = int(len(shuffled) * confirmed_test_frac)
+    test_pairs = shuffled[:n_test]
+    conf_train = shuffled[n_test:]
+    test_seen = {t for t, _ in test_pairs}
+
     train_seen = set()
-    train_dedup: List[Tuple[str, List[Dict]]] = []
-    for text, entities in train_pairs:
+    train_pairs: List[Tuple[str, List[Dict]]] = []
+    for text, entities in conf_train + anchor_only:
         if text in test_seen or text in train_seen:
             continue
         train_seen.add(text)
-        train_dedup.append((text, entities))
+        train_pairs.append((text, entities))
 
     test_out = [schema.make_record(f'{id_prefix}-test-{i}', t, e)
                 for i, (t, e) in enumerate(test_pairs)]
     train_out = [schema.make_record(f'{id_prefix}-train-{i}', t, e)
-                 for i, (t, e) in enumerate(train_dedup)]
+                 for i, (t, e) in enumerate(train_pairs)]
     return test_out, train_out
 
 
@@ -102,6 +115,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--out-test', required=True,
                    help='Test expansion JSONL (confirmed)')
     p.add_argument('--id-prefix', default='dm')
+    p.add_argument('--confirmed-test-frac', type=float, default=1.0,
+                   help='confirmed 중 test 로 보낼 비율 (나머지는 train). '
+                        '1.0=전부 test, 0.5=절반씩')
+    p.add_argument('--seed', type=int, default=42,
+                   help='confirmed 분할 shuffle seed')
     p.add_argument('--log-level', default='INFO')
     return p
 
@@ -118,7 +136,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             json.loads(ln) for ln
             in Path(path).read_text(encoding='utf-8').splitlines()
             if ln.strip())
-    test_out, train_out = build_extra(records, args.id_prefix)
+    test_out, train_out = build_extra(
+        records, args.id_prefix, args.confirmed_test_frac, args.seed)
     _write_jsonl(Path(args.out_test), test_out)
     _write_jsonl(Path(args.out_train), train_out)
     print(f'test : {len(test_out)} sents / {_prod_count(test_out)} PROD '
