@@ -162,7 +162,7 @@ ja.wikipedia 에서 문장을 마이닝하고 Gemma+Qwen 2모델 합의로 canon
 > ⚠️ **이슈 #64 결론**: 본 도메인 데이터를 train 에 증강하면 *도메인 편중
 > test* 에선 PROD P 가 오르지만 *운영 원본 test* 에선 회귀(과적합, #45 재현).
 > production 모델 학습 기본 레시피엔 미포함. 상세:
-> `docs/reports/ja-prod-gate-public-data-relabel-2026-05.md`.
+> `docs/issues/issue-64-prod-pr-gate-public-data-relabel.md`.
 
 ## 사용 예
 
