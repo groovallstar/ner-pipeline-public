@@ -1030,9 +1030,16 @@ checkpoint-*) 는 모두 제거하고 metrics.json 만 보존했다 (재현 명�
 
 ### 현재 남아있는 산출물
 
+> ⚠️ **post-#64 데이터셋 변경**: `pii_all_phonediv.jsonl` 은 이슈 #64 에서
+> 도메인 데이터 1,022 행이 병합돼 **6,292 행으로 변경**됨 (사용자 지시).
+> 본 문서의 S8 절대수치(0.9644 등)는 5,270 행 기준이라 **현재 파일로는
+> 재현 불가** — 5,270 행 원본은 `pii_all_phonediv_pre_domain.jsonl` 백업
+> 참조. 상세: `docs/reports/ja-prod-gate-public-data-relabel-2026-05.md`.
+
 | 경로 | 내용 |
 |---|---|
-| `data/stockmark/pii_all_phonediv.jsonl` | 5,270 행 production 데이터 (PHONE 다양화 후) |
+| `data/stockmark/pii_all_phonediv.jsonl` | **6,292 행** (post-#64 도메인 병합; 원래 5,270 행은 본문 측정 기준) |
+| `data/stockmark/pii_all_phonediv_pre_domain.jsonl` | 5,270 행 (병합 전 백업, 본문 수치 재현용) |
 | `data/stockmark/pii_extra_s8_prod_domain_N5.jsonl` | S7N2 negative + PROD domain seed extra |
 | `data/stockmark/pii_all_origin.jsonl` | phonediv 적용 전 5,270 행 base (본문 §Phase 0~4 의 pii_all.jsonl 현재 보관명) |
 | `results/classifier/ja_sweep/s8_prod_domain_N5_seed45/best/` | **현 production checkpoint** |
