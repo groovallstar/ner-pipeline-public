@@ -87,6 +87,84 @@ def split_train_valid_test(rows: List[dict],
     return train, valid, test
 
 
+def split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
+                           strat_labels=('PROD', 'EVT')):
+    """층화 K-fold 분할. (train, valid, test) 3-way 반환.
+
+    층화 기준: 각 row 의 entities 에 등장하는 strat_labels 부분집합
+    (예: 없음/PROD만/EVT만/둘다 = 최대 4개 층). stratum key 는 정렬된 tuple.
+
+    각 층 내에서 row 인덱스를 random.Random(seed) 로 셔플한 뒤 라운드로빈
+    (shuffled_position % n_folds) 으로 fold 에 배정한다. 층은 stratum key
+    정렬 순서로 결정적으로 순회하므로, 같은 seed 면 fold_index 와 무관하게
+    fold 배정이 항상 동일하다.
+
+    test = fold_index 에 배정된 rows, valid = (fold_index+1) % n_folds 에
+    배정된 rows, train = 나머지.
+
+    핵심 보장: fold_index 를 0..n_folds-1 로 바꿔가며 호출하면 모든 row 가
+    정확히 한 번씩 test 에 등장한다 (valid 도 동일).
+
+    층 크기가 n_folds 로 나누어 떨어지지 않으면 나머지 row 는 낮은 번호의
+    fold 에 먼저 배정된다 (라운드로빈 잔여분).
+
+    Args:
+        rows: augmenters JSONL 형식 row 리스트
+        n_folds: fold 개수 (>= 3 — test/valid 외에 train 이 최소 1 fold 필요)
+        fold_index: test 로 쓸 fold 번호 (0 <= fold_index < n_folds)
+        seed: 셔플 시드
+        strat_labels: 층화 기준 라벨 튜플
+
+    Returns:
+        (train_rows, valid_rows, test_rows)
+    """
+    if n_folds < 3:
+        raise ValueError(
+            f'n_folds must be >= 3 for 3-way split, got {n_folds}'
+        )
+    if n_folds > len(rows):
+        raise ValueError(
+            f'n_folds ({n_folds}) must not exceed number of rows '
+            f'({len(rows)})'
+        )
+    if fold_index < 0 or fold_index >= n_folds:
+        raise ValueError(
+            f'fold_index must be in [0, {n_folds}), got {fold_index}'
+        )
+
+    strat_set = set(strat_labels)
+    # 층화 기준: row 의 entities 에 등장하는 strat_labels 부분집합 (정렬 tuple)
+    strata: Dict[tuple, List[int]] = {}
+    for i, row in enumerate(rows):
+        present = {
+            e['label'] for e in row['entities']
+            if e['label'] in strat_set
+        }
+        key = tuple(sorted(present))
+        strata.setdefault(key, []).append(i)
+
+    # fold 별 row 인덱스 버킷
+    fold_indices: List[List[int]] = [[] for _ in range(n_folds)]
+    rng = random.Random(seed)
+    for key in sorted(strata.keys()):
+        bucket = strata[key][:]
+        rng.shuffle(bucket)
+        for pos, row_idx in enumerate(bucket):
+            fold_indices[pos % n_folds].append(row_idx)
+
+    test_idx = fold_indices[fold_index]
+    valid_idx = fold_indices[(fold_index + 1) % n_folds]
+    test_set = set(test_idx)
+    valid_set = set(valid_idx)
+    train_rows = [
+        rows[i] for i in range(len(rows))
+        if i not in test_set and i not in valid_set
+    ]
+    valid_rows = [rows[i] for i in valid_idx]
+    test_rows = [rows[i] for i in test_idx]
+    return train_rows, valid_rows, test_rows
+
+
 def _encode_ja(text: str, tokenizer, max_length: int):
     """JA: slow tokenizer 의 tokenize() 결과를 text 에 greedy match 로 정렬.
 

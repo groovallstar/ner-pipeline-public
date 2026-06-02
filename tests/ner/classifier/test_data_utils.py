@@ -1,5 +1,9 @@
 """classifier.data_utils 의 라벨 맵 / BIO 정렬 / span 디코드 단위 테스트."""
 
+from typing import List
+
+import pytest
+
 from ner.classifier.data_utils import (
     CANONICAL_LABELS,
     NER_TYPES,
@@ -9,6 +13,7 @@ from ner.classifier.data_utils import (
     class_weights_tensor,
     decode_bio_to_spans,
     mask_pii_in_features,
+    split_kfold_stratified,
     split_train_test,
     split_train_valid_test,
 )
@@ -151,6 +156,93 @@ def test_split_train_valid_test_deterministic():
     b = split_train_valid_test(rows, 0.1, 0.1, seed=7)
     for left, right in zip(a, b):
         assert [r['id'] for r in left] == [r['id'] for r in right]
+
+
+def test_kfold_partition():
+    """단일 fold_index 에서 train/valid/test disjoint + union = 전체."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]
+    train, valid, test = split_kfold_stratified(
+        rows, n_folds=5, fold_index=0, seed=42
+    )
+    train_ids = {r['id'] for r in train}
+    valid_ids = {r['id'] for r in valid}
+    test_ids = {r['id'] for r in test}
+    assert train_ids.isdisjoint(valid_ids)
+    assert train_ids.isdisjoint(test_ids)
+    assert valid_ids.isdisjoint(test_ids)
+    assert train_ids | valid_ids | test_ids == {str(i) for i in range(100)}
+
+
+def test_kfold_every_row_tested_once():
+    """fold_index 0..4 순회하며 test 집합 모으면 전체 rows 와 일치, 중복 없음."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]
+    seen: List[str] = []
+    for fi in range(5):
+        _, _, test = split_kfold_stratified(
+            rows, n_folds=5, fold_index=fi, seed=42
+        )
+        seen.extend(r['id'] for r in test)
+    # 중복 없음
+    assert len(seen) == len(set(seen))
+    # 전체 rows 와 일치
+    assert set(seen) == {str(i) for i in range(100)}
+
+
+def test_kfold_stratification():
+    """PROD 문장 20개 + 일반 80개 → 각 fold test 에 PROD 가 4개씩(±1)."""
+    rows = []
+    for i in range(20):
+        rows.append({
+            'text': '',
+            'entities': [
+                {'label': 'PROD', 'start_char': 0,
+                 'end_char': 1, 'text': 'x'}
+            ],
+            'id': f'prod-{i}',
+        })
+    for i in range(80):
+        rows.append({'text': '', 'entities': [], 'id': f'plain-{i}'})
+    for fi in range(5):
+        _, _, test = split_kfold_stratified(
+            rows, n_folds=5, fold_index=fi, seed=42
+        )
+        n_prod = sum(
+            1 for r in test
+            if any(e['label'] == 'PROD' for e in r['entities'])
+        )
+        assert 3 <= n_prod <= 5
+
+
+def test_kfold_deterministic():
+    """같은 seed 로 두 번 호출 시 동일 분할."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]
+    a = split_kfold_stratified(rows, n_folds=5, fold_index=2, seed=7)
+    b = split_kfold_stratified(rows, n_folds=5, fold_index=2, seed=7)
+    for left, right in zip(a, b):
+        assert [r['id'] for r in left] == [r['id'] for r in right]
+
+
+def test_kfold_invalid_fold_index():
+    """범위 밖 fold_index 에 ValueError."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(10)]
+    with pytest.raises(ValueError):
+        split_kfold_stratified(rows, n_folds=5, fold_index=5, seed=42)
+    with pytest.raises(ValueError):
+        split_kfold_stratified(rows, n_folds=5, fold_index=-1, seed=42)
+
+
+def test_kfold_n_folds_too_small():
+    """n_folds < 3 이면 train 이 비므로 ValueError."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(10)]
+    with pytest.raises(ValueError):
+        split_kfold_stratified(rows, n_folds=2, fold_index=0, seed=42)
+
+
+def test_kfold_n_folds_exceeds_rows():
+    """n_folds 가 행 수보다 크면 ValueError."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(4)]
+    with pytest.raises(ValueError):
+        split_kfold_stratified(rows, n_folds=10, fold_index=0, seed=42)
 
 
 def test_ner_pii_partition():

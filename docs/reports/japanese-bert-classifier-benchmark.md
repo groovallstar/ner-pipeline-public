@@ -5,8 +5,13 @@
 위치, 재현 명령.
 
 Phase 0~8 각 단계의 가설·시도·결과 상세 (실측 수치 표 포함) 는
-**`japanese-bert-classifier-history.md`** 에 있다. 본 문서에서 인용하는
-Phase 번호는 모두 그 문서의 섹션을 가리킨다.
+**`japanese-bert-classifier-history.md`** (1편, 동결) 에 있다. 본
+문서에서 인용하는 Phase 번호는 모두 그 문서의 섹션을 가리킨다.
+
+측정 프로토콜 개편 (#69) 이후의 새 실험은
+**`japanese-bert-classifier-history-2.md`** (2편, 층화 K-fold 프로토콜)
+에 기록한다. 1편과 2편은 측정 프로토콜이 달라 수치를 직접 비교할 수
+없다.
 
 - 대상: Stockmark JA Wikipedia NER + 합성 PII 주입 데이터에 BERT family
   파인튜닝 (canonical 10종 평면 = NER 5 + PII 5)
@@ -18,6 +23,12 @@ Phase 번호는 모두 그 문서의 섹션을 가리킨다.
   `docs/reports/vietnamese-bert-classifier-benchmark.md` 참조
 
 ## 한눈에 보는 결론 (현 production)
+
+> ⚠️ 측정 프로토콜 개편 (#69) 에서 아래 측정값 (0.9644) 에 extra train
+> 데이터의 train/test 중복 인플레이션 (~+1.7pp 추정) 이 포함된 것이
+> 확인됐다. 중복 없는 test 부분 기준으로는 0.9478 (게이트 미달).
+> 청정 재기준선 (rebaseline) 은 후속 이슈에서 결정 예정 — 상세:
+> `japanese-bert-classifier-history-2.md` §배경.
 
 - 모델: `tohoku-nlp/bert-base-japanese-v3` (110M) + boundary-aware loss
 - 데이터: `data/stockmark/pii_all_phonediv.jsonl` 5,270 행 (Stockmark
