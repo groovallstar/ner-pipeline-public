@@ -144,26 +144,6 @@ python -m ner.augmenters.ja.prod_seed \
   (HF Trainer shuffle 입력 순서 결정성 유지)
 - `--extra-only` (default on): leak-free 평가 필수
 
-#### domain_mine/ — 공개데이터 마이닝 + 교차검증 재라벨 (post-#61, 이슈 #64)
-
-prod_seed 가 *기존 데이터* 에서 도메인 PROD 를 선별하는 반면, domain_mine
-은 *공개 데이터* (e-Gov 법령·Wikidata 작품·악곡·교통카드) 명칭을 모아
-ja.wikipedia 에서 문장을 마이닝하고 Gemma+Qwen 2모델 합의로 canonical 10종
-재라벨해 신규 도메인 PROD 데이터를 생성한다.
-
-| 파일 | 역할 |
-|------|------|
-| `schema.py` | contract 변환(span→entity)·offset 무결성 검증·도메인 상수 (순수) |
-| `name_sources.py` | e-Gov(XML)·Wikidata SPARQL·curated 명칭 수집 + 캐시 CLI |
-| `sentence_miner.py` | ja.wiki 전문검색→문장분리→명칭 포함 문장+offset 추출 |
-| `relabel.py` | 2모델 재라벨 + merge_confidence 합의 + `apply_anchor` (confirmed/conflict/anchor_only) |
-| `build_extra.py` | status 분배(confirmed→test, anchor_only→train) + `--confirmed-test-frac` 분할 + leak-free dedup |
-
-> ⚠️ **이슈 #64 결론**: 본 도메인 데이터를 train 에 증강하면 *도메인 편중
-> test* 에선 PROD P 가 오르지만 *운영 원본 test* 에선 회귀(과적합, #45 재현).
-> production 모델 학습 기본 레시피엔 미포함. 상세:
-> `docs/issues/issue-64-prod-pr-gate-public-data-relabel.md`.
-
 ## 사용 예
 
 ```bash

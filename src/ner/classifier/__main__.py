@@ -118,12 +118,6 @@ def main():
              'from --data). Used for negative-oversampling experiments '
              'where leak-free evaluation is required.',
     )
-    parser.add_argument(
-        '--data-extra-test-jsonl', default=None,
-        help='Extra JSONL appended to TEST split only (train/valid stay '
-             'from --data). Used to expand low-support entities (e.g. '
-             'PROD) for statistically reliable measurement.',
-    )
     args = parser.parse_args()
 
     data_path = args.data or DEFAULT_DATA[args.lang]
@@ -153,15 +147,6 @@ def main():
             'Appended %d rows from extra JSONL to TRAIN only '
             '(valid/test from --data split unchanged): total train=%d',
             len(extra_rows), len(train_rows),
-        )
-
-    if args.data_extra_test_jsonl:
-        extra_test_rows = load_jsonl(args.data_extra_test_jsonl)
-        test_rows = test_rows + extra_test_rows
-        logger.info(
-            'Appended %d rows from extra JSONL to TEST only '
-            '(train/valid from --data split unchanged): total test=%d',
-            len(extra_test_rows), len(test_rows),
         )
 
     logger.info(
@@ -301,7 +286,6 @@ def main():
         'model_name': model_name,
         'data_path': data_path,
         'data_extra_train_jsonl': args.data_extra_train_jsonl,
-        'data_extra_test_jsonl': args.data_extra_test_jsonl,
         'train_samples': len(train_rows),
         'valid_samples': len(valid_rows),
         'test_samples': len(test_rows),
