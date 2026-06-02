@@ -110,7 +110,8 @@ results/classifier/{ja,vi}/
 ├── checkpoint-*/               # 중간 체크포인트 (save_total_limit=1 로 정리)
 └── metrics.json                # 학습 설정 + overall + per-entity F1
 
-docs/reports/japanese-bert-classifier-benchmark.md      # JA 리포트
+docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)
+docs/reports/japanese-bert-classifier-history.md         # JA Phase별 실험 히스토리 상세
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 
