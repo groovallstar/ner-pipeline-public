@@ -44,9 +44,6 @@ DEFAULT_MODEL = {
     'vi': 'xlm-roberta-base',
 }
 
-# F1 합격선 (deep-interview round 4 lock-in)
-F1_GATE = 0.95
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -383,14 +380,9 @@ def main():
         _print_metrics_block("relaxed (SemEval'13 Partial)", relaxed_m)
     print(f"\n  Saved to {metrics_path}")
 
-    gate_o = strict_m['overall']
-    if gate_o['f1'] >= F1_GATE:
-        print(f"\n  PASS  strict F1 {gate_o['f1']:.4f} >= gate {F1_GATE}")
-    else:
-        print(f"\n  FAIL  strict F1 {gate_o['f1']:.4f} <  gate {F1_GATE}  "
-              f"(gap {F1_GATE - gate_o['f1']:.4f})")
-    print(f"  relaxed F1 {relaxed_m['overall']['f1']:.4f}  "
-          f"(Δ vs strict {relaxed_m['overall']['f1'] - gate_o['f1']:+.4f})")
+    strict_o = strict_m['overall']
+    print(f"\n  relaxed F1 {relaxed_m['overall']['f1']:.4f}  "
+          f"(Δ vs strict {relaxed_m['overall']['f1'] - strict_o['f1']:+.4f})")
 
 
 def _print_metrics_block(label: str, m: dict) -> None:

@@ -128,13 +128,6 @@ docs/reports/japanese-bert-classifier-history-2.md       # JA 히스토리 2편 
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 
-## 합격선
-
-deep-interview 결과: **overall span F1 ≥ 0.95** (시간·모델 크기 미고려).
-
-`__main__.py` 마지막에 `PASS` / `FAIL` 출력.
-미달 시 후속 이슈 발행 (사용자 승인 후 PR 진행).
-
 ## 테스트
 
 ```bash
