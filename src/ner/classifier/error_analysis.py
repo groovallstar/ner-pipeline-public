@@ -605,51 +605,29 @@ def run_inference(
     return results
 
 
-def run_error_analysis(
+def _analyze_sentences(
+    sentences: List[dict],
     *,
     lang: str,
-    model_path: str,
-    data_path: str,
     output_dir: str,
-    tokenizer_name: str,
-    split: str = 'test',
+    split: str,
+    seed: int,
+    meta: Optional[dict] = None,
     review_ratio: float = 0.1,
     review_min_per_type: int = 3,
-    seed: int = 42,
-    valid_ratio: float = 0.1,
-    test_ratio: float = 0.1,
-    max_length: int = 256,
-    batch_size: int = 32,
     with_diagnosis: bool = False,
     diagnosis_fp_types: Optional[List[str]] = None,
     diagnosis_fn_types: Optional[List[str]] = None,
     diagnosis_top_n: int = 50,
     diagnosis_ctx_chars: int = 20,
 ) -> dict:
-    """전체 파이프라인: 추론 → 분류 → 집계 → 검수 샘플 → 산출물 저장.
+    """추론·로딩 이후 공통 파이프라인: 분류 → 집계 → 검수 샘플 → 산출물.
 
-    출력 파일명은 split 별로 분리된다:
-    - 'test' (default): 기존 호환을 위해 suffix 없음 (error_analysis.json,
-      review_sample.jsonl)
-    - 'valid' / 'train': suffix 부여 + 샘플링 생략, 모든 오류 문장을
-      review_full_{split}.jsonl 에 직접 출력 (full review 기본 가정)
+    `sentences` 는 {'sent_idx', 'text', 'gold_spans', 'pred_spans'} 리스트.
+    추론 경로(`run_error_analysis`)와 K-fold pooled 예측 경로
+    (`run_pooled_error_analysis`)가 공유한다. `meta` 는 산출 JSON 헤더에
+    합칠 출처 정보(model_path / fold_dirs 등).
     """
-    logger.info('Loading model and running inference (lang=%s, split=%s)',
-                lang, split)
-    sentences = run_inference(
-        lang=lang,
-        model_path=model_path,
-        data_path=data_path,
-        tokenizer_name=tokenizer_name,
-        split=split,
-        valid_ratio=valid_ratio,
-        test_ratio=test_ratio,
-        seed=seed,
-        max_length=max_length,
-        batch_size=batch_size,
-    )
-    logger.info('Inference done: %d sentences', len(sentences))
-
     sentence_results: List[dict] = []
     for s in sentences:
         cls = classify_span_errors(s['gold_spans'], s['pred_spans'])
@@ -669,10 +647,9 @@ def run_error_analysis(
     with open(full_path, 'w', encoding='utf-8') as f:
         json.dump({
             'lang': lang,
-            'model_path': model_path,
-            'data_path': data_path,
             'split': split,
             'seed': seed,
+            **(meta or {}),
             'aggregate': agg,
             'sentences': sentence_results,
         }, f, ensure_ascii=False, indent=2)
@@ -686,7 +663,7 @@ def run_error_analysis(
         review_path = os.path.join(output_dir, 'review_sample.jsonl')
         review_label = 'sample'
     else:
-        # valid/train: 전체 오류 문장을 review_full_{split}.jsonl 로 직접 출력
+        # test 외(valid/train/pooled): 전체 오류 문장을 직접 출력
         review = [
             sr for sr in sentence_results
             if sr['counts']['fn'] > 0 or sr['counts']['fp'] > 0
@@ -769,20 +746,181 @@ def run_error_analysis(
     }
 
 
+def load_pooled_predictions(fold_dirs: List[str]) -> List[dict]:
+    """K-fold 각 fold 의 test_predictions.json 을 합쳐 문장 리스트로 변환.
+
+    재추론 없이 저장된 fold 예측을 진단 파이프라인 입력 형식
+    ({'sent_idx', 'text', 'gold_spans', 'pred_spans'}) 으로 펼친다.
+    sent_idx 는 fold 를 가로지르는 전역 일련번호. span dict 에 'text' 키가
+    없으면 문장 text 에서 surface 를 복원해 채운다 (검수 산출용).
+
+    무결성: fold 간 중복 text 가 있으면 ValueError (kfold_pool 과 동일
+    규칙 — 같은 문장이 두 번 test 되면 분할 오류 또는 leak 신호).
+
+    Args:
+        fold_dirs: 각 fold output_dir (안에 test_predictions.json 존재)
+
+    Returns:
+        문장 리스트. 호출자는 fold_dirs 가 전체 fold 를 빠짐없이 포함하는지
+        직접 확인해야 한다 (누락 fold 는 감지되지 않음).
+    """
+    sentences: List[dict] = []
+    seen_texts: set = set()
+    idx = 0
+    for fold_dir in fold_dirs:
+        preds_path = os.path.join(fold_dir, 'test_predictions.json')
+        with open(preds_path, encoding='utf-8') as f:
+            records = json.load(f)
+        for rec in records:
+            text = rec.get('text', '')
+            if text:
+                if text in seen_texts:
+                    raise ValueError(
+                        f'duplicate test sentence across folds '
+                        f'(in {preds_path}): {text[:50]!r}'
+                    )
+                seen_texts.add(text)
+            sentences.append({
+                'sent_idx': idx,
+                'text': text,
+                'gold_spans': [_with_surface(s, text) for s in rec['gold_spans']],
+                'pred_spans': [_with_surface(s, text) for s in rec['pred_spans']],
+            })
+            idx += 1
+    return sentences
+
+
+def _with_surface(span: dict, text: str) -> dict:
+    """span dict 에 'text' 키가 없으면 문장 text 에서 surface 복원."""
+    if 'text' in span:
+        return span
+    return {**span, 'text': text[span['start']:span['end']]}
+
+
+def run_pooled_error_analysis(
+    *,
+    lang: str,
+    fold_dirs: List[str],
+    output_dir: str,
+    seed: int = 42,
+    with_diagnosis: bool = False,
+    diagnosis_fp_types: Optional[List[str]] = None,
+    diagnosis_fn_types: Optional[List[str]] = None,
+    diagnosis_top_n: int = 50,
+    diagnosis_ctx_chars: int = 20,
+) -> dict:
+    """K-fold pooled 예측 → 오류 분류·집계·진단 (재추론 없음).
+
+    저장된 fold 별 test_predictions.json 을 합쳐 전체 코퍼스에 대한 단일
+    진단을 낸다. split 라벨은 'pooled' (산출 파일 suffix = '_pooled').
+    """
+    logger.info('Loading pooled predictions from %d folds', len(fold_dirs))
+    sentences = load_pooled_predictions(fold_dirs)
+    logger.info('Loaded %d pooled sentences', len(sentences))
+    return _analyze_sentences(
+        sentences,
+        lang=lang,
+        output_dir=output_dir,
+        split='pooled',
+        seed=seed,
+        meta={'fold_dirs': list(fold_dirs)},
+        with_diagnosis=with_diagnosis,
+        diagnosis_fp_types=diagnosis_fp_types,
+        diagnosis_fn_types=diagnosis_fn_types,
+        diagnosis_top_n=diagnosis_top_n,
+        diagnosis_ctx_chars=diagnosis_ctx_chars,
+    )
+
+
+def run_error_analysis(
+    *,
+    lang: str,
+    model_path: str,
+    data_path: str,
+    output_dir: str,
+    tokenizer_name: str,
+    split: str = 'test',
+    review_ratio: float = 0.1,
+    review_min_per_type: int = 3,
+    seed: int = 42,
+    valid_ratio: float = 0.1,
+    test_ratio: float = 0.1,
+    max_length: int = 256,
+    batch_size: int = 32,
+    with_diagnosis: bool = False,
+    diagnosis_fp_types: Optional[List[str]] = None,
+    diagnosis_fn_types: Optional[List[str]] = None,
+    diagnosis_top_n: int = 50,
+    diagnosis_ctx_chars: int = 20,
+) -> dict:
+    """전체 파이프라인: 추론 → 분류 → 집계 → 검수 샘플 → 산출물 저장.
+
+    출력 파일명은 split 별로 분리된다:
+    - 'test' (default): 기존 호환을 위해 suffix 없음 (error_analysis.json,
+      review_sample.jsonl)
+    - 'valid' / 'train': suffix 부여 + 샘플링 생략, 모든 오류 문장을
+      review_full_{split}.jsonl 에 직접 출력 (full review 기본 가정)
+    """
+    logger.info('Loading model and running inference (lang=%s, split=%s)',
+                lang, split)
+    sentences = run_inference(
+        lang=lang,
+        model_path=model_path,
+        data_path=data_path,
+        tokenizer_name=tokenizer_name,
+        split=split,
+        valid_ratio=valid_ratio,
+        test_ratio=test_ratio,
+        seed=seed,
+        max_length=max_length,
+        batch_size=batch_size,
+    )
+    logger.info('Inference done: %d sentences', len(sentences))
+
+    return _analyze_sentences(
+        sentences,
+        lang=lang,
+        output_dir=output_dir,
+        split=split,
+        seed=seed,
+        meta={'model_path': model_path, 'data_path': data_path},
+        review_ratio=review_ratio,
+        review_min_per_type=review_min_per_type,
+        with_diagnosis=with_diagnosis,
+        diagnosis_fp_types=diagnosis_fp_types,
+        diagnosis_fn_types=diagnosis_fn_types,
+        diagnosis_top_n=diagnosis_top_n,
+        diagnosis_ctx_chars=diagnosis_ctx_chars,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Test-set error analysis (classifier).'
     )
     parser.add_argument('--lang', choices=['ja', 'vi'], required=True)
     parser.add_argument(
-        '--model-path', required=True,
-        help='HF model dir (e.g., results/classifier/ja_sweep/baseline/best)',
+        '--from-predictions', action='store_true',
+        help='Diagnose saved K-fold pooled predictions instead of running '
+             'inference. Requires --fold-dirs; ignores --model-path/'
+             '--tokenizer-name/--data/--split.',
     )
     parser.add_argument(
-        '--tokenizer-name', required=True,
+        '--fold-dirs', nargs='+',
+        help='K-fold output dirs (each with test_predictions.json) for '
+             '--from-predictions mode.',
+    )
+    parser.add_argument(
+        '--model-path',
+        help='HF model dir (e.g., results/classifier/ja_sweep/baseline/best). '
+             'Required unless --from-predictions.',
+    )
+    parser.add_argument(
+        '--tokenizer-name',
         help='Original HF tokenizer id used during training '
              '(trainer.save_model only stores model weights/config, not '
-             'tokenizer). e.g., tohoku-nlp/bert-base-japanese-v3',
+             'tokenizer). e.g., tohoku-nlp/bert-base-japanese-v3. '
+             'Required unless --from-predictions.',
     )
     parser.add_argument(
         '--data',
@@ -832,14 +970,36 @@ def main():
         format='%(asctime)s %(name)s %(levelname)s %(message)s',
     )
 
+    fp_types = [t.strip() for t in args.diagnosis_fp_types.split(',') if t.strip()]
+    fn_types = [t.strip() for t in args.diagnosis_fn_types.split(',') if t.strip()]
+
+    if args.from_predictions:
+        if not args.fold_dirs:
+            parser.error('--from-predictions requires --fold-dirs')
+        run_pooled_error_analysis(
+            lang=args.lang,
+            fold_dirs=args.fold_dirs,
+            output_dir=args.output_dir,
+            seed=args.seed,
+            with_diagnosis=args.with_diagnosis,
+            diagnosis_fp_types=fp_types,
+            diagnosis_fn_types=fn_types,
+            diagnosis_top_n=args.diagnosis_top_n,
+            diagnosis_ctx_chars=args.diagnosis_ctx_chars,
+        )
+        return
+
+    if not args.model_path or not args.tokenizer_name:
+        parser.error(
+            '--model-path and --tokenizer-name are required '
+            '(unless --from-predictions)'
+        )
+
     default_data = {
         'ja': 'data/stockmark/pii_all.jsonl',
         'vi': 'data/wikiann_vi/pii_all.jsonl',
     }
     data_path = args.data or default_data[args.lang]
-
-    fp_types = [t.strip() for t in args.diagnosis_fp_types.split(',') if t.strip()]
-    fn_types = [t.strip() for t in args.diagnosis_fn_types.split(',') if t.strip()]
 
     run_error_analysis(
         lang=args.lang,
