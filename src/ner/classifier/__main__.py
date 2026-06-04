@@ -23,6 +23,7 @@ from ner.classifier.data_utils import (
     encode_dataset,
     load_jsonl,
     mask_pii_in_features,
+    split_kfold_stratified,
     split_train_valid_test,
 )
 from ner.classifier.train_eval import evaluate_model, fine_tune
@@ -60,6 +61,16 @@ def main():
     parser.add_argument('--max-length', type=int, default=256)
     parser.add_argument('--valid-ratio', type=float, default=0.1)
     parser.add_argument('--test-ratio', type=float, default=0.1)
+    parser.add_argument(
+        '--kfold', type=int, default=None,
+        help='Number of folds for stratified K-fold CV. When set, '
+             '--valid-ratio/--test-ratio are ignored.',
+    )
+    parser.add_argument(
+        '--fold-index', type=int, default=None,
+        help='Fold used as test split (0 <= fold-index < kfold). '
+             'Required when --kfold is set.',
+    )
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output-dir', help='Override output dir')
     parser.add_argument(
@@ -120,6 +131,11 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.kfold is not None and args.fold_index is None:
+        parser.error('--fold-index is required when --kfold is set')
+    if args.kfold is not None and args.kfold < 3:
+        parser.error('--kfold must be >= 3 (train needs at least one fold)')
+
     data_path = args.data or DEFAULT_DATA[args.lang]
     model_name = args.model_name or DEFAULT_MODEL[args.lang]
     output_dir = args.output_dir or f'results/classifier/{args.lang}'
@@ -129,9 +145,20 @@ def main():
 
     logger.info('Loading data: %s', data_path)
     rows = load_jsonl(data_path)
-    train_rows, valid_rows, test_rows = split_train_valid_test(
-        rows, args.valid_ratio, args.test_ratio, args.seed
-    )
+    if args.kfold is not None:
+        train_rows, valid_rows, test_rows = split_kfold_stratified(
+            rows, args.kfold, args.fold_index, args.seed
+        )
+        logger.info(
+            'Stratified K-fold: kfold=%d, fold_index=%d (test fold), '
+            'valid fold=%d',
+            args.kfold, args.fold_index,
+            (args.fold_index + 1) % args.kfold,
+        )
+    else:
+        train_rows, valid_rows, test_rows = split_train_valid_test(
+            rows, args.valid_ratio, args.test_ratio, args.seed
+        )
 
     if args.smoke:
         train_rows = train_rows[:100]
@@ -271,13 +298,36 @@ def main():
         logger.info('Train time: %.1fs', elapsed)
 
     logger.info('Evaluating on test split...')
+    is_kfold = args.kfold is not None
     metrics = evaluate_model(
         model_path=best_dir,
         eval_features=test_features,
         eval_offsets=test_offsets,
         eval_rows=test_rows,
         id2label=id2label,
+        return_spans=is_kfold,
     )
+
+    if is_kfold:
+        # kfold pooled 평가용: test_rows 의 id·text 와 gold/pred span 을 zip.
+        # text 는 pooling 단계의 fold 간 중복 문장 검증 기준 (id 는 비고유)
+        preds_out = [
+            {
+                'id': row.get('id'),
+                'text': row['text'],
+                'gold_spans': gold,
+                'pred_spans': pred,
+            }
+            for row, gold, pred in zip(
+                test_rows,
+                metrics['gold_spans_list'],
+                metrics['pred_spans_list'],
+            )
+        ]
+        preds_path = os.path.join(output_dir, 'test_predictions.json')
+        with open(preds_path, 'w', encoding='utf-8') as f:
+            json.dump(preds_out, f, indent=2, ensure_ascii=False)
+        logger.info('Saved test predictions: %s', preds_path)
 
     strict_m = metrics['strict']
     relaxed_m = metrics['relaxed']
@@ -295,6 +345,8 @@ def main():
         'max_length': args.max_length,
         'valid_ratio': args.valid_ratio,
         'test_ratio': args.test_ratio,
+        'kfold': args.kfold,
+        'fold_index': args.fold_index if is_kfold else None,
         'seed': args.seed,
         'class_weight_ner': args.class_weight_ner,
         'class_weight_pii': args.class_weight_pii,

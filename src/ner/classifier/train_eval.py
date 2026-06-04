@@ -327,16 +327,22 @@ def evaluate_model(*, model_path: str,
                    eval_offsets: List[List[Tuple[int, int]]],
                    eval_rows: List[dict],
                    id2label: Dict[int, str],
-                   batch_size: int = 32) -> dict:
+                   batch_size: int = 32,
+                   return_spans: bool = False) -> dict:
     """best 모델 로드 → predict → BIO decode → strict + relaxed span F1 계산.
 
     eval_rows 는 augmenters JSONL 형식 그대로 (label/start_char/end_char).
     내부에서 metrics 모듈이 요구하는 (type/start/end) 형식으로 변환.
 
+    Args:
+        return_spans: True 면 반환 dict 에 'gold_spans_list',
+            'pred_spans_list' 키를 추가한다 (kfold pooled 평가용).
+
     Returns:
         {"strict": {overall, per_entity}, "relaxed": {overall, per_entity}}
         strict = (start, end, type) 정확 일치 (게이트 측정 default).
         relaxed = SemEval'13 Partial — type 일치 + char-offset overlap 시 0.5점.
+        return_spans=True 면 'gold_spans_list', 'pred_spans_list' 추가.
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # CRF 모델 감지: best 디렉토리에 crf.pt 가 있으면 CRF wrapper 로 로드.
@@ -401,9 +407,13 @@ def evaluate_model(*, model_path: str,
                     ]
                     gold_spans_list.append(gold)
 
-    return {
+    result = {
         'strict': compute_offset_span_f1(gold_spans_list, pred_spans_list),
         'relaxed': compute_offset_span_f1_relaxed(
             gold_spans_list, pred_spans_list
         ),
     }
+    if return_spans:
+        result['gold_spans_list'] = gold_spans_list
+        result['pred_spans_list'] = pred_spans_list
+    return result

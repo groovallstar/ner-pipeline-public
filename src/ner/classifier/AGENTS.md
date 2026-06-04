@@ -16,7 +16,8 @@ span F1 을 측정한다.
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / JA·VI tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`) |
-| `error_analysis.py` | baseline 모델의 test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. CLI: `python -m ner.classifier.error_analysis` |
+| `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
+| `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출. CLI: `python -m ner.classifier.kfold_pool` |
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
 
 ## CLI
@@ -42,6 +43,16 @@ python -m ner.classifier --lang ja \
     --data data/stockmark/pii_all.jsonl \
     --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
     --boundary-b-weight 1.5 --boundary-i-weight 1.2
+
+# 층화 K-fold 교차 검증 (fold 별 1회 학습 후 pooled 평가)
+for fold in 0 1 2 3 4 5 6 7 8 9; do
+  python -m ner.classifier --lang ja \
+      --data data/stockmark/pii_all_phonediv.jsonl \
+      --kfold 10 --fold-index ${fold} \
+      --output-dir results/classifier/ja_sweep/<실험명>/fold${fold}
+done
+python -m ner.classifier.kfold_pool \
+    --fold-dirs results/classifier/ja_sweep/<실험명>/fold{0..9}
 ```
 
 `--data-extra-train-jsonl PATH` 는 별 JSONL 을 train split 에만 합치고
@@ -54,6 +65,7 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/pii_all.jsonl`
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
+- **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-history-2.md`
 
 ## JSONL contract (입력 계약)
 
@@ -111,7 +123,8 @@ results/classifier/{ja,vi}/
 └── metrics.json                # 학습 설정 + overall + per-entity F1
 
 docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)
-docs/reports/japanese-bert-classifier-history.md         # JA Phase별 실험 히스토리 상세
+docs/reports/japanese-bert-classifier-history.md         # JA 히스토리 1편 (Phase 0~8, 동결)
+docs/reports/japanese-bert-classifier-history-2.md       # JA 히스토리 2편 (층화 K-fold 프로토콜)
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 
@@ -128,9 +141,10 @@ deep-interview 결과: **overall span F1 ≥ 0.95** (시간·모델 크기 미�
 python -m pytest tests/ner/classifier/ -q
 ```
 
-- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / class weight / curriculum mask
+- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / class weight / curriculum mask
 - `test_encode.py` — 실제 토크나이저(JA·VI)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
+- `test_kfold_pool.py` — pooled F1 손계산 일치 / fold 간 중복 text 검증 / 비고유 id 허용
 
 ## 주의
 
