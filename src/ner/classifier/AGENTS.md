@@ -16,7 +16,7 @@ span F1 을 측정한다.
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / JA·VI tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`) |
-| `error_analysis.py` | baseline 모델의 test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. CLI: `python -m ner.classifier.error_analysis` |
+| `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
 | `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출. CLI: `python -m ner.classifier.kfold_pool` |
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
 

@@ -3,11 +3,18 @@
 추론·모델 로딩 경로는 별도 (느린) 통합 테스트로 분리. 본 파일은 순수 함수만.
 """
 
+import json
+import os
+
+import pytest
+
 from ner.classifier.error_analysis import (
     NULL,
     aggregate_errors,
     build_confusion_matrix,
     classify_span_errors,
+    load_pooled_predictions,
+    run_pooled_error_analysis,
     sample_for_review,
     top_errors_by_type,
 )
@@ -239,3 +246,75 @@ def test_sample_for_review_skips_clean_sentences():
     s = sample_for_review([clean, err], ratio=1.0, min_per_type=1, seed=0)
     assert all(x['sent_idx'] != 0 for x in s)
     assert any(x['sent_idx'] == 1 for x in s)
+
+
+def _write_fold(fold_dir, records):
+    os.makedirs(fold_dir, exist_ok=True)
+    with open(os.path.join(fold_dir, 'test_predictions.json'),
+              'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False)
+
+
+def test_load_pooled_predictions_concat_and_index(tmp_path):
+    # fold0 2문장 + fold1 1문장 → 전역 sent_idx 0,1,2
+    f0 = str(tmp_path / 'fold0')
+    f1 = str(tmp_path / 'fold1')
+    _write_fold(f0, [
+        {'text': 'AAA org BBB',
+         'gold_spans': [{'type': 'ORG', 'start': 4, 'end': 7}],
+         'pred_spans': [{'type': 'ORG', 'start': 4, 'end': 7}]},
+        {'text': 'no entities here',
+         'gold_spans': [], 'pred_spans': []},
+    ])
+    _write_fold(f1, [
+        {'text': 'CCC loc DDD',
+         'gold_spans': [{'type': 'LOC', 'start': 4, 'end': 7}],
+         'pred_spans': []},
+    ])
+    sents = load_pooled_predictions([f0, f1])
+    assert [s['sent_idx'] for s in sents] == [0, 1, 2]
+    # span 에 text 키 없을 때 문장에서 surface 복원
+    assert sents[0]['gold_spans'][0]['text'] == 'org'
+
+
+def test_load_pooled_predictions_duplicate_text_raises(tmp_path):
+    f0 = str(tmp_path / 'fold0')
+    f1 = str(tmp_path / 'fold1')
+    dup = {'text': 'same sentence',
+           'gold_spans': [], 'pred_spans': []}
+    _write_fold(f0, [dup])
+    _write_fold(f1, [dup])
+    with pytest.raises(ValueError, match='duplicate test sentence'):
+        load_pooled_predictions([f0, f1])
+
+
+def test_run_pooled_error_analysis_aggregate(tmp_path):
+    # fold0: ORG EXACT 1 + ORG HALLUCINATION 1 / fold1: LOC MISS 1
+    f0 = str(tmp_path / 'fold0')
+    f1 = str(tmp_path / 'fold1')
+    _write_fold(f0, [
+        {'text': 'AAA org BBB ZZ',
+         'gold_spans': [{'type': 'ORG', 'start': 4, 'end': 7}],
+         'pred_spans': [{'type': 'ORG', 'start': 4, 'end': 7},
+                        {'type': 'ORG', 'start': 12, 'end': 14}]},
+    ])
+    _write_fold(f1, [
+        {'text': 'CCC loc DDD',
+         'gold_spans': [{'type': 'LOC', 'start': 4, 'end': 7}],
+         'pred_spans': []},
+    ])
+    out = str(tmp_path / 'diag')
+    res = run_pooled_error_analysis(
+        lang='ja', fold_dirs=[f0, f1], output_dir=out,
+        with_diagnosis=True, diagnosis_fp_types=['ORG'],
+        diagnosis_fn_types=['LOC'],
+    )
+    agg = res['aggregate']
+    assert agg['totals']['exact'] == 1
+    assert agg['fp_by_class'].get('HALLUCINATION') == 1
+    assert agg['fn_by_class'].get('MISS') == 1
+    # pooled suffix 산출물 생성 확인
+    assert os.path.exists(os.path.join(out, 'error_analysis_pooled.json'))
+    assert os.path.exists(os.path.join(out, 'confusion_matrix_pooled.md'))
+    assert os.path.exists(os.path.join(out, 'fp_top_ORG_pooled.md'))
+    assert os.path.exists(os.path.join(out, 'fn_top_LOC_pooled.md'))
