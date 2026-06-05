@@ -323,8 +323,8 @@ strict = (시작,끝,종류) 완전 일치, relaxed = SemEval'13 Partial.
 | PROD | 0.8009 | 0.7883 | 0.8140 | 0.8278 | 1,043 |
 
 상위 6종(EMAIL·PHONE·CREDIT_CARD·PER·ID_NUM·DAT) 포화권(F1≥0.958),
-잔여 헤드룸은 NER 4종(ORG·LOC·EVT·PROD)에 집중. ORG·PROD 는 gold 천장
-확정(#71·#73), LOC·EVT 미진단.
+잔여 헤드룸은 NER 4종(ORG·LOC·EVT·PROD)에 집중. ORG·PROD·EVT 는 gold
+천장 확정(#71·#73·#80), LOC 미진단.
 
 ### 결론
 
@@ -343,3 +343,51 @@ census 단발 시도(<+0.4pp)보다 큰 단일 이득.
 `.../kfold10_phonediv_ccfix/`(보정 gold 10-fold)·`.../diag_prod/`(CC FP/FN
 진단 재사용) — `results/`·보정 gold 모두 gitignore(로컬). 영구 재현
 기준은 #69 base 0.9195(CC 854).
+
+## 실험 — EVT 차하위 진단 + HALLUCINATION census (#80)
+
+### EVT pooled 3-갈래 (ccfix 예측, 재추론 0)
+
+strict TP 779 / FP 188 / FN 97 (F1 0.8454 / P 0.8056 / R 0.8893).
+BOUNDARY 46·46 / HALLUC 117·MISS 34 / TYPE(EVT↔ORG) 25·17.
+confusion 은 EVT↔ORG 양방향 24건 지배.
+
+### 경계 레버 가설 반증 (핵심)
+
+이슈 선두 가설("gold extent 비일관 = 학습 모순")을 직접 측정으로 반증.
+gold 일관: `オリンピック` bare=0/mod=35·`選手権` 0/82·`大会` 0/67·
+`選挙` 0/47·`戦争` 0/37(bare 혼재는 ワールドカップ·ダービー 3건뿐).
+경계의 실제 정체 = ① 연도 prefix 의 DAT 경합(EVT-내부 연도 표면 16/24
+가 standalone DAT, 264회:38회) ② suffix 이질 24종 = 모델 compositional
+한계. strict↔relaxed +2.5pp 는 학습 모순 아닌 진짜 난이도.
+
+### HALLUCINATION census — 두 방식의 대조 (#73 프로토콜)
+
+독립 판정자 gemma-4-31B∩Qwen3.6-35B(평가 BERT·gold 와 무관):
+
+| census | 탐색 | 적용 gap | EVT F1 | Δ vs 0.8454 | EVT P | EVT R |
+|---|---|---:|---:|---:|---:|---:|
+| model-FP (편향) | 모델 FP 117 → ACCEPT 17 | 17 | 0.8559 | +1.05pp | 0.8175 | 0.8981 |
+| **model-neutral (전수)** | 5,270 전수 → ACCEPT 92 | **92** | **0.8495** | **+0.41pp** | 0.8208 | 0.8802 |
+
+model-FP: 117 중 둘 다 EVT 21 / 둘 다 아님 72(62% = 진짜 leak). accept
+가 모델이 이미 맞춘 자리라 FP→TP 직접 전환 = 상한. model-neutral: 전수
+GAP 124 → schema ACCEPT 92(reject 7=질병·법령·그룹·정치구상), gold
+876→968, 모델 무관 대칭 탐색 = 무편향.
+
+### 결론 — EVT = gold 천장 (model-neutral 확정)
+
+model-FP +1.05pp 중 ~0.64pp 가 모델 편향. 전수 독립으로 제거 시 **+0.41pp
+= 노이즈 바닥(±1.21pp) 미달**(EVT per-seed ±3.69pp 는 한참 위) → **EVT =
+gold 천장 model-neutral 확정**. 서명: 무편향 보정에서 **R 0.8893→0.8802(↓)**
+— 독립 탐색 gap 92 의 대부분이 모델이 못 잡아 새 FN, F1 안 오름(P 만
++1.52). #73 PROD(편향 +1.54→무편향 +0.38) 와 동일 패턴. 세 갈래 모두
+천장/회색: 경계 레버 반증·HALLUC 62% leak·TYPE EVT↔ORG 미규정.
+
+### 산출물
+
+`.../kfold10_phonediv_ccfix/diag_evt/`(진단·model-FP·model-neutral
+census·verdicts)·`.../kfold10_phonediv_evtcensus{,_neutral}/`(보정
+재학습) — `results/`·무편향 보정 gold(EVT 968, 백업 `.preevtcensus`=876)
+모두 gitignore(로컬). 현재 권위 overall 0.9268/EVT 0.8495. 영구 재현
+기준은 #69 base 0.9195 유지.
