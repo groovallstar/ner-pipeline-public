@@ -116,80 +116,74 @@ per-entity (strict, pooled):
 fold{0..9}/metrics.json·test_predictions.json + pooled_metrics.json
 (`results/` 는 gitignore 대상 — 수치의 영구 인용 출처는 본 문서)
 
-## 실험 — ORG 정밀도 회복 시도 (#71)
+## 실험 — ORG 정밀도: gold 품질 천장 확인 (#71 + 누락 회복 후속)
 
-청정 기준선의 최대 오류 기여자 ORG (support 5,133 = 28%, F1 0.8893,
-P 0.8665 / R 0.9133) 를 진단하고 model-side·data-side 처방을 시도했다.
-결론: **ORG 는 이 데이터셋 gold 의 천장에 도달** — 세 각도 모두 노이즈
-바닥 위로 못 올림.
+청정 기준선 최대 오류 기여자 ORG (support 5,133 = 28%, **P 0.8665 <
+R 0.9133 = 과예측**) 를 진단·처방했다. 결론: ORG 잔여 오류는 모델 한계가
+아니라 **gold 품질 한계** — "환각" FP 의 다수가 실은 gold 누락 (모델이
+맞음) 이라, 측정 ORG 정밀도는 gold 노이즈로 깎인 하한이다.
 
-### ORG 진단 (pooled 5,270문장, 재추론 없이)
+### 진단 — ORG FP 722 / FN 445 전수 분해 (pooled, 재추론 0)
 
-K-fold fold 별 `test_predictions.json` 을 `error_analysis.py
---from-predictions` 로 합쳐 ORG FP/FN 을 전수 분해 (1편 #56 진단의 10배
-데이터). ORG FP 722 / FN 445 의 정체:
+`error_analysis.py --from-predictions` 로 fold 예측을 합쳐 분해:
 
 | 경로 | ORG FP | ORG FN | 비고 |
 |---|---:|---:|---|
-| clean 환각 (gold-ORG 0회) | 391 | — | 진짜 노이즈 + gold 누락 혼재 |
-| BOUNDARY (접미사 절단) | 176 | 176 | 같은 span 양쪽 (`中国軍`→`中国`) |
+| clean 환각 (gold-ORG 0회) | 391 | — | 노이즈 + gold 누락 혼재 (아래 재분해) |
+| BOUNDARY (접미 절단) | 176 | 176 | `中国軍`→`中国`, 99% 토큰 표현 가능 |
 | TYPE_MISMATCH | 79 | 68 | ORG↔LOC/PROD |
 | ambiguous (gold-ORG 도 됨) | 76 | 20 | `海軍`·`民主党` 문맥의존 |
 
-핵심: 경계 176건 중 **99% 가 MeCab 토큰 경계로 표현 가능** → 토크나이저
-한계가 아니라 모델이 접미 토큰 (`軍`/`院`/`バス`) 을 O 로 떨군 추론
-문제. ambiguous 자기모순은 96건뿐 — 대부분 *문맥의존 정상 라벨* (특정
-명명 조직이면 ORG, 일반명사면 O) 이라 일괄 보정 대상 아님.
+경계 176 은 모델이 접미 토큰 (`軍`/`院`) 을 O 로 떨군 추론 문제,
+ambiguous 96 은 문맥의존 정상 라벨이라 일괄 보정 대상 아님.
 
-### 처방 1 — boundary loss I-weight 브래킷 (실패)
+### 처방 1·2 — 모델·초기 데이터 측 모두 노이즈 내
 
-접미 절단 (정답 I-ORG 인데 O 예측) 표적. base 와 I-weight 만 다르게
-10-fold ×3 (I=1.5/2.0/2.5, B=1.5 고정).
+- **boundary loss I-weight** (I=1.5/2.0/2.5 ×10-fold): 최선 ORG F1 0.8916,
+  경계 −7% 뿐 — 전역 P↔R 맞교환 → 폐기.
+- **LLM 2-모델 census**: 명명 조직 89 span 추가 (5,133→5,222), F1
+  0.8893→0.8903. OVER 의심 53 은 대부분 진짜 ORG (gold 정확 역증명, 제거
+  0). 데이터 품질↑, F1 무효.
 
-| arm | overall F1 | ORG F1 | ORG 경계 FP/FN |
-|---|---:|---:|---:|
-| base I=1.2 | 0.9195 | 0.8893 | 176 / 176 |
-| I=2.0 (최선) | 0.9205 | 0.8916 | 163 / 163 |
-| I=2.5 | 0.9216 | 0.8902 | 166 / 166 |
+### clean 환각의 정체 — 76% 가 모델이 맞거나 거의 맞음 (핵심)
 
-전부 노이즈 바닥 (±1.2pp) 내. 최선도 경계 −13/176 (7%) 뿐 — I-weight 는
-"ORG 접미사 잇기" 를 표적 못 하고 전역으로 I 를 더 내뱉어 P↔R 맞교환
-(1편 교훈 #4 재현). **채택 안 함.**
+census 후에도 남은 clean 환각 (현 gold 기준 344건 / 327 surface) 을
+스키마로 전수 판정하니 "모델 오류" 가 아니라 정반대 4종의 혼합이었다:
 
-### 처방 2 — LLM 보조 gold 전수 census
+| 무리 | 고유 surface | 비중 | 정체 |
+|---|---:|---:|---|
+| GOLD 누락 (모델 맞음) | ~120 | ~37% | 진짜 명명 조직 누락 (`三井住友銀行`·`東京地裁`·`国務院`) |
+| TYPE 혼동 (ORG 아님) | ~80 | ~24% | LOC (노선·성·공원·묘지)·PER·PROD |
+| FRAGMENT (경계 누수) | ~50 | ~15% | 더 큰 조직의 일부만 (`厚生労働`→省) |
+| 진짜 과예측 (모델 틀림) | ~75 | ~23% | 일반명사·스키마 제외 (`政権`·`帝国`·`宗派`) |
 
-독립 vLLM 2개 (gemma-4-31B / Qwen3.6-35B) 로 5,270문장 ORG 라벨링 →
-두 모델 overlap 합의 vs gold diff. **GAP (누락 의심) 298 / OVER (과라벨
-의심) 53.** OVER 는 대부분 `日産`·`民主党`·`衆議院` 등 진짜 ORG 를 두
-LLM 이 놓친 것 → **gold 가 이미 정확함을 역증명**, 제거 0건. GAP 278
-surface 를 스키마로 판정 (노선→LOC·직책→PER·일반명사·씨족·제국·종파·
-신문잡지 제외) → **명명 조직 79 surface / 89 span 을 ORG 로 추가**,
-`pii_all_phonediv.jsonl` 에 병합 (ORG 5,133 → 5,222).
+GOLD누락 + TYPE + FRAGMENT = **~76% 가 모델이 진짜 엔티티를 찾아냄** →
+ORG "천장" 은 모델이 아니라 gold 품질 문제, 순수 모델 과예측은 ~23% 뿐
+(고유 surface 기준, 회색지대 ±5pp).
 
-보정 데이터 10-fold 재측정:
+### 누락 회복 +78 — 데이터·측정 정확성 보정 (F1 레버 아님)
 
-| | overall F1 | ORG F1 | ORG P | ORG R | ORG sup |
+GOLD누락 중 *범주적으로 명백한* 명명 조직 69 surface / 78 span 을 스키마
+근거로 일관 라벨 (전 occurrence) 로 gold 에 추가 (5,222→5,300). 안티순환:
+회색 metonym (도시명=구단)·PROD·국명+軍/艦隊 서술형·시설 *종류* 는 제외.
+
+- **재학습 0 리스코어** (모델 +78 미학습 = 순수 gold 효과): ORG F1
+  0.8932→0.9001 (**+0.69pp**). 78 중 72 가 FP→TP (P +1.32pp), 6 은 신규
+  FN — FP/FN 자연 균형 (순환 아님).
+- **보정 gold 10-fold 재학습** (아래 표): ORG **P +1.77pp** 회복,
+  R −0.94pp (신규 FN), F1 +0.47pp.
+
+| gold | overall F1 | ORG F1 | ORG P | ORG R | sup |
 |---|---:|---:|---:|---:|---:|
-| 보정 전 | 0.9195 | 0.8893 | 0.8665 | 0.9133 | 5,133 |
-| 보정 후 (+89) | 0.9180 | 0.8903 | 0.8646 | 0.9175 | 5,222 |
+| base | 0.9195 | 0.8893 | 0.8665 | 0.9133 | 5,133 |
+| census +89 | 0.9180 | 0.8903 | 0.8646 | 0.9175 | 5,222 |
+| **+누락 회복 +78** | 0.9232 | **0.8950** | **0.8823** | 0.9081 | 5,300 |
 
-+89 (전체 span 의 0.5%) 라 노이즈 바닥 내 — F1 레버로는 무효. 데이터
-품질은 개선 (89개 실제 누락 교정) 했으나, gap 을 2배로 늘려도 ~1% 라
-측정 불가.
+추가분이 전체 span 의 0.4% 라 overall 변화는 run 변동과 섞인다 — 귀속
+가능한 신호는 **ORG 정밀도 회복** (모델의 ORG 예측이 보정 gold 로 검증됨).
+데이터·측정 정확성은 회복했으나 게이트 레버는 아니다.
 
 ### 결론
-
-ORG 잔여 오류의 본질은 **문맥의존** (`海軍` = 특정 조직 vs 일반명사 —
-per-occurrence 주석 판단 필요, 그 자체가 논쟁적) + **long-tail 1회성**
-이라 gold 천장에 가깝다. model-side (boundary loss) 도 data-side (gap
-보정) 도 노이즈 위로 못 올린다. 게이트 (0.95) 도달은 ORG 단독으로
-불가 — PROD (0.79)·EVT (0.85) 가 별도 과제로 남는다.
-
-신규 재사용 도구: `error_analysis.py --from-predictions --fold-dirs ...`
-— K-fold pooled 예측을 재추론 없이 진단 (confusion matrix + per-type
-FP/FN surface dump).
-
-### 산출물
 
 `results/classifier/ja_sweep/kfold10_orgfix/` (보정 데이터 10-fold) +
 `.../kfold10_phonediv_noextra/diag_org/` (ORG 진단) +
