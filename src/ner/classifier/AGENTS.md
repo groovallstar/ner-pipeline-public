@@ -38,12 +38,6 @@ python -m ner.classifier --lang vi \
     --data data/wikiann_vi/pii_all.jsonl \
     --max-length 256 --lr 5e-5
 
-# train 셋만 보강 (leak-free, augmenters/ja.negative 와 조합)
-python -m ner.classifier --lang ja \
-    --data data/stockmark/pii_all.jsonl \
-    --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
-    --boundary-b-weight 1.5 --boundary-i-weight 1.2
-
 # 층화 K-fold 교차 검증 (fold 별 1회 학습 후 pooled 평가)
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   python -m ner.classifier --lang ja \
