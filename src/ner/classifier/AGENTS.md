@@ -38,12 +38,6 @@ python -m ner.classifier --lang vi \
     --data data/wikiann_vi/pii_all.jsonl \
     --max-length 256 --lr 5e-5
 
-# train 셋만 보강 (leak-free, augmenters/ja.negative 와 조합)
-python -m ner.classifier --lang ja \
-    --data data/stockmark/pii_all.jsonl \
-    --data-extra-train-jsonl data/stockmark/pii_neg_aug_N2_extra.jsonl \
-    --boundary-b-weight 1.5 --boundary-i-weight 1.2
-
 # 층화 K-fold 교차 검증 (fold 별 1회 학습 후 pooled 평가)
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   python -m ner.classifier --lang ja \
@@ -127,13 +121,6 @@ docs/reports/japanese-bert-classifier-history.md         # JA 히스토리 1편 
 docs/reports/japanese-bert-classifier-history-2.md       # JA 히스토리 2편 (층화 K-fold 프로토콜)
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
-
-## 합격선
-
-deep-interview 결과: **overall span F1 ≥ 0.95** (시간·모델 크기 미고려).
-
-`__main__.py` 마지막에 `PASS` / `FAIL` 출력.
-미달 시 후속 이슈 발행 (사용자 승인 후 PR 진행).
 
 ## 테스트
 

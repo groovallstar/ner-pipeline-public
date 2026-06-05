@@ -1,4 +1,4 @@
-# 일본어 BERT NER 분류기 — 실험 히스토리 2편 (층화 K-fold 프로토콜)
+# 일본어 BERT NER 분류기 — 실험 히스토리 2편
 
 측정 프로토콜 개편 (#69) 이후의 일본어 NER classifier
 (`src/ner/classifier/`, `--lang ja`) 실험 기록. 1편
@@ -185,10 +185,64 @@ GOLD누락 중 *범주적으로 명백한* 명명 조직 69 surface / 78 span �
 
 ### 결론
 
-ORG 잔여 오류는 **gold 품질 천장**: 모델은 gold 가 놓친 조직을 찾아내고도
-오답 처리된다 (clean 환각의 76%). 측정 ORG P 는 하한이며 실제 모델
-정밀도는 더 높다. model-side (boundary)·data-side (census·누락 회복) 모두
-F1 을 노이즈 위로 못 올린다 — 게이트 (0.95) 는 ORG 단독 불가,
-PROD (0.79)·EVT (0.85) 별도 과제. 재사용 도구
-`error_analysis.py --from-predictions` (재추론 0). 산출물 `results/`·
-`data/` gitignore — 수치 영구 출처는 본 문서.
+`results/classifier/ja_sweep/kfold10_orgfix/` (보정 데이터 10-fold) +
+`.../kfold10_phonediv_noextra/diag_org/` (ORG 진단) +
+`.../org_census/{gemma,qwen}_preds.json·gaps.jsonl·over.jsonl`
+(`results/`·`data/` 는 gitignore — 수치 영구 출처는 본 문서)
+
+## 실험 — PROD 천장 진단 + 전수 독립 census (#73)
+
+청정 baseline 최하위 클래스 PROD (F1 0.7895, P 0.7656 / R 0.8149,
+support 994) 의 잔여 오류가 gold 천장인지, gold 누락(gap) 보정으로
+회복 가능한지를 **model-neutral** 로 측정했다.
+
+### PROD pooled 진단 (재추론 없이)
+
+- FP 248 = HALLUCINATION 171 / BOUNDARY 61 / TYPE 16
+- FN 184 = MISS 88 / BOUNDARY 61 / TYPE 35
+- 모델은 PROD 과예측(P<R), leak 은 정밀도 쪽. TYPE 혼동 PROD↔ORG 지배.
+
+### gold gap census — 두 방식의 대조
+
+독립 판정자 3종(평가 BERT 와 무관): gemma-4-31B + Qwen3.6-35B +
+Claude(canonical schema). gold 는 Stockmark 인간 주석이라 독립.
+
+| census | 탐색 범위 | gap | PROD F1 | Δ |
+|---|---|---|---|---|
+| model-FP (편향) | 모델 HALL FP 171 | 25 | 0.8049 | +1.54pp |
+| **model-neutral** | 5,270 전수 gemma∩qwen | **49** | **0.7933** | **+0.38pp** |
+
+model-FP 의 +1.54pp 중 ~1.2pp 는 **모델-편향**(모델이 이미 맞춘 자리만
+gold 화 = FP→TP 직접 전환). 전수 독립으로 편향 제거 시 **+0.38pp =
+노이즈 바닥(±1.28pp) 미달**. 서명: HALL FP 171→151(↓) 이나 MISS
+88→96(↑) — 독립 탐색 gap 은 모델이 못 잡아 새 FN 이 되어 F1 불변.
+
+### 전수 census 판정 (GAP 149)
+
+ACCEPT 61 / REJECT 41 / **BORDERLINE 47**. BORDERLINE = 군함·전차·함포·
+법령·프로젝트·전시·랭킹 등 **canonical schema 미규정 범주** — ACCEPT 와
+맞먹는 규모이며 gold 비일관·PROD 천장의 구조적 원인. OVER(gold=PROD,
+LLM 부정) 20 중 진짜 over-label 은 법령 3건뿐 → gold 는 누락 한 방향.
+
+### 결론
+
+PROD 도 ORG 와 동일하게 **gold 천장** — gold gap 을 model-neutral 로
+보정해도 held-out F1 이 노이즈 위로 안 올라간다(+0.38pp). 잔여는
+long-tail 1회성 MISS + PROD↔ORG/EVT 본질 모호성 + schema 미규정
+회색지대. 측정 결과 **미측정 증강 도구 `prod_seed`/`negative` 폐기**
+(PROD 신호 추가가 census2 에서 HALL 재생성 → recall oversample 은
+precision leak 악화로 무효임을 직접 측정).
+
+이후 ORG gold 수정(누적 5300 = #69 5133 + #71 census 89 + 추가 78)까지
+반영한 현재 gold(ORG 5300 / PROD 1043) 전체 재측정: overall strict
+**0.9167** / ORG **0.8932** / PROD **0.7826**. gold 수정(ORG +167 /
+PROD +49)에도 per-entity 변동은 노이즈 바닥 내 → 천장 재확인 (구 목표
+0.95 대비 −3.3pp). 현재 gold 는 gitignore 로컬, 영구 재현 기준은 #69 의
+0.9195.
+
+### 산출물
+
+`.../kfold10_phonediv_census`(model-FP)·`…_census2`(model-neutral) +
+`.../diag_prod/{fullcorpus_prod_labels,census_fullcorpus_candidates,
+census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
+보정은 로컬 한정·미커밋, 영구 수치 출처는 본 문서의 994 기준)
