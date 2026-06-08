@@ -46,7 +46,7 @@ R 0.959) 의 P 저하 원인 규명 — gold 천장(ORG/PROD)인지 고칠 수 �
 - [x] 진단: P 0.8922 = HALL FP 50 중 34 풀카드가 무라벨 카드포맷
 - [x] 원인: 파이프라인 버그(LLM injector 환각) 확정 — gold 천장 아님
 - [x] 처방·측정: 재학습 +6.1pp(CC) / +0.88pp(overall), 노이즈 위
-- [x] 문서: 본 doc + history-2 §CREDIT_CARD + 평가지표 표
+- [x] 문서: 본 doc + per-entity-diagnosis §CREDIT_CARD + 평가지표 표
 
 ## 미해결 질문 (open question)
 
@@ -59,14 +59,14 @@ R 0.959) 의 P 저하 원인 규명 — gold 천장(ORG/PROD)인지 고칠 수 �
 ## 변경 요약
 
 코드 변경 없음(진단 도구·학습 CLI 재사용). gold 보정은 로컬 한정
-(`data/` gitignore). 문서만 커밋: 본 이슈 doc + history-2 §CREDIT_CARD
+(`data/` gitignore). 문서만 커밋: 본 이슈 doc + per-entity-diagnosis §CREDIT_CARD
 실험 섹션(진단·원인·처방·전체 P/R/F1 표).
 
 ## 검증
 
 - 진단·측정: `error_analysis` 인라인 + 보정 gold 10-fold pooled
   (`kfold10_phonediv_ccfix`). CREDIT_CARD 0.9295→**0.9907**, overall
-  0.9167→**0.9255**. 상세 표·전체 P/R/F1: history-2 §CREDIT_CARD(#78).
+  0.9167→**0.9255**. 상세 표·전체 P/R/F1: per-entity-diagnosis §CREDIT_CARD(#78).
 - 산출물 `results/`·보정 gold 모두 gitignore(로컬). 영구 재현 기준은
   #69 의 base 0.9195(CC 854 기준).
 

@@ -29,7 +29,7 @@ EVT 가 완벽(F1→1.0)해도 overall 기여는 support 4.7% 가중 → **~+0.7
 3. 환각 census: HALLUCINATION FP 가 gold 누락인지 dual-vLLM∩Claude
    독립 판정(#73 census 프로토콜 재사용) — model-FP(상한) 먼저.
 4. accept gold 보정 → 10-fold 재학습 → pooled EVT delta vs 노이즈 바닥.
-5. 결과를 docs/issues + history-2 §EVT 에 축약 기록. 레버 채택 시
+5. 결과를 docs/issues + per-entity-diagnosis §EVT 에 축약 기록. 레버 채택 시
    처방·재측정, 아니면 천장 문서화.
 
 ## 구현 결과·검증
@@ -37,7 +37,7 @@ EVT 가 완벽(F1→1.0)해도 overall 기여는 support 4.7% 가중 → **~+0.7
 ### 진단 — EVT pooled 3-갈래 (ccfix 예측, 재추론 0)
 
 strict TP 779 / FP 188 / FN 97 (P 0.8056 / R 0.8893 / F1 0.8454 —
-history-2 권위값과 정확히 일치, 분해 검증됨).
+per-entity-diagnosis 권위값과 정확히 일치, 분해 검증됨).
 
 | 경로 | FP | FN | 정체 |
 |---|---:|---:|---|
@@ -122,7 +122,7 @@ model-FP +1.05pp 중 ~0.64pp 가 **모델 편향**. 전수 독립으로 편향 �
 ## 커밋 입도
 
 - 진단·census 는 코드 변경 없음(도구 재사용) → 산출물 커밋 대상 아님.
-- 이슈 md(계획+결과) + history-2 §EVT 갱신은 마무리 단계 한 커밋.
+- 이슈 md(계획+결과) + per-entity-diagnosis §EVT 갱신은 마무리 단계 한 커밋.
 
 ## 리스크
 

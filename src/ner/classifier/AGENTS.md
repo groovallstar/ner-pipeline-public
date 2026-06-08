@@ -59,7 +59,7 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/pii_all.jsonl`
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
-- **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-history-2.md`
+- **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
 ## JSONL contract (입력 계약)
 
@@ -118,7 +118,7 @@ results/classifier/{ja,vi}/
 
 docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)
 docs/reports/japanese-bert-classifier-history.md         # JA 히스토리 1편 (Phase 0~8, 동결)
-docs/reports/japanese-bert-classifier-history-2.md       # JA 히스토리 2편 (층화 K-fold 프로토콜)
+docs/reports/japanese-bert-classifier-per-entity-diagnosis.md  # JA 엔티티별 성능 진단 (1편 후속, 층화 K-fold)
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 

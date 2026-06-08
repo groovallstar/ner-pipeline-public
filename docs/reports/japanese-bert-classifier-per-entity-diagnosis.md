@@ -1,11 +1,12 @@
-# 일본어 BERT NER 분류기 — 실험 히스토리 2편
+# 일본어 BERT NER 분류기 — 엔티티별 성능 진단·보정
 
-측정 프로토콜 개편 (#69) 이후의 일본어 NER classifier
-(`src/ner/classifier/`, `--lang ja`) 실험 기록. 1편
-(`japanese-bert-classifier-history.md`, Phase 0~8, 동결) 과는 측정
-프로토콜이 달라 **수치를 직접 비교할 수 없다** — 1편은 80/10/10 단일
-분할 (test 527 문장, Phase 7~8 은 extra 중복 포함), 본 문서는 층화
-10-fold 교차 검증 pooled (test 5,270 문장 전체, 중복 자동 검증).
+측정 프로토콜 개편 (#69) 으로 측정 노이즈를 낮춘 뒤, 엔티티별 (ORG·
+PROD·CREDIT_CARD·EVT·LOC) 잔여 오류의 정체(gold 천장 vs 수정 가능
+버그)를 진단·보정한 기록. 1편 (`japanese-bert-classifier-history.md`,
+Phase 0~8, 동결, 시계열 히스토리) 의 후속이며, 1편과는 측정 프로토콜이
+달라 **수치를 직접 비교할 수 없다** — 1편은 80/10/10 단일 분할 (test
+527 문장, Phase 7~8 은 extra 중복 포함), 본 문서는 층화 10-fold 교차
+검증 pooled (test 5,270 문장 전체, 중복 자동 검증).
 
 - 요약본: `japanese-bert-classifier-benchmark.md`
 - 운영 규칙: 새 실험이 종결되면 본 문서에 섹션을 추가한다. 실험 명칭은
@@ -17,12 +18,14 @@
 - fold k = test, fold (k+1)%10 = valid, 나머지 8개 fold = train
   → **train 4,216 / valid 527 / test 527** (1편의 80/10/10 과 동일 크기)
 - fold 0~9 로 10회 학습 후 전체 test 예측을 합쳐 **pooled micro-average
-  F1** 산출. 모든 문장이 정확히 1회 test 에 등장 → 유효 test = 전체
-  5,270 문장. 측정 노이즈: overall ±0.63pp → ±0.28pp, PROD ±4.10pp →
+  F1** (전 fold test 예측을 합쳐 한 번에 계산) 산출. 모든 문장이 정확히
+  1회 test 에 등장 → 유효 test = 전체 5,270 문장. 측정 노이즈 (이항 SE,
+  pooling 시 √10 축소): overall ±0.63pp → ±0.20pp, PROD ±4.10pp →
   ±1.28pp, EVT ±3.69pp → ±1.21pp
 
 공통 조건: `tohoku-nlp/bert-base-japanese-v3`, epochs=5, BS 16, LR 5e-5,
-max_len 256, fp16, boundary-aware loss (B=1.5/I=1.2),
+max_len 256, fp16, boundary-aware loss (B/I 토큰에 가중치를 더 주는
+토큰분류 손실; B=1.5/I=1.2),
 `metric_for_best_model='eval_loss'`, 분할 seed 42.
 RTX A6000, fold 당 학습 ~97초.
 
@@ -59,16 +62,20 @@ uv run python -m ner.classifier.kfold_pool \
    |---|---:|---:|
    | 전체 (1편 보고값) | 527 | 0.9644 |
    | 중복 부분 (extra 에 원문 존재) | 187 | 0.9947 (EVT/ORG/PER 전부 1.0 = 암기) |
-   | **비중복 부분** | 340 | **0.9478** (게이트 미달) |
+   | **비중복 부분** | 340 | **0.9478** |
 
    → 1편 Phase 7~8 수치는 ~+1.7pp 부풀려진 값. 중복 수정은 별도 이슈로.
 
 ## 실험 — base 단독 10-fold 측정 (#69)
 
-extra 없는 base 데이터 (`pii_all_phonediv.jsonl` 단독) 의 청정 기준선
-(clean baseline) 확정 + 층화 10-fold 프로토콜 첫 실측.
+extra 없는 base 데이터 (`pii_all_phonediv.jsonl` 단독, `phonediv` =
+PHONE 형식 다양화) 의 청정 기준선 (clean baseline) 확정 + 층화 10-fold
+프로토콜 첫 실측.
 
 ### pooled 결과 (전체 5,270 문장, 18,349 span)
+
+strict = (시작,끝,종류) 완전 일치, relaxed = SemEval'13 Partial (경계가
+살짝 어긋난 건 부분 점수).
 
 | 메트릭 | strict | relaxed (SemEval'13 Partial) |
 |---|---:|---:|
@@ -98,13 +105,13 @@ per-entity (strict, pooled):
 
 ### 해석
 
-1. **base 단독 청정 기준선 = strict F1 0.9195** (게이트 -3.05pp).
-   5-seed median 0.9198 과 일치 — 수준 교차 확인.
+1. **base 단독 청정 기준선 = strict F1 0.9195**. 5-seed median 0.9198
+   과 일치 — 독립 프로토콜 간 교차 확인.
 2. **노이즈 감소 목표 달성.** ±1.5pp 이상의 per-entity 변화는 이제
    노이즈가 아닌 실제 효과로 판별 가능.
 3. **전체 오류의 최대 기여자는 ORG** (support 5,133 = 전체의 28%,
    F1 0.8893). PROD 는 F1 이 가장 낮지만 (0.7943) support 가 5.4% 라
-   전체 기여는 ORG 보다 작다. 게이트 도달이 목표면 ORG 가 1순위.
+   전체 기여는 ORG 보다 작다. overall 향상 여지는 ORG 가 1순위.
 4. **1편 production 0.9644 와의 격차** = extra 진짜 기여 (+2.5~3pp,
    비중복 부분 0.9478 기준) + 중복 인플레이션 (~+1.7pp) + 프로토콜
    차이. extra 를 중복 없이 재생성해 본 프로토콜로 재측정하는 것이
@@ -117,6 +124,9 @@ fold{0..9}/metrics.json·test_predictions.json + pooled_metrics.json
 (`results/` 는 gitignore 대상 — 수치의 영구 인용 출처는 본 문서)
 
 ## 실험 — ORG 정밀도: gold 품질 천장 확인 (#71 + 누락 회복 후속)
+
+> `gold 천장` = gold 라벨 품질이 만드는 성능 상한 — 모델을 더 키워도
+> 잘못·누락된 정답 때문에 측정 F1 이 그 위로 안 올라가는 지점.
 
 청정 기준선 최대 오류 기여자 ORG (support 5,133 = 28%, **P 0.8665 <
 R 0.9133 = 과예측**) 를 진단·처방했다. 결론: ORG 잔여 오류는 모델 한계가
@@ -141,9 +151,10 @@ ambiguous 96 은 문맥의존 정상 라벨이라 일괄 보정 대상 아님.
 
 - **boundary loss I-weight** (I=1.5/2.0/2.5 ×10-fold): 최선 ORG F1 0.8916,
   경계 −7% 뿐 — 전역 P↔R 맞교환 → 폐기.
-- **LLM 2-모델 census**: 명명 조직 89 span 추가 (5,133→5,222), F1
-  0.8893→0.8903. OVER 의심 53 은 대부분 진짜 ORG (gold 정확 역증명, 제거
-  0). 데이터 품질↑, F1 무효.
+- **LLM census** (후보 span 을 독립 판정자가 재판정; gemma-4-31B +
+  Qwen3.6-35B 후보 탐지 + Claude canonical schema 판정): 명명 조직 89
+  span 추가 (5,133→5,222), F1 0.8893→0.8903. OVER 의심 53 은 대부분 진짜
+  ORG (gold 정확 역증명, 제거 0). 데이터 품질↑, F1 무효.
 
 ### clean 환각의 정체 — 76% 가 모델이 맞거나 거의 맞음 (핵심)
 
@@ -164,12 +175,13 @@ ORG "천장" 은 모델이 아니라 gold 품질 문제, 순수 모델 과예측
 ### 누락 회복 +78 — 데이터·측정 정확성 보정 (F1 레버 아님)
 
 GOLD누락 중 *범주적으로 명백한* 명명 조직 69 surface / 78 span 을 스키마
-근거로 일관 라벨 (전 occurrence) 로 gold 에 추가 (5,222→5,300). 안티순환:
-회색 metonym (도시명=구단)·PROD·국명+軍/艦隊 서술형·시설 *종류* 는 제외.
+근거로 일관 라벨 (전 occurrence) 로 gold 에 추가 (5,222→5,300). 모델
+편향 회피: 회색 metonym (환유, 도시명=구단)·PROD·국명+軍/艦隊 서술형·
+시설 *종류* 는 제외.
 
 - **재학습 0 리스코어** (모델 +78 미학습 = 순수 gold 효과): ORG F1
   0.8932→0.9001 (**+0.69pp**). 78 중 72 가 FP→TP (P +1.32pp), 6 은 신규
-  FN — FP/FN 자연 균형 (순환 아님).
+  FN — FP/FN 자연 균형 (모델 편향 아님).
 - **보정 gold 10-fold 재학습** (아래 표): ORG **P +1.77pp** 회복,
   R −0.94pp (신규 FN), F1 +0.47pp.
 
@@ -185,7 +197,7 @@ GOLD누락 중 *범주적으로 명백한* 명명 조직 69 surface / 78 span �
 측정, overall 0.9167 / ORG 0.8932 / PROD 0.7826). PROD +49 추가로 ORG F1
 0.8950→0.8932 (−0.18pp, 노이즈). 추가분이 전체 span 의 0.4% 라 overall
 변화는 run 변동과 섞이며, 귀속 가능한 신호는 **ORG 정밀도 회복** (모델의
-ORG 예측이 보정 gold 로 검증됨). 데이터·측정 정확성 회복이지 게이트
+ORG 예측이 보정 gold 로 검증됨). 데이터·측정 정확성 회복이지 overall F1
 레버는 아니다.
 
 ### 결론
@@ -197,9 +209,11 @@ ORG 예측이 보정 gold 로 검증됨). 데이터·측정 정확성 회복이�
 
 ## 실험 — PROD 천장 진단 + 전수 독립 census (#73)
 
-청정 baseline 최하위 클래스 PROD (F1 0.7895, P 0.7656 / R 0.8149,
-support 994) 의 잔여 오류가 gold 천장인지, gold 누락(gap) 보정으로
-회복 가능한지를 **model-neutral** 로 측정했다.
+청정 baseline 최하위 클래스 PROD (본 census 캠페인 noextra 재pool
+F1 0.7895, P 0.7656 / R 0.8149, support 994; #69 동결표의 0.7943 과는
+학습 비결정성 run 변동 ±1.28pp 내) 의 잔여 오류가 gold 천장인지, gold
+누락(gap) 보정으로 회복 가능한지를 **model-neutral** (모델 예측과 무관한
+대칭 탐색) 로 측정했다. 이하 census Δ 는 모두 캠페인 base 0.7895 기준.
 
 ### PROD pooled 진단 (재추론 없이)
 
@@ -209,8 +223,10 @@ support 994) 의 잔여 오류가 gold 천장인지, gold 누락(gap) 보정으�
 
 ### gold gap census — 두 방식의 대조
 
-독립 판정자 3종(평가 BERT 와 무관): gemma-4-31B + Qwen3.6-35B +
-Claude(canonical schema). gold 는 Stockmark 인간 주석이라 독립.
+독립 판정자 3종(평가 BERT 와 무관): gemma-4-31B + Qwen3.6-35B (후보
+탐지) + Claude (canonical schema 판정). gold 는 Stockmark 인간 주석이라
+독립. model-FP = 모델 FP 자리만 탐색(편향), model-neutral = 코퍼스 전수
+대칭 탐색(무편향). 탐지는 gemma∩qwen 교집합, 채택은 Claude schema 판정.
 
 | census | 탐색 범위 | gap | PROD F1 | Δ |
 |---|---|---|---|---|
@@ -241,9 +257,8 @@ precision leak 악화로 무효임을 직접 측정).
 이후 ORG gold 수정(누적 5300 = #69 5133 + #71 census 89 + 추가 78)까지
 반영한 현재 gold(ORG 5300 / PROD 1043) 전체 재측정: overall strict
 **0.9167** / ORG **0.8932** / PROD **0.7826**. gold 수정(ORG +167 /
-PROD +49)에도 per-entity 변동은 노이즈 바닥 내 → 천장 재확인 (구 목표
-0.95 대비 −3.3pp). 현재 gold 는 gitignore 로컬, 영구 재현 기준은 #69 의
-0.9195.
+PROD +49)에도 per-entity 변동은 노이즈 바닥 내 → 천장 재확인. 현재
+gold 는 gitignore 로컬, 영구 재현 기준은 #69 의 0.9195.
 
 ### 산출물
 
@@ -331,7 +346,7 @@ strict = (시작,끝,종류) 완전 일치, relaxed = SemEval'13 Partial.
 CREDIT_CARD 의 P 천장은 ORG/PROD 식 인간 주석 모호성이 아니라 **LLM
 injector 환각**(라벨 안 된 카드숫자 107 주입). 판정 census 없이 schema
 기준 결정론적 relabel 로 닫혔고, 재학습 +6.1pp(CC)·+0.88pp(overall)
-회복. overall 0.9167→0.9255 는 노이즈 바닥(±0.28pp)의 3배 = ORG/PROD
+회복. overall 0.9167→0.9255 는 노이즈 바닥(±0.20pp)의 약 4배 = ORG/PROD
 census 단발 시도(<+0.4pp)보다 큰 단일 이득.
 
 > 근본 원인은 코드에 잔존 — gold 보정은 로컬·미커밋(gitignore)이라
@@ -359,11 +374,12 @@ gold 일관: `オリンピック` bare=0/mod=35·`選手権` 0/82·`大会` 0/67
 `選挙` 0/47·`戦争` 0/37(bare 혼재는 ワールドカップ·ダービー 3건뿐).
 경계의 실제 정체 = ① 연도 prefix 의 DAT 경합(EVT-내부 연도 표면 16/24
 가 standalone DAT, 264회:38회) ② suffix 이질 24종 = 모델 compositional
-한계. strict↔relaxed +2.5pp 는 학습 모순 아닌 진짜 난이도.
+(구성성 일반화) 한계. strict↔relaxed +2.5pp 는 학습 모순 아닌 진짜 난이도.
 
 ### HALLUCINATION census — 두 방식의 대조 (#73 프로토콜)
 
-독립 판정자 gemma-4-31B∩Qwen3.6-35B(평가 BERT·gold 와 무관):
+독립 판정자 3종 gemma-4-31B + Qwen3.6-35B (후보 탐지, 교집합) + Claude
+(canonical schema 판정) — 평가 BERT·gold 와 무관:
 
 | census | 탐색 | 적용 gap | EVT F1 | Δ vs 0.8454 | EVT P | EVT R |
 |---|---|---:|---:|---:|---:|---:|
@@ -391,3 +407,54 @@ census·verdicts)·`.../kfold10_phonediv_evtcensus{,_neutral}/`(보정
 재학습) — `results/`·무편향 보정 gold(EVT 968, 백업 `.preevtcensus`=876)
 모두 gitignore(로컬). 현재 권위 overall 0.9268/EVT 0.8495. 영구 재현
 기준은 #69 base 0.9195 유지.
+
+## 실험 — LOC 최대레버 진단 + 무편향 census 재학습 (#82)
+
+### LOC pooled 3-갈래 (ccfix 예측, 재추론 0)
+
+strict TP 2614 / FP 371 / FN 218 (F1 0.8987 / P 0.8757 / R 0.9230).
+HALLUC 247·MISS 77 / BOUNDARY 94·94 / TYPE(LOC↔ORG) 30·47. HALLUC
+분해: attributive 국가 82 / 〒·주소 blob 23 / 일회성 고유 지명 142.
+confusion 은 LOC↔ORG 양방향 66(gold LOC→ORG 40·역 26) 지배. BOUNDARY
+는 모델 under-extent 72%(행정·주소 복합체 분할).
+
+### attributive gold 모순 — #80 과 정반대 (핵심)
+
+#80 EVT 는 gold extent 가 완전 일관(bare=0)이라 레버 반증. LOC 는
+attributive 국가명에서 **gold 자기모순을 직접 확인**: `日本国内` gold有
+3·無 3, `日本の実業家` 8·3 = 50/50; referential `日本では` 18:0 은 일관.
+attributive nationality 의 본질적 모호성 = 정의 가능한 gold 모순 클래스.
+canonical §2.3 에 규칙화(지명+人/語/系/製·국적 수식 명사구 = 비-LOC).
+
+### 무편향 census → gold-fix → 재학습 (권위 실측)
+
+model-FP(247 HALL_FP): 둘 다 LOC 64 / 모델오류 101(41%). 전수 census
+GAP 180·OVER 85. 보정→10-fold 재학습 (baseline evtcensus_neutral LOC
+0.8964, 바닥 이항 SE ±0.6pp — EVT ±1.21pp 의 √(876/2832) 축소):
+
+| gold-fix | LOC F1 | P | R | Δ vs 0.8964 | 바닥 |
+|---|---:|---:|---:|---:|---|
+| **refonly +67 (구체 지명만)** | **0.8995** | 0.8743 | 0.9262 | **+0.31pp** | 미달 |
+| maximal +129 (attributive 포함) | 0.9043 | 0.8829 | 0.9267 | +0.79pp | 위 |
+
+### 결론 — LOC = gold 천장 (4연속, 정정 가능 결함 존재)
+
+**방어 가능한 referential-only 보정(東京·京都·パリ 등 구체 지명 67)은
++0.31pp < 바닥 = 천장** — ORG·PROD·EVT 와 동일. 바닥 위(+0.79)는
+attributive 국가명(`日本の`)을 LOC 로 인정하는 tag-all 에만 의존(maximal
+초과분 +0.48pp 가 전부 attributive=모델이 이미 찍은 FP→TP). refonly 는
+P 0.8810→0.8743(↓), 추가가 대부분 모델 미예측 자리라 R 만 +1.38pp.
+
+단 **EVT(완전 무결)와 질적 차이**: GAP 67(구체 누락) + OVER 85
+(attributive 과태깅 + 합성 주소 경계) = 대칭 gold 결함 존재. 천장이되
+**gold 품질 정정 여지가 있는 천장**. refonly +67 채택(품질 정정, #80
+EVT 968 선례와 일관). 현재 권위 overall 0.9256/LOC 0.8995(support
+2899). "schema 결정 먼저"·"referential-only 변종" 이 정확히 attributive
+인공물 함정을 드러냄.
+
+### 산출물
+
+`.../kfold10_phonediv_ccfix/diag_loc/`(진단·model-FP·전수 census·
+candidates)·`.../kfold10_phonediv_loccensus_{neutral,refonly}/`(보정
+재학습) — `results/`·보정 gold(LOC 2899, 백업 `.preloccensus`=2832) 모두
+gitignore(로컬). 영구 재현 기준은 #69 base 0.9195 유지.

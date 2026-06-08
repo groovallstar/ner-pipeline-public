@@ -33,7 +33,7 @@ seed 까지 7~8단계에 걸쳐 strict F1 0.9644 (Phase 8 의 S8) 에 도달했�
 > 격차는 *모두 거품이 아니라* extra 의 진짜 기여 (+2.5~3pp) 와 누설
 > 인플레이션 (~+1.7pp) 이 섞인 값이므로, 부풀린 몫을 걷어내면 게이트
 > 아래로 내려간다. 그래서 이후 실험은 새 기법이 아니라 *측정 신뢰성
-> 회복* 을 먼저 했고, 2편 (`japanese-bert-classifier-history-2.md`) 으로
+> 회복* 을 먼저 했고, 2편 (`japanese-bert-classifier-per-entity-diagnosis.md`) 으로
 > 이어진다.
 
 - **요약본** (현 production 결론·F1 추이·핵심 교훈·산출물·재현 명령):
@@ -42,7 +42,7 @@ seed 까지 7~8단계에 걸쳐 strict F1 0.9644 (Phase 8 의 S8) 에 도달했�
   **영구 인용 단일 출처**다 — Phase 상세 표를 삭제·요약하지 말 것
 - 운영 규칙: 본 문서는 Phase 0~8 에서 **동결**되었다 (하단 §본 문서
   동결 참조). 새 실험은 측정 프로토콜이 달라
-  `japanese-bert-classifier-history-2.md` (2편) 에 기록한다
+  `japanese-bert-classifier-per-entity-diagnosis.md` (2편) 에 기록한다
 - 라운드↔Phase 매핑: 라운드 2 = Phase 4 (#51) / 라운드 3 = Phase 5~7
   (#56·#57·#58) / 라운드 4 = Phase 8 (#61)
 
@@ -963,5 +963,5 @@ non-determinism 이 더해져, *같은 분할을 재학습만 해도* PROD R 이
 
 따라서 본 문서의 수치는 *같은 프로토콜 안에서의 상대 비교*로만 유효하다.
 이후 실험은 층화 K-fold 교차 검증 프로토콜로 전환하여
-`japanese-bert-classifier-history-2.md` (2편) 에 기록하며,
+`japanese-bert-classifier-per-entity-diagnosis.md` (2편) 에 기록하며,
 본 문서에는 새 Phase 를 추가하지 않는다 (Phase 0~8 동결).

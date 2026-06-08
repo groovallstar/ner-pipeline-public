@@ -93,7 +93,7 @@ uv run python -m ner.classifier.error_analysis --from-predictions \
 
 ### 5. 문서 + 마무리
 
-히스토리 2편(`japanese-bert-classifier-history-2.md`)에 진단·처방·재측정
+히스토리 2편(`japanese-bert-classifier-per-entity-diagnosis.md`)에 진단·처방·재측정
 실험 섹션 추가(자기서술형 명칭), 본 이슈 md 에 결과·검증 추가 →
 정합성 확인 후 최초 커밋 → PR(`closes #71`).
 
@@ -170,7 +170,7 @@ uv run python -m ner.classifier.error_analysis --from-predictions \
 노이즈 위로 못 올림 → **ORG 는 이 데이터셋 gold 천장에 도달**. 잔여
 오류는 문맥의존(`海軍` 특정조직 vs 일반명사) + long-tail. 게이트(0.95)는
 ORG 단독으로 불가, PROD·EVT 별도 과제. 상세·수치 영구 출처:
-`docs/reports/japanese-bert-classifier-history-2.md` §ORG 정밀도 회복.
+`docs/reports/japanese-bert-classifier-per-entity-diagnosis.md` §ORG 정밀도 회복.
 
 산출물: 재사용 도구 `error_analysis.py --from-predictions` + 89건 gold
 교정(데이터 반영) + 진단/census 산출물(`results/` gitignore).
