@@ -43,7 +43,7 @@
 - production(S8) test 문장의 30~35%가 extra train 데이터에 원문 그대로 존재:
   중복 부분 F1 0.9947 vs 비중복 부분 0.9478 (처리는 범위 외, 별도 이슈)
 - 수치 상세·해석의 영구 인용 출처:
-  `docs/reports/japanese-bert-classifier-history-2.md`
+  `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
 ## 결정 로그 (append-only)
 
