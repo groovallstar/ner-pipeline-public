@@ -267,6 +267,34 @@ gold 는 gitignore 로컬, 영구 재현 기준은 #69 의 0.9195.
 census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
 보정은 로컬 한정·미커밋, 영구 수치 출처는 본 문서의 994 기준)
 
+### 후속 — schema 규정으로 회색지대 정정 (#84 · ADR 0001 · #85)
+
+위 BORDERLINE 47(canonical 미규정 회색지대)이 PROD 천장의 구조적
+원인이라, data 수급이 아니라 **schema 규정**으로 전환했다.
+
+- **#84 4범주**(제조 artifact→PROD / 법령→비-entity / 전시→EVT /
+  프로젝트→EVT): gold `prodschema`, PROD 1043→1042. 10-fold pooled
+  PROD F1 0.8004→0.8090 (ΔP +1.73 / ΔR −0.11 비대칭 P-레버, 노이즈
+  대역 내).
+- **ADR 0001 서비스 제외**: 재감사에서 남은 비일관 주범이 "서비스"로
+  드러나 PROD 를 positive 재규정(서비스·온라인 운영물·기술 표준 제외).
+  오라벨 재배치(회사→`ORG`, 계획·전시·시리즈→`EVT`, 상·훈장·규격→
+  비-entity). gold `prodclean` 승격, PROD 1042→**943**(이탈 99 = 재라벨
+  20 + 제거 79). JA 프롬프트 positive 통일.
+
+| 지표 | baseline(loccensus) | prodschema | **prodclean** |
+|---|---|---|---|
+| PROD F1·P·R | 0.8004·0.7725·0.8303 | 0.8090·0.7898·0.8292 | **0.8168·0.7913·0.8441** |
+| ORG F1 | 0.8982 | 0.8913 | 0.8965 |
+| EVT F1 | 0.8593 | 0.8366 | 0.8353 |
+| overall F1 | 0.9256 | 0.9222 | 0.9251 |
+
+PROD F1 상승은 **가장 비일관·난해했던 79 스팬 제거의 기계적 효과**
+(support 943≠1043) — baseline 과 비교 불가, 성능 레버 아닌 gold 일관성
+보정(본 절 천장 결론과 정합). overall 은 baseline 수준 회복, ORG 회복.
+**EVT −2.4pp(vs baseline) single-run 은 실재/노이즈 미판정 → #85 에서
+multi-seed(s42·43·44) 재확인.** 상세 `docs/decisions/0001-prod-service-exclusion.md`.
+
 ## 실험 — CREDIT_CARD 정밀도: LLM injector 환각 규명 (#78)
 
 ORG·PROD 와 달리 CREDIT_CARD 는 **gold 천장이 아니라 고칠 수 있는

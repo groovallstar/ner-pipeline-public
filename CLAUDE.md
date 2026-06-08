@@ -141,4 +141,19 @@ docs/issues/
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
 3. **구현 계획 수립 → 승인 요청**: 하위 작업 3~6개를 Issue 본문의 체크박스로 분해하고, 동일 내용을 `docs/issues/issue-{N}-{slug}.md`의 계획 섹션에 기록 (**커밋하지 않음**)
 4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조
-5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → `docs/issues/issue-{N}-{slug}.md`에 구현 결과·검증 섹션 추가 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
+5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **산출물 확인**: `refuter` 스킬로 현재 diff를 이 이슈의 성공 기준에 대해 반증(PASS면 진행, FAIL이면 4단계로 회귀) → `docs/issues/issue-{N}-{slug}.md`에 구현 결과·검증 섹션 추가 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
+
+> **산출물 확인(반박자)**: 4단계 구현 후 이슈 종료 전, `refuter` 스킬을 호출해 기억이 깨끗한 Sonnet 서브에이전트로 현재 diff를 *승인이 아니라 반증*시킨다 — 코드 정합성·측정 무결성(리포트·`docs/issues` 숫자 ↔ `results/*.json`)·테스트 무결성 3축. PASS면 종료, FAIL이면 구현으로 회귀. 상세는 "루프 검증 게이트" 섹션 및 `.claude/skills/refuter/`.
+
+## 루프 검증 게이트 (격리 컨텍스트 반박자)
+
+ralph/ultrawork 등 **루프 모드일 때만** 작동하는 Stop 훅 게이트. 일상 단발 편집·대화 턴에는 뜨지 않는다.
+
+- **발동 조건**: 루프 활성(`.omc/state/sessions/<id>/prd.json`에 미완료 story 존재, 또는 수동 토글 `.omc/state/refuter-gate.on`) **+** 미커밋 diff 존재.
+- **순서**: ① 변경된 `.py`에 `ruff check`(결정적 선통과, 실패 시 완료 차단) → ② 현재 diff에 대한 반박자 판정 요구.
+- **반박자**: 기억이 깨끗한 Sonnet 서브에이전트가 *승인이 아니라 반증*을 전담 — 코드 정합성·회귀, 측정 무결성(리포트·`docs/issues` 숫자 ↔ `results/*.json`), 테스트 삭제·약화 여부를 본다. 절차는 `refuter` 스킬.
+- **판정 파일**: `.omc/state/refuter/<diff_hash>.json`(`verdict: PASS|FAIL`). 훅은 모델 말이 아니라 이 파일을 직접 읽는다. PASS만 완료 허용.
+- **무한루프 차단**: 재진입 Stop(`stop_hook_active`)에서는 재-block하지 않는다(Claude Code 연속-block 안전장치 존중, OMC persistent-mode와 동일 패턴). 세션 누적 block 6회 초과 시에도 통과·에스컬레이션.
+- **OMC 공존**: persistent-mode(계속 일하라)와 **보완적** — 게이트는 *완료 관문*이라 직교한다. 둘 다 루프 모드에서만 작동하고 재진입 비-block으로 deadlock을 피한다.
+- **끄기**: 루프를 안 돌리면 자동 비활성. 강제로 끄려면 `DISABLE_OMC=1` 또는 `OMC_SKIP_HOOKS=refuter-gate`(게이트가 이 토큰을 인식), 또는 `.claude/settings.json`의 `hooks.Stop`에서 제거.
+- 구현: `.claude/hooks/refuter_gate.py`, `.claude/skills/refuter/`.
