@@ -41,7 +41,7 @@ MEASURE → IDENTIFY → FIX → VERIFY → GUARD
 - 품질 지표도 함께 확인 (F1/precision/recall)
 
 ### 5. GUARD — 회귀 방지
-- 결과 JSON 보존 (`results/`) + 변경 요약을 `docs/guides/` 또는 ADR에 기록
+- 결과 JSON 보존 (`results/`) + 변경 요약을 `docs/guides/` 또는 `docs/reports/`에 기록
 - 임계값 이탈 시 경보할 수 있는 체크 추가 고려
 
 ## 하지 말 것

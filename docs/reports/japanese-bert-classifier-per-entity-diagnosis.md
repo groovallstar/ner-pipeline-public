@@ -267,7 +267,7 @@ gold 는 gitignore 로컬, 영구 재현 기준은 #69 의 0.9195.
 census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
 보정은 로컬 한정·미커밋, 영구 수치 출처는 본 문서의 994 기준)
 
-### 후속 — schema 규정으로 회색지대 정정 (#84 · ADR 0001 · #85)
+### 후속 — schema 규정으로 회색지대 정정 (#84 · #85)
 
 위 BORDERLINE 47(canonical 미규정 회색지대)이 PROD 천장의 구조적
 원인이라, data 수급이 아니라 **schema 규정**으로 전환했다.
@@ -276,7 +276,7 @@ census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
   프로젝트→EVT): gold `prodschema`, PROD 1043→1042. 10-fold pooled
   PROD F1 0.8004→0.8090 (ΔP +1.73 / ΔR −0.11 비대칭 P-레버, 노이즈
   대역 내).
-- **ADR 0001 서비스 제외**: 재감사에서 남은 비일관 주범이 "서비스"로
+- **#84 서비스 제외**: 재감사에서 남은 비일관 주범이 "서비스"로
   드러나 PROD 를 positive 재규정(서비스·온라인 운영물·기술 표준 제외).
   오라벨 재배치(회사→`ORG`, 계획·전시·시리즈→`EVT`, 상·훈장·규격→
   비-entity). gold `prodclean` 승격, PROD 1042→**943**(이탈 99 = 재라벨
@@ -295,10 +295,9 @@ PROD F1 상승은 **가장 비일관·난해했던 79 스팬 제거의 기계적
 **EVT −2.4pp(vs baseline) 은 #85 에서 cross-baseline 으로 규명** —
 baseline 0.8593(`loccensus_refonly`, support 968) vs prodclean 0.8353
 (987) 는 lineage·support 가 달라 비교 불가. #84 격리 효과는 prodschema→
-prodclean −0.13pp(seed42, 노이즈). 상세
-`docs/decisions/0001-prod-service-exclusion.md`.
+prodclean −0.13pp(seed42, 노이즈).
 
-### EVT 회색지대 규정 (#85 · ADR 0002)
+### EVT 회색지대 규정 (#85)
 
 EVT 자체가 회색지대였다 — prodclean EVT 987 형태 분해에서 canonical §1
 미규정 군집(자연재해·경제위기·generic 선거·지속상태)이 라벨/무라벨·
@@ -316,8 +315,7 @@ process(`冷戦`·`宗教改革`·`産業革命`·`ホロコースト`)·서비�
 | PROD F1 | 0.8168 | **0.8149** | −0.19pp |
 
 EVT/ORG/PROD support 동시 변동(987→992·5310→5303·943→942) → ΔEVT 단독
-격리 불가. 성능 레버 아닌 **gold 정의·일관성 보정**. 상세
-`docs/decisions/0002-evt-graycase.md`.
+격리 불가. 성능 레버 아닌 **gold 정의·일관성 보정**.
 
 ## 실험 — CREDIT_CARD 정밀도: LLM injector 환각 규명 (#78)
 
