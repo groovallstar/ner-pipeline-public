@@ -292,8 +292,32 @@ census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
 PROD F1 상승은 **가장 비일관·난해했던 79 스팬 제거의 기계적 효과**
 (support 943≠1043) — baseline 과 비교 불가, 성능 레버 아닌 gold 일관성
 보정(본 절 천장 결론과 정합). overall 은 baseline 수준 회복, ORG 회복.
-**EVT −2.4pp(vs baseline) single-run 은 실재/노이즈 미판정 → #85 에서
-multi-seed(s42·43·44) 재확인.** 상세 `docs/decisions/0001-prod-service-exclusion.md`.
+**EVT −2.4pp(vs baseline) 은 #85 에서 cross-baseline 으로 규명** —
+baseline 0.8593(`loccensus_refonly`, support 968) vs prodclean 0.8353
+(987) 는 lineage·support 가 달라 비교 불가. #84 격리 효과는 prodschema→
+prodclean −0.13pp(seed42, 노이즈). 상세
+`docs/decisions/0001-prod-service-exclusion.md`.
+
+### EVT 회색지대 규정 (#85 · ADR 0002)
+
+EVT 자체가 회색지대였다 — prodclean EVT 987 형태 분해에서 canonical §1
+미규정 군집(자연재해·경제위기·generic 선거·지속상태)이 라벨/무라벨·
+타입 혼재. PROD §3.1 처럼 **§3.3** 로 규정: 자연재해·named 위기·주기적
+복합 행사명사(선거·투표·`国勢調査`)·경기/컵/`歌合戦`/`甲子園`(운영리그는
+ORG)·dated bounded 사건은 EVT; 추상 topic(`〜問題`)·세기 시대·다년 지속
+process(`冷戦`·`宗教改革`·`産業革命`·`ホロコースト`)·서비스/코드네임은
+비-entity. gold EVT 987→992 · ORG 5310→5303 · PROD 943→942.
+
+| 지표 | prodclean | **evtgray** | Δ |
+|---|---|---|---|
+| EVT F1 | 0.8353 | **0.8332** | −0.21pp |
+| overall F1 | 0.9251 | **0.9244** | −0.07pp |
+| ORG F1 | 0.8965 | **0.8956** | −0.09pp |
+| PROD F1 | 0.8168 | **0.8149** | −0.19pp |
+
+EVT/ORG/PROD support 동시 변동(987→992·5310→5303·943→942) → ΔEVT 단독
+격리 불가. 성능 레버 아닌 **gold 정의·일관성 보정**. 상세
+`docs/decisions/0002-evt-graycase.md`.
 
 ## 실험 — CREDIT_CARD 정밀도: LLM injector 환각 규명 (#78)
 
