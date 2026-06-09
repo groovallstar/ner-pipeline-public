@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import re
 from collections.abc import Iterable, Iterator
 from typing import Protocol, runtime_checkable
 
@@ -116,6 +117,50 @@ def build_injection_prompt(
 
 # ── span 추출 ────────────────────────────────────────────────────────────
 
+# ── PII 포맷 충돌 하드닝 ──────────────────────────────────────────────────
+# LLM 주입기가 자연 삽입 중 pii_values 에 없는 카드/마이넘버 포맷 digit 열을
+# 환각 생성하면 string-match 라벨러가 놓쳐 무라벨(O)로 코퍼스에 박힌다. 같은
+# 포맷 표면이 라벨/무라벨로 공존하면 학습 모순이 되어 정밀도 천장을 만든다
+# (측정: CC P 0.888 / ID_NUM P 0.949 → 결정론 relabel 재학습 +6.1pp / +2.82pp
+# 회복). 주입 후 무라벨 포맷 열을 해당 PII 타입으로 일관 relabel 한다.
+# 카드: 13~19 연속 digit 또는 4-4-4-4 구분자 그룹
+_CC_FORMAT = re.compile(
+    r'(?<!\d)(?:\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}|\d{13,19})(?!\d)'
+)
+# 마이넘버: 12 연속 digit 또는 4-4-4 (카드 16자리의 앞 12자리는 제외)
+_ID_FORMAT = re.compile(
+    r'(?<![\d-])(?:\d{4}[ -]\d{4}[ -]\d{4}|\d{12})(?![\d]|[ -]\d{4})'
+)
+
+
+def harden_pii_format_collisions(
+    text: str, spans: list[Entity]
+) -> list[Entity]:
+    """무라벨 카드/마이넘버 포맷 digit 열을 PII 타입으로 일관 relabel 한다.
+
+    LLM injector 환각으로 pii_values 밖에서 생성된 포맷 열이 무라벨로 남는
+    것을 막는다. 카드(긴 포맷)를 먼저 잡아 마이넘버가 카드 앞 12자리를
+    오인하지 않게 한다. 기존 span 과 겹치면 건너뛴다.
+    """
+    used = [(e.start_char, e.end_char) for e in spans]
+
+    def _overlaps(s: int, e: int) -> bool:
+        return any(s < ue and us < e for us, ue in used)
+
+    for label, pattern in (
+        ('CREDIT_CARD', _CC_FORMAT), ('ID_NUM', _ID_FORMAT),
+    ):
+        for m in pattern.finditer(text):
+            s, e = m.start(), m.end()
+            if _overlaps(s, e):
+                continue
+            spans.append(Entity(
+                label=label, start_char=s, end_char=e, text=m.group(),
+            ))
+            used.append((s, e))
+    return spans
+
+
 def extract_spans(
     text: str,
     *,
@@ -179,6 +224,8 @@ def extract_spans(
         ))
         used_ranges.append((idx, end))
 
+    # 3. 무라벨 PII 포맷 충돌 하드닝 (LLM 환각 카드/마이넘버 relabel)
+    spans = harden_pii_format_collisions(text, spans)
     return sorted(spans, key=lambda e: e.start_char)
 
 
