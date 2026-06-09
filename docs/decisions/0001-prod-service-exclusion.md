@@ -61,8 +61,11 @@ PROD = 유형 제품(시판 물품·기기·하드웨어·식품·약품) · 창
   제거**한 데서 오는 기계적 효과 — support 정의가 바뀌어 baseline 0.8004
   와 **비교 불가**. "PROD 성능 개선"으로 보고하지 말 것. 이 변경은
   성능 레버가 아니라 **gold 일관성 보정**이다.
-- **리스크**: EVT −2.4pp(vs baseline). EVT 로의 이질적 재배치 영향인지
-  단일-run 노이즈인지 미해결 → multi-seed(s42·43·44) 검증 진행 중.
+- **리스크 해소(#85)**: EVT −2.4pp 는 baseline `loccensus_refonly`
+  (support 968) vs prodclean(987) 의 **cross-baseline** 수치였다. #84
+  서비스제외의 격리 효과는 동일 계열 prodschema(0.8366)→prodclean
+  (0.8353) = −0.13pp(seed42, 노이즈). multi-seed 폐기, EVT 회색지대
+  규정으로 전환 (#85, ADR 0002).
 - **출처 이탈**: gold 가 원본 Stockmark `製品名` 에서 멀어진 **프로젝트
   고유 재주석**이 됨(~10% PROD 스팬 변경). 의도된 선택.
 
