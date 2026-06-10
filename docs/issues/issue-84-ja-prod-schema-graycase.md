@@ -74,11 +74,11 @@ EVT 0.8593·0.8366·0.8833. 보정 gold 재학습 → `kfold10_phonediv_prodsche
 예측대로 **비대칭 P-레버**(ΔP +1.73 / ΔR −0.11), F1 변화는 per-fold
 std 5.24pp 노이즈 대역 안. 성능 레버 아님 확인.
 
-### 2) 추가 정정 — 서비스 제외 (ADR 0001)
+### 2) 추가 정정 — 서비스 제외
 
 4범주 규정 후 재감사에서 **남은 비일관의 주범이 "서비스"**임이 드러나,
 PROD 정의를 positive 재규정(서비스·온라인 운영물·기술 표준 제외).
-상세·근거: `docs/decisions/0001-prod-service-exclusion.md`, schema §3.2.
+상세·근거: schema §3.2.
 
 - PROD 1042 → **943** (이탈 99 = 재라벨 20[ORG·EVT] + 제거 79)
 - gold 승격: `pii_all_phonediv.jsonl` ← prodclean, 백업 `.preprodclean`

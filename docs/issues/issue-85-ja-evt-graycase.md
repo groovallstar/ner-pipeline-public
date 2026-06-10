@@ -2,7 +2,7 @@
 
 - area: classifier
 - 브랜치: `feat/issue-85-ja-evt-graycase`
-- 관련: #84(ADR 0001), #73(PROD 천장), ADR 0002
+- 관련: #84, #73(PROD 천장)
 
 ## 1. 배경 — re-scope
 
@@ -29,7 +29,7 @@ prodclean EVT 987 스팬을 형태별 분해 → canonical §1(1회성 행사·�
 지속상태(`冷戦`·`時代`·`問題`) 가 라벨/무라벨·타입 혼재. PROD §3.1 처럼
 EVT 경계를 규정해 gold 비일관을 닫는다.
 
-## 2. 규정 (사용자 비준) — canonical §3.3 / ADR 0002
+## 2. 규정 (사용자 비준) — canonical §3.3
 
 **EVT 포함 명문화**: 자연재해·대형사고 / named 경제·금융·정치 위기 /
 주기적 복합 행사명사(선거·투표·`国勢調査` — generic 단독 예외) / 경기·
@@ -51,13 +51,12 @@ EVT 경계를 규정해 gold 비일관을 닫는다.
 ## 4. 산출물 (체크리스트)
 
 - [x] canonical §3.3 + 변경이력 (`docs/manual/data/canonical-entity-schema.md`)
-- [x] ADR 0002 + `0002-evt-graycase-mapping.json`
 - [x] `ner_prompts.py` EVT positive 갱신(3 템플릿 + `チャンピオンズリーグ`
   예시 ORG→EVT)
 - [x] gold relabel (백업 `.preevtgray`, offset/overlap 무결 검증)
 - [x] evtgray 10-fold 재측정 (EVT/ORG/PROD 동시 변동 → ΔEVT 격리 불가)
 - [x] per-entity 진단 리포트 EVT § + #84 −2.4pp cross-baseline 규명
-- [ ] refuter PASS → PR closes #85
+- [x] refuter PASS → PR closes #85
 
 ## 5. 측정 결과 (evtgray 10-fold, seed42)
 
@@ -84,6 +83,3 @@ support 동시 변동(987→992·5310→5303·943→942)으로 ΔEVT 단독 격�
   `pooled_metrics.json` ↔ 문서 숫자 일치, −2.4pp cross-baseline·격리
   −0.13pp 정합.
 - **gold·테스트**: gold count 992/5303/942 일치, 테스트 약화 없음.
-
-반박자 non-blocking 지적 반영: mapping JSON `evt_to_none` 을 `.preevtgray`
-대비 전체 14건으로 보완(원 8 + 추가 6 = 완전 감사 trail).

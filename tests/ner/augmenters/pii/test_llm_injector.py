@@ -7,6 +7,7 @@ from ner.augmenters.pii.llm_injector import (
     LLMInjector,
     build_injection_prompt,
     extract_spans,
+    harden_pii_format_collisions,
 )
 from ner.augmenters.pii.schema import Entity, Record
 
@@ -158,6 +159,64 @@ class TestExtractSpans:
         offsets = [(s.start_char, s.end_char) for s in spans]
         # 두 span이 겹치지 않아야 한다
         assert len(set(offsets)) == len(offsets)
+
+
+# ── PII 포맷 충돌 하드닝 ──────────────────────────────────────────────────
+
+class TestHardenPiiFormatCollisions:
+    """LLM 환각으로 무라벨된 카드/마이넘버 포맷 열을 일관 relabel."""
+
+    def test_unlabeled_card_solid_relabeled(self):
+        text = '決済番号は4065055130224539で処理した。'
+        spans = harden_pii_format_collisions(text, [])
+        cc = [s for s in spans if s.label == 'CREDIT_CARD']
+        assert len(cc) == 1
+        assert cc[0].text == '4065055130224539'
+
+    def test_unlabeled_card_grouped_relabeled(self):
+        text = 'カードは 4065 0551 3022 4539 を利用。'
+        spans = harden_pii_format_collisions(text, [])
+        cc = [s for s in spans if s.label == 'CREDIT_CARD']
+        assert len(cc) == 1
+        assert cc[0].text == '4065 0551 3022 4539'
+
+    def test_unlabeled_mynumber_relabeled(self):
+        text = '管理番号 1917-0792-7808 で登録されている。'
+        spans = harden_pii_format_collisions(text, [])
+        idn = [s for s in spans if s.label == 'ID_NUM']
+        assert len(idn) == 1
+        assert idn[0].text == '1917-0792-7808'
+
+    def test_card_prefix_not_mislabeled_as_id(self):
+        """16자리 카드의 앞 12자리를 ID_NUM 으로 오인하지 않는다."""
+        text = '決済 5120-7030-4950-5800 を使用。'
+        spans = harden_pii_format_collisions(text, [])
+        labels = [s.label for s in spans]
+        assert 'CREDIT_CARD' in labels
+        assert 'ID_NUM' not in labels
+
+    def test_existing_span_preserved(self):
+        """이미 라벨된 카드 자리는 중복 라벨하지 않는다."""
+        text = '決済 4065055130224539 を使用。'
+        existing = [_ent('CREDIT_CARD', 3, 19, '4065055130224539')]
+        spans = harden_pii_format_collisions(text, list(existing))
+        cc = [s for s in spans if s.label == 'CREDIT_CARD']
+        assert len(cc) == 1
+
+    def test_short_number_not_relabeled(self):
+        """연도·일반 짧은 숫자는 relabel 하지 않는다."""
+        text = '2020年に設立され、約1500人が在籍した。'
+        spans = harden_pii_format_collisions(text, [])
+        assert spans == []
+
+    def test_extract_spans_applies_hardening(self):
+        """extract_spans 가 무라벨 환각 카드를 relabel 한다."""
+        text = '担当の山田太郎が、5120-7030-4950-5800のカードで決済。'
+        pii = {'NAME': '山田太郎'}
+        spans = extract_spans(text, pii_values=pii, original_entities=[])
+        labels = {s.label for s in spans}
+        assert 'NAME' in labels
+        assert 'CREDIT_CARD' in labels
 
 
 # ── LLMInjector 통합 (모의 LLM) ─────────────────────────────────────────

@@ -267,7 +267,7 @@ gold 는 gitignore 로컬, 영구 재현 기준은 #69 의 0.9195.
 census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
 보정은 로컬 한정·미커밋, 영구 수치 출처는 본 문서의 994 기준)
 
-### 후속 — schema 규정으로 회색지대 정정 (#84 · ADR 0001 · #85)
+### 후속 — schema 규정으로 회색지대 정정 (#84 · #85)
 
 위 BORDERLINE 47(canonical 미규정 회색지대)이 PROD 천장의 구조적
 원인이라, data 수급이 아니라 **schema 규정**으로 전환했다.
@@ -276,7 +276,7 @@ census_fullcorpus_verdicts}` (`results/`·`data/` gitignore — gold 49건
   프로젝트→EVT): gold `prodschema`, PROD 1043→1042. 10-fold pooled
   PROD F1 0.8004→0.8090 (ΔP +1.73 / ΔR −0.11 비대칭 P-레버, 노이즈
   대역 내).
-- **ADR 0001 서비스 제외**: 재감사에서 남은 비일관 주범이 "서비스"로
+- **#84 서비스 제외**: 재감사에서 남은 비일관 주범이 "서비스"로
   드러나 PROD 를 positive 재규정(서비스·온라인 운영물·기술 표준 제외).
   오라벨 재배치(회사→`ORG`, 계획·전시·시리즈→`EVT`, 상·훈장·규격→
   비-entity). gold `prodclean` 승격, PROD 1042→**943**(이탈 99 = 재라벨
@@ -295,10 +295,9 @@ PROD F1 상승은 **가장 비일관·난해했던 79 스팬 제거의 기계적
 **EVT −2.4pp(vs baseline) 은 #85 에서 cross-baseline 으로 규명** —
 baseline 0.8593(`loccensus_refonly`, support 968) vs prodclean 0.8353
 (987) 는 lineage·support 가 달라 비교 불가. #84 격리 효과는 prodschema→
-prodclean −0.13pp(seed42, 노이즈). 상세
-`docs/decisions/0001-prod-service-exclusion.md`.
+prodclean −0.13pp(seed42, 노이즈).
 
-### EVT 회색지대 규정 (#85 · ADR 0002)
+### EVT 회색지대 규정 (#85)
 
 EVT 자체가 회색지대였다 — prodclean EVT 987 형태 분해에서 canonical §1
 미규정 군집(자연재해·경제위기·generic 선거·지속상태)이 라벨/무라벨·
@@ -316,8 +315,7 @@ process(`冷戦`·`宗教改革`·`産業革命`·`ホロコースト`)·서비�
 | PROD F1 | 0.8168 | **0.8149** | −0.19pp |
 
 EVT/ORG/PROD support 동시 변동(987→992·5310→5303·943→942) → ΔEVT 단독
-격리 불가. 성능 레버 아닌 **gold 정의·일관성 보정**. 상세
-`docs/decisions/0002-evt-graycase.md`.
+격리 불가. 성능 레버 아닌 **gold 정의·일관성 보정**.
 
 ## 실험 — CREDIT_CARD 정밀도: LLM injector 환각 규명 (#78)
 
@@ -410,6 +408,92 @@ census 단발 시도(<+0.4pp)보다 큰 단일 이득.
 `.../kfold10_phonediv_ccfix/`(보정 gold 10-fold)·`.../diag_prod/`(CC FP/FN
 진단 재사용) — `results/`·보정 gold 모두 gitignore(로컬). 영구 재현
 기준은 #69 base 0.9195(CC 854).
+
+## 실험 — ID_NUM injector 환각 relabel + 근본 코드수정 (#90)
+
+#78(CREDIT_CARD)에서 별도 이슈로 남긴 injector 포맷-충돌 하드닝의
+ID_NUM 판. ID_NUM(F1 0.9646 / P 0.9491)이 EMAIL·PHONE·CC 포화권 대비 P
+가 낮은 잔여 이상치를 진단, CC 와 동형 버그를 규명하고 relabel + injector
+근본 수정으로 닫았다.
+
+### 진단 — 포맷-충돌 감사 (#78 CC 프로토콜 재사용)
+
+본문 마이넘버 포맷(12자리: solid / `4-4-4` / `4 4 4`) 표면 965 중
+**932 ID_NUM / 33 무라벨(O)** = 일관성 96.6%(CC 수정전 854/961=88.9%
+대비 양호하나 동일 버그). 무라벨 33 프레임: `管理番号` 10 / `番号` 2 /
+`ID` 1 / 기타 20.
+
+**CC형(학습가능) 확정 — LOC attributive(#89 천장)와 대비:** 라벨된
+ID_NUM 932 의 프레임이 `管理番号` 390·`ID番号` 315 로 **무라벨 33 과 동일
+프레임**. 같은 포맷·같은 프레임을 라벨/무라벨로 학습시킨 모순이라 포맷+
+프레임 결정적(문맥 미약 단서 아님). #78 CC(854/107)와 정확히 동형.
+
+### 원인 — extract_spans string-match 누락
+
+`extract_spans` 는 주입값(`pii_values`)만 string-match 로 라벨하므로, LLM
+이 자연 삽입 중 `管理番号`/`ID番号` 프레임에 창작한 여분 마이넘버 포맷
+digit열은 `pii_values` 에 없어 무라벨로 코퍼스에 박힌다. CC 의 107 과 동일.
+
+### 처방 1 — 결정론 relabel + 재학습
+
+무라벨 마이넘버포맷 33 → ID_NUM 일괄(932→965, 백업·offset 결함 0·신규
+overlap 0). 보정 gold 10-fold 재학습:
+
+| 측정 | ID_NUM F1 | P | R | FP |
+|---|---:|---:|---:|---:|
+| before (evtgray, ID_NUM 932) | 0.9646 | 0.9491 | 0.9807 | 49 |
+| **relabel 재학습 (idnumfix, 965)** | **0.9793** | **0.9773** | 0.9813 | **22** |
+| Δ | +1.47pp | **+2.82pp** | +0.07 | −27 |
+
+CC 패턴 재현 — P↑·FP↓(TP +33 = relabel 정확히). 일관성 96.6%→100% 보정이
+CC(88.9%→100%, +6.1pp)보다 작아 ID_NUM +2.82pp(P) / +1.47pp(F1).
+
+### 처방 2 — injector 근본 수정 (#78 open question 해소)
+
+`llm_injector.py` `extract_spans` 에 하드닝 step 추가
+(`harden_pii_format_collisions`): 주입·라벨 후 무라벨 카드(13~19자리)·
+마이넘버(12자리) 포맷열을 해당 PII 타입으로 일관 relabel. 카드(긴 포맷)
+먼저 매칭해 12자리 오인 방지, 기존 span 무겹침, 짧은 숫자(연도 등) 미반응.
+테스트 7개. → 코퍼스 재생성 시 CC·ID_NUM 무라벨 재유입 차단.
+
+### 평가지표 — 보정 gold 10-fold pooled (현재 권위, ID_NUM 965)
+
+결합 gold(ORG 5303 / LOC 2899 / EVT 992 / PROD 942 / CC 961 / ID_NUM 965),
+n=5,270. strict = (시작,끝,종류) 완전 일치.
+
+| entity | strict F1 | P | R | support |
+|---|---:|---:|---:|---:|
+| **overall** | **0.9231** | 0.9037 | 0.9434 | 18,790 |
+| EMAIL | 0.9980 | 0.9961 | 1.0000 | 1,013 |
+| PHONE | 0.9938 | 0.9897 | 0.9979 | 964 |
+| CREDIT_CARD | 0.9869 | 0.9916 | 0.9823 | 961 |
+| **ID_NUM** | **0.9793** | 0.9773 | 0.9813 | 965 |
+| PER | 0.9671 | 0.9533 | 0.9812 | 3,726 |
+| DAT | 0.9623 | 0.9647 | 0.9600 | 1,025 |
+| LOC | 0.8985 | 0.8716 | 0.9272 | 2,899 |
+| ORG | 0.8899 | 0.8651 | 0.9163 | 5,303 |
+| EVT | 0.8345 | 0.7960 | 0.8770 | 992 |
+| PROD | 0.8042 | 0.7611 | 0.8524 | 942 |
+
+overall 0.9231 은 baseline(evtgray 0.9244) 대비 **−0.12pp 로 하락 방향이나
+노이즈 대역 내** — ID_NUM 33/18,790 라벨 변동의 인과 기여(~+0.1pp)가
+run-to-run 비결정성(ORG/PROD seed 변동 ±1~2pp)에 묻혀 overall 은 분리
+불가하고, ID_NUM(P +2.82pp, 바닥 위)만이 격리된 인과 신호다. PII 5종 + PER 포화권(F1≥0.96), 잔여 헤드룸은 NER 4종
+(LOC·ORG·EVT·PROD)에 집중하며 #71·#73·#80·#82·#89 에서 gold/모델 천장
+확정.
+
+### 결론
+
+ID_NUM 의 P 천장은 CC 와 동일하게 **LLM injector 환각**(33 무라벨). #78
+이 미룬 근본 코드수정(하드닝)까지 본 이슈서 완료 — 이제 코퍼스 재생성에도
+CC·ID_NUM 무라벨이 재유입되지 않는다. attributive/국가(#89, 문맥의존
+천장)와 달리 포맷결정적이라 학습 가능했다.
+
+### 산출물
+
+`.../kfold10_phonediv_idnumfix/`(보정 gold 10-fold) — `results/`·보정 gold
+gitignore(로컬). injector 하드닝은 커밋(`src/ner/augmenters/pii/llm_injector.py`).
+영구 재현 기준은 #69 base 0.9195(ID_NUM 932).
 
 ## 실험 — EVT 차하위 진단 + HALLUCINATION census (#80)
 
