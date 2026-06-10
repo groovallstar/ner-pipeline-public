@@ -1,7 +1,7 @@
 # issue-92: JA classifier abstention 운영점 — per-class 신뢰도 임계값 통합
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/92
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner_pipeline/pull/93
 - 브랜치: `feat/issue-92-ja-classifier-abstention-thresholds`
 - 승인일: 2026-06-10
 
