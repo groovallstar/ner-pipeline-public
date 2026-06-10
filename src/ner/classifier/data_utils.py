@@ -20,7 +20,7 @@ JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
 
 import json
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # canonical 10종 평면 (단일 출처: docs/manual/data/canonical-entity-schema.md)
 CANONICAL_LABELS = [
@@ -35,8 +35,8 @@ def build_label_maps() -> Tuple[Dict[str, int], Dict[int, str]]:
     for t in CANONICAL_LABELS:
         labels.append(f'B-{t}')
         labels.append(f'I-{t}')
-    label2id = {l: i for i, l in enumerate(labels)}
-    id2label = {i: l for l, i in label2id.items()}
+    label2id = {lbl: i for i, lbl in enumerate(labels)}
+    id2label = {i: lbl for lbl, i in label2id.items()}
     return label2id, id2label
 
 
@@ -355,8 +355,8 @@ def mask_pii_in_features(features: List[dict], label2id: Dict[str, int]) -> List
     out = []
     for f in features:
         new_labels = [
-            o_id if (l in pii_ids) else l
-            for l in f['labels']
+            o_id if (lid in pii_ids) else lid
+            for lid in f['labels']
         ]
         out.append({
             'input_ids': f['input_ids'],
@@ -368,35 +368,55 @@ def mask_pii_in_features(features: List[dict], label2id: Dict[str, int]) -> List
 
 def decode_bio_to_spans(label_ids: List[int],
                         char_offsets: List[Tuple[int, int]],
-                        id2label: Dict[int, str]) -> List[dict]:
+                        id2label: Dict[int, str],
+                        confs: Optional[List[float]] = None) -> List[dict]:
     """BIO label id 시퀀스 + char offsets → list of {type, start, end} spans.
 
     동일 단어에 같은 char span 이 반복되어도 max(end) 로 병합되어 단일 span 으로 수렴.
+
+    confs 가 주어지면(토큰별 신뢰도, label_ids 와 동일 길이) 각 span 에
+    `score` = span 구성 토큰 신뢰도의 평균(conf_mean)을 부착한다. confs 미입력
+    시에는 score 키를 달지 않아 기존 동작과 완전히 동일하다(BC).
     """
     spans: List[dict] = []
     current = None
-    for lid, (start, end) in zip(label_ids, char_offsets):
+    cur_confs: Optional[List[float]] = None
+
+    def _push() -> None:
+        # confs 입력 시에만 score 부착 — 그 외엔 기존 출력과 동일
+        if confs is not None and cur_confs:
+            current['score'] = float(sum(cur_confs) / len(cur_confs))
+        spans.append(current)
+
+    for idx, (lid, (start, end)) in enumerate(zip(label_ids, char_offsets)):
+        cf = confs[idx] if confs is not None else None
         if start == 0 and end == 0:
             if current:
-                spans.append(current)
+                _push()
                 current = None
+                cur_confs = None
             continue
         label = id2label.get(int(lid), 'O')
         if label == 'O':
             if current:
-                spans.append(current)
+                _push()
                 current = None
+                cur_confs = None
         elif label.startswith('B-'):
             if current:
-                spans.append(current)
+                _push()
             current = {'type': label[2:], 'start': start, 'end': end}
+            cur_confs = [cf] if cf is not None else None
         elif label.startswith('I-'):
             etype = label[2:]
             if current and current['type'] == etype:
                 current['end'] = max(current['end'], end)
+                if cur_confs is not None:
+                    cur_confs.append(cf)
             else:
                 # B- 누락된 I- 는 새 span 시작으로 관용 처리
                 current = {'type': etype, 'start': start, 'end': end}
+                cur_confs = [cf] if cf is not None else None
     if current:
-        spans.append(current)
+        _push()
     return spans

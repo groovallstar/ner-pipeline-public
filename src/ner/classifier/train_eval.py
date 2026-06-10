@@ -14,7 +14,6 @@ from torch.utils.data import Dataset
 from torchcrf import CRF
 from transformers import (
     AutoModelForTokenClassification,
-    AutoTokenizer,
     Trainer,
     TrainingArguments,
 )
@@ -201,11 +200,11 @@ def _build_compute_metrics(id2label: Dict[int, str]):
         true_preds: List[List[str]] = []
         for pred_seq, label_seq in zip(preds, labels):
             tp, tl = [], []
-            for p, l in zip(pred_seq, label_seq):
-                if l == -100:
+            for p, lab in zip(pred_seq, label_seq):
+                if lab == -100:
                     continue
                 tp.append(id2label.get(int(p), 'O'))
-                tl.append(id2label.get(int(l), 'O'))
+                tl.append(id2label.get(int(lab), 'O'))
             true_preds.append(tp)
             true_labels.append(tl)
 
@@ -328,7 +327,8 @@ def evaluate_model(*, model_path: str,
                    eval_rows: List[dict],
                    id2label: Dict[int, str],
                    batch_size: int = 32,
-                   return_spans: bool = False) -> dict:
+                   return_spans: bool = False,
+                   capture_scores: bool = False) -> dict:
     """best 모델 로드 → predict → BIO decode → strict + relaxed span F1 계산.
 
     eval_rows 는 augmenters JSONL 형식 그대로 (label/start_char/end_char).
@@ -337,6 +337,10 @@ def evaluate_model(*, model_path: str,
     Args:
         return_spans: True 면 반환 dict 에 'gold_spans_list',
             'pred_spans_list' 키를 추가한다 (kfold pooled 평가용).
+        capture_scores: True 면 토큰 softmax 신뢰도를 포착해 각 pred span 에
+            'score'(conf_mean)를 부착한다 (abstention fit·apply 용). non-CRF
+            경로만 지원 — CRF(Viterbi)는 score 미부착. score 는 metrics 에
+            영향 없음(여전히 strict/relaxed 는 임계값 미적용 raw 기준).
 
     Returns:
         {"strict": {overall, per_entity}, "relaxed": {overall, per_entity}}
@@ -393,11 +397,21 @@ def evaluate_model(*, model_path: str,
                 logits = model(
                     input_ids=input_ids, attention_mask=attention_mask
                 ).logits
-                preds = logits.argmax(dim=-1).cpu().numpy()
+                if capture_scores:
+                    probs = torch.softmax(logits, dim=-1)
+                    conf_t, pred_t = probs.max(dim=-1)
+                    confs_np = conf_t.cpu().numpy()
+                    preds = pred_t.cpu().numpy()
+                else:
+                    preds = logits.argmax(dim=-1).cpu().numpy()
+                    confs_np = None
                 for j, pred_ids in enumerate(preds):
                     offs = eval_offsets[i + j]
                     pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
-                    spans = decode_bio_to_spans(pred_ids_list, offs, id2label)
+                    cf = ([float(x) for x in confs_np[j][:len(offs)]]
+                          if confs_np is not None else None)
+                    spans = decode_bio_to_spans(
+                        pred_ids_list, offs, id2label, confs=cf)
                     pred_spans_list.append(spans)
                     gold = [
                         {'type': e['label'],
