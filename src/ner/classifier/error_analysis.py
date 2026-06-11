@@ -553,7 +553,7 @@ def run_inference(
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = AutoModelForTokenClassification.from_pretrained(
-        model_path, torch_dtype=torch.float32
+        model_path, dtype=torch.float32
     ).to(device).eval()
 
     results: List[dict] = []

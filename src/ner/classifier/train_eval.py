@@ -362,7 +362,7 @@ def evaluate_model(*, model_path: str,
     else:
         # 평가는 항상 float32 로 (DeBERTa-v3 family 의 fp16 NaN underflow 회피)
         model = AutoModelForTokenClassification.from_pretrained(
-            model_path, torch_dtype=torch.float32
+            model_path, dtype=torch.float32
         ).to(device).eval()
 
     pred_spans_list: List[List[dict]] = []
