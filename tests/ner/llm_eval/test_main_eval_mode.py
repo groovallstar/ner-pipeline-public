@@ -56,7 +56,6 @@ def test_vi_offset_span_path_runs_end_to_end():
     })
     runner = BenchmarkRunner(
         records,
-        compute_bertscore=False,
         lang='vi',
         eval_mode='offset_span',
         sample_concurrency=2,

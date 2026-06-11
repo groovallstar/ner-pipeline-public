@@ -228,7 +228,6 @@ LLM 이 풀네임을 출력하는 경우 약어로 변환. KO 와 달리 별도 
 | Span Match | entity 단위 exact/relaxed 매칭 | **Primary** |
 | seqeval | 단어 BIO 태그 기반 F1 | Secondary |
 | Character Span F1 | 문자 수준 span 매칭 | |
-| BERTScore | 의미 유사도 | Optional (`--no-bertscore`) |
 
 VI 평가는 BIO 경로 (`eval_mode='bio'`) 사용. KO 와 동일.
 

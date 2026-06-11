@@ -4,7 +4,7 @@
 # vllm
 
 ## Purpose
-Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism across GPUs 1,2 for high-throughput LLM inference. Includes model-specific start scripts for Qwen3.5 variants and automated benchmark orchestration scripts.
+Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism across GPUs 1,2 for high-throughput LLM inference. Includes model-specific start scripts (all default to port 8081; compose default is 8000) and automated benchmark orchestration.
 
 ## Key Files
 
@@ -12,10 +12,8 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 |------|-------------|
 | `docker-compose.yml` | vLLM service: configurable model/GPU/memory/dtype/port via env vars, IPC host, HF cache mount |
 | `config/.env` | Env file for model selection (populated by start scripts) |
-| `start-27b.sh` | Start Qwen3.5-27B: tensor_parallel=2, GPUs 1,2, port 8081 |
-| `start-35b-a3b.sh` | Start Qwen3.5-35B-A3B (MoE, 3B active) |
-| `start-122b-a10b-gptq.sh` | Start Qwen3.5-122B-A10B-GPTQ-Int4 with quantization flags |
-| `load-and-bench.sh` | Single-model pipeline: download, swap, restart, benchmark |
+| `start-*.sh` | Model-specific start scripts (set `VLLM_PORT=8081`, GPUs, tensor parallelism) |
+| `load-and-bench.sh` | Single-model pipeline: download, write config/.env, restart, benchmark |
 | `stop.sh` | Stop vLLM container |
 | `logs.sh` | Tail vLLM logs |
 
@@ -28,7 +26,7 @@ Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism
 - Readiness check: poll `curl -s $URL/models | grep $MODEL_NAME`
 
 ### Testing Requirements
-- `load-and-bench.sh` runs `ner.llm_eval` error analysis on 50 samples by default
+- `load-and-bench.sh` runs `ner.llm_eval.error_analysis` on 50 samples by default
 
 ## Dependencies
 

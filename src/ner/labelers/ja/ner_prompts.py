@@ -20,7 +20,7 @@ from typing import List
 
 DEFAULT_ENTITY_TYPES = [
     'PER', 'LOC', 'ORG', 'PROD', 'EVT',
-    'EMAIL', 'PHONE', 'DAT', 'ID_NUM', 'CREDIT_CARD',
+    'DAT', 'EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD',
 ]
 
 # ── Single-sentence prompt ────────────────────────────────────────────

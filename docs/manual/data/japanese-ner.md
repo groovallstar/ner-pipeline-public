@@ -351,8 +351,8 @@ f1        = 2 * precision * recall / (precision + recall)
 | 조사·경칭 목록 | 은/는/이/가/을/를/에/에서/으로/의/과/와/부터/까지 | は/が/を/に/で/と/の/へ/から/まで/も/や/より + 경칭(氏/さん/君/ちゃん/様) |
 | span → 태그 변환 | `_spans_to_bio()` (BIO 생성) | `match_spans()` (오프셋 부여, BIO 변환 없음) |
 | 태그 정규화 | 필요 (PER→PS 등) | 불필요 (canonical 그대로) |
-| 평가 메트릭 | Span Match + seqeval BIO F1 + Char Span F1 + BERTScore | Offset Span F1 단일 |
-| 평가 라이브러리 | seqeval, bert-score 의존 | 자체 구현 (`metrics/span_metrics.py`) |
+| 평가 메트릭 | Span Match + seqeval BIO F1 + Char Span F1 | Offset Span F1 단일 |
+| 평가 라이브러리 | seqeval 의존 | 자체 구현 (`metrics/span_metrics.py`) |
 | TagAligner | 필수 | 미사용 |
 | 주요 모듈 | `dataset_loader.py`, `labelers/tag_aligner.py`, `metrics/bio_metrics.py`, `llm_eval/benchmark_runner.py` | `ja/dataset_loader.py`, `ja/span_matcher.py`, `metrics/span_metrics.py`, `llm_eval/benchmark_runner.py` |
 
@@ -371,4 +371,4 @@ f1        = 2 * precision * recall / (precision + recall)
 | 7 | 라벨링 | 길이 역순 + `consumed` 추적 | 부분 문자열 충돌·중복 매칭 방지 | 출현 순서대로 매칭 (충돌 위험) |
 | 8 | 라벨링 | 3단계 매칭 (exact → 공백 제거 → 조사 제거) | 일본어 조사·공백 부착 문제를 단계적 해결 | exact만 (매칭률 저하) |
 | 9 | 평가 | Offset Span F1 단일 메트릭 | gold가 offset span. BIO 변환 불필요, 변환 노이즈 제거 | 다중 메트릭 (불필요한 복잡도) |
-| 10 | 평가 | seqeval/BERTScore 미사용 | BIO 태그 부재, span 평가에 의미 유사도 불필요 | BIO 변환 후 seqeval (변환 노이즈 유입) |
+| 10 | 평가 | seqeval 미사용 | BIO 태그 부재, offset span 직접 평가 | BIO 변환 후 seqeval (변환 노이즈 유입) |

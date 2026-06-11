@@ -10,12 +10,23 @@ llm_eval, metrics 등 NER 파이프라인 전반을 커버한다.
 tests/ner/
 ├── CLAUDE.md
 ├── AGENTS.md
+├── test_base_labelers.py
+├── test_bio_dataset.py
+├── test_llm_helpers.py
+├── test_span_evaluator.py
+├── test_span_f1.py
+├── test_span_matcher.py
+├── test_span_metrics.py
 ├── augmenters/
 │   ├── pii/           # suffix·llm injector, label merger, loader, verifier
-│   └── wikiann_vi/    # 재라벨 파서·offset 매칭·kappa·Wikidata anchor·confidence 병합
+│   └── wikiann_vi/    # 재라벨 파서·kappa·Wikidata anchor·confidence 병합
+├── classifier/        # abstention, boundary weights, data_utils, encode,
+│   │                  # error_analysis, kfold_pool
 ├── labelers/
-│   └── ja/            # span_matcher (match_spans) 테스트
-└── llm_eval/          # MetricsCalculator (span_f1, span_match 등) 테스트
+│   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
+│   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
+└── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,
+                       # wikiann_vi_gold 테스트
 ```
 
 ## For AI Agents
@@ -35,8 +46,10 @@ tests/ner/
 ## Dependencies
 
 ### Internal
-- `ner.metrics.bio_metrics` (MetricsCalculator)
-- `ner.labelers.ja.span_matcher`
+- `ner.metrics.bio_metrics`, `ner.metrics.span_metrics`
+- `ner.labelers.ja.*`, `ner.labelers.vi.*`
+- `ner.classifier.*`
+- `ner.llm_eval.*`
 - `ner.augmenters.pii.*`, `ner.augmenters.wikiann_vi.*`
 
 ### External

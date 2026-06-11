@@ -26,7 +26,6 @@ class ReportGenerator:
             self._print_offset_span_table()
             return
 
-        has_bertscore = any(r.metrics.get("bertscore") for r in self.results)
         has_span_match = any(r.metrics.get("span_match") for r in self.results)
 
         # --- 주 메트릭: Span 매칭 (LLM 평가) ---
@@ -83,8 +82,6 @@ class ReportGenerator:
         print("-" * 70)
 
         headers = ["Model", "F1", "Prec", "Recall"]
-        if has_bertscore:
-            headers.append("BERT-F1")
         headers.extend(["TPS", "Sec/Sample", "Out Tok/s", "Tokens", "Samples", "Errors"])
 
         rows = []
@@ -96,9 +93,6 @@ class ReportGenerator:
                 f"{overall.get('precision', 0):.4f}",
                 f"{overall.get('recall', 0):.4f}",
             ]
-            if has_bertscore:
-                bs = r.metrics.get("bertscore", {})
-                row.append(f"{bs.get('f1', 0):.4f}")
             total_tokens = r.latency.get("total_tokens", 0)
             row.extend([
                 f"{r.latency.get('tokens_per_second', 0):.1f}",

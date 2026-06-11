@@ -19,7 +19,6 @@ from transformers import AutoTokenizer
 from ner.classifier.data_utils import (
     build_label_maps,
     boundary_weights_tensor,
-    class_weights_tensor,
     encode_dataset,
     load_jsonl,
     mask_pii_in_features,
@@ -82,20 +81,6 @@ def main():
         '--smoke', action='store_true',
         help='Smoke test: 100 train / 50 test / 1 epoch',
     )
-    # 변종 플래그 (class weight·hard-negative·multi-task 변종 실험용)
-    parser.add_argument(
-        '--class-weight-ner', type=float, default=None,
-        help='Cross-entropy weight for NER 5-class BIO labels (default: 1.0)',
-    )
-    parser.add_argument(
-        '--class-weight-pii', type=float, default=None,
-        help='Cross-entropy weight for PII 5-class BIO labels (default: 1.0)',
-    )
-    parser.add_argument(
-        '--metric-for-best', default='eval_loss',
-        choices=['eval_loss', 'ner_f1', 'overall_f1'],
-        help='Best-model selection metric',
-    )
     parser.add_argument(
         '--curriculum', action='store_true',
         help='Two-stage NER warmup: stage 1 with PII masked to O, stage 2 full 21-class',
@@ -113,12 +98,6 @@ def main():
         help='Span F1 mode shown in console. metrics.json always stores both. '
              'strict=(start,end,type) exact match (default gate). '
              "relaxed=SemEval'13 Partial (type match + overlap = 0.5).",
-    )
-    parser.add_argument(
-        '--use-crf', action='store_true',
-        help='Add a linear-chain CRF head on top of token classification. '
-             'Decoding uses Viterbi for BIO consistency. class_weights '
-             'are ignored when CRF loss is used.',
     )
     parser.add_argument(
         '--boundary-b-weight', type=float, default=None,
@@ -224,29 +203,15 @@ def main():
         test_rows, tokenizer, label2id, args.lang, args.max_length
     )
 
-    # class_weights tensor (None 이면 표준 CE)
+    # Boundary-aware weight (B/I/O 차등) — None 이면 표준 CE
     cw = None
-    if args.class_weight_ner is not None or args.class_weight_pii is not None:
-        cw = class_weights_tensor(
-            label2id,
-            w_ner=args.class_weight_ner if args.class_weight_ner is not None else 1.0,
-            w_pii=args.class_weight_pii if args.class_weight_pii is not None else 1.0,
-            w_o=1.0,
-        )
-        logger.info(
-            'Class weights: NER=%s, PII=%s, O=1.0',
-            args.class_weight_ner, args.class_weight_pii,
-        )
-
-    # Boundary-aware weight (B/I/O 차등) — class weight 와 elementwise 곱
     if args.boundary_b_weight is not None or args.boundary_i_weight is not None:
-        bw = boundary_weights_tensor(
+        cw = boundary_weights_tensor(
             label2id,
             w_b=args.boundary_b_weight if args.boundary_b_weight is not None else 1.0,
             w_i=args.boundary_i_weight if args.boundary_i_weight is not None else 1.0,
             w_o=1.0,
         )
-        cw = bw if cw is None else cw * bw
         logger.info(
             'Boundary weights: B=%s, I=%s, O=1.0',
             args.boundary_b_weight, args.boundary_i_weight,
@@ -273,7 +238,6 @@ def main():
             batch_size=args.batch_size,
             lr=args.lr,
             class_weights=cw,
-            metric_for_best=args.metric_for_best,
             precision=args.precision,
         )
         logger.info('Stage 1 time: %.1fs (best at %s)', s1_elapsed, s1_best)
@@ -293,10 +257,8 @@ def main():
             batch_size=args.batch_size,
             lr=args.lr,
             class_weights=cw,
-            metric_for_best=args.metric_for_best,
             init_model_path=s1_best,
             precision=args.precision,
-            use_crf=args.use_crf,
         )
         elapsed = s1_elapsed + s2_elapsed
         logger.info('Curriculum total time: %.1fs (stage1=%.1f + stage2=%.1f)',
@@ -314,9 +276,7 @@ def main():
             batch_size=args.batch_size,
             lr=args.lr,
             class_weights=cw,
-            metric_for_best=args.metric_for_best,
             precision=args.precision,
-            use_crf=args.use_crf,
         )
         logger.info('Train time: %.1fs', elapsed)
 
@@ -431,9 +391,7 @@ def main():
         'kfold': args.kfold,
         'fold_index': args.fold_index if is_kfold else None,
         'seed': args.seed,
-        'class_weight_ner': args.class_weight_ner,
-        'class_weight_pii': args.class_weight_pii,
-        'metric_for_best': args.metric_for_best,
+        'metric_for_best': 'eval_loss',
         'curriculum': args.curriculum,
         'curriculum_stage1_epochs': args.curriculum_stage1_epochs if args.curriculum else None,
         'train_time_sec': round(elapsed, 1),

@@ -17,7 +17,7 @@ Korean NER labelers targeting KLUE NER annotation guidelines with 6 entity types
 ### Working In This Directory
 - Prompt engineering is the primary quality lever — `ner_prompts.py` contains highly tuned Korean linguistic rules. Do not simplify
 - `_spans_to_bio()` uses 2-pass matching: exact token match first, then substring containment (handles Korean particles like "서울에서" matching "서울")
-- `_split_sentences()` splits on `.!?` followed by whitespace, minimum 10-char buffer — duplicated in all three files
+- `split_sentences()` splits on `.!?` followed by whitespace, minimum 10-char buffer — defined once in `llm_helpers.py`, called via the shared base classes
 - vLLM sends all sentences concurrently; OpenAI uses token-budget batching
 
 ### Testing Requirements
@@ -25,7 +25,7 @@ Korean NER labelers targeting KLUE NER annotation guidelines with 6 entity types
 - Mock `AsyncOpenAI.chat.completions.create()`
 
 ### Common Patterns
-- All three labelers import prompts from `ner_prompts.py`
+- Both labelers import prompts from `ner_prompts.py`
 - `DEFAULT_ENTITY_TYPES = ["PS", "LC", "OG", "DT", "TI", "QT"]`
 
 ## Dependencies

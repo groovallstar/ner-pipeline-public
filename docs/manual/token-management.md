@@ -115,7 +115,7 @@ ner_pipeline/
 ```
 
 **추가 스킬 후보:**
-- `ner-evaluation/`: NER 평가 메트릭(seqeval, bert-score) 실행 절차
+- `ner-evaluation/`: NER 평가 메트릭(seqeval) 실행 절차
 - `data-pipeline/`: 데이터 수집 → 전처리 → 라벨링 파이프라인 절차
 
 ---

@@ -2,10 +2,7 @@
 
 import torch
 
-from ner.classifier.data_utils import (
-    boundary_weights_tensor,
-    class_weights_tensor,
-)
+from ner.classifier.data_utils import boundary_weights_tensor
 
 
 def _build_label2id():
@@ -41,19 +38,3 @@ def test_boundary_weights_default_no_effect():
     label2id = _build_label2id()
     w = boundary_weights_tensor(label2id)
     assert torch.allclose(w, torch.ones(21))
-
-
-def test_boundary_combined_with_class_weights():
-    """class_weights × boundary_weights 의 elementwise 곱."""
-    label2id = _build_label2id()
-    cw = class_weights_tensor(label2id, w_ner=2.0, w_pii=0.5, w_o=1.0)
-    bw = boundary_weights_tensor(label2id, w_b=1.5, w_i=1.0, w_o=1.0)
-    combined = cw * bw
-
-    def _close(actual, expected):
-        assert abs(actual - expected) < 1e-5
-    _close(combined[label2id['B-PER']].item(), 3.0)
-    _close(combined[label2id['I-PER']].item(), 2.0)
-    _close(combined[label2id['B-EMAIL']].item(), 0.75)
-    _close(combined[label2id['I-EMAIL']].item(), 0.5)
-    _close(combined[label2id['O']].item(), 1.0)

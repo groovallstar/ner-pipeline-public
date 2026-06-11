@@ -10,11 +10,9 @@ from ner.classifier.data_utils import (
     PII_TYPES,
     _bio_labels_from_offsets,
     build_label_maps,
-    class_weights_tensor,
     decode_bio_to_spans,
     mask_pii_in_features,
     split_kfold_stratified,
-    split_train_test,
     split_train_valid_test,
 )
 
@@ -106,29 +104,6 @@ def test_decode_special_tokens_skipped():
         {'type': 'PER', 'start': 0, 'end': 6},
         {'type': 'PER', 'start': 10, 'end': 13},
     ]
-
-
-def test_split_train_test_deterministic():
-    """같은 seed 면 동일 분할."""
-    rows = [{'text': str(i), 'entities': [], 'id': str(i)} for i in range(100)]
-    a_train, a_test = split_train_test(rows, 0.2, seed=42)
-    b_train, b_test = split_train_test(rows, 0.2, seed=42)
-    assert [r['id'] for r in a_train] == [r['id'] for r in b_train]
-    assert [r['id'] for r in a_test] == [r['id'] for r in b_test]
-    assert len(a_test) == 20
-    assert len(a_train) == 80
-
-
-def test_split_test_ratio():
-    """test_ratio 0.2 일 때 test 가 정확히 20%."""
-    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(50)]
-    train, test = split_train_test(rows, 0.2, seed=0)
-    assert len(test) == 10
-    assert len(train) == 40
-    # 중복 없음
-    train_ids = {r['id'] for r in train}
-    test_ids = {r['id'] for r in test}
-    assert train_ids.isdisjoint(test_ids)
 
 
 def test_split_train_valid_test_partition():
@@ -251,20 +226,6 @@ def test_ner_pii_partition():
     assert set(NER_TYPES) | set(PII_TYPES) == set(CANONICAL_LABELS)
     assert len(NER_TYPES) == 5
     assert len(PII_TYPES) == 5
-
-
-def test_class_weights_tensor_shape_and_values():
-    """class_weights_tensor 가 BIO 21 라벨에 NER/PII/O weight 를 정확히 부여."""
-    label2id, _ = build_label_maps()
-    cw = class_weights_tensor(label2id, w_ner=2.0, w_pii=0.5, w_o=1.0)
-    assert cw.shape == (21,)
-    assert cw[label2id['O']].item() == 1.0
-    for t in NER_TYPES:
-        assert cw[label2id[f'B-{t}']].item() == 2.0
-        assert cw[label2id[f'I-{t}']].item() == 2.0
-    for t in PII_TYPES:
-        assert cw[label2id[f'B-{t}']].item() == 0.5
-        assert cw[label2id[f'I-{t}']].item() == 0.5
 
 
 def test_mask_pii_in_features():

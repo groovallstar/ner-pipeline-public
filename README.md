@@ -22,11 +22,11 @@ vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
 src/ner/
 ├── labelers/{ko,ja,vi}/   # 언어별 LLM 라벨러
 ├── llm_eval/              # 벤치마크 오케스트레이션·리포트
-├── augmenters/{pii,wikiann_vi,crawlers/ko}/  # 학습 데이터 증강
+├── augmenters/{pii,wikiann_vi}/  # 학습 데이터 증강
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
-└── scripts/               # 보조 셸 스크립트
-docker/{dev,vllm}/         # 개발 컨테이너 + vLLM 서비스
+└── scripts/               # 보조 스크립트
+docker/{dev,vllm,ollama}/  # 개발 컨테이너 + vLLM·Ollama 서비스
 results/                   # 벤치마크 산출 (gitignored)
 tests/ner/                 # pytest 테스트
 docs/                      # manual·reports·issues·wiki·specs
@@ -49,8 +49,8 @@ python -m ner.llm_eval --lang {ko,ja,vi} \
     --vllm-url "http://localhost:8081/v1"
 
 # BERT 파인튜닝·평가
-python -m ner.classifier              # 일본어 NER 5종
-python -m ner.classifier.pii_benchmark  # PII 7종
+python -m ner.classifier --lang ja    # 일본어 canonical 10종
+python -m ner.classifier --lang vi    # 베트남어 canonical 10종
 
 # 데이터 증강
 python -m ner.augmenters.pii          # 합성 PII 주입

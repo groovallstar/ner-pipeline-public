@@ -17,7 +17,7 @@ Builds and runs the primary development container based on `pytorch/pytorch:2.11
 ## For AI Agents
 
 ### Working In This Directory
-- The Dockerfile copies `pyproject.toml`, `uv.lock`, `.python-version` at build time — these are the authoritative dependency definitions
+- The Dockerfile build context is the repo root; it COPYs `./docker/dev/pyproject.toml`, `./docker/dev/uv.lock`, `./docker/dev/.python-version` at build time
 - Container runs as non-root user matching host UID/GID (build args)
 - `.claude` directory mounted from `${HOME}/dev/.claude` on the host
 - `init_with_claude_extension.sh` is interactive — cannot be run headlessly
