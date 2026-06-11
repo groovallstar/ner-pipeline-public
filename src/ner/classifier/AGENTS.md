@@ -151,7 +151,7 @@ docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 python -m pytest tests/ner/classifier/ -q
 ```
 
-- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / class weight / curriculum mask
+- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / curriculum mask
 - `test_encode.py` — 실제 토크나이저(JA·VI)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
 - `test_kfold_pool.py` — pooled F1 손계산 일치 / fold 간 중복 text 검증 / 비고유 id 허용

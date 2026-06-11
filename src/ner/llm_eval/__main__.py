@@ -131,7 +131,6 @@ def main():
     parser.add_argument("--split", default=None, help="Dataset split (default: validation for ko, test for ja)")
     parser.add_argument("--max-samples", type=int, default=None, help="Limit number of samples")
     parser.add_argument("--output", default=None, help="JSON output path")
-    parser.add_argument("--no-bertscore", action="store_true", help="Skip BERTScore computation")
 
     # Backend-specific options
     parser.add_argument("--vllm-url", default="http://localhost:8081/v1", help="vLLM base URL")
@@ -205,7 +204,6 @@ def _run_benchmark(args):
     eval_mode = _eval_mode_for_lang(args.lang)
     runner = BenchmarkRunner(
         gold_records,
-        compute_bertscore=not args.no_bertscore,
         lang=args.lang,
         eval_mode=eval_mode,
         sample_concurrency=args.concurrency,
