@@ -27,7 +27,7 @@ JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 �
 | `verifier.py` | `PIIVerifier` — LLM 교차 검증 (confirmed/missed/conflict 분류, drop_span/drop_record/keep_all 정책). 검증 시 `label_spans(split=False)` 로 호출하여 문맥 보존 |
 | `__main__.py` | `python -m ner.augmenters.pii` CLI 엔트리포인트 (`--mode {suffix,llm}`, `--verify vllm` 교차 검증) |
 | `loaders.py` | Stockmark / 임의 JSONL / HF Hub → `Record` 어댑터 모음 |
-| `generators/base.py` | `PIIGenerator` Protocol, `get_generator(lang)` factory, 공용 유틸 |
+| `generators/base.py` | `generate_pii(label, lang, rng)` 언어·라벨 디스패치 + 공용 유틸(`random_email`·`random_credit_card_number`·`EMAIL_DOMAINS` 등) |
 | `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
 | `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
 
@@ -37,7 +37,7 @@ JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 �
 - **병합 규칙** (`DEFAULT_MERGE_RULES`): `NAME → PER`, `ADDRESS → LOC`
   (둘 다 무조건 병합). 학습 데이터에는 `NAME`·`ADDRESS` 라벨이 존재하지
   않는다
-- **최종 출력 라벨**: canonical 10종 (NER 5종: `PER/LOC/ORG/PROD/EVT` + PII 5종: `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
+- **최종 출력 라벨**: canonical 10종 평면 (NER 5종 `PER/LOC/ORG/PROD/EVT` + PII 5종 `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
 
 #### 주입 밀도
 기본값 분포 `P(0)=0.2, P(1)=0.4, P(2)=0.3, P(3)=0.1` (문장당 PII 개수).
