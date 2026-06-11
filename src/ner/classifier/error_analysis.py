@@ -7,8 +7,8 @@ baseline 모델을 test split 에 대해 추론한 뒤, gold/pred span 비교 �
 사용 예 (모델 천장 vs gold 라벨 천장 분리):
     python -m ner.classifier.error_analysis \
         --lang ja \
-        --model-path results/classifier/ja_sweep/baseline/best \
-        --output-dir results/classifier/ja_sweep/baseline
+        --model-path data/stockmark/ja_ner_prod_seed1/model \
+        --output-dir results/classifier/ja_error_analysis
 
 산출물:
     error_analysis.json        # 전체 문장별 결과 + 집계
@@ -912,7 +912,7 @@ def main():
     )
     parser.add_argument(
         '--model-path',
-        help='HF model dir (e.g., results/classifier/ja_sweep/baseline/best). '
+        help='HF model dir (e.g., data/stockmark/ja_ner_prod_seed1/model). '
              'Required unless --from-predictions.',
     )
     parser.add_argument(

@@ -10,22 +10,6 @@ JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 �
 
 ## 서브 모듈
 
-### crawlers/
-뉴스 RSS 크롤러 + NER BIO 태깅 파이프라인. Phase-1 스모크 테스트 버전이며
-Yonhap(연합뉴스) 한국어 소스를 지원한다. 상세: `crawlers/ko/AGENTS.md`.
-
-```bash
-python -m ner.augmenters.crawlers.ko \
-    --source yna --max-sentences 100 \
-    --output-dir data/ner/raw \
-    --vllm-base-url http://localhost:8081/v1 \
-    --model Qwen/Qwen3.5-27B
-```
-
-Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{source}/`
-(`.gitignore` 대상). 기존 `labelers.ko.VllmNERLabeler.label_spans`를 문장 단위로
-호출하며 `BaseVllmLabeler`는 수정하지 않는다.
-
 ### pii/
 합성 PII 주입(injector). 기존 NER 데이터셋(Stockmark, JSONL, HF Hub)의
 각 문장에 자연스러운 위치로 합성 PII(전화/주소/생년월일/ID/이메일/카드)를

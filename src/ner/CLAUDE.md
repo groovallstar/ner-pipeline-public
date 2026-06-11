@@ -40,7 +40,6 @@
 |---------|------|
 | `pii/` | 합성 PII 주입기 (suffix/llm 모드, vLLM 교차 검증). CLI: `python -m ner.augmenters.pii` |
 | `wikiann_vi/` | WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증. CLI: `python -m ner.augmenters.wikiann_vi` |
-| `crawlers/ko/` | 한국어 Yonhap RSS 크롤러 + NER 태깅. CLI: `python -m ner.augmenters.crawlers.ko` |
 
 ### classifier/
 

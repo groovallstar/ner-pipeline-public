@@ -1,5 +1,8 @@
 """문장별 오류 분석: NER 벤치마크에서 FN/FP 패턴을 추출한다.
 
+KO/KLUE BIO 벤치마크 전용 (`--dataset klue`). JA·VI 의 span 오류 분석은
+`ner.classifier.error_analysis` (`--lang ja|vi`) 를 사용한다.
+
 사용 예:
     python -m ner.llm_eval.error_analysis \
         --models vllm:Qwen/Qwen3.5-27B \

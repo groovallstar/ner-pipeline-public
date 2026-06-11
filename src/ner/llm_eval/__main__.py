@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 
-from ner.labelers.dataset_loader import DatasetLoader  # noqa: direct import avoids bs4 dep in labelers.__init__
+from ner.labelers.dataset_loader import DatasetLoader  # direct import avoids bs4 dep in labelers.__init__
 from ner.llm_eval.benchmark_runner import BenchmarkRunner
 from ner.llm_eval.report import ReportGenerator
 

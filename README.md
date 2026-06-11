@@ -22,7 +22,7 @@ vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
 src/ner/
 ├── labelers/{ko,ja,vi}/   # 언어별 LLM 라벨러
 ├── llm_eval/              # 벤치마크 오케스트레이션·리포트
-├── augmenters/{pii,wikiann_vi,crawlers/ko}/  # 학습 데이터 증강
+├── augmenters/{pii,wikiann_vi}/  # 학습 데이터 증강
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
 └── scripts/               # 보조 스크립트

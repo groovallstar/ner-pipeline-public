@@ -180,6 +180,14 @@ class TestHardenPiiFormatCollisions:
         assert len(cc) == 1
         assert cc[0].text == '4065 0551 3022 4539'
 
+    def test_unlabeled_card_double_space_relabeled(self):
+        """생성기가 만드는 더블스페이스 구분자 카드도 relabel 한다."""
+        text = 'カードは 3528  9893  7864  1469 を利用。'
+        spans = harden_pii_format_collisions(text, [])
+        cc = [s for s in spans if s.label == 'CREDIT_CARD']
+        assert len(cc) == 1
+        assert cc[0].text == '3528  9893  7864  1469'
+
     def test_unlabeled_mynumber_relabeled(self):
         text = '管理番号 1917-0792-7808 で登録されている。'
         spans = harden_pii_format_collisions(text, [])

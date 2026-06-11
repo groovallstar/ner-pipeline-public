@@ -41,7 +41,6 @@ src/ner/
 │   └── span_metrics.py      # compute_offset_span_f1 등 span 레벨 메트릭
 ├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/AGENTS.md)
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
-│   ├── crawlers/ko/   # 한국어 Yonhap RSS 크롤러 + NER 태깅
 │   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
 ├── classifier/        # JA·VI canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
 │   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi ...)
@@ -67,7 +66,6 @@ docs/                  # 문서
 - `python -m ner.llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
 - `python -m ner.classifier --lang {ja,vi}` — BERT 파인튜닝·평가 (canonical 10종 평면)
 - `python -m ner.augmenters.pii` — 합성 PII 주입
-- `python -m ner.augmenters.crawlers.ko` — 한국어 뉴스 크롤러 + NER 태깅
 - `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
 
 상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.

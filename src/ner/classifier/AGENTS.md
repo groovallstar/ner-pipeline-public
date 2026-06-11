@@ -145,6 +145,21 @@ docs/reports/japanese-bert-classifier-per-entity-diagnosis.md  # JA 엔티티별
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 
+## 출하·배포 (JA deploy)
+
+JA 출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·`docs/`)에
+둔다 — 학습은 CLI(`python -m ner.classifier`, `--fit-abstain` 포함)에
+흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음).
+
+| 아티팩트 | 위치 | 역할 |
+|---|---|---|
+| 배포 추론 | `src/ner/scripts/eval_ja_ner_test.py` (`.sh` = uv 래퍼) | 학습 없이 고정 test + 저장된 `thresholds.json` 으로 추론·태깅·P/R/F1 출력. 절대경로만 허용. 기본 배포 레이아웃 `/data/ner/ja/{model,data/test.jsonl,thresholds.json}` |
+| 출하 모델 번들 | `data/stockmark/ja_ner_prod_seed1/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `thresholds.json` + `MODEL_CARD.md` (배포 시 `/data/ner/ja/` 로 복사) |
+| 최종 출하 스펙 | `docs/reports/japanese-bert-classifier-spec.md` | 모델·데이터·엔티티·평가지표 단일 출처 (10-fold pooled 0.9361 / raw 0.9273) |
+
+> 배포 추론은 위 "책임 경계 제외(추론 서빙)" 와 직교 — `scripts/` 의 독립
+> 도구이며 classifier 패키지를 import 만 한다 (패키지에 서빙 코드 없음).
+
 ## 테스트
 
 ```bash
