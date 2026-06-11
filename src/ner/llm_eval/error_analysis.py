@@ -12,10 +12,9 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 from collections import Counter, defaultdict
-from typing import Dict, List, Tuple
+from typing import List
 
 from ner.labelers.dataset_loader import DatasetLoader
 from ner.labelers.tag_aligner import TagAligner, normalize_tags, extract_spans_from_bio
@@ -210,26 +209,26 @@ def print_error_report(agg: dict, sentence_results: List[dict]):
     """사람이 읽기 쉬운 오류 분석 리포트를 출력한다."""
     s = agg["summary"]
     print(f"\n{'='*70}")
-    print(f"  ERROR ANALYSIS REPORT")
+    print("  ERROR ANALYSIS REPORT")
     print(f"{'='*70}")
     print(f"  Gold: {s['total_gold']}  Pred: {s['total_pred']}  "
           f"Exact: {s['total_exact']}  FN: {s['total_fn']}  FP: {s['total_fp']}")
     print(f"  Exact F1: {s['exact_f1']}")
 
     print(f"\n{'─'*70}")
-    print(f"  FALSE NEGATIVES (missed entities) by class:")
+    print("  FALSE NEGATIVES (missed entities) by class:")
     print(f"{'─'*70}")
     for cls, cnt in sorted(agg["fn_by_class"].items(), key=lambda x: -x[1]):
         print(f"    {cls:25s} {cnt:3d}")
 
     print(f"\n{'─'*70}")
-    print(f"  FALSE POSITIVES (spurious entities) by class:")
+    print("  FALSE POSITIVES (spurious entities) by class:")
     print(f"{'─'*70}")
     for cls, cnt in sorted(agg["fp_by_class"].items(), key=lambda x: -x[1]):
         print(f"    {cls:25s} {cnt:3d}")
 
     print(f"\n{'─'*70}")
-    print(f"  FN BY ENTITY TYPE (top examples):")
+    print("  FN BY ENTITY TYPE (top examples):")
     print(f"{'─'*70}")
     for etype, info in agg["fn_by_entity_type"].items():
         print(f"\n  [{etype}] — {info['count']} misses")
@@ -240,7 +239,7 @@ def print_error_report(agg: dict, sentence_results: List[dict]):
             print(f"      문장: {ex['sentence']}...")
 
     print(f"\n{'─'*70}")
-    print(f"  FP BY ENTITY TYPE (top examples):")
+    print("  FP BY ENTITY TYPE (top examples):")
     print(f"{'─'*70}")
     for etype, info in agg["fp_by_entity_type"].items():
         print(f"\n  [{etype}] — {info['count']} spurious")
@@ -253,7 +252,7 @@ def print_error_report(agg: dict, sentence_results: List[dict]):
     # 최악의 문장을 표시한다 (오류 최다)
     worst = sorted(sentence_results, key=lambda x: -(x["counts"]["fn"] + x["counts"]["fp"]))[:10]
     print(f"\n{'─'*70}")
-    print(f"  WORST SENTENCES (most errors):")
+    print("  WORST SENTENCES (most errors):")
     print(f"{'─'*70}")
     for sr in worst:
         if sr["counts"]["fn"] + sr["counts"]["fp"] == 0:
