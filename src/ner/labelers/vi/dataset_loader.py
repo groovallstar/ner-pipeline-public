@@ -1,14 +1,18 @@
 """WikiANN-vi canonical 덤프 로더.
 
-canonical 5종으로 축소된 JSONL 덤프
-(`data/wikiann_vi/vi_wikiann_recall_{split}.jsonl`, recall-merge
-결과)를 그대로 읽는다. HF 원본(WikiANN 3종) 로딩은 본 모듈의 책임이
-아니다 — 재라벨 파이프라인은 augmenters/wikiann_vi 쪽에서 직접 HF를
-읽는다. 폴백 없음.
+두 종류의 JSONL을 읽으며, 둘 다 `{id, text, gold_spans:[{text, type,
+start, end}]}` 스키마로 반환한다(폴백 없음):
 
-출력 스키마: `{id, text, gold_spans:[{text, type, start, end}]}`
-— 기본 span_key는 `gold_spans_8type_merged` (recall 정책 병합 결과의
-필드명. 데이터 호환성을 위해 필드명 그대로 유지).
+- **기본 split 파일** (`data/wikiann_vi/{train,valid,test}.jsonl`): silver
+  재라벨 + PII 주입을 거쳐 materialize 된 최종 덤프. `entities` 스키마
+  (`{label, start_char, end_char, text}`). `load(split=...)`(명시 path·
+  span_key 없이)는 이 파일을 `load_local` 경로로 읽는다.
+- **recall-merge 중간 덤프** (임의 경로): `gold_spans_8type_merged` 등
+  span_key 필드를 가진 merge_confidence 산출물. `load(path=..., span_key=...)`
+  로 명시 지정해 읽는다.
+
+HF 원본(WikiANN 3종) 로딩은 본 모듈 책임이 아니다 — 재라벨 파이프라인은
+augmenters/wikiann_vi 쪽에서 직접 HF를 읽는다.
 """
 from __future__ import annotations
 
@@ -21,16 +25,12 @@ class VietnameseDatasetLoader:
     """canonical WikiANN-vi 덤프를 gold_spans 레코드로 반환한다."""
 
     DEFAULT_PATH: dict = {
-        'train': Path(
-            'data/wikiann_vi/vi_wikiann_recall_train.jsonl'
-        ),
-        'validation': Path(
-            'data/wikiann_vi/vi_wikiann_recall_validation.jsonl'
-        ),
-        'test': Path(
-            'data/wikiann_vi/vi_wikiann_recall_test.jsonl'
-        ),
+        'train': Path('data/wikiann_vi/train.jsonl'),
+        'validation': Path('data/wikiann_vi/valid.jsonl'),
+        'test': Path('data/wikiann_vi/test.jsonl'),
     }
+    # 명시적 path·span_key 로 recall-merge 중간 덤프를 읽을 때의 기본 필드명.
+    # 기본 split 파일(entities 스키마)에는 적용되지 않는다.
     SPAN_KEY = 'gold_spans_8type_merged'
 
     def load(
@@ -40,18 +40,24 @@ class VietnameseDatasetLoader:
         path: Optional[Union[str, Path]] = None,
         span_key: Optional[str] = None,
     ) -> List[dict]:
-        """canonical WikiANN-vi 덤프를 로드한다.
+        """WikiANN-vi 덤프를 gold_spans 레코드로 로드한다.
 
         Args:
             split: 'train' | 'validation' | 'test'. `path` 지정 시 무시.
             max_samples: 반환할 레코드 수 상한.
-            path: 임의 JSONL 경로. split 대신 사용.
-            span_key: gold로 사용할 span 필드. 기본값은
-                `gold_spans_8type_merged` (recall 정책 병합, canonical 5종).
-                WikiANN 원본 3종으로 평가하려면 `'gold_spans'` 지정.
+            path: 임의 JSONL 경로. split 대신 사용(recall-merge 중간 덤프).
+            span_key: recall-merge 덤프에서 gold로 쓸 span 필드. 기본값
+                `gold_spans_8type_merged`. WikiANN 원본 3종은 `'gold_spans'`.
+
+        읽기 경로 분기:
+        - 명시 `path` 또는 `span_key` → recall-merge 덤프 reader
+          (`_read_records`, span_key 필드 사용).
+        - 그 외 기본 split → materialize 된 `{train,valid,test}.jsonl`
+          (entities 스키마) 를 `load_local` 로 읽는다.
 
         파일이 없으면 `FileNotFoundError`. 폴백 없음.
         """
+        explicit_dump = path is not None or span_key is not None
         if path is not None:
             target = Path(path)
         elif split in self.DEFAULT_PATH:
@@ -64,13 +70,15 @@ class VietnameseDatasetLoader:
 
         if not target.exists():
             raise FileNotFoundError(
-                f'WikiANN-vi canonical dump not found: {target}. '
-                'Generate it via ner.augmenters.wikiann_vi + '
-                'ner.augmenters.wikiann_vi.merge_confidence.'
+                f'WikiANN-vi dump not found: {target}. Generate splits via '
+                'ner.augmenters.wikiann_vi (+ merge_confidence) and PII '
+                'injection (ner.augmenters.pii).'
             )
-        return _read_records(
-            target, max_samples, span_key or self.SPAN_KEY,
-        )
+        if explicit_dump:
+            return _read_records(
+                target, max_samples, span_key or self.SPAN_KEY,
+            )
+        return self.load_local(target, max_samples=max_samples)
 
     @staticmethod
     def load_local(

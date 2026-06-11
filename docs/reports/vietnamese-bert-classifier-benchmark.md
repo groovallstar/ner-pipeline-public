@@ -4,8 +4,7 @@
 - 대상: WikiANN-vi silver + 합성 PII 주입 데이터에 BERT family 파인튜닝
 - 데이터: `data/wikiann_vi/pii_all.jsonl` (40,000 행, canonical 10종 = NER 5 + PII 5)
 - 평가: char-offset span F1 (`src/ner/metrics/span_metrics.compute_offset_span_f1`)
-- 출처: `docs/issues/issue-40-classifier-restore.md` §SOTA Sweep,
-  `docs/issues/handoff-post-issue-40-classifier-followups.md` §F2~F6
+- 출처: `docs/issues/issue-40-classifier-restore.md` §SOTA Sweep
 - 일본어 동일 평가 셋업의 분류기 결과는
   `docs/reports/japanese-bert-classifier-benchmark.md` 참조
 
@@ -19,9 +18,10 @@
 - **fast tokenizer fragmentation**: `mmBERT-base` 가 베트남어 tone mark
   분해 실패로 NER 5종 모두 F1 < 0.50.
 - **EVT 절대 support 부족 (61 spans @ test)** + **WikiANN-vi silver 노이즈
-  (PROD precision 0.54 / recall 0.80)** 가 게이트 0.95 미달의 본질.
-- **현재 진행**: post-#40 핸드오프의 F2~F6 트랙은 별도 이슈 분리 진행 (JA
-  먼저 #45·#48 로 진행 중, VI 트랙은 이슈 후보 단계).
+  (PROD precision 0.54 / recall 0.80)** 가 현재 천장(특히 PROD·EVT)의 본질.
+- **게이트 수치는 미설정** — per-entity P/R/F1 을 확인한 뒤 유동적으로 별도
+  결정한다. 천장 *개선* 레버(silver→gold 정제·외부 코퍼스·PhoBERT 등)는 본
+  리포트 범위 밖.
 
 ## 조건
 
@@ -54,18 +54,18 @@ production 베이스라인은 `results/classifier/vi/metrics.json`.
 
 ### 베이스라인 per-entity (production: `xlm-roberta-base`)
 
-| Entity | F1 | Precision | Recall | Support | 게이트 0.95 |
-|---|---:|---:|---:|---:|:---:|
-| EMAIL | 0.9960 | 0.9919 | 1.0000 | 739 | ✅ |
-| PER | 0.9272 | 0.9142 | 0.9406 | 2,072 | ❌ |
-| LOC | 0.9182 | 0.8797 | 0.9601 | 2,004 | ❌ |
-| CREDIT_CARD | 0.9050 | 0.8940 | 0.9162 | 764 | ❌ |
-| ID_NUM | 0.9045 | 0.9028 | 0.9063 | 758 | ❌ |
-| DAT | 0.8868 | 0.8779 | 0.8959 | 730 | ❌ |
-| ORG | 0.8593 | 0.8235 | 0.8984 | 748 | ❌ |
-| PHONE | 0.8089 | 0.8066 | 0.8112 | 694 | ❌ |
-| EVT | 0.6457 | 0.6212 | 0.6721 | 61 | ❌ |
-| PROD | 0.6434 | 0.5390 | 0.7981 | 208 | ❌ |
+| Entity | F1 | Precision | Recall | Support |
+|---|---:|---:|---:|---:|
+| EMAIL | 0.9960 | 0.9919 | 1.0000 | 739 |
+| PER | 0.9272 | 0.9142 | 0.9406 | 2,072 |
+| LOC | 0.9182 | 0.8797 | 0.9601 | 2,004 |
+| CREDIT_CARD | 0.9050 | 0.8940 | 0.9162 | 764 |
+| ID_NUM | 0.9045 | 0.9028 | 0.9063 | 758 |
+| DAT | 0.8868 | 0.8779 | 0.8959 | 730 |
+| ORG | 0.8593 | 0.8235 | 0.8984 | 748 |
+| PHONE | 0.8089 | 0.8066 | 0.8112 | 694 |
+| EVT | 0.6457 | 0.6212 | 0.6721 | 61 |
+| PROD | 0.6434 | 0.5390 | 0.7981 | 208 |
 
 ### `xlm-roberta-large` per-entity
 
@@ -126,15 +126,14 @@ bf16` 의 단순 설정으로는 token-classification head 가 majority-class 'O
 DeBERTa-v3 와 동일하게 collapse — 언어 특화 사전학습은 본 학습 불안정성을
 회피하지 못함.
 
-후속 검증: post-#40 핸드오프 §F3 (DeBERTa-v3 hyperparameter sweep, VI
-대상) — 별도 이슈 후보. 미달 시 "DeBERTa family 는 본 데이터셋·셋업과
-호환 안 됨" 으로 동결.
+후속 검증 레버: DeBERTa-v3 hyperparameter sweep(VI 대상 — warmup_ratio·
+weight_decay·gradient_clip 튜닝). 미달 시 "DeBERTa family 는 본 데이터셋·
+셋업과 호환 안 됨" 으로 동결. (본 리포트 범위 밖)
 
 ### `mmBERT-base` 토크나이저 fragmentation
 
 학습 자체는 성공하지만 NER 5종 collapse. **베트남어 tone mark + 다국어
-BPE 의 부정확 분해**가 원인. 근거: 핸드오프
-`docs/issues/handoff-post-issue-40-classifier-followups.md`,
+BPE 의 부정확 분해**가 원인. 근거:
 `docs/issues/issue-40-classifier-restore.md:244`.
 
 base XLM-RoBERTa 는 SentencePiece (`xlmr.spm`) 로 베트남어 tone mark 안정
@@ -144,7 +143,7 @@ base XLM-RoBERTa 는 SentencePiece (`xlmr.spm`) 로 베트남어 tone mark 안�
 
 - `vinai/phobert-base/large` — fast tokenizer 미지원. slow tokenizer 의
   manual greedy match (`_encode_ja` 경로) + word_segmenter (VnCoreNLP)
-  결합이 필요. post-#40 핸드오프 §F4 별도 이슈 후보.
+  결합이 필요. (통합은 본 리포트 범위 밖)
 
 ## 변종 ablation (v1~v4, 80/20 분할 기준)
 
@@ -159,14 +158,15 @@ base XLM-RoBERTa 는 SentencePiece (`xlmr.spm`) 로 베트남어 tone mark 안�
 | **v2** classwt + NER-best | NER B/I weight=2.0, PII B/I weight=0.5, `metric_for_best='ner_f1'` | 0.9137 | 0.8971 | 0.9308 |
 | v3 + large | `xlm-roberta-large` | 0.9135 | 0.8985 | 0.9291 |
 | **v4** + curriculum | NER warmup 3 epoch + 21-class fine-tune | **0.9147** | 0.9034 | 0.9263 |
-| **gate** | — | 0.9500 | — | — |
 
 원시 메트릭: `results/classifier/vi/{v2,v3,v4}/metrics.json`.
+(v1=0.9108 은 80/20 분할 historical 값으로 results json 백킹 없음 — 직접 비교 금지.)
 
 핵심:
 - **v4 가 최선** (+0.39pp vs v1) — large + curriculum 조합이 small-class
   변동성을 부분 보완. v2 단독 + base 가 ROI 우위.
-- **PII 5종 v1 부터 0.95+ 포화** — class weight down-weight 효과 미미.
+- **PII 5종은 변종 간 거의 불변** — class weight down-weight 효과 미미
+  (EMAIL≈1.0, 그 외 PII 는 0.81~0.91 수준에서 안정).
 - **VI EVT 는 어떤 변종도 60% 대 천장**. v3 (large) 에서 0.545 (-7.9pp vs
   v2) 까지 회귀 후 v4 (curriculum) 으로 0.660 까지 부분 회복. 절대 support
   부족 (94 → 61) 본질적 한계.
@@ -195,27 +195,20 @@ base XLM-RoBERTa 는 SentencePiece (`xlmr.spm`) 로 베트남어 tone mark 안�
 | NER 5종 (PER/LOC/ORG/PROD/EVT) | 0.890 |
 | PII 5종 (DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD) | 0.901 |
 
-## 현재 진행 중 — VI 트랙
+## 천장 원인과 개선 레버 (본 리포트 범위 밖)
 
-VI 측은 JA 측 (#45 → #48) 에 비해 **이슈 분리 진행이 늦다**. 핸드오프
-`docs/issues/handoff-post-issue-40-classifier-followups.md` 의 F2~F6 트랙은
-이슈 후보 단계이며, 각 트랙의 잠재력은 다음과 같이 평가됨:
+현재 천장의 단일 최대 원인은 **WikiANN-vi silver 노이즈**(PROD precision
+0.54 시사)와 **PROD/EVT 절대 support 부족**이다(상세 §동결된 후속 트랙).
+게이트 수치는 미설정 — per-entity P/R/F1 을 보고 유동적으로 별도 결정한다.
 
-| 트랙 | 잠재력 | 비용 | 위험 | 의존 |
-|---|---|---|---|---|
-| F2. WikiANN-vi silver→gold 부분 정제 (PROD/EVT 우선) | ★★★ | ★★ | ★ | 없음 |
-| F3. DeBERTa-v3 hyperparameter sweep (VI) | ? | ★★ | ★★ | 없음 |
-| F4. PhoBERT (단일언어 SOTA) 통합 | ★★ | ★★★ | ★★★ | tokenizer adapter |
-| F5. EVT class oversampling (4-8x 복제) | ★ | ★ | ★ | 없음 |
-| F6. 외부 코퍼스 통합 (VLSP 2018·2021, PhoNER) | ★★★ | ★★★ | ★★ | 라이선스 검증 |
+천장 *개선* 레버(전부 본 리포트 범위 밖, 착수 시 이슈로 분리):
+- silver→gold 부분 정제(PROD/EVT 우선) — ROI 추정 1순위, 사람 검수 비용 큼
+- 외부 코퍼스 통합(VLSP 2018·2021, PhoNER) — 라이선스 검증 필요
+- PhoBERT(단일언어) 통합 — slow-tokenizer adapter + word_segmenter 필요
+- DeBERTa-v3 hyperparameter sweep / EVT class oversampling
 
-**추정 ROI 1순위는 F2** — silver 노이즈가 단일 최대 천장 (PROD precision
-0.54 시사). 다만 정제 비용 (사람 검수) 이 크다. JA 측 #48 의 Tier 3
-(test-set error analysis + gold cleanup) 결과가 VI F2 의 정제 절차
-프로토콜 참고가 됨.
-
-JA 측 베이스라인 (`baseline_corrected`) 처럼 gold cleanup 후 strict F1
-+1.95pp 향상이 VI 측에서도 재현되면 게이트 0.95 도달 가능성 재평가 대상.
+참고: JA 측 gold cleanup 후 strict F1 +1.95pp 향상 사례가 VI silver 정제의
+잠재 효과를 시사한다.
 
 ## 동결된 후속 트랙
 

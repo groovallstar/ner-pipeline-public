@@ -41,7 +41,7 @@ class BenchmarkRunner:
             gold_records = gold_records[:max_samples]
         self.gold_records = gold_records
         self.lang = lang
-        self.eval_mode = eval_mode  # "bio" (ko/vi) 또는 "offset_span" (ja)
+        self.eval_mode = eval_mode  # "bio" (ko) 또는 "offset_span" (ja/vi)
         self.sample_concurrency = sample_concurrency  # offset_span 경로의 sample 단위 병렬도
         self._labelers: List[tuple] = []  # (name, backend, labeler)
 
@@ -63,7 +63,7 @@ class BenchmarkRunner:
         return results
 
     def _run_offset_span(self, name: str, backend: str, labeler: Any) -> BenchmarkResult:
-        """문자 오프셋을 사용하는 Span F1 경로 (ja). 레코드 형식: {text, gold_spans}."""
+        """문자 오프셋을 사용하는 Span F1 경로 (ja/vi). 레코드 형식: {text, gold_spans}."""
         return asyncio.run(self._run_offset_span_async(name, backend, labeler))
 
     async def _run_offset_span_async(
