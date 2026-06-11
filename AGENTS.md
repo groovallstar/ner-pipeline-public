@@ -52,7 +52,7 @@ API: vLLM, OpenAI) + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 �
 
 ### External
 - `langchain-openai`, `langchain-huggingface` (의존성; 직접 import는 최소)
-- `transformers`, `datasets`, `evaluate`, `seqeval`, `bert-score`
+- `transformers`, `datasets`, `evaluate`, `seqeval`
 - `torch` (CUDA), `accelerate`
 - `numpy`, `pandas`, `scikit-learn`
 

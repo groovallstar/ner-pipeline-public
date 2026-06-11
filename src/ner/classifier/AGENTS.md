@@ -15,7 +15,7 @@ span F1 을 측정한다.
 | 파일 | 역할 |
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / JA·VI tokenizer 분기 정렬 / BIO ↔ char-span 변환 (`decode_bio_to_spans(confs=...)` 시 span 에 conf_mean `score` 부착) |
-| `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
+| `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
 | `abstention.py` | per-class 신뢰도 기권 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
 | `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출. CLI: `python -m ner.classifier.kfold_pool` |
@@ -30,7 +30,7 @@ python -m ner.classifier --lang ja
 # VI 본 학습 (xlm-roberta-base 기본 모델)
 python -m ner.classifier --lang vi --epochs 5 --batch-size 16
 
-# 스모크 (100 train / 50 test / 1 epoch — CI·dev 검증용)
+# 스모크 (100 train / 25 valid / 50 test / 1 epoch — CI·dev 검증용)
 python -m ner.classifier --lang ja --smoke
 
 # 모델·데이터 override
@@ -136,7 +136,7 @@ slow tokenizer 는 `offset_mapping` 미지원 — `data_utils._encode_ja` 가 �
 results/classifier/{ja,vi}/
 ├── best/                       # best 체크포인트 (HF model dir)
 ├── checkpoint-*/               # 중간 체크포인트 (save_total_limit=1 로 정리)
-├── metrics.json                # 학습 설정 + overall + per-entity F1 (+--fit-abstain 시 abstention 블록)
+├── metrics.json                # 학습 설정 + overall/per-entity strict·relaxed F1 (+--fit-abstain 시 abstention 블록)
 └── thresholds.json             # --fit-abstain 시: per-class 임계값 + meta (conf_key/target/fit_set)
 
 docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)

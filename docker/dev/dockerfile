@@ -59,14 +59,12 @@ RUN EXISTING_USER=$(getent passwd ${USER_UID} | cut -d: -f1) && \
 RUN su - ${USERNAME} -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
 
 # 사용자 환경 설정
-COPY ./docker/dev/config/.env .
 RUN <<EOF
 USER_HOME=$(eval echo ~${USERNAME})
 
 echo "alias ll='ls \$LS_OPTIONS -alh'" >> ${USER_HOME}/.bashrc
 
 # set environments
-source ./.env 2>/dev/null || true
 echo "export LC_ALL=C.UTF-8" >> ${USER_HOME}/.bashrc
 echo "export LANG=C.UTF-8" >> ${USER_HOME}/.bashrc
 echo "export HF_HOME=${USER_HOME}/.huggingface/" >> ${USER_HOME}/.bashrc

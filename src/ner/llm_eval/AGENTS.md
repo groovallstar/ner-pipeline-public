@@ -9,23 +9,23 @@
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | 지연 import 공개 API: TagAligner, MetricsCalculator, BenchmarkRunner, ReportGenerator |
+| `__init__.py` | 패키지 마커 — 직접 모듈 임포트 사용 (BenchmarkRunner, ReportGenerator 등) |
 | `__main__.py` | CLI: `python -m ner.llm_eval --lang {ko,ja,vi}` |
-| `benchmark_runner.py` | `BenchmarkRunner` — KO BIO 평가 오케스트레이션 (라벨링·태그 정렬·3단계 메트릭) |
-| `ja_benchmark_runner.py` | `JaBenchmarkRunner` — JA·VI offset-span 파이프라인 + `JaReportGenerator` |
-| `metrics.py` | `MetricsCalculator`: seqeval, span_f1, span_match (exact+relaxed) |
-| `ja_metrics.py` | `compute_offset_span_f1()` — JA·VI offset-span 평가 |
-| `report.py` | `ReportGenerator` — KO: span-match·seqeval 테이블 + per-entity 분석 |
+| `benchmark_runner.py` | `BenchmarkRunner` — KO(BIO)·JA·VI(offset-span) 공용 러너, eval_mode 스위치 |
+| `report.py` | `ReportGenerator` — span-match·seqeval 테이블 + per-entity 분석 (KO·JA·VI) |
 | `error_analysis.py` | 문장별 오류 분류 CLI: TYPE_MISMATCH, BOUNDARY_SUBSET, MISS, HALLUCINATION |
+| `span_evaluator.py` | gold 레코드 + 라벨러로 span-match F1 계산 유틸 |
+| `span_evaluator_cli.py` | 예측 JSONL 소비 → char-offset span F1 비교 테이블 CLI |
 | `vi_silver_quality.py` | VI silver vs gold 비교 |
 | `wikiann_vi_gold.py` | WikiANN-vi gold 데이터 로딩 유틸 |
 
 ## For AI Agents
 
 ### Working In This Directory
-- 평가 경로 2종: KO(BIO via `BenchmarkRunner`), JA·VI(offset-span via `JaBenchmarkRunner`) — 혼용 금지
+- 평가 경로: KO는 `BenchmarkRunner`의 BIO eval_mode, JA·VI는 동일 러너의
+  offset-span eval_mode 사용 — 혼용 금지
 - KO 3개 메트릭: `span_match`(주), seqeval(부), `span_f1`(character-offset from BIO)
-- JA·VI: `ja_metrics.py`의 offset-span F1만 사용
+- JA·VI: offset-span F1은 `ner.metrics.span_metrics.compute_offset_span_f1` 사용
 - 태그 정규화(`_TAG_NORMALIZE_MAP`)는 `labelers/tag_aligner.py` 참조
 - `error_analysis.py`는 `llm_eval.__main__`에서 import — 지연 import로 동작
 
@@ -47,6 +47,6 @@
 - `ner.labelers.dataset_loader`, `ner.labelers.ko.*`, `ner.labelers.ja.*`, `ner.labelers.vi.*`
 
 ### External
-- `seqeval`, `bert_score`, `tqdm`
+- `seqeval`, `tqdm`
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

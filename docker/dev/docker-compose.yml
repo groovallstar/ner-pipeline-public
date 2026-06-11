@@ -9,8 +9,6 @@ services:
         USERNAME: ${USER:-devuser}
         USER_UID: ${DOCKER_UID:-1000}
         USER_GID: ${DOCKER_GID:-1000}
-    env_file:
-      - ./config/.env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/dev/.claude:/home/${USER:-devuser}/.claude

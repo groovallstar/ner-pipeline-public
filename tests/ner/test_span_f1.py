@@ -1,8 +1,5 @@
 """Unit tests for character-level span F1 metric (KLUE official)."""
 
-import sys
-sys.path.insert(0, "/work/git/ner_pipeline/src")
-
 from ner.metrics.bio_metrics import MetricsCalculator
 
 

@@ -47,7 +47,7 @@ src/ner/
 │   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi ...)
 │   ├── data_utils.py       # JSONL 로딩, JA(slow)·VI(fast) tokenizer 분기 정렬, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
-└── scripts/           # 보조 셸 스크립트 (eval_spans.sh 등)
+└── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
 └── vllm/              # vLLM 서비스

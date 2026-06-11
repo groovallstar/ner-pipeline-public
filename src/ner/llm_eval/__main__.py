@@ -19,7 +19,7 @@ from ner.llm_eval.report import ReportGenerator
 
 def _load_env():
     """python-dotenv가 설치된 경우 .env 파일을 로드하고, 없으면 건너뛴다."""
-    env_path = os.path.join(os.path.dirname(__file__), "../../docker/dev/config/.env")
+    env_path = os.path.join(os.path.dirname(__file__), "../../../.env")
     env_path = os.path.abspath(env_path)
     if os.path.exists(env_path):
         try:

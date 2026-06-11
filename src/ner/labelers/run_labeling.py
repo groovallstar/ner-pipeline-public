@@ -21,7 +21,7 @@ from ner.labelers.ja.span_matcher import match_spans
 
 
 def _load_env() -> None:
-    env_path = os.path.join(os.path.dirname(__file__), "../../.env")
+    env_path = os.path.join(os.path.dirname(__file__), "../../../.env")
     env_path = os.path.abspath(env_path)
     if not os.path.exists(env_path):
         return

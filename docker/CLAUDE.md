@@ -4,7 +4,7 @@
 
 ```bash
 # 최초 설정
-cd docker/dev && bash init.sh
+cd docker/dev && bash init_with_claude_extension.sh
 ```
 
 - VS Code devcontainer 또는 `docker exec`로 접속
@@ -15,21 +15,20 @@ cd docker/dev && bash init.sh
 
 | 호스트 | 컨테이너 | 용도 |
 |--------|----------|------|
-| /work | /work | 프로젝트 코드 |
-| /data | /data | 데이터셋, 모델 가중치 |
 | /var/run/docker.sock | /var/run/docker.sock | 중첩 Docker 접근 |
+| ${HOME}/dev/.claude | ~/.claude | Claude Code 인증 공유 |
 
 ### Claude Code 설정 동기화
 
-컨테이너 내 설정 변경 후 호스트로 동기화:
-
-```bash
-bash docker/dev/copy_claude_setting.sh
-```
+`init_with_claude_extension.sh` 최초 실행 시 컨테이너 내 인증 파일을
+`docker cp` 로 호스트 `${HOME}/dev/.claude/` 에 복사한다.
+이후 컨테이너는 해당 경로를 bind-mount로 공유하므로 별도 동기화 불필요.
 
 ## vLLM 서비스 (docker/vllm/)
 
-GPU 1,2 사용, tensor_parallel=2, 포트 8081.
+GPU 1,2 사용, tensor_parallel=2.
+포트: start 스크립트 기본값 8081 (`VLLM_PORT=8081`);
+compose 자체 기본값은 8000 (`${VLLM_PORT:-8000}`).
 
 ```bash
 # 27B 모델 시작
@@ -53,6 +52,6 @@ bash docker/vllm/logs.sh
 
 ## 환경 변수
 
-- `HF_DATASETS_CACHE=/work/.huggingface/`
-- `OPENAI_API_KEY` — `.env` 파일에서 로드
+- `HF_HOME=~/.huggingface/` (dev 컨테이너 내 사용자 홈 기준)
+- `OPENAI_API_KEY` — 레포 루트 `.env`에서 로드 (CLI `_load_env`)
 - `CUDA_VISIBLE_DEVICES` — vLLM 시작 스크립트에서 자동 설정

@@ -17,7 +17,8 @@ Orchestrates two Docker service layers: a GPU-enabled development container (dev
 | Directory | Purpose |
 |-----------|---------|
 | `dev/` | Development container: PyTorch+CUDA, UV, Claude Code (see `dev/AGENTS.md`) |
-| `vllm/` | vLLM server on GPUs 1,2 with tensor parallelism, port 8081 (see `vllm/AGENTS.md`) |
+| `vllm/` | vLLM inference server, tensor parallelism, port 8081 (see `vllm/AGENTS.md`) |
+| `ollama/` | Ollama inference backend (config only) |
 
 ## For AI Agents
 
@@ -29,8 +30,9 @@ Orchestrates two Docker service layers: a GPU-enabled development container (dev
 - Host paths `/work` and `/data` must exist
 
 ### Common Patterns
-- Each service has start.sh, stop.sh, logs.sh lifecycle scripts
-- Config via `.env` files in `config/` subdirectories
+- vllm/ has lifecycle scripts: `start-*.sh` (model-specific), `stop.sh`, `logs.sh`
+- dev/ has only `init_with_claude_extension.sh` (first-run setup); no start/stop/logs scripts
+- Env vars: host CLIs auto-load repo-root `.env` (gitignored) via `_load_env`; vllm/ uses its own gitignored `config/.env` (model selection, written by `load-and-bench.sh`)
 
 ## Dependencies
 

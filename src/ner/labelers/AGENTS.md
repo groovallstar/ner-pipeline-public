@@ -12,10 +12,12 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | 공개 API: DatasetLoader, NERRecord 익스포트 |
+| `__init__.py` | 공개 API: DatasetLoader, DatasetNotFoundError, NERRecord 익스포트 |
 | `labeler_base.py` | 공용 `parse_json_response()` — think-tag·markdown fence·wrapped dict 처리 |
-| `dataset_loader.py` | `DatasetLoader` for HuggingFace NER datasets (KLUE 등), ClassLabel 변환 |
-| `tag_aligner.py` | `TagAligner`: BIO 정렬, KLUE 음절 토크나이저, 태그 정규화(PER→PS 등), `extract_spans_from_bio()` |
+| `base_vllm_labeler.py` | vLLM 백엔드 공용 베이스 (언어팩 주입 서브클래싱) |
+| `base_openai_labeler.py` | OpenAI 호환 배치 라벨러 공용 베이스 |
+| `dataset_loader.py` | `HFTokenDatasetLoader` (alias: `DatasetLoader`) — HuggingFace NER datasets (KLUE 등), ClassLabel 변환 |
+| `tag_aligner.py` | `TagAligner`: BIO 정렬·span 추출(`extract_spans_from_bio`), 태그 정규화(`normalize_tag`, PER→PS 등) |
 | `hf_ner_labeler.py` | `HFNERLabeler` — HuggingFace pipeline 기반 BERT NER 베이스라인 |
 | `llm_helpers.py` | 공용 LLM 유틸 |
 | `run_labeling.py` | 일괄 라벨링 실행 스크립트 |
@@ -26,7 +28,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 |-----------|---------|
 | `ko/` | 한국어 NER 라벨러 — KLUE 6종 (PS, LC, OG, DT, TI, QT) (see `ko/AGENTS.md`) |
 | `ja/` | 일본어 NER 라벨러 — canonical 10종 평면; pre-dumped Stockmark JSONL 전용 (see `ja/AGENTS.md`) |
-| `vi/` | 베트남어 NER 라벨러 — canonical 10종 평면; canonical WikiANN-vi JSONL 덤프 전용 (see `vi/AGENTS.md`) |
+| `vi/` | 베트남어 NER 라벨러 — canonical 10종 평면; canonical WikiANN-vi JSONL 덤프 전용 |
 
 라벨 스키마 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
@@ -35,7 +37,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 ### Working In This Directory
 - 모든 라벨러 공통 인터페이스: `label(text)`, `label_spans(text)`, `label_records(records)`
 - `parse_json_response()`는 `labeler_base.py`의 canonical JSON 추출 유틸 — 새 JSON 파싱 코드 작성 금지
-- `_split_sentences()`와 `_spans_to_bio()`는 각 라벨러 파일에 복제됨 — 수정 시 모든 사본 갱신
+- `split_sentences()`와 `spans_to_bio()`는 `llm_helpers.py`에 단일 정의되며 베이스 클래스를 통해 호출됨
 - 각 라벨러는 `total_prompt_tokens`, `total_completion_tokens`로 토큰 사용량 추적
 - `DatasetLoader`는 JSONL fallback 경로(`/data/ner/`)를 지원
 

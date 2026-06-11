@@ -10,7 +10,7 @@
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, and match_spans |
+| `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, match_spans, OpenAINERLabeler, VllmNERLabeler |
 | `ner_prompts.py` | Japanese NER prompts — canonical 10종 평면 엔티티 타입 정의 및 disambiguation 규칙 |
 | `dataset_loader.py` | `JapaneseDatasetLoader` — reads canonical Stockmark JSONL dumps (`data/stockmark/{train,test}.jsonl`). No HF fetch, no label mapping — fails fast if dumps are missing |
 | `span_matcher.py` | `match_spans()` — converts LLM text spans to character offsets using longest-first matching with overlap prevention and Japanese particle stripping |
@@ -29,7 +29,7 @@
 
 ### Testing Requirements
 - Test `match_spans()` with overlapping entities, particle-containing entities, and whitespace-collapsed matches
-- Dataset loader requires network access or cached HuggingFace data
+- Dataset loader requires the local JSONL dump (`data/stockmark/{train,test}.jsonl`); raises `FileNotFoundError` immediately if absent — no HuggingFace or network access
 
 ### Common Patterns
 - All labelers import from `ner_prompts.py`
