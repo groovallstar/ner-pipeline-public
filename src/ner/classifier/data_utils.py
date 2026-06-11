@@ -56,16 +56,6 @@ def load_jsonl(path: str) -> List[dict]:
     return rows
 
 
-def split_train_test(rows: List[dict], test_ratio: float = 0.2,
-                     seed: int = 42) -> Tuple[List[dict], List[dict]]:
-    """행 단위 셔플 후 train/test 분할."""
-    rng = random.Random(seed)
-    shuffled = rows[:]
-    rng.shuffle(shuffled)
-    n_test = int(len(shuffled) * test_ratio)
-    return shuffled[n_test:], shuffled[:n_test]
-
-
 def split_train_valid_test(rows: List[dict],
                            valid_ratio: float = 0.1,
                            test_ratio: float = 0.1,
@@ -73,7 +63,7 @@ def split_train_valid_test(rows: List[dict],
     """행 단위 셔플 후 train/valid/test 3-way 분할.
 
     분할 순서: shuffle → 앞부분 test, 그 다음 valid, 나머지 train.
-    같은 seed 면 결정적이며, test 셋은 split_train_test 와 동일한 prefix.
+    같은 seed 면 결정적이다.
     """
     rng = random.Random(seed)
     shuffled = rows[:]
@@ -299,26 +289,6 @@ NER_TYPES = ('PER', 'LOC', 'ORG', 'PROD', 'EVT')
 PII_TYPES = ('DAT', 'EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD')
 
 
-def class_weights_tensor(label2id: Dict[str, int],
-                         w_ner: float = 1.0,
-                         w_pii: float = 1.0,
-                         w_o: float = 1.0):
-    """label2id 기준 BIO 21 라벨에 대한 weight tensor (torch).
-
-    NER 5종 BIO → w_ner, PII 5종 BIO → w_pii, O → w_o.
-    """
-    import torch
-    weights = [w_o] * len(label2id)
-    for label, idx in label2id.items():
-        if label == 'O':
-            weights[idx] = w_o
-        elif label[2:] in NER_TYPES:
-            weights[idx] = w_ner
-        elif label[2:] in PII_TYPES:
-            weights[idx] = w_pii
-    return torch.tensor(weights, dtype=torch.float32)
-
-
 def boundary_weights_tensor(label2id: Dict[str, int],
                             w_b: float = 1.0,
                             w_i: float = 1.0,
@@ -326,7 +296,6 @@ def boundary_weights_tensor(label2id: Dict[str, int],
     """B-/I-/O 토큰별 weight tensor — entity 경계 학습 강조용.
 
     `B-XXX` (entity 시작) 에 w_b, `I-XXX` (내부) 에 w_i, `O` 에 w_o.
-    `class_weights_tensor` 와 elementwise 곱으로 결합 가능.
     """
     import torch
     weights = [w_o] * len(label2id)

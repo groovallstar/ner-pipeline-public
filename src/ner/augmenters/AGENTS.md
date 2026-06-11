@@ -10,22 +10,6 @@ JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 �
 
 ## 서브 모듈
 
-### crawlers/
-뉴스 RSS 크롤러 + NER BIO 태깅 파이프라인. Phase-1 스모크 테스트 버전이며
-Yonhap(연합뉴스) 한국어 소스를 지원한다. 상세: `crawlers/ko/AGENTS.md`.
-
-```bash
-python -m ner.augmenters.crawlers.ko \
-    --source yna --max-sentences 100 \
-    --output-dir data/ner/raw \
-    --vllm-base-url http://localhost:8081/v1 \
-    --model Qwen/Qwen3.5-27B
-```
-
-Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{source}/`
-(`.gitignore` 대상). 기존 `labelers.ko.VllmNERLabeler.label_spans`를 문장 단위로
-호출하며 `BaseVllmLabeler`는 수정하지 않는다.
-
 ### pii/
 합성 PII 주입(injector). 기존 NER 데이터셋(Stockmark, JSONL, HF Hub)의
 각 문장에 자연스러운 위치로 합성 PII(전화/주소/생년월일/ID/이메일/카드)를
@@ -38,7 +22,7 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 | `schema.py` | `Entity`, `Record` 공용 dataclass (labelers 호환) |
 | `config.py` | `InjectionConfig` (lang, density, pii_labels, label_merge_rules, seed) + `validate()` |
 | `injector.py` | `PIIInjector` — **suffix 모드**: 문장 끝 접미 삽입 + span 재계산. `apply_label_merge`/`merge_entities` 규칙 기반 병합(`NAME→PER`, `ADDRESS→LOC` 무조건)도 제공 |
-| `llm_injector.py` | `LLMInjector` + `VllmClient` — **llm 모드**: LLM이 PII를 자연스럽게 문중에 삽입, 생성 텍스트에서 string match로 span offset 추출 |
+| `llm_injector.py` | `LLMInjector` + `VllmClient` — **llm 모드**: LLM이 PII를 자연스럽게 문중에 삽입, 생성 텍스트에서 string match로 span offset 추출; 주입 후 `harden_pii_format_collisions`로 무라벨 CC·ID_NUM 포맷 열을 일관 relabel |
 | `stats.py` | 라벨별 빈도·커버리지·PII 없는 샘플 비율 리포트 |
 | `verifier.py` | `PIIVerifier` — LLM 교차 검증 (confirmed/missed/conflict 분류, drop_span/drop_record/keep_all 정책). 검증 시 `label_spans(split=False)` 로 호출하여 문맥 보존 |
 | `__main__.py` | `python -m ner.augmenters.pii` CLI 엔트리포인트 (`--mode {suffix,llm}`, `--verify vllm` 교차 검증) |
@@ -53,7 +37,7 @@ Flat `CrawlerSpec` dataclass 스타일(상속 없음). 출력은 `data/ner/raw/{
 - **병합 규칙** (`DEFAULT_MERGE_RULES`): `NAME → PER`, `ADDRESS → LOC`
   (둘 다 무조건 병합). 학습 데이터에는 `NAME`·`ADDRESS` 라벨이 존재하지
   않는다
-- **최종 출력 라벨**: canonical 13종 (NER 8종 + `DAT` 1종 + PII 4종)
+- **최종 출력 라벨**: canonical 10종 (NER 5종: `PER/LOC/ORG/PROD/EVT` + PII 5종: `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
 
 #### 주입 밀도
 기본값 분포 `P(0)=0.2, P(1)=0.4, P(2)=0.3, P(3)=0.1` (문장당 PII 개수).

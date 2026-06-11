@@ -12,14 +12,14 @@ import logging
 import os
 import sys
 
-from ner.labelers.dataset_loader import DatasetLoader  # noqa: direct import avoids bs4 dep in labelers.__init__
+from ner.labelers.dataset_loader import DatasetLoader  # direct import avoids bs4 dep in labelers.__init__
 from ner.llm_eval.benchmark_runner import BenchmarkRunner
 from ner.llm_eval.report import ReportGenerator
 
 
 def _load_env():
     """python-dotenv가 설치된 경우 .env 파일을 로드하고, 없으면 건너뛴다."""
-    env_path = os.path.join(os.path.dirname(__file__), "../../docker/dev/config/.env")
+    env_path = os.path.join(os.path.dirname(__file__), "../../../.env")
     env_path = os.path.abspath(env_path)
     if os.path.exists(env_path):
         try:
@@ -131,7 +131,6 @@ def main():
     parser.add_argument("--split", default=None, help="Dataset split (default: validation for ko, test for ja)")
     parser.add_argument("--max-samples", type=int, default=None, help="Limit number of samples")
     parser.add_argument("--output", default=None, help="JSON output path")
-    parser.add_argument("--no-bertscore", action="store_true", help="Skip BERTScore computation")
 
     # Backend-specific options
     parser.add_argument("--vllm-url", default="http://localhost:8081/v1", help="vLLM base URL")
@@ -205,7 +204,6 @@ def _run_benchmark(args):
     eval_mode = _eval_mode_for_lang(args.lang)
     runner = BenchmarkRunner(
         gold_records,
-        compute_bertscore=not args.no_bertscore,
         lang=args.lang,
         eval_mode=eval_mode,
         sample_concurrency=args.concurrency,

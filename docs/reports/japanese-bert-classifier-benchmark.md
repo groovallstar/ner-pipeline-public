@@ -227,3 +227,18 @@ done
 # 테스트
 uv run python -m pytest tests/ner/classifier/ tests/ner/augmenters/ja/ -q
 ```
+
+---
+
+## 최종 출하 수치 — 단일 출처 spec
+
+본 문서는 Phase 0~8 실험 경위 요약이며, 위 **0.9644** 는 옛 80/10/10 단일
+split 측정(train/test 중복 인플레이션 포함)이다. 측정 프로토콜 개편(#69)
+이후 **층화 10-fold pooled** 가 공정 기준이고, 최종 출하 수치는:
+
+- **pooled strict F1 = 0.9361** (운영점, P 0.9420 / R 0.9302, 전 지표 ≥ 0.93)
+- raw 모델(임계값 미적용) overall = **0.9273**
+
+모델·데이터·엔티티·per-entity 전수의 **단일 출처**는
+`japanese-bert-classifier-spec.md`. 프로토콜·진단 상세는
+`japanese-bert-classifier-per-entity-diagnosis.md` (2편, 층화 K-fold).

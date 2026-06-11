@@ -1,7 +1,7 @@
-"""NER 평가 메트릭: seqeval F1/Precision/Recall + BERTScore."""
+"""NER 평가 메트릭: seqeval F1/Precision/Recall + span match."""
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from seqeval.metrics import (
     classification_report,
@@ -80,26 +80,6 @@ class MetricsCalculator:
             "per_entity": per_entity,
             "report": report_str,
         }
-
-    @staticmethod
-    def extract_entities(tokens: List[str], tags: List[str]) -> List[str]:
-        """BIO 태그가 붙은 토큰 시퀀스에서 엔티티 문자열을 추출한다."""
-        entities = []
-        current = []
-        for tok, tag in zip(tokens, tags):
-            if tag.startswith("B-"):
-                if current:
-                    entities.append(" ".join(current))
-                current = [tok]
-            elif tag.startswith("I-") and current:
-                current.append(tok)
-            else:
-                if current:
-                    entities.append(" ".join(current))
-                    current = []
-        if current:
-            entities.append(" ".join(current))
-        return entities
 
     @staticmethod
     def _extract_spans(tokens: List[str], tags: List[str]) -> set:
@@ -366,52 +346,4 @@ class MetricsCalculator:
                 "exact_matches": exact_correct,
                 "relaxed_matches": relaxed_tp,
             },
-        }
-
-    @staticmethod
-    def compute_bertscore(
-        gold_tags_list: List[List[str]],
-        pred_tags_list: List[List[str]],
-        gold_tokens_list: List[List[str]],
-        pred_tokens_list: List[List[str]],
-        model_type: str = "klue/roberta-base",
-    ) -> Dict:
-        """gold 엔티티 문자열과 예측 엔티티 문자열 간의 BERTScore를 계산한다.
-
-        BIO 태그에서 엔티티 span을 추출한 후, 엔티티 텍스트 리스트에 대해
-        BERTScore를 계산한다.
-        """
-        try:
-            from bert_score import score as bert_score_fn
-        except ImportError:
-            logger.warning("bert-score not installed, skipping BERTScore")
-            return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
-
-        gold_entities_all = []
-        pred_entities_all = []
-        for g_tokens, g_tags, p_tokens, p_tags in zip(
-            gold_tokens_list, gold_tags_list, pred_tokens_list, pred_tags_list
-        ):
-            gold_entities_all.extend(MetricsCalculator.extract_entities(g_tokens, g_tags))
-            pred_entities_all.extend(MetricsCalculator.extract_entities(p_tokens, p_tags))
-
-        if not gold_entities_all or not pred_entities_all:
-            return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
-
-        # BERTScore를 위해 짧은 리스트를 동일 길이로 패딩한다
-        max_len = max(len(gold_entities_all), len(pred_entities_all))
-        gold_padded = gold_entities_all + [""] * (max_len - len(gold_entities_all))
-        pred_padded = pred_entities_all + [""] * (max_len - len(pred_entities_all))
-
-        P, R, F1 = bert_score_fn(
-            pred_padded, gold_padded,
-            model_type=model_type,
-            lang="ko",
-            verbose=False,
-        )
-
-        return {
-            "precision": round(float(P.mean()), 4),
-            "recall": round(float(R.mean()), 4),
-            "f1": round(float(F1.mean()), 4),
         }

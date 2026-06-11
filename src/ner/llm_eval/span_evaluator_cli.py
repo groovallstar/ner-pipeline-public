@@ -22,7 +22,7 @@ import argparse
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from ner.metrics.span_metrics import compute_offset_span_f1
 

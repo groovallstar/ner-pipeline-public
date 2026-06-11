@@ -15,7 +15,7 @@ span F1 을 측정한다.
 | 파일 | 역할 |
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / JA·VI tokenizer 분기 정렬 / BIO ↔ char-span 변환 (`decode_bio_to_spans(confs=...)` 시 span 에 conf_mean `score` 부착) |
-| `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
+| `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
 | `abstention.py` | per-class 신뢰도 기권 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
 | `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출. CLI: `python -m ner.classifier.kfold_pool` |
@@ -30,7 +30,7 @@ python -m ner.classifier --lang ja
 # VI 본 학습 (xlm-roberta-base 기본 모델)
 python -m ner.classifier --lang vi --epochs 5 --batch-size 16
 
-# 스모크 (100 train / 50 test / 1 epoch — CI·dev 검증용)
+# 스모크 (100 train / 25 valid / 50 test / 1 epoch — CI·dev 검증용)
 python -m ner.classifier --lang ja --smoke
 
 # 모델·데이터 override
@@ -136,7 +136,7 @@ slow tokenizer 는 `offset_mapping` 미지원 — `data_utils._encode_ja` 가 �
 results/classifier/{ja,vi}/
 ├── best/                       # best 체크포인트 (HF model dir)
 ├── checkpoint-*/               # 중간 체크포인트 (save_total_limit=1 로 정리)
-├── metrics.json                # 학습 설정 + overall + per-entity F1 (+--fit-abstain 시 abstention 블록)
+├── metrics.json                # 학습 설정 + overall/per-entity strict·relaxed F1 (+--fit-abstain 시 abstention 블록)
 └── thresholds.json             # --fit-abstain 시: per-class 임계값 + meta (conf_key/target/fit_set)
 
 docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)
@@ -145,13 +145,28 @@ docs/reports/japanese-bert-classifier-per-entity-diagnosis.md  # JA 엔티티별
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
 ```
 
+## 출하·배포 (JA deploy)
+
+JA 출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·`docs/`)에
+둔다 — 학습은 CLI(`python -m ner.classifier`, `--fit-abstain` 포함)에
+흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음).
+
+| 아티팩트 | 위치 | 역할 |
+|---|---|---|
+| 배포 추론 | `src/ner/scripts/eval_ja_ner_test.py` (`.sh` = uv 래퍼) | 학습 없이 고정 test + 저장된 `thresholds.json` 으로 추론·태깅·P/R/F1 출력. 절대경로만 허용. 기본 배포 레이아웃 `/data/ner/ja/{model,data/test.jsonl,thresholds.json}` |
+| 출하 모델 번들 | `data/stockmark/ja_ner_prod_seed1/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `thresholds.json` + `MODEL_CARD.md` (배포 시 `/data/ner/ja/` 로 복사) |
+| 최종 출하 스펙 | `docs/reports/japanese-bert-classifier-spec.md` | 모델·데이터·엔티티·평가지표 단일 출처 (10-fold pooled 0.9361 / raw 0.9273) |
+
+> 배포 추론은 위 "책임 경계 제외(추론 서빙)" 와 직교 — `scripts/` 의 독립
+> 도구이며 classifier 패키지를 import 만 한다 (패키지에 서빙 코드 없음).
+
 ## 테스트
 
 ```bash
 python -m pytest tests/ner/classifier/ -q
 ```
 
-- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / class weight / curriculum mask
+- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / curriculum mask
 - `test_encode.py` — 실제 토크나이저(JA·VI)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
 - `test_kfold_pool.py` — pooled F1 손계산 일치 / fold 간 중복 text 검증 / 비고유 id 허용

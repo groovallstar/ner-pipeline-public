@@ -52,8 +52,7 @@ LLM JSON 응답
     ▼ MetricsCalculator + span_metrics              [metrics/{bio_metrics,span_metrics}.py]
     ├── compute_span_match()   Span Match (exact/relaxed) — primary
     ├── compute_seqeval()      seqeval BIO F1 — secondary
-    ├── compute_span_f1()      Character Span F1
-    └── compute_bertscore()    BERTScore (optional)
+    └── compute_span_f1()      Character Span F1
     │
     ▼ ReportGenerator                                [llm_eval/report.py]
 벤치마크 결과 (CLI 테이블 + JSON 파일)
@@ -392,7 +391,6 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
 | **Span Match** | `compute_span_match()` | entity 단위 exact/relaxed 매칭 | **Primary** — BIO 변환 없이 직접 span 비교 |
 | **seqeval** | `compute_seqeval()` | 음절 BIO 태그 기반 F1/Precision/Recall | Secondary — BERT 모델과 비교 시 사용 |
 | **Character Span F1** | `compute_span_f1()` | 문자 수준 span 매칭 (KLUE 공식 메트릭) | BIO 태그에서 span 추출 후 비교 |
-| **BERTScore** | `compute_bertscore()` | 의미적 유사도 기반 평가 | Optional — `--no-bertscore` 플래그로 비활성화 |
 
 **Span Match 상세:**
 - **Exact**: gold span과 predicted span의 text와 type이 정확히 일치
@@ -405,8 +403,7 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
 | Span Match를 primary 메트릭으로 | BIO 변환 과정의 정렬 오류를 우회하여, LLM 라벨링 품질을 직접 평가 |
 | seqeval을 secondary로 유지 | BERT 기반 모델은 BIO 태그를 직접 출력하므로, LLM과 BERT를 동일 기준으로 비교하기 위해 |
 | 음절 BIO 변환이 필요한 이유 | KLUE gold 데이터가 음절 단위 BIO이므로, seqeval 비교를 위해 LLM spans를 같은 형식으로 변환 필요 |
-| 4종 메트릭 병행 | 각 메트릭이 다른 관점을 제공: span match(엔티티 품질), seqeval(토큰 정확도), BERTScore(의미 유사도) |
-| BERTScore를 optional로 | 계산 비용이 높아 빠른 반복 시에는 생략 가능 |
+| 3종 메트릭 병행 | 각 메트릭이 다른 관점을 제공: span match(엔티티 품질), seqeval(토큰 정확도), character span F1(문자 수준 매칭) |
 
 ---
 

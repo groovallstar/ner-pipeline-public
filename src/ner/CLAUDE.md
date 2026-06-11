@@ -30,6 +30,7 @@
 | `error_analysis.py` | 문장별 오류 유형 분류 CLI |
 | `span_evaluator.py` / `span_evaluator_cli.py` | span 단위 평가 유틸 |
 | `vi_silver_quality.py` | silver vs gold 비교 |
+| `wikiann_vi_gold.py` | WikiANN-vi gold 기준 평가 |
 
 ### augmenters/
 
@@ -39,7 +40,6 @@
 |---------|------|
 | `pii/` | 합성 PII 주입기 (suffix/llm 모드, vLLM 교차 검증). CLI: `python -m ner.augmenters.pii` |
 | `wikiann_vi/` | WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증. CLI: `python -m ner.augmenters.wikiann_vi` |
-| `crawlers/ko/` | 한국어 Yonhap RSS 크롤러 + NER 태깅. CLI: `python -m ner.augmenters.crawlers.ko` |
 
 ### classifier/
 
@@ -50,6 +50,9 @@ JA·VI canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
 | `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / JA(slow)·VI(fast) tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
 | `train_eval.py` | HF Trainer 래퍼 + char-offset span F1 (`src/ner/metrics` 공용) |
+| `abstention.py` | per-class 신뢰도 임계값 fit·apply |
+| `error_analysis.py` | 오류 유형 분류 CLI |
+| `kfold_pool.py` | K-fold 데이터 풀 구성 유틸 |
 
 ### metrics/
 
@@ -62,7 +65,7 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 
 ### scripts/
 
-보조 셸 스크립트 (`eval_spans.sh` 등).
+보조 스크립트 (`eval_ja_ner_test.py` 등).
 
 ## 라벨 스키마
 

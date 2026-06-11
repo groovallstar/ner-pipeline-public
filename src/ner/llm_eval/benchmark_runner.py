@@ -33,7 +33,6 @@ class BenchmarkRunner:
         self,
         gold_records: List[dict],
         max_samples: Optional[int] = None,
-        compute_bertscore: bool = True,
         lang: str = "ko",
         eval_mode: str = "bio",
         sample_concurrency: int = 32,
@@ -41,7 +40,6 @@ class BenchmarkRunner:
         if max_samples is not None:
             gold_records = gold_records[:max_samples]
         self.gold_records = gold_records
-        self.compute_bertscore = compute_bertscore
         self.lang = lang
         self.eval_mode = eval_mode  # "bio" (ko/vi) 또는 "offset_span" (ja)
         self.sample_concurrency = sample_concurrency  # offset_span 경로의 sample 단위 병렬도
@@ -203,9 +201,6 @@ class BenchmarkRunner:
             gold_spans_all.append(g_spans)
             pred_spans_all.append(p_spans)
 
-            # Update progress bar with running stats
-            elapsed = time.time() - t_start
-            speed = (i + 1) / elapsed if elapsed > 0 else 0
             pbar.set_postfix(errors=errors)
 
         pbar.close()
@@ -229,13 +224,6 @@ class BenchmarkRunner:
             "report": seqeval_metrics.get("report", ""),
             "span_f1": char_span_f1,
         }
-
-        if self.compute_bertscore:
-            print(f"  Computing BERTScore...")
-            bertscore = MetricsCalculator.compute_bertscore(
-                gold_tags_all, pred_tags_all, gold_tokens_all, pred_tokens_all
-            )
-            metrics["bertscore"] = bertscore
 
         num_evaluated = len(gold_tags_all)
 
