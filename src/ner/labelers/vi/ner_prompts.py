@@ -17,7 +17,6 @@ LOC로 라벨링하므로 본 canonical(시설=ORG)과 시설 엔티티가 LOC�
 가능하다.
 """
 
-from typing import List
 
 DEFAULT_ENTITY_TYPES = [
     'PER', 'LOC', 'ORG', 'PROD', 'EVT',
@@ -88,48 +87,6 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 Đầu vào: {sentence}
 Đầu ra:"""
 
-# ── Batch prompt ──────────────────────────────────────────────────────
-
-BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ thống 10 loại chuẩn (nhãn tiếng Anh). Trích xuất thực thể từ nhiều câu và trả về JSON object với chỉ số câu làm khóa.
-
-## Loại thực thể ({entity_types})
-- PER: Tên người (không bao gồm chức danh)
-- LOC: **Chỉ vị trí địa lý** (quốc gia/tỉnh/sông/núi/đảo/địa chỉ). Cơ sở nhân tạo thuộc ORG
-- ORG: Tổ chức và mọi cơ sở nhân tạo (công ty/tập đoàn/ngân hàng/hãng/đài/trường đại học/đảng/bộ/quân đội/CLB thể thao/hiệp hội/tổ chức quốc tế + ga/sân bay/bệnh viện/trường PT/bảo tàng/thư viện/chùa/nhà thờ/sân vận động)
-- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình
-- EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn
-- EMAIL: Địa chỉ email đầy đủ (local@domain.TLD)
-- PHONE: Số điện thoại (định dạng Việt Nam hoặc quốc tế)
-- DAT: Ngày tháng tổng quát (năm/tháng/ngày/khoảng thời gian/thời đại)
-- ID_NUM: Số định danh cá nhân (CCCD/CMND/mã số thuế)
-- CREDIT_CARD: Số thẻ tín dụng (13~19 chữ số)
-
-## Quy tắc phân loại (áp dụng khi phân vân)
-- Tổ chức/cơ sở nhân tạo → ORG; vị trí địa lý đơn thuần → LOC
-- Trường đại học (pháp nhân, khuôn viên, cơ sở phụ thuộc — toàn bộ) → ORG
-- Bệnh viện/Trường PT/ga/sân bay/bảo tàng/chùa → ORG (cơ sở nhân tạo)
-- Sản phẩm/tác phẩm → PROD; Sự kiện/chiến tranh/hiệp ước → EVT
-
-## Quy tắc chung
-1. Giữ nguyên dấu tiếng Việt
-2. Thực thể nhiều từ giữ nguyên thành một thực thể
-3. Loại trừ chức danh đứng trước tên
-4. Trả về JSON object với chỉ số câu là key. Không có thực thể → mảng rỗng
-5. Chỉ JSON, không giải thích
-6. Nhãn dùng ký hiệu tiếng Anh
-
-## Ví dụ
-Đầu vào:
-0: Chủ tịch Nguyễn Xuân Phúc đã đến thăm Đà Nẵng.
-1: Đại học Quốc gia Hà Nội ký kết hợp tác với Samsung.
-
-Đầu ra: {{"0": [{{"text": "Nguyễn Xuân Phúc", "type": "PER"}}, {{"text": "Đà Nẵng", "type": "LOC"}}], "1": [{{"text": "Đại học Quốc gia Hà Nội", "type": "ORG"}}, {{"text": "Samsung", "type": "ORG"}}]}}
-
-## Các câu đầu vào
-{sentences}
-
-Đầu ra:"""
-
 # ── System prompt for OpenAI (chat format) ────────────────────────────
 
 SYSTEM_PROMPT = """Bạn là chuyên gia nhận dạng thực thể có tên (NER) tiếng Việt theo hệ thống 10 loại chuẩn (nhãn tiếng Anh). Trích xuất thực thể từ các câu và trả về dưới dạng JSON.
@@ -169,7 +126,3 @@ USER_PROMPT_TEMPLATE = """Trích xuất thực thể từ các câu dưới đâ
 {{"0": [{{"text": "Nguyễn Văn A", "type": "PER"}}, {{"text": "Hà Nội", "type": "LOC"}}], "1": [{{"text": "Samsung", "type": "ORG"}}, {{"text": "Galaxy S24", "type": "PROD"}}], "2": []}}
 
 Đầu ra:"""
-
-
-def format_entity_types(entity_types: List[str]) -> str:
-    return ', '.join(entity_types)
