@@ -31,7 +31,7 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 - PER: Tên người (họ tên đầy đủ, họ, tên, biệt hiệu, nghệ danh). Loại trừ chức danh "Ông/Bà/Chủ tịch/Thủ tướng/Tướng"
 - LOC: **Chỉ vị trí địa lý** — quốc gia, tỉnh, thành phố, huyện, xã, sông, núi, biển, đảo, vịnh, hồ, địa chỉ (số nhà/tòa nhà/tầng). **Cơ sở nhân tạo (ga, sân bay, bệnh viện, trường học, bảo tàng, chùa, v.v.) thuộc ORG, không phải LOC**
 - ORG: Tổ chức và mọi cơ sở nhân tạo — doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, **trường đại học (pháp nhân, khuôn viên, cơ sở phụ thuộc — tất cả)**, đảng phái, bộ/cơ quan chính phủ, quân đội, tòa án, quốc hội, tổ chức quốc tế, câu lạc bộ/đội thể thao, giải đấu định kỳ, hiệp hội, liên đoàn, dàn nhạc giao hưởng + **ga/nhà ga, sân bay, cảng, bệnh viện, trường tiểu học/THCS/THPT, bảo tàng, thư viện, chùa, nhà thờ, đền, sân vận động, tháp**
-- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm (sách/phim/tiểu thuyết), chương trình (không bao gồm tên công ty, tên người, tên cơ sở)
+- PROD: Sản phẩm hữu hình, tác phẩm sáng tạo (âm nhạc/phim/sách/tiểu thuyết/truyện tranh/anime/game/chương trình TV), phần mềm đóng gói, phương tiện/vũ khí/tàu/máy bay có tên model. **KHÔNG gồm: dịch vụ, SaaS, viễn thông, game vận hành trực tuyến, tiêu chuẩn/định dạng/giao thức kỹ thuật, giải thưởng/huân chương** (→ phi-thực-thể); tên công ty/người/cơ sở (→ ORG/PER)
 - EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn, cuộc cách mạng (không bao gồm giải đấu thường niên — đó là ORG)
 - EMAIL: Địa chỉ email đầy đủ dạng `local@domain.TLD` (TLD bắt buộc: .com/.vn/.net/.org/.edu/.gov.vn…)
 - PHONE: Số điện thoại (định dạng Việt Nam hoặc quốc tế: 090-1234-567, +84 90 1234 567, 0901234567)
@@ -47,6 +47,14 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 - Trường đại học (pháp nhân, khuôn viên, ký túc xá, viện nghiên cứu trực thuộc) → **ORG** (toàn bộ)
 - Bệnh viện/Trường tiểu học/THCS/THPT → **ORG** (cơ sở nhân tạo)
 - Phức hợp địa danh hành chính ("Thành phố Hồ Chí Minh") → **LOC** đơn nhất
+
+## Ranh giới PROD/EVT (§3 — áp dụng nghiêm)
+- Tác phẩm âm nhạc/phim/sách/anime/game/chương trình TV → **PROD** (cả tiêu đề đứng một mình trong dấu ngoặc kép)
+- Giải định kỳ/CLB → **ORG**; phiên bản theo năm ("World Cup 2022") → **EVT**
+- Mã số mẫu đơn ("RV522") → KHÔNG PHẢI PROD; chỉ thương hiệu+mã ("Galaxy S24") mới là PROD
+- Luật/pháp lệnh/nghị định/quy định → **KHÔNG PHẢI thực thể** (chỉ hiệp ước = EVT)
+- Triển lãm/tour/ra mắt, dự án/kế hoạch/chiến lược có tên → **EVT**; thảm họa/khủng hoảng có tên/bầu cử/phong trào có mốc → **EVT**
+- Quá trình kéo dài nhiều năm (Chiến tranh Lạnh, Cách mạng Công nghiệp, Minh Trị Duy tân)/thời đại/chủ đề trừu tượng ("vấn đề ~") → **KHÔNG PHẢI thực thể**
 
 ## Quy tắc chung
 1. Giữ nguyên dấu tiếng Việt, trích xuất chính xác văn bản gốc
@@ -95,8 +103,8 @@ Loại thực thể:
 - PER: Tên người (không bao gồm chức danh)
 - LOC: **Chỉ vị trí địa lý** (quốc gia/tỉnh/sông/núi/đảo/địa chỉ). Cơ sở nhân tạo thuộc ORG
 - ORG: Tổ chức và mọi cơ sở nhân tạo (công ty/tập đoàn/ngân hàng/hãng/đài/trường đại học (toàn bộ)/đảng/bộ/quân đội/CLB thể thao/hiệp hội/tổ chức quốc tế + ga/sân bay/bệnh viện/trường PT/bảo tàng/thư viện/chùa/nhà thờ/sân vận động)
-- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình
-- EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn
+- PROD: Sản phẩm hữu hình, tác phẩm sáng tạo (âm nhạc/phim/sách/anime/game/TV), phần mềm đóng gói, phương tiện/vũ khí có tên model. **KHÔNG gồm dịch vụ/SaaS/tiêu chuẩn kỹ thuật/giải thưởng** (→ phi-thực-thể)
+- EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn. Luật/pháp lệnh/nghị định và quá trình nhiều năm (Chiến tranh Lạnh, Minh Trị Duy tân)/thời đại → KHÔNG PHẢI thực thể
 - EMAIL: Địa chỉ email đầy đủ (local@domain.TLD)
 - PHONE: Số điện thoại (định dạng Việt Nam hoặc quốc tế)
 - DAT: Ngày tháng tổng quát (năm/tháng/ngày/khoảng thời gian/thời đại)

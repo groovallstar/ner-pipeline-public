@@ -136,11 +136,16 @@ fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
 
 ## 천장 원인 (본 리포트 범위 밖)
 
-- **PROD(~0.71)·EVT(~0.80)** 가 단일 최대 천장. WikiANN-vi silver 노이즈(PROD
-  precision 낮음) + 상대적 support 부족(EVT 474, PROD 2,005 vs PER/LOC 2만대).
+- **PROD(~0.71)·EVT(~0.80)** 가 단일 최대 천장. **§3 기준 gold 감사로 분해**
+  (#108, fold0, gemma-31B 판정): 천장은 *축별로 갈린다* — PROD precision
+  (.725→보정 .897)은 **silver 누락**(창작물 미라벨)이 주범, PROD recall
+  (.698→보정 .743)은 **모델 실측 약점**. 보정(진짜) 천장 ≈ PROD 0.81·EVT 0.90
+  (fold0 기준 — EVT fold0 orig 0.851 > pooled 0.792라 pooled EVT 보정은 더 낮음).
+  클래스 정의(§3) 모호성은 병목 아님(schema_gap 0, IAA 1.0) — VI gold가 §3.1/
+  3.2(법령·서비스·창작물 규칙)를 미반영한 게 원인.
 - PII 5종은 0.98~1.00 포화. NER 5종 중 PER/LOC/ORG는 0.88~0.93.
-- 개선 레버(범위 밖, 착수 시 이슈 분리): silver→gold 부분 정제(PROD/EVT),
-  외부 코퍼스(VLSP/PhoNER, 단 오염 위험), EVT oversampling.
+- 개선 레버(범위 밖, 착수 시 이슈 분리): VI gold에 §3.1/3.2/3.3 적용 + 창작물
+  커버리지 re-silver(#84-for-VI), 외부 코퍼스(VLSP/PhoNER, 단 오염 위험).
 
 ## 재현
 
