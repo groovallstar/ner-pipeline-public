@@ -14,7 +14,7 @@ span F1 을 측정한다.
 
 | 파일 | 역할 |
 |---|---|
-| `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / JA·VI tokenizer 분기 정렬 / BIO ↔ char-span 변환 (`decode_bio_to_spans(confs=...)` 시 span 에 conf_mean `score` 부착) |
+| `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) 3-way tokenizer 분기 정렬 / BIO ↔ char-span 변환 (`decode_bio_to_spans(confs=...)` 시 span 에 conf_mean `score` 부착) |
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
 | `abstention.py` | per-class 신뢰도 기권 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
@@ -115,14 +115,19 @@ B-CREDIT_CARD, I-CREDIT_CARD
 
 총 21 labels (`O` + 10*B + 10*I). 단일 출처: `docs/manual/data/canonical-entity-schema.md`.
 
-## 토크나이저 분기 (slow vs fast)
+## 토크나이저 분기 (3-way)
 
-| 언어 | 토크나이저 | 정렬 방식 |
+`encode_row` 가 토크나이저 종류로 분기한다 (`data_utils`):
+
+| 분기 | 조건 | 정렬 방식 |
 |---|---|---|
-| JA | `BertJapaneseTokenizer` (slow, MeCab 의존) | `tokenize()` 결과를 `text.find(surface, pos)` 로 greedy 매칭. `##` 접두 subword 는 strip 후 매칭. UNK 시 0-length span. 의존성: `fugashi` + `unidic-lite` |
-| VI | `XLMRobertaTokenizer` (fast) | `return_offsets_mapping=True` 직접 사용 |
+| fast | `tokenizer.is_fast` (XLM-R·CafeBERT·mmBERT·DeBERTa-V3 등) | `return_offsets_mapping=True` + `_trim_offset`. SentencePiece 계열이 `▁` 토큰에 선행 공백을, 숫자형 entity 끝에 문장부호를 흡착해 char-offset 이 어긋나는 것을 **선행 공백·후행 `.`/`,` trim** 으로 교정 (`_encode_vi`) |
+| PhoBERT | `_is_phobert` (slow, 단어분절 전제) | `pyvi` 단어분절 후 단어별 BPE, 단어 char-span 정렬 (`_encode_phobert`). 의존성: `pyvi` |
+| JA slow | 그 외 slow (`BertJapaneseTokenizer`) | `tokenize()` → `text.find(surface, pos)` greedy. `##` strip. UNK 시 0-length. 의존성: `fugashi` + `unidic-lite` |
 
-slow tokenizer 는 `offset_mapping` 미지원 — `data_utils._encode_ja` 가 수동 정렬을 수행한다.
+- slow tokenizer 는 `offset_mapping` 미지원 — `_encode_ja`/`_encode_phobert` 가 수동 정렬.
+- `--legacy-no-offset-trim` 으로 fast 경로 trim 을 끌 수 있다(진단·구 동작 재현용).
+- DeBERTa-V3 는 정렬은 정상이나 표준 레시피 학습 실패로 벤치 제외(리포트 참조).
 
 ## 메트릭
 
@@ -167,7 +172,7 @@ python -m pytest tests/ner/classifier/ -q
 ```
 
 - `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / curriculum mask
-- `test_encode.py` — 실제 토크나이저(JA·VI)로 round-trip 검증
+- `test_encode.py` — 실제 토크나이저(JA·VI·DeBERTa-V3·PhoBERT)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
 - `test_kfold_pool.py` — pooled F1 손계산 일치 / fold 간 중복 text 검증 / 비고유 id 허용
 - `test_abstention.py` — scored decode(conf_mean)·apply·fit(greedy P·R≥target)·save/load 라운드트립

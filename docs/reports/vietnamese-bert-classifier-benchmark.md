@@ -1,244 +1,157 @@
 # 베트남어 BERT NER 분류기 벤치마크 (canonical 10종 평면)
 
-- 측정일: 2026-05-04
-- 대상: WikiANN-vi silver + 합성 PII 주입 데이터에 BERT family 파인튜닝
-- 데이터: `data/wikiann_vi/pii_all.jsonl` (40,000 행, canonical 10종 = NER 5 + PII 5)
-- 평가: char-offset span F1 (`src/ner/metrics/span_metrics.compute_offset_span_f1`)
-- 출처: `docs/issues/issue-40-classifier-restore.md` §SOTA Sweep
-- 일본어 동일 평가 셋업의 분류기 결과는
-  `docs/reports/japanese-bert-classifier-benchmark.md` 참조
+- 측정일: 2026-06-15
+- 대상: WikiANN-vi silver + 합성 PII 주입 데이터에 인코더 family 파인튜닝
+- 데이터: `data/wikiann_vi/pii_all.jsonl` (**중복 제거 후 38,371 행**, canonical 10종 = NER 5 + PII 5)
+- 평가: char-offset span F1 (`src/ner/metrics/span_metrics.compute_offset_span_f1`), **stratified 5-fold pooled micro-average**
+- 출처: `docs/issues/issue-103-vi-classifier-canonical-benchmark.md`
+- 일본어 동일 셋업 결과는 `docs/reports/japanese-bert-classifier-benchmark.md` 참조
+
+> **이전 표(production 0.8985, sweep, v1~v4 ablation)는 폐기·대체됨.** 두 가지
+> 혼입(confound)이 있었다 — ① fast-tokenizer offset 정렬 버그(아래 §코드 수정),
+> ② WikiANN-vi 내재 train/test 누출(아래 §누출). 본 표는 둘을 모두 제거한
+> 캐노니컬 단일 출처다.
 
 ## 요약
 
-- **현 production 모델**: `xlm-roberta-base` (278M).
-  baseline F1 = 0.8985.
-- **`xlm-roberta-large` 가 +0.42pp / 5x 비용** — large 채택은 비용 효율 낮음.
-- **DeBERTa-v3 family 학습 실패**: `microsoft/mdeberta-v3-base`,
-  `Fsoft-AIC/videberta-base` 모두 F1=0 (majority-class collapse).
-- **fast tokenizer fragmentation**: `mmBERT-base` 가 베트남어 tone mark
-  분해 실패로 NER 5종 모두 F1 < 0.50.
-- **EVT 절대 support 부족 (61 spans @ test)** + **WikiANN-vi silver 노이즈
-  (PROD precision 0.54 / recall 0.80)** 가 현재 천장(특히 PROD·EVT)의 본질.
-- **게이트 수치는 미설정** — per-entity P/R/F1 을 확인한 뒤 유동적으로 별도
-  결정한다. 천장 *개선* 레버(silver→gold 정제·외부 코퍼스·PhoBERT 등)는 본
-  리포트 범위 밖.
+- **상위 무승부**: `vinai/phobert-base-v2` (0.9461) ≈ `xlm-roberta-base`
+  (0.9459) — 0.02pp 차로 통계적 동률.
+- **CafeBERT(VI continued-pretrain)는 base를 못 넘음** (0.9367 < 0.9459) —
+  베트남어 추가 사전학습이 이 태스크엔 이득 없음.
+- **`xlm-roberta-large` 불안정** — 5-fold 중 fold0이 all-O로 완전 붕괴(F1=0),
+  정상 4-fold는 0.9414. large 모델의 확률적 학습 붕괴(아래 §large 불안정).
+- **DeBERTa-V3(mdeberta·videberta) 제외** — 표준 레시피로 학습 불가(아래).
+- 천장은 여전히 **PROD(F1~0.71)·EVT(~0.80)** — WikiANN-vi silver 노이즈 +
+  상대적 support 부족. 게이트 수치는 미설정.
 
 ## 조건
 
 | 항목 | 값 |
 |---|---|
-| 데이터 | WikiANN-vi (silver) + PII 주입 (40,000) |
-| 분할 | train 32,000 / valid 4,000 / test 4,000 (80/10/10, `seed=42`) |
+| 데이터 | WikiANN-vi (silver) + PII 주입, **원문 기준 중복 제거 후 38,371** (아래 §누출) |
+| 분할 | **stratified 5-fold** (PROD/EVT 층화, `seed=42`), pooled micro-avg |
 | 라벨 | `PER, LOC, ORG, PROD, EVT, DAT, EMAIL, PHONE, ID_NUM, CREDIT_CARD` |
-| 학습 | epochs=5, batch_size=16, lr=5e-5, max_length=256, fp16 |
-| 모델 선택 | `metric_for_best_model='eval_loss'` (valid) |
-| 하드웨어 | NVIDIA RTX A6000 49GB, 단일 seed=42 |
+| 학습 | epochs=5, lr=5e-5, max_length=256, fp16, batch 16 (large/CafeBERT 8) |
+| 모델 선택 | `metric_for_best_model='eval_loss'` (valid fold) |
+| 하드웨어 | NVIDIA RTX A6000 49GB ×3, seed=42 |
 
-> 변종 ablation (v2~v4) 은 도입 전 80/20 분할 기준이라 sweep 표와 직접
-> 비교하지 않는다. 분할 변경 영향 (-1.23pp) 은
-> `docs/issues/issue-40-classifier-restore.md` §"80/20 → 80/10/10 분할
-> 변경 영향" 참조.
+## 누출(data leakage) 발견과 제거
 
-## SOTA 모델 Sweep — 5 후보 (overall)
+raw `unimelb-nlp/wikiann`(vi)에는 데이터 품질 문제가 내재한다 — **원본
+test∩train = 1,778 문장**, train 내부 중복 3,932행(19.7%). PII 주입이 행마다 다른 개인정보를 넣어
+exact 문자열을 바꾸며 이 누출을 **가렸다**(겉보기 중복은 줄지만 base 문장은 여전히
+겹침). 40,000 행을 random 재셔플하면 test의 **4.17%(글자 그대로 일치)/
+6.33%(원문 일치)** 가 train과 겹쳐 모델이 라벨을 암기 → F1 부풀림.
 
-| 모델 | F1 | Precision | Recall | Train time |
-|---|---:|---:|---:|---:|
-| **`xlm-roberta-base`** (production) | **0.8985** | 0.8760 | 0.9222 | 808s |
-| `xlm-roberta-large` | 0.9027 | 0.8921 | 0.9136 | 4,098s (5×) |
-| `jhu-clsp/mmBERT-base` | 0.5278 | 0.5343 | 0.5215 | 1,329s |
-| `microsoft/mdeberta-v3-base` (bf16, lr=2e-5) | 0.0000 | 0.0000 | 0.0000 | 1,273s — 학습 실패 |
-| `Fsoft-AIC/videberta-base` (bf16, lr=2e-5) | 0.0000 | 0.0000 | 0.0000 | 1,246s — 학습 실패 |
+**조치**: PII를 제외한 원문 문장(이하 '원문 키')이 같은 행을 하나만 남기는
+**중복 제거(deduplication)** → 38,371 행(중복 1,629행 제거). 재검증: 중복 제거 후
+어떤 split·fold 조합에서도 train·test 간 같은 문장 출현(cross-split 중복) **0**. 실증으로
+CafeBERT가 leaky single-split 0.9504 → clean fold0 0.9259로 떨어져 부풀림을 확인.
 
-원시 메트릭: `results/classifier/vi/sweep/<모델>/metrics.json`,
-production 베이스라인은 `results/classifier/vi/metrics.json`.
+> **잔여 한계(제거 불가)**: 전 인코더가 위키백과(VI)로 사전학습됨 → WikiANN
+> 문장 *텍스트*는 사전학습에 노출(라벨은 아님). 전 모델 공통이라 *상대 비교는
+> 유효*하나 *절대 F1은 낙관적*. 단, 사전학습 코퍼스 편중(PhoBERT/CafeBERT는
+> VI 위키·뉴스 집중)이 위키 출처 벤치에 유리할 수 있음은 해석 시 유의.
 
-### 베이스라인 per-entity (production: `xlm-roberta-base`)
+## 5-fold 결과 (pooled, 중복 제거 후)
 
-| Entity | F1 | Precision | Recall | Support |
-|---|---:|---:|---:|---:|
-| EMAIL | 0.9960 | 0.9919 | 1.0000 | 739 |
-| PER | 0.9272 | 0.9142 | 0.9406 | 2,072 |
-| LOC | 0.9182 | 0.8797 | 0.9601 | 2,004 |
-| CREDIT_CARD | 0.9050 | 0.8940 | 0.9162 | 764 |
-| ID_NUM | 0.9045 | 0.9028 | 0.9063 | 758 |
-| DAT | 0.8868 | 0.8779 | 0.8959 | 730 |
-| ORG | 0.8593 | 0.8235 | 0.8984 | 748 |
-| PHONE | 0.8089 | 0.8066 | 0.8112 | 694 |
-| EVT | 0.6457 | 0.6212 | 0.6721 | 61 |
-| PROD | 0.6434 | 0.5390 | 0.7981 | 208 |
+| 모델 | strict F1 | Precision | Recall | relaxed F1 | 비고 |
+|---|---:|---:|---:|---:|---|
+| **`vinai/phobert-base-v2`** | **0.9461** | 0.9317 | 0.9610 | 0.9508 | pyvi 단어분절 |
+| **`xlm-roberta-base`** | **0.9459** | 0.9286 | 0.9639 | 0.9505 | |
+| `jhu-clsp/mmBERT-base` | 0.9395 | 0.9250 | 0.9543 | 0.9464 | |
+| `uitnlp/CafeBERT` | 0.9367 | 0.9168 | 0.9574 | 0.9426 | XLM-R-large 계열, 550M |
+| `xlm-roberta-large` | 0.8364† | 0.9270 | 0.7620 | 0.8413 | †fold0 붕괴 포함 |
 
-### `xlm-roberta-large` per-entity
+n_sentences = 38,371 (각 모델 전수 1회 평가).
 
-| Entity | F1 | Precision | Recall | Support |
-|---|---:|---:|---:|---:|
-| EMAIL | 0.9839 | 0.9760 | 0.9919 | 739 |
-| LOC | 0.9239 | 0.8982 | 0.9511 | 2,004 |
-| PER | 0.9226 | 0.9030 | 0.9430 | 2,072 |
-| ID_NUM | 0.9045 | 0.9028 | 0.9063 | 758 |
-| CREDIT_CARD | 0.9050 | 0.8940 | 0.9162 | 764 |
-| ORG | 0.8956 | 0.9023 | 0.8890 | 748 |
-| DAT | 0.8841 | 0.8752 | 0.8932 | 730 |
-| PHONE | 0.8089 | 0.8066 | 0.8112 | 694 |
-| PROD | 0.6667 | 0.7412 | 0.6058 | 208 |
-| EVT | 0.5667 | 0.5763 | 0.5574 | 61 |
+### per-fold strict F1 (투명 보고)
 
-base 대비 변화: ORG +3.6pp, LOC +0.6pp, PROD +2.3pp, EVT **-7.9pp**, 그 외
-포화·동률. 비용 5x 대비 **EVT 회귀가 단일 최대 손실**.
+| 모델 | fold0 | fold1 | fold2 | fold3 | fold4 | fold평균‡ | std‡ |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| phobert-base-v2 | 0.9500 | 0.9423 | 0.9453 | 0.9498 | 0.9430 | 0.9461 | 0.003 |
+| xlm-roberta-base | 0.9459 | 0.9447 | 0.9481 | 0.9457 | 0.9454 | 0.9460 | 0.001 |
+| mmbert-base | 0.9406 | 0.9347 | 0.9435 | 0.9361 | 0.9424 | 0.9395 | 0.004 |
+| cafebert | 0.9259 | 0.9494 | 0.9420 | 0.9330 | 0.9332 | 0.9367 | 0.008 |
+| **xlm-roberta-large** | **0.0000** | 0.9404 | 0.9408 | 0.9384 | 0.9460 | 0.7531 | 0.377 |
 
-### `mmBERT-base` per-entity (NER 붕괴 패턴)
+‡ `fold평균`은 5개 fold F1의 **산술평균**(위 overall 표의 pooled micro-avg와
+별개 — pooled는 fold 크기로 가중). `std`는 모집단 표준편차(n=5). xlm-r-large는
+fold0 붕괴로 산술평균(0.7531)·pooled(0.8364)·정상4fold평균(0.9414)이 모두 다름.
 
-| Entity | F1 | Precision | Recall | Support |
-|---|---:|---:|---:|---:|
-| ID_NUM | 0.9980 | 0.9961 | 1.0000 | 758 |
-| DAT | 0.9898 | 0.9799 | 1.0000 | 730 |
-| CREDIT_CARD | 0.9877 | 0.9757 | 1.0000 | 764 |
-| EMAIL | 0.5202 | 0.5181 | 0.5223 | 739 |
-| PHONE | 0.4986 | 0.4971 | 0.5000 | 694 |
-| ORG | 0.4850 | 0.4744 | 0.4960 | 748 |
-| EVT | 0.4960 | 0.4844 | 0.5082 | 61 |
-| LOC | 0.3469 | 0.3749 | 0.3229 | 2,004 |
-| PER | 0.2472 | 0.2493 | 0.2452 | 2,072 |
-| PROD | 0.1659 | 0.1593 | 0.1731 | 208 |
+대표 학습시간(평균/fold): phobert 8.6분 · xlm-r-base 10.2 · mmbert 16.9 ·
+cafebert 32.8 · xlm-r-large 32.8.
 
-PII 일부 (ID_NUM, DAT, CREDIT_CARD) 는 0.99+ 인데 NER 5종 (PER 0.247,
-LOC 0.347, PROD 0.166) 가 50% 미만. P 와 R 이 거의 동률 — boundary 오류가
-아니라 **토큰 분해 자체의 실패 패턴**.
+### per-entity strict F1 (pooled)
 
-## 학습 실패 모델 분석
+| Entity | support | phobert | xlm-r-base | mmbert | cafebert | xlm-r-large† |
+|---|---:|---:|---:|---:|---:|---:|
+| ID_NUM | 7,225 | 0.9971 | 0.9971 | 0.9965 | 0.9941 | 0.8840 |
+| EMAIL | 7,242 | 0.9966 | 0.9957 | 0.9956 | 0.9802 | 0.8809 |
+| PHONE | 7,090 | 0.9963 | 0.9959 | 0.9940 | 0.9873 | 0.8842 |
+| CREDIT_CARD | 7,246 | 0.9865 | 0.9862 | 0.9846 | 0.9791 | 0.8748 |
+| DAT | 7,003 | 0.9845 | 0.9849 | 0.9771 | 0.9772 | 0.8767 |
+| LOC | 19,922 | 0.9349 | 0.9291 | 0.9225 | 0.9220 | 0.8223 |
+| PER | 20,485 | 0.9272 | 0.9317 | 0.9247 | 0.9252 | 0.8239 |
+| ORG | 7,306 | 0.8814 | 0.8888 | 0.8724 | 0.8677 | 0.7710 |
+| EVT | 474 | 0.7920 | 0.8031 | 0.6796 | 0.7310 | 0.6911 |
+| PROD | 2,005 | 0.7171 | 0.7097 | 0.6867 | 0.6874 | 0.6142 |
 
-### DeBERTa-v3 family (`microsoft/mdeberta-v3-base`, `Fsoft-AIC/videberta-base`)
+†xlm-r-large는 붕괴 fold0 포함 pooled — per-entity 전반이 낮은 것은 fold0의
+all-O 때문이며 정상 4-fold는 타 모델과 동급(아래).
 
-| 항목 | 관측값 |
-|---|---|
-| 학습 loss | 정상 감소 |
-| eval_loss | 정상 감소 |
-| 평가 prediction | **모두 'O'** (majority-class collapse) |
-| 모델 weight | NaN 없음 |
-| classifier head 학습 신호 | 받음 (mean ≈ 0.004) |
-| 시도한 설정 | bf16 (fp16 unscale 에러 회피용), lr=2e-5 |
+## `xlm-roberta-large` 불안정 (large 모델 확률적 붕괴)
 
-**원인 추정**: DeBERTa-v3 family 는 알려진 unstable family — `lr=2e-5 +
-bf16` 의 단순 설정으로는 token-classification head 가 majority-class 'O'
-로 붕괴. warmup_ratio (0.06~0.1), weight_decay (0.01), gradient_clip (1.0)
-의 추가 튜닝이 필요. JA·VI 양 언어에서 동일 패턴 재현.
+fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
+(eval_loss ~0.14, F1 0.938~0.946). **정상 4-fold 평균 = 0.9414**로 base와 동급.
+다른 모델은 동일 fold0에서 정상 학습하므로(데이터 문제 아님) large 모델 특유의
+확률적 all-O 붕괴다. seed=42 고정이라 fold0 재실행은 동일 붕괴 재현 가능성이
+높고, "성공할 때까지 재시도"는 측정 cherry-picking이라 **재실행하지 않고 그대로
+보고**한다. 비용(33분/fold) 대비 base를 못 넘고 1/5 붕괴 위험까지 있어 채택
+가치 낮음.
 
-특히 `Fsoft-AIC/videberta-base` 는 베트남어 단일언어 모델이지만 base
-DeBERTa-v3 와 동일하게 collapse — 언어 특화 사전학습은 본 학습 불안정성을
-회피하지 못함.
+## DeBERTa-V3 제외 (`microsoft/mdeberta-v3-base`, `Fsoft-AIC/videberta-base`)
 
-후속 검증 레버: DeBERTa-v3 hyperparameter sweep(VI 대상 — warmup_ratio·
-weight_decay·gradient_clip 튜닝). 미달 시 "DeBERTa family 는 본 데이터셋·
-셋업과 호환 안 됨" 으로 동결. (본 리포트 범위 밖)
+두 가지 **별개** 문제로 표준 레시피 학습 불가:
 
-### `mmBERT-base` 토크나이저 fragmentation
+1. **발산** — lr=5e-5 no-warmup에서 첫 스텝부터 loss 폭증(126) + grad_norm
+   NaN → 즉시 발산. warmup 또는 저LR(1e-5/2e-5)로 **해소 가능**.
+2. **비학습** — 발산을 막아도(warmup 有, lr 1e-5·2e-5) eval_loss가 ~2.0에
+   고착(all-O), F1=0. warmup·LR과 **무관**하게 재현. 테스트한 4개 설정이 모두
+   bf16이었고 정밀도(fp16/fp32) 변수는 미분리.
 
-학습 자체는 성공하지만 NER 5종 collapse. **베트남어 tone mark + 다국어
-BPE 의 부정확 분해**가 원인. 근거:
-`docs/issues/issue-40-classifier-restore.md:244`.
+토크나이저 정렬(아래 offset-trim)은 해결됐으나(라벨 왕복 복원율 1.0) 최적화가
+표준 레시피로 안 됨. 모델별 튜닝은 본 벤치 범위("모델만, 설정 sweep 금지") 밖이라
+**제외**. (videberta는 베트남어 단일언어 DeBERTa-V3이나 동일 실패.)
 
-base XLM-RoBERTa 는 SentencePiece (`xlmr.spm`) 로 베트남어 tone mark 안정
-분해 — 본 데이터셋에서는 단일언어 PhoBERT 보다 다국어 XLM-R 이 더 안전.
+## 코드 수정 (이번 벤치에서 도입)
 
-### 제외된 모델
+- **fast-tokenizer offset trim** (`data_utils._encode_vi`): SentencePiece 계열이
+  `▁` 토큰에 선행 공백을, 숫자형 entity 끝에 문장부호를 흡착해 char-offset이
+  어긋나던 문제를 공백·후행 `.`/`,` trim으로 교정. **mmBERT를 0.53→0.94로 구제**,
+  XLM-R/CafeBERT 정렬도 0.966→1.0으로 동반 개선.
+- **PhoBERT 통합** (`data_utils._encode_phobert` + `pyvi`): 단어분절 후 단어별
+  BPE, 단어 char-span 정렬. fast-tokenizer·offset_mapping 없는 PhoBERT를 char
+  span 계약에 편입(왕복 복원율 0.996). **최상위 모델로 진입.**
 
-- `vinai/phobert-base/large` — fast tokenizer 미지원. slow tokenizer 의
-  manual greedy match (`_encode_ja` 경로) + word_segmenter (VnCoreNLP)
-  결합이 필요. (통합은 본 리포트 범위 밖)
+## 천장 원인 (본 리포트 범위 밖)
 
-## 변종 ablation (v1~v4, 80/20 분할 기준)
-
-> 누적 변종은 80/20 분할 시점 측정값. 80/10/10 분할로 갱신된 baseline
-> (0.8985) 과 직접 비교하지 말 것. 80/20 → 80/10/10 변경으로 -1.23pp
-> 회귀했으며, 그 원인은 PROD test support 398→208 절반 축소로 silver
-> 노이즈 영향이 증폭됐기 때문.
-
-| 변종 | 누적 변경 | F1 | Precision | Recall |
-|---|---|---:|---:|---:|
-| v1 baseline | 표준 CE / `eval_loss` best / base 모델 | 0.9108 | — | — |
-| **v2** classwt + NER-best | NER B/I weight=2.0, PII B/I weight=0.5, `metric_for_best='ner_f1'` | 0.9137 | 0.8971 | 0.9308 |
-| v3 + large | `xlm-roberta-large` | 0.9135 | 0.8985 | 0.9291 |
-| **v4** + curriculum | NER warmup 3 epoch + 21-class fine-tune | **0.9147** | 0.9034 | 0.9263 |
-
-원시 메트릭: `results/classifier/vi/{v2,v3,v4}/metrics.json`.
-(v1=0.9108 은 80/20 분할 historical 값으로 results json 백킹 없음 — 직접 비교 금지.)
-
-핵심:
-- **v4 가 최선** (+0.39pp vs v1) — large + curriculum 조합이 small-class
-  변동성을 부분 보완. v2 단독 + base 가 ROI 우위.
-- **PII 5종은 변종 간 거의 불변** — class weight down-weight 효과 미미
-  (EMAIL≈1.0, 그 외 PII 는 0.81~0.91 수준에서 안정).
-- **VI EVT 는 어떤 변종도 60% 대 천장**. v3 (large) 에서 0.545 (-7.9pp vs
-  v2) 까지 회귀 후 v4 (curriculum) 으로 0.660 까지 부분 회복. 절대 support
-  부족 (94 → 61) 본질적 한계.
-- **PROD 은 v4 에서 0.762** (+1.1pp vs v3) — silver 노이즈가 어휘·boundary
-  양쪽으로 영향. 이슈 #30 silver 품질 분석 참조.
-
-### v4 per-entity (VI 최선)
-
-| Entity | F1 | Precision | Recall | Support |
-|---|---:|---:|---:|---:|
-| EMAIL | 0.9960 | 0.9967 | 0.9953 | 1,503 |
-| PER | 0.9352 | 0.9239 | 0.9468 | 4,155 |
-| LOC | 0.9352 | 0.9164 | 0.9547 | 4,043 |
-| ORG | 0.9130 | 0.8937 | 0.9331 | 1,540 |
-| CREDIT_CARD | 0.9047 | 0.9005 | 0.9089 | 1,493 |
-| ID_NUM | 0.9042 | 0.9027 | 0.9057 | 1,464 |
-| DAT | 0.8943 | 0.8879 | 0.9008 | 1,442 |
-| PHONE | 0.8138 | 0.8129 | 0.8147 | 1,392 |
-| PROD | 0.7624 | 0.7168 | 0.8141 | 398 |
-| EVT | 0.6599 | 0.6311 | 0.6915 | 94 |
-
-## NER 5종 vs PII 5종 가중 평균 (production baseline)
-
-| 그룹 | F1 |
-|---|---:|
-| NER 5종 (PER/LOC/ORG/PROD/EVT) | 0.890 |
-| PII 5종 (DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD) | 0.901 |
-
-## 천장 원인과 개선 레버 (본 리포트 범위 밖)
-
-현재 천장의 단일 최대 원인은 **WikiANN-vi silver 노이즈**(PROD precision
-0.54 시사)와 **PROD/EVT 절대 support 부족**이다(상세 §동결된 후속 트랙).
-게이트 수치는 미설정 — per-entity P/R/F1 을 보고 유동적으로 별도 결정한다.
-
-천장 *개선* 레버(전부 본 리포트 범위 밖, 착수 시 이슈로 분리):
-- silver→gold 부분 정제(PROD/EVT 우선) — ROI 추정 1순위, 사람 검수 비용 큼
-- 외부 코퍼스 통합(VLSP 2018·2021, PhoNER) — 라이선스 검증 필요
-- PhoBERT(단일언어) 통합 — slow-tokenizer adapter + word_segmenter 필요
-- DeBERTa-v3 hyperparameter sweep / EVT class oversampling
-
-참고: JA 측 gold cleanup 후 strict F1 +1.95pp 향상 사례가 VI silver 정제의
-잠재 효과를 시사한다.
-
-## 동결된 후속 트랙
-
-이슈 #40 종결 시점 기록:
-
-- **WikiANN-vi silver 노이즈** — VI PROD precision 0.54 / recall 0.80
-  패턴은 silver 라벨 비일관성 시사. 모델은 합리적으로 학습, gold 가
-  일관되지 않음.
-- **EVT 절대 support 천장** — VI EVT 학습 492, test 61 — class imbalance
-  본질적 한계.
-- **PROD 어휘 다양성** — 제품명은 OOV 일반화 문제 (브랜드+모델, 약어,
-  외래어, 숫자 포함).
-- **PHONE 표기 다양성** — 5+ 형식. regex 정규화로 토크나이저 정렬
-  안정화 가능하나 surface form 정보 손실로 CREDIT_CARD/ID_NUM 과 구분
-  약화 위험.
+- **PROD(~0.71)·EVT(~0.80)** 가 단일 최대 천장. WikiANN-vi silver 노이즈(PROD
+  precision 낮음) + 상대적 support 부족(EVT 474, PROD 2,005 vs PER/LOC 2만대).
+- PII 5종은 0.98~1.00 포화. NER 5종 중 PER/LOC/ORG는 0.88~0.93.
+- 개선 레버(범위 밖, 착수 시 이슈 분리): silver→gold 부분 정제(PROD/EVT),
+  외부 코퍼스(VLSP/PhoNER, 단 오염 위험), EVT oversampling.
 
 ## 재현
 
 ```bash
-# 데이터 (생성은 augmenters 측, gitignore 됨)
-ls data/wikiann_vi/pii_all.jsonl
-
-# 의존성
-uv sync
-
-# Production baseline 학습 + 평가
-python -m ner.classifier --lang vi \
-  --epochs 5 --batch-size 16 --max-length 256
-
-# 단위 + 토크나이저 round-trip 테스트
+ls data/wikiann_vi/pii_all.jsonl   # 중복 제거 후 38,371 (생성은 augmenters, gitignore)
+uv sync                            # pyvi 포함
+# 단일 모델 5-fold (fold 0..4 반복 후 pooling)
+for f in 0 1 2 3 4; do
+  python -m ner.classifier --lang vi --model-name xlm-roberta-base \
+    --kfold 5 --fold-index $f --output-dir results/classifier/vi/canonical5fold/xlm-roberta-base/fold$f
+done
 python -m pytest tests/ner/classifier/ -q
 ```
 
@@ -246,8 +159,7 @@ python -m pytest tests/ner/classifier/ -q
 
 | 경로 | 내용 |
 |---|---|
-| `results/classifier/vi/metrics.json` | production baseline (`xlm-roberta-base`) |
-| `results/classifier/vi/sweep/<모델>/metrics.json` | SOTA sweep 4 후보 |
-| `results/classifier/vi/{v2,v3,v4}/metrics.json` | 변종 ablation 메트릭 |
+| `results/classifier/vi/canonical5fold/<모델>/fold{0..4}/metrics.json` | fold별 메트릭 |
+| `results/classifier/vi/canonical5fold/pooled_summary.json` | 5모델 pooled 집계 |
 
-`results/` 는 gitignore 대상 — 본 리포트의 표가 영구 인용 가능한 단일 출처.
+`results/`는 gitignore — 본 리포트 표가 영구 인용 단일 출처.
