@@ -5,6 +5,7 @@
 > 관련 코드: `src/ner/labelers/bio_dataset.py` (REGISTRY 진입점), `src/ner/labelers/dataset_loader.py`, `src/ner/labelers/tag_aligner.py`
 > KLUE·KMOU 등 BIO 토큰 시퀀스 데이터셋의 1급 진입점은 `bio_dataset.py`이며,
 > 스펙 정의·BIO 변종 정규화·span 추출 규칙은 `docs/manual/data/bio-dataset-spec-registry.md` 참조.
+> **갱신(이슈 #109)**: 파이프라인 ko 타깃 스키마가 canonical 4종(PER/LOC/ORG/DAT)으로 정렬됨(KLUE 유래, TI/QT 드롭). 아래 데이터셋의 native 스키마 기술은 원본 기준이며, 소비 시 canonical로 재매핑된다.
 
 ## 목차
 

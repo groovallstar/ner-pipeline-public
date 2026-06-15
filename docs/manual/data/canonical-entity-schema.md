@@ -8,11 +8,17 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
   `src/ner/augmenters/wikiann_vi/`
 - 적용 데이터: `data/stockmark/` (JA NER 5종 + PII 주입 10종),
   `data/wikiann_vi/` (VI silver 10종)
-- 본 스키마 적용 범위 외(별도 스키마): KO (`src/ner/labelers/ko/**`,
-  KLUE `PS/LC/OG/DT/TI/QT`)
+- KO (`src/ner/labelers/ko/**`): KLUE 유래 canonical **부분 정렬** —
+  현재 `PER/LOC/ORG/DAT` 4종(KLUE `PS/LC/OG/DT` 개명, `TI/QT` 드롭).
+  `PROD/EVT`·PII 5종 미보유(후속 증분). 전체 10종·분류기 미완.
 
 ## 변경 이력
 
+- **2026-06-15 (이슈 #109)**: KO 라벨러·seed gold를 canonical 명칭으로
+  정렬. `PS→PER, LC→LOC, OG→ORG, DT→DAT` 개명, KLUE `TI/QT` 드롭.
+  `tag_aligner` ko/ja normalize 맵 분리(ja 불변). KLUE 유래 4종 seed
+  gold(`scripts/klue_to_canonical_gold.py` → `data/ko_klue/`) 생성.
+  `PROD/EVT`·PII 6종은 후속 증분.
 - **2026-06-09 (이슈 #85)**: JA EVT scope 재정의 — 회색지대
   규정(§3.3). **EVT 포함 명문화**: 자연재해·대형사고·named 경제/정치
   위기·주기적 복합 행사명사(선거·투표·`国勢調査`)·경기/컵/토너먼트/
@@ -438,7 +444,8 @@ canonical 형태로 저장된다.
 
 - **본 스키마 적용 제외**:
   - `src/ner/llm_eval/**` — 후속 정리 예정
-  - `src/ner/labelers/ko/**` — 별도 KLUE 스키마(`PS/LC/OG/DT/TI/QT`) 사용
+  - `src/ner/labelers/ko/**` — canonical 4종(`PER/LOC/ORG/DAT`) 부분 정렬
+    (KLUE 유래, `TI/QT` 드롭). `PROD/EVT`·PII 5종 미적용(후속). 이슈 #109
   - 참고: `src/ner/classifier/**` 는 issue #40 에서 본 스키마(canonical 10종 평면)로 정합 완료
 
 ## 7. 평가 시 주의

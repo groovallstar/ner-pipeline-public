@@ -1,7 +1,7 @@
 # ko
 
 ## Purpose
-Korean NER labelers targeting KLUE NER annotation guidelines with 6 entity types (PS=person, LC=location, OG=organization, DT=date, TI=time, QT=quantity). Two backend implementations (vLLM, OpenAI) share identical prompt templates and span-to-BIO conversion logic.
+Korean NER labelers aligned to the canonical schema with 4 entity types (PER=person, LOC=location, ORG=organization, DAT=date), renamed from KLUE (PS/LC/OG/DT) with KLUE's TI/QT dropped. Annotation rules still follow KLUE NER guidelines (particle exclusion, syllable boundaries, compound merging). PROD/EVT and the PII types remain unfilled (later increments). Two backend implementations (vLLM, OpenAI) share identical prompt templates and span-to-BIO conversion logic.
 
 ## Key Files
 
@@ -26,7 +26,7 @@ Korean NER labelers targeting KLUE NER annotation guidelines with 6 entity types
 
 ### Common Patterns
 - Both labelers import prompts from `ner_prompts.py`
-- `DEFAULT_ENTITY_TYPES = ["PS", "LC", "OG", "DT", "TI", "QT"]`
+- `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "DAT"]`
 
 ## Dependencies
 

@@ -6,7 +6,7 @@
 
 **다국어 NER(Named Entity Recognition) 파이프라인** — 멀티 백엔드 LLM 지원(OpenAI 호환 API) + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 기반 학습 데이터 생성.
 
-- 한국어: KLUE NER (6 엔티티: PS, LC, OG, DT, TI, QT)
+- 한국어: KLUE 유래 canonical 정렬 진행 (현재 4종: PER/LOC/ORG/DAT; KLUE TI/QT 드롭, PROD/EVT·PII 후속)
 - 일본어·베트남어: canonical 10종 평면 = NER 5종(PER/LOC/ORG/PROD/EVT) + PII 5종(DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD)
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 

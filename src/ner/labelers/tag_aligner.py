@@ -10,8 +10,21 @@ from typing import List, Tuple
 logger = logging.getLogger(__name__)
 
 # 언어별 태그 정규화 맵
-# 한국어 (KLUE): PS, LC, OG, DT, TI, QT로 표준화
+# 한국어: canonical 명칭(PER/LOC/ORG/DAT)으로 표준화. KLUE 약어(PS/LC/OG/DT)
+# 입력도 canonical로 수렴시킨다. TI/QT는 매핑하지 않고 통과(후속 gold 단계 드롭).
 _TAG_NORMALIZE_MAP_KO = {
+    "PS": "PER",
+    "LC": "LOC",
+    "OG": "ORG",
+    "DT": "DAT",
+    "PERSON": "PER",
+    "LOCATION": "LOC",
+    "ORGANIZATION": "ORG",
+    "DATE": "DAT",
+}
+
+# 일본어 (KLUE 약어 표준): PER→PS, LOC→LC 등으로 정규화
+_TAG_NORMALIZE_MAP_JA = {
     "PER": "PS",
     "LOC": "LC",
     "ORG": "OG",
@@ -36,7 +49,7 @@ _TAG_NORMALIZE_MAP_VI = {
 
 _TAG_NORMALIZE_MAPS = {
     "ko": _TAG_NORMALIZE_MAP_KO,
-    "ja": _TAG_NORMALIZE_MAP_KO,  # 일본어는 한국어와 동일한 맵을 사용한다
+    "ja": _TAG_NORMALIZE_MAP_JA,
     "vi": _TAG_NORMALIZE_MAP_VI,
 }
 
@@ -44,7 +57,8 @@ _TAG_NORMALIZE_MAPS = {
 def normalize_tag(tag: str, lang: str = "ko") -> str:
     """BIO 태그를 언어별 표준으로 정규화한다.
 
-    한국어/일본어: B-PER → B-PS, B-LOC → B-LC (KLUE 표준)
+    한국어: B-PS → B-PER, B-LC → B-LOC (canonical 표준)
+    일본어: B-PER → B-PS, B-LOC → B-LC (KLUE 약어 표준)
     베트남어: B-PERSON → B-PER, B-LOCATION → B-LOC (국제 표준)
     """
     if tag == "O" or not tag:
