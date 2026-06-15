@@ -10,8 +10,8 @@
 PR #41 베이스라인(JA 0.9058 / 4개 라벨만 게이트 통과)이 본 데이터셋
 (Stockmark) 의 어휘 다양성·EVT 절대 support 부족 천장에 막혔음이 sweep
 18회로 확정. 외부 JA gold 코퍼스 통합으로 데이터 천장을 들어올려
-F1 ≥ 0.95 도달을 시도한다. 핸드오프:
-`docs/issues/handoff-post-issue-40-classifier-followups.md` §F6.
+F1 ≥ 0.95 도달을 시도한다. 선행 분석:
+`docs/issues/issue-40-classifier-restore.md`.
 
 ## 라이선스 제약 (선결 조건)
 - 유료·기관 협약 코퍼스 사용 불가: OntoNotes JA (LDC 유료), BCCWJ
@@ -237,8 +237,8 @@ EVT 0건·ARTIFACT type drift) — F6 단독으론 실현 어려움 확인. 이�
   unlabeled corpus pseudo-label + Gaussian per-class threshold. 2~3일.
 - **Tier 3 — test-set error analysis 후 gold cleanup**: baseline 의 test
   오답 ~10% 검수 → gold 라벨 오류율 측정. 모델 천장 vs gold 천장 분리.
-- VI 트랙: `docs/issues/handoff-post-issue-40-classifier-followups.md` 의
-  F2/F3-VI/F4/F5 별도 진행.
+- VI 트랙: silver→gold 정제·외부 코퍼스·PhoBERT 등 개선 레버는
+  `docs/reports/vietnamese-bert-classifier-benchmark.md` §천장 원인과 개선 레버 참조.
 
 ### 완료된 산출물 (post-closure 정리 후)
 

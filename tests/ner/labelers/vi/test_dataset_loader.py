@@ -203,3 +203,26 @@ class TestLoadCanonicalDump:
     def test_default_paths_exposed(self) -> None:
         for split in ('train', 'validation', 'test'):
             assert split in VietnameseDatasetLoader.DEFAULT_PATH
+
+    def test_default_split_reads_entities(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        """기본 split 파일은 entities 스키마 → load_local 경로로 읽힌다."""
+        path = tmp_path / 'test.jsonl'
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({
+                'id': '0',
+                'text': 'Hà Nội là thủ đô.',
+                'entities': [{
+                    'text': 'Hà Nội', 'label': 'LOC',
+                    'start_char': 0, 'end_char': 6,
+                }],
+            }, ensure_ascii=False) + '\n')
+        monkeypatch.setitem(
+            VietnameseDatasetLoader.DEFAULT_PATH, 'test', path,
+        )
+        records = VietnameseDatasetLoader().load(split='test')
+        assert len(records) == 1
+        assert records[0]['gold_spans'][0] == {
+            'text': 'Hà Nội', 'type': 'LOC', 'start': 0, 'end': 6,
+        }

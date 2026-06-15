@@ -35,30 +35,36 @@ List[NERRecord] {tokens, ner_tags, id}
 LLM JSON 응답 → spans 파싱
 [{"text": "Nguyễn Xuân Phúc", "type": "PER"}, ...]
     │
-    ├──▶ label_spans() 경로: raw spans 직접 반환
+    ▼ label_spans() 경로: raw spans 반환 (VI 평가 경로)
     │
-    └──▶ label() 경로: spans → BIO 변환
-         → NERRecord {tokens, ner_tags, id}
+    ▼ BenchmarkRunner._run_offset_span()            [llm_eval/benchmark_runner.py]
+    ├── match_spans(text, raw_spans)  pred span 정합
+    └── gold_spans (load_local/load)  gold span (entities → {type,start,end})
     │
-    ▼ BenchmarkRunner._run_single()                 [llm_eval/benchmark_runner.py]
-    ├── extract_spans_from_bio()  gold span 추출
-    ├── normalize_tag()           태그 정규화 (PERSON→PER 등)
-    └── TagAligner.align()        토큰 정렬
-    │
-    ▼ MetricsCalculator + span_metrics              [metrics/{bio_metrics,span_metrics}.py]
+    ▼ compute_offset_span_f1                         [metrics/span_metrics.py]
     │
     ▼ ReportGenerator                               [llm_eval/report.py]
 벤치마크 결과 (CLI 테이블 + JSON)
+
+(KO 는 label() → BIO 변환 → NERRecord → `_run_single` → seqeval 경로. VI·JA 는
+위 offset_span 경로.)
 ```
 
 재라벨 파이프라인 (silver 데이터셋 생성, §7) 은 별개의 흐름:
 
 ```
-WikiANN test split → augmenters/wikiann_vi/__main__.py
-    → Gemma + Qwen 독립 라벨링 → merge_confidence (recall_strict)
+WikiANN split → augmenters/wikiann_vi/__main__.py (모델별 1회)
+    → Gemma·Qwen 독립 재라벨 (각 gold_spans_8type)
+    → merge_confidence (recall_strict) → gold_spans_8type_merged 단일 덤프
     → kappa + Wikidata anchor 검증
-    → data/wikiann_vi/{train,valid,test}.jsonl (Stockmark 포맷)
+    → entities 스키마 변환 + split → data/wikiann_vi/{train,valid,test}.jsonl
+    → augmenters/pii 주입 → data/wikiann_vi/pii_{train,valid,test,all}.jsonl
 ```
+
+> merge_confidence 출력은 `gold_spans_8type_merged`(type/start/end) 필드를 가진
+> 덤프이며, 최종 `{train,valid,test}.jsonl`·`pii_*.jsonl` 은 `entities`
+> (label/start_char/end_char) 스키마(§7.4)다. 빌드 셸 절차는
+> `docs/reports/vietnamese-ner-silver-quality.md` §재현 참조.
 
 ---
 
@@ -82,6 +88,11 @@ WikiANN test split → augmenters/wikiann_vi/__main__.py
   "id": "0"
 }
 ```
+
+> 위 `{tokens, ner_tags}` 는 WikiANN HF 원본(재라벨 파이프라인 입력)의 형식이다.
+> **벤치마크 평가 gold** 는 `_load_gold()` 가 materialize 된 silver
+> (`{train,valid,test}.jsonl`, entities) 를 `VietnameseDatasetLoader` 로 읽어
+> `{text, gold_spans}`(offset_span) 로 공급한다(§6.2). 두 경로를 혼동하지 말 것.
 
 ### WikiANN 토큰화 특성
 
@@ -198,16 +209,18 @@ python -m ner.llm_eval --lang vi --models "vllm:cyankiwi/gemma-4-31B-it-AWQ-8bit
 
 ### 6.2 평가 흐름
 
-`src/ner/llm_eval/__main__.py` 단일 dispatch → `BenchmarkRunner` (lang="vi") 실행:
+`src/ner/llm_eval/__main__.py` 단일 dispatch → `BenchmarkRunner`
+(lang="vi", eval_mode="offset_span") `_run_offset_span` 실행:
 
 ```
-gold record {tokens, ner_tags}
-    ├── (1) 텍스트 재구성: reconstruct_text() (word-level space-join)
-    ├── (2) gold spans 추출: extract_spans_from_bio(lang="vi")
-    ├── (3) LLM 라벨링: labeler.label_spans(text) 또는 label(text)
-    ├── (4) 태그 정렬: TagAligner.align()
-    └── (5) 메트릭 계산
+gold record {text, gold_spans}            # _load_gold → load(split) / load_local
+    ├── (1) LLM 라벨링: labeler.label_spans(text) → raw spans
+    ├── (2) span 정합: match_spans(text, raw_spans) → pred_spans
+    └── (3) 메트릭: compute_offset_span_f1(gold_spans, pred_spans)
 ```
+
+gold 는 `data/wikiann_vi/test.jsonl`(entities) 또는 `--local-file` PII 주입본을
+`VietnameseDatasetLoader` 가 `gold_spans` 스키마로 읽어 공급한다.
 
 ### 6.3 태그 정규화
 
@@ -221,15 +234,17 @@ LLM 이 풀네임을 출력하는 경우 약어로 변환. KO 와 달리 별도 
 
 ### 6.4 메트릭
 
-`src/ner/metrics/bio_metrics.py::MetricsCalculator` + `src/ner/metrics/span_metrics.py::compute_offset_span_f1`:
+VI 평가는 **offset_span 경로** (`eval_mode='offset_span'`) — JA 와 동일.
+`_eval_mode_for_lang('vi') → 'offset_span'` 으로 dispatch 되며(KO 만 BIO),
+gold·pred 모두 문자 오프셋 span(`{type, start, end}`)으로 직접 비교한다.
 
-| 메트릭 | 역할 | 비고 |
+| 메트릭 | 역할 | 구현 |
 |---|---|---|
-| Span Match | entity 단위 exact/relaxed 매칭 | **Primary** |
-| seqeval | 단어 BIO 태그 기반 F1 | Secondary |
-| Character Span F1 | 문자 수준 span 매칭 | |
+| Offset Span F1 | char-offset span exact 매칭 (**Primary**) | `src/ner/metrics/span_metrics.py::compute_offset_span_f1` |
 
-VI 평가는 BIO 경로 (`eval_mode='bio'`) 사용. KO 와 동일.
+이 메트릭은 classifier(`train_eval.py`)와 **동일 함수**라 LLM 라벨러와 BERT
+분류기 결과가 직접 비교 가능하다. seqeval/BIO 정렬(`TagAligner`·
+`extract_spans_from_bio`)은 KO BIO 경로 전용이며 VI 에는 적용되지 않는다.
 
 ---
 

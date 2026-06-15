@@ -14,8 +14,9 @@ JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
 - BIO 변환: O + 10*B + 10*I = 21 labels
 
 토크나이저 분기:
+- fast (XLM-R·DeBERTa-V3 등): return_offsets_mapping=True + 공백·후행부호 trim
+- PhoBERT (slow, 단어분절 전제): pyvi 분절 후 단어별 BPE, 단어 char span 부여
 - JA (BertJapaneseTokenizer, slow): tokenize() 후 text.find() 로 subword char span 추적
-- VI (XLMRobertaTokenizer, fast): return_offsets_mapping=True 사용
 """
 
 import json
@@ -194,8 +195,37 @@ def _encode_ja(text: str, tokenizer, max_length: int):
     return {'input_ids': input_ids, 'attention_mask': attention_mask}, char_offsets
 
 
-def _encode_vi(text: str, tokenizer, max_length: int):
-    """VI: fast tokenizer 의 offset_mapping 을 그대로 사용."""
+# 후행에서 떼어낼 문장부호 — SentencePiece 계열이 entity 끝 토큰에 흡착시키는
+# 마침표·쉼표만. ')'·':' 등은 entity 에 정당히 포함될 수 있어 제외한다.
+_TRAIL_PUNCT = '.,'
+
+
+def _trim_offset(text: str, start: int, end: int) -> Tuple[int, int]:
+    """fast tokenizer offset 에서 선행 공백 + 후행 공백·문장부호를 제외해
+    char span 을 토큰의 entity 관련 내용에 맞춘다.
+
+    두 가지 토크나이저 입도 차이를 흡수한다:
+    1. DeBERTa-V3(SentencePiece)는 `▁` 토큰 offset 에 선행 공백을 포함시켜
+       (예: '▁Võ' → ' Võ') entity 첫 토큰 start 가 경계보다 1 작아진다.
+    2. 다국어 SentencePiece 는 숫자형 entity 끝과 문장부호를 한 토큰으로
+       병합한다(예: '568.' → 끝이 entity 경계를 넘어감).
+    공백·후행 `.`/`,` 를 trim 하면 토크나이저 무관하게 정렬되고, 이미 분리해
+    내는 XLM-R 계열에는 사실상 no-op 이다. (start,end)=(0,0) 특수토큰·
+    zero-length 는 그대로 둔다.
+    """
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and (text[end - 1].isspace() or text[end - 1] in _TRAIL_PUNCT):
+        end -= 1
+    return (start, end)
+
+
+def _encode_vi(text: str, tokenizer, max_length: int, trim: bool = True):
+    """VI: fast tokenizer 의 offset_mapping 을 (기본) 공백·후행부호 trim 후 사용.
+
+    trim=False 는 정렬 수정 이전 동작을 재현하는 진단용 — SentencePiece 계열의
+    offset 어긋남으로 라벨이 붕괴(F1 ≈ 0)하는 as-is 벤치마크 재현에만 쓴다.
+    """
     enc = tokenizer(
         text,
         max_length=max_length,
@@ -203,10 +233,77 @@ def _encode_vi(text: str, tokenizer, max_length: int):
         padding='max_length',
         return_offsets_mapping=True,
     )
+    raw = enc['offset_mapping']
+    offsets = [_trim_offset(text, s, e) for s, e in raw] if trim else list(raw)
     return (
         {'input_ids': enc['input_ids'], 'attention_mask': enc['attention_mask']},
-        list(enc['offset_mapping']),
+        offsets,
     )
+
+
+def _is_phobert(tokenizer) -> bool:
+    """PhoBERT 계열(단어분절 필요 + slow BPE) 토크나이저 판별."""
+    name = type(tokenizer).__name__.lower()
+    path = getattr(tokenizer, 'name_or_path', '').lower()
+    return 'phobert' in name or 'phobert' in path
+
+
+def _word_spans_vi(text: str) -> List[Tuple[str, int, int]]:
+    """pyvi 단어분절 → [(분절표면, start_char, end_char)] 원문 char 정렬.
+
+    pyvi 는 다음절 단어를 '_' 로 잇고 문장부호 주위에 공백을 넣어 원문과
+    char 정렬이 깨진다. 분절 표면을 음절('_' 분리)로 쪼개 원문에서 cursor
+    순차 탐색해 각 단어의 원문 char span 을 복원한다.
+    """
+    from pyvi import ViTokenizer
+    seg = ViTokenizer.tokenize(text)
+    out: List[Tuple[str, int, int]] = []
+    pos = 0
+    for token in seg.split(' '):
+        if not token:
+            continue
+        start = end = None
+        for syll in token.split('_'):
+            idx = text.find(syll, pos)
+            if idx < 0:
+                continue
+            if start is None:
+                start = idx
+            end = idx + len(syll)
+            pos = end
+        if start is not None:
+            out.append((token, start, end))
+    return out
+
+
+def _encode_phobert(text: str, tokenizer, max_length: int):
+    """PhoBERT: pyvi 단어분절 후 단어별 BPE, 각 subword 에 단어의 원문 char
+    span 을 부여한다.
+
+    PhoBERT 는 fast tokenizer·offset_mapping 미지원이고 입력이 단어분절을
+    전제하므로, 분절 단어 단위로 char span 을 정렬한다. entity 가 단어 경계에
+    정렬되는 한 단어 단위 span 으로 BIO 라벨·디코드가 정확히 복원된다.
+    """
+    word_spans = _word_spans_vi(text)
+    input_ids = [tokenizer.cls_token_id]
+    char_offsets: List[Tuple[int, int]] = [(0, 0)]
+    for surface, start, end in word_spans:
+        for sub in tokenizer.tokenize(surface):
+            if len(input_ids) >= max_length - 1:
+                break
+            input_ids.append(tokenizer.convert_tokens_to_ids(sub))
+            char_offsets.append((start, end))
+
+    input_ids.append(tokenizer.sep_token_id)
+    char_offsets.append((0, 0))
+
+    attention_mask = [1] * len(input_ids)
+    while len(input_ids) < max_length:
+        input_ids.append(tokenizer.pad_token_id)
+        attention_mask.append(0)
+        char_offsets.append((0, 0))
+
+    return {'input_ids': input_ids, 'attention_mask': attention_mask}, char_offsets
 
 
 def _bio_labels_from_offsets(char_offsets: List[Tuple[int, int]],
@@ -246,17 +343,21 @@ def _bio_labels_from_offsets(char_offsets: List[Tuple[int, int]],
     return labels
 
 
-def encode_row(row: dict, tokenizer, label2id, lang: str, max_length: int = 256):
+def encode_row(row: dict, tokenizer, label2id, lang: str, max_length: int = 256,
+               trim_offsets: bool = True):
     """단일 row → (features, char_offsets).
 
     토크나이저 capability 로 분기:
     - fast tokenizer (offset_mapping 지원): _encode_vi 경로 (lang 무관)
     - slow tokenizer: _encode_ja 경로 (BertJapaneseTokenizer 같은 MeCab 기반)
-    lang 인자는 모델 선택의 컨텍스트로만 유지.
+    lang 인자는 모델 선택의 컨텍스트로만 유지. trim_offsets=False 는 fast 경로
+    의 offset trim 을 끄는 진단용(as-is 붕괴 재현).
     """
     text = row['text']
     if getattr(tokenizer, 'is_fast', False):
-        enc, offs = _encode_vi(text, tokenizer, max_length)
+        enc, offs = _encode_vi(text, tokenizer, max_length, trim=trim_offsets)
+    elif _is_phobert(tokenizer):
+        enc, offs = _encode_phobert(text, tokenizer, max_length)
     else:
         enc, offs = _encode_ja(text, tokenizer, max_length)
 
@@ -271,15 +372,19 @@ def encode_row(row: dict, tokenizer, label2id, lang: str, max_length: int = 256)
     )
 
 
-def encode_dataset(rows: List[dict], tokenizer, label2id, lang: str, max_length: int = 256):
+def encode_dataset(rows: List[dict], tokenizer, label2id, lang: str,
+                   max_length: int = 256, trim_offsets: bool = True):
     """전체 dataset 인코딩. (features_list, offsets_list) 반환.
 
     features_list 는 학습/평가 모델 입력, offsets_list 는 평가 시 BIO → span 디코드용.
+    trim_offsets=False 는 fast 경로 offset trim 을 끄는 진단용(as-is 붕괴 재현).
     """
     features = []
     offsets_list = []
     for row in rows:
-        feat, offs = encode_row(row, tokenizer, label2id, lang, max_length)
+        feat, offs = encode_row(
+            row, tokenizer, label2id, lang, max_length, trim_offsets
+        )
         features.append(feat)
         offsets_list.append(offs)
     return features, offsets_list
