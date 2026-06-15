@@ -45,6 +45,7 @@ dependencies = [
     "spacy",
     "fugashi>=1.5.2",
     "unidic-lite>=1.0.8",
+    "pyvi>=0.1.1",
 ]
 
 [tool.uv]

@@ -34,8 +34,17 @@ def ja_tokenizer():
     )
 
 
+@pytest.fixture(scope='module')
+def deberta_tokenizer():
+    pytest.importorskip('transformers')
+    from transformers import AutoTokenizer
+    return AutoTokenizer.from_pretrained(
+        'microsoft/mdeberta-v3-base', use_fast=True
+    )
+
+
 def _has_label(labels, label_id):
-    return any(l == label_id for l in labels)
+    return any(lid == label_id for lid in labels)
 
 
 def test_encode_vi_email_roundtrip(vi_tokenizer, label_maps):
@@ -91,6 +100,100 @@ def test_encode_ja_email_roundtrip(ja_tokenizer, label_maps):
     assert es['end'] <= entities[0]['end_char']
 
 
+def test_encode_deberta_multiword_entity_roundtrip(deberta_tokenizer, label_maps):
+    """DeBERTa-V3(SentencePiece) fast tokenizer 는 ▁ 토큰 offset 에 선행 공백을
+    포함시켜, 0번이 아닌 위치에서 시작하는 다단어 entity 의 첫 토큰이 경계
+    밖으로 밀려 라벨이 누락된다(과거 F1 0.0 붕괴 원인). _encode_vi 의 공백
+    trim 으로 char span 이 정확히 복원되어야 한다 (회귀 가드)."""
+    label2id, id2label = label_maps
+    text = 'Liên hệ: Nguyễn Văn An nhé.'
+    name = 'Nguyễn Văn An'
+    start = text.index(name)
+    entities = [{
+        'label': 'PER',
+        'start_char': start,
+        'end_char': start + len(name),
+        'text': name,
+    }]
+    row = {'text': text, 'entities': entities, 'id': 'd1'}
+    feat, offs = encode_row(row, deberta_tokenizer, label2id, 'vi', max_length=64)
+
+    assert _has_label(feat['labels'], label2id['B-PER'])
+    # trim 후 어떤 토큰 offset 도 선행/후행 공백을 포함하지 않아야 한다
+    for s, e in offs:
+        if s == e:
+            continue
+        assert not text[s].isspace()
+        assert not text[e - 1].isspace()
+    # decode 시 다단어 PER span 이 char 정확히 복원
+    spans = decode_bio_to_spans(feat['labels'], offs, id2label)
+    per_spans = [s for s in spans if s['type'] == 'PER']
+    assert len(per_spans) == 1
+    assert (per_spans[0]['start'], per_spans[0]['end']) == (
+        entities[0]['start_char'], entities[0]['end_char']
+    )
+
+
+def test_encode_deberta_numeric_pii_trailing_period(deberta_tokenizer, label_maps):
+    """다국어 SentencePiece 는 숫자형 entity 끝과 문장부호를 한 토큰으로 병합
+    한다(예: '568.'). 후행 `.`/`,` trim 으로 경계 직전 숫자형 PII 가 정확히
+    복원되어야 한다 (회귀 가드)."""
+    label2id, id2label = label_maps
+    num = '836394225258'
+    text = f'ID: {num}.'
+    start = text.index(num)
+    entities = [{
+        'label': 'ID_NUM',
+        'start_char': start,
+        'end_char': start + len(num),
+        'text': num,
+    }]
+    row = {'text': text, 'entities': entities, 'id': 'd2'}
+    feat, offs = encode_row(row, deberta_tokenizer, label2id, 'vi', max_length=32)
+
+    spans = decode_bio_to_spans(feat['labels'], offs, id2label)
+    id_spans = [s for s in spans if s['type'] == 'ID_NUM']
+    assert len(id_spans) == 1
+    # 끝이 마침표를 포함하지 않고 숫자 경계에서 정확히 끝나야 함
+    assert (id_spans[0]['start'], id_spans[0]['end']) == (
+        entities[0]['start_char'], entities[0]['end_char']
+    )
+
+
+@pytest.fixture(scope='module')
+def phobert_tokenizer():
+    pytest.importorskip('pyvi')
+    pytest.importorskip('transformers')
+    from transformers import AutoTokenizer
+    return AutoTokenizer.from_pretrained('vinai/phobert-base-v2')
+
+
+def test_encode_phobert_wordseg_roundtrip(phobert_tokenizer, label_maps):
+    """PhoBERT(slow, 단어분절 전제): pyvi 분절 + 단어 char span 정렬로
+    다단어 entity 가 원문 char span 으로 정확히 복원되어야 한다."""
+    label2id, id2label = label_maps
+    text = 'Liên hệ: Nguyễn Văn An tại Hà Nội.'
+    name = 'Nguyễn Văn An'
+    start = text.index(name)
+    entities = [{
+        'label': 'PER',
+        'start_char': start,
+        'end_char': start + len(name),
+        'text': name,
+    }]
+    row = {'text': text, 'entities': entities, 'id': 'p1'}
+    feat, offs = encode_row(row, phobert_tokenizer, label2id, 'vi', max_length=64)
+
+    assert not phobert_tokenizer.is_fast  # slow 경로 확인
+    assert _has_label(feat['labels'], label2id['B-PER'])
+    spans = decode_bio_to_spans(feat['labels'], offs, id2label)
+    per_spans = [s for s in spans if s['type'] == 'PER']
+    assert len(per_spans) == 1
+    assert (per_spans[0]['start'], per_spans[0]['end']) == (
+        entities[0]['start_char'], entities[0]['end_char']
+    )
+
+
 def test_encode_no_entities(vi_tokenizer, label_maps):
     """엔티티 0 개 row 도 정상 인코드 (전부 O)."""
     label2id, _ = label_maps
@@ -98,8 +201,8 @@ def test_encode_no_entities(vi_tokenizer, label_maps):
     feat, offs = encode_row(row, vi_tokenizer, label2id, 'vi', max_length=32)
     o_id = label2id['O']
     # special token 은 -100, 그 외 모두 O
-    non_special = [l for l in feat['labels'] if l != -100]
-    assert all(l == o_id for l in non_special)
+    non_special = [lid for lid in feat['labels'] if lid != -100]
+    assert all(lid == o_id for lid in non_special)
     # input_ids 길이 = max_length (padding)
     assert len(feat['input_ids']) == 32
     assert len(feat['attention_mask']) == 32

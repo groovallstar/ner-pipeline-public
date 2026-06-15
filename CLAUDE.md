@@ -44,7 +44,7 @@ src/ner/
 │   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
 ├── classifier/        # JA·VI canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
 │   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi ...)
-│   ├── data_utils.py       # JSONL 로딩, JA(slow)·VI(fast) tokenizer 분기 정렬, BIO↔span 변환
+│   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
 └── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
 docker/

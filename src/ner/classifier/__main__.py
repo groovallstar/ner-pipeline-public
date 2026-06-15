@@ -94,6 +94,12 @@ def main():
         help='Mixed precision (use bf16 for DeBERTa-v3 family)',
     )
     parser.add_argument(
+        '--legacy-no-offset-trim', action='store_true',
+        help='Diagnostic: disable fast-tokenizer offset trim, reproducing '
+             'the pre-fix SentencePiece misalignment collapse (F1 ~ 0). '
+             'Only for as-is benchmark reproduction.',
+    )
+    parser.add_argument(
         '--metric-mode', choices=['strict', 'relaxed', 'both'], default='both',
         help='Span F1 mode shown in console. metrics.json always stores both. '
              'strict=(start,end,type) exact match (default gate). '
@@ -192,15 +198,18 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     logger.info('Tokenizer fast=%s', tokenizer.is_fast)
 
+    trim_offsets = not args.legacy_no_offset_trim
+    if not trim_offsets:
+        logger.info('Offset trim DISABLED (legacy as-is reproduction)')
     logger.info('Tokenizing and aligning labels...')
     train_features, _ = encode_dataset(
-        train_rows, tokenizer, label2id, args.lang, args.max_length
+        train_rows, tokenizer, label2id, args.lang, args.max_length, trim_offsets
     )
     valid_features, valid_offsets = encode_dataset(
-        valid_rows, tokenizer, label2id, args.lang, args.max_length
+        valid_rows, tokenizer, label2id, args.lang, args.max_length, trim_offsets
     )
     test_features, test_offsets = encode_dataset(
-        test_rows, tokenizer, label2id, args.lang, args.max_length
+        test_rows, tokenizer, label2id, args.lang, args.max_length, trim_offsets
     )
 
     # Boundary-aware weight (B/I/O 차등) — None 이면 표준 CE
@@ -391,6 +400,7 @@ def main():
         'kfold': args.kfold,
         'fold_index': args.fold_index if is_kfold else None,
         'seed': args.seed,
+        'offset_trim': trim_offsets,
         'metric_for_best': 'eval_loss',
         'curriculum': args.curriculum,
         'curriculum_stage1_epochs': args.curriculum_stage1_epochs if args.curriculum else None,

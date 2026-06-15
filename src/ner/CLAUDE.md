@@ -48,7 +48,7 @@ JA·VI canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/
 | 파일 | 역할 |
 |------|------|
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
-| `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / JA(slow)·VI(fast) tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
+| `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
 | `train_eval.py` | HF Trainer 래퍼 + char-offset span F1 (`src/ner/metrics` 공용) |
 | `abstention.py` | per-class 신뢰도 임계값 fit·apply |
 | `error_analysis.py` | 오류 유형 분류 CLI |
