@@ -12,12 +12,12 @@ export VLLM_DTYPE=auto
 export VLLM_PORT=8082
 export VLLM_EXTRA_ARGS=""
 export VLLM_IMAGE=vllm/vllm-openai:v0.19.0
-export VLLM_CONTAINER=vllm-qwen
+export VLLM_CONTAINER=vllm-qwen36-35b-a3b-awq4
 export CUDA_VISIBLE_DEVICES=2
 
 echo "기존 컨테이너 정리..."
-docker compose -p vllm-qwen -f docker-compose.yml down 2>/dev/null || true
+docker compose -p vllm-qwen36-35b-a3b-awq4 -f docker-compose.yml down 2>/dev/null || true
 
 echo "모델: $VLLM_MODEL (GPU 2, 포트 $VLLM_PORT)"
-docker compose -p vllm-qwen -f docker-compose.yml up -d
+docker compose -p vllm-qwen36-35b-a3b-awq4 -f docker-compose.yml up -d
 echo "로그 확인: docker logs -f $VLLM_CONTAINER"

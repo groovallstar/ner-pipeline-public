@@ -26,22 +26,41 @@ cd docker/dev && bash init_with_claude_extension.sh
 
 ## vLLM 서비스 (docker/vllm/)
 
-GPU 1,2 사용, tensor_parallel=2.
-포트: start 스크립트 기본값 8081 (`VLLM_PORT=8081`);
-compose 자체 기본값은 8000 (`${VLLM_PORT:-8000}`).
+두 가지 워크플로가 공존한다.
+
+### 1) 프로덕션 라벨링 — 2-모델 동시 구동
+
+NER silver 라벨링은 GPU 2장에 단일-GPU 컨테이너 2개를 띄운다 (각 `tensor_parallel=1`).
+compose 자체 포트 기본값은 8000 (`${VLLM_PORT:-8000}`)이며, 각 start 스크립트가
+`VLLM_PORT`를 명시해 덮어쓴다.
+
+| 역할 | 모델 | 스크립트 | 컨테이너 | 포트/GPU |
+|------|------|----------|----------|----------|
+| 1차 라벨러·PII 주입 | `cyankiwi/gemma-4-31B-it-AWQ-8bit` | `start-gemma4-31b-awq-8bit.sh` | `vllm-gemma4-31b-awq8` | 8081 / GPU1 |
+| 검증·replacer | `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` | `start-qwen3.6-35b-a3b-awq.sh` | `vllm-qwen36-35b-a3b-awq4` | 8082 / GPU2 |
 
 ```bash
-# 27B 모델 시작
-bash docker/vllm/start-27b.sh
+# 기동 (각 스크립트가 자기 컨테이너를 -p 프로젝트로 정리 후 재기동)
+bash docker/vllm/start-gemma4-31b-awq-8bit.sh
+bash docker/vllm/start-qwen3.6-35b-a3b-awq.sh
 
-# 35B-A3B 모델 시작
-bash docker/vllm/start-35b-a3b.sh
+# 로그·중지는 컨테이너 이름으로 직접 다룬다
+docker logs -f vllm-gemma4-31b-awq8
+docker rm -f vllm-gemma4-31b-awq8 vllm-qwen36-35b-a3b-awq4
+```
 
-# 중지
-bash docker/vllm/stop.sh
+> 명명 컨테이너는 `-p <이름>` 프로젝트로 뜨므로, 기본 compose 프로젝트(`vllm`)만
+> 다루는 `stop.sh`·`logs.sh`로는 제어되지 않는다.
 
-# 로그
-bash docker/vllm/logs.sh
+### 2) 벤치마크 오케스트레이션 — load-and-bench.sh
+
+임의 모델을 받아 교체·평가하는 단일-모델 파이프라인. 기본 compose 프로젝트(`vllm`,
+컨테이너 `vllm-server`, 포트 8081)를 쓰며 `stop.sh`·`logs.sh`가 여기에 대응한다.
+
+```bash
+bash docker/vllm/load-and-bench.sh <모델명> [출력파일]  # 다운로드→로드→error_analysis 50샘플
+bash docker/vllm/stop.sh                                # vllm-server 중지
+bash docker/vllm/logs.sh                                # vllm-server 로그
 ```
 
 ## 이미지 Pull 규칙
