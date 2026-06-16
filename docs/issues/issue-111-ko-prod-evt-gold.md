@@ -89,7 +89,7 @@ issue #109의 KLUE 유래 4종(PER/LOC/ORG/DAT) seed gold에 PROD·EVT를 LLM
   KLUE override 1192(LOC 348·PER 342·DAT 270·ORG 232)
 
 ## 관련 커밋
-- `<hash>`: <!-- 커밋 후 채움 -->
+- `075300b`: ko 라벨러 6종 전환 + relabel/merge 스크립트 + gold 5종 승격 + docs
 
 ## 후속 작업
 - PII 4종(EMAIL/PHONE/ID_NUM/CREDIT_CARD) 증분 — PII 주입 별도 이슈
