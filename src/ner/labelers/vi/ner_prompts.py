@@ -92,6 +92,9 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 Đầu vào: Chùa Một Cột nằm ở quận Ba Đình, Hà Nội.
 Đầu ra: [{{"text": "Chùa Một Cột", "type": "ORG"}}, {{"text": "quận Ba Đình", "type": "LOC"}}, {{"text": "Hà Nội", "type": "LOC"}}]
 
+Đầu vào: '' Diễm xưa '' ( Trịnh Công Sơn ).
+Đầu ra: [{{"text": "Diễm xưa", "type": "PROD"}}, {{"text": "Trịnh Công Sơn", "type": "PER"}}]
+
 Đầu vào: {sentence}
 Đầu ra:"""
 

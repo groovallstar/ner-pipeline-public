@@ -93,6 +93,15 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 Đầu vào: Đường sắt xuyên Sibir là tuyến đường sắt dài nhất thế giới, vận hành bởi Công ty Đường sắt Nga.
 Đầu ra: [{{"text": "Đường sắt xuyên Sibir", "type": "LOC"}}, {{"text": "Công ty Đường sắt Nga", "type": "ORG"}}]
 
+Đầu vào: '' Diễm xưa '' ( Trịnh Công Sơn ).
+Đầu ra: [{{"text": "Diễm xưa", "type": "PROD"}}, {{"text": "Trịnh Công Sơn", "type": "PER"}}]
+
+Đầu vào: Quốc hội thông qua Luật Giao thông đường bộ năm 2008.
+Đầu ra: [{{"text": "Quốc hội", "type": "ORG"}}]
+
+Đầu vào: Chiến tranh Lạnh kết thúc và Liên Xô tan rã.
+Đầu ra: [{{"text": "Liên Xô", "type": "LOC"}}]
+
 Đầu vào: {sentence}
 Đầu ra:"""
 
@@ -134,6 +143,13 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ th
 2: Samsung giới thiệu Galaxy S24.
 
 Đầu ra: {{"0": [{{"text": "Hồ Chí Minh", "type": "PER"}}, {{"text": "Chùa Một Cột", "type": "ORG"}}], "1": [{{"text": "Vietnam Airlines", "type": "ORG"}}, {{"text": "Sân bay Nội Bài", "type": "ORG"}}], "2": [{{"text": "Samsung", "type": "ORG"}}, {{"text": "Galaxy S24", "type": "PROD"}}]}}
+
+Đầu vào:
+0: '' Diễm xưa '' ( Trịnh Công Sơn ).
+1: Quốc hội thông qua Luật Giao thông đường bộ.
+2: Chiến tranh Lạnh kết thúc và Liên Xô tan rã.
+
+Đầu ra: {{"0": [{{"text": "Diễm xưa", "type": "PROD"}}, {{"text": "Trịnh Công Sơn", "type": "PER"}}], "1": [{{"text": "Quốc hội", "type": "ORG"}}], "2": [{{"text": "Liên Xô", "type": "LOC"}}]}}
 
 ## Các câu đầu vào
 {sentences}

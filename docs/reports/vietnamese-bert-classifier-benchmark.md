@@ -143,9 +143,14 @@ fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
   (fold0 기준 — EVT fold0 orig 0.851 > pooled 0.792라 pooled EVT 보정은 더 낮음).
   클래스 정의(§3) 모호성은 병목 아님(schema_gap 0, IAA 1.0) — VI gold가 §3.1/
   3.2(법령·서비스·창작물 규칙)를 미반영한 게 원인.
+- **remediation 실측(#108)**: VI 프롬프트 §3 정렬 → 2모델 합의 re-silver(기준
+  유지) → 5-fold 재학습. **PROD pooled 0.717→0.792(phobert)·0.710→0.761
+  (xlm-r)** — 보정 추정(0.81) 사실상 적중, 천장은 데이터 문제로 확인. overall·
+  LOC·ORG 동반 상승. **단 EVT는 회귀**(−1.9/−6.8pp, 저support 합의 noise) →
+  미해결. 산출 gold `pii_all_v2.jsonl`(본 표 baseline은 v1로 불변).
 - PII 5종은 0.98~1.00 포화. NER 5종 중 PER/LOC/ORG는 0.88~0.93.
-- 개선 레버(범위 밖, 착수 시 이슈 분리): VI gold에 §3.1/3.2/3.3 적용 + 창작물
-  커버리지 re-silver(#84-for-VI), 외부 코퍼스(VLSP/PhoNER, 단 오염 위험).
+- 개선 레버(범위 밖): EVT 합의 정책·few-shot 보강(미해결), 외부 코퍼스(VLSP/
+  PhoNER, 단 오염 위험).
 
 ## 재현
 

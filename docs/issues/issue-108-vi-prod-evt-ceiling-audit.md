@@ -124,6 +124,41 @@ phobert. 산출: `results/classifier/vi/audit/`(gitignore).
 remediation의 직접 검증은 과라벨 2건이 새 프롬프트로 비-entity 처리되는지(규칙
 명문화 = 결정적). 누락 75건은 re-silver 시 회복 여부 측정 대상.
 
+## remediation 측정 결과 (격리 re-silver + 5-fold 재학습)
+
+방법(`src/ner/scripts/resilver_vi_isolated.py`): 변수를 *프롬프트 하나*로 격리
+— pii_all 각 행의 원문(주입 전)만 새 §3 프롬프트로 **두 모델(Gemma+Qwen)
+재라벨 → 동일 `recall_strict` 합의 merge**(2-LLM 합의 기준 *유지*) → 원문
+NER만 교체(주입 PII·텍스트·5-fold split 고정) → `pii_all_v2.jsonl`. 검증:
+offset 정합 91,543/91,543, PII 주입분 Δ0, 회복 PROD 275종 실제 작품
+(`Music of the Sun`·`Vietnam Idol`·`Boeing B-50` 등).
+
+gold 변화(v1→v2): PROD 2,005→2,394(+389, 창작물 회복), EVT 474→436(−38,
+과라벨 제거). 과라벨 `Minh Trị Duy tân`·`Pháp lệnh` 제거 확인.
+
+**5-fold pooled strict F1 (v1 #103 → v2 재학습):**
+
+| Entity | phobert v1→v2 | xlm-r-base v1→v2 |
+|---|---|---|
+| overall | 0.9461 → **0.9529** (+0.7) | 0.9459 → **0.9543** (+0.8) |
+| **PROD** | 0.7171 → **0.7920** (**+7.5**) | 0.7097 → **0.7614** (**+5.2**) |
+| EVT | 0.7920 → 0.7731 (−1.9) | 0.8031 → 0.7348 (−6.8) |
+| PER | 0.9272 → 0.9278 | 0.9317 → 0.9434 |
+| LOC | 0.9349 → 0.9563 (+2.1) | 0.9291 → 0.9510 (+2.2) |
+| ORG | 0.8814 → 0.8994 (+1.8) | 0.8888 → 0.9037 (+1.5) |
+
+- ✅ **PROD 천장 해결**: +5~7.5pp, recall ~.83 — 모델이 회복된 창작물을 학습해
+  찾음. 감사 보정 추정(0.81) 사실상 적중(0.79). 천장은 데이터(gold) 문제였음.
+- ✅ overall·LOC·ORG 동반 상승(더 완전한 gold).
+- ⚠️ **EVT 회귀**(양 모델 일관, −1.9/−6.8pp): 저support(436) EVT가 새 프롬프트로
+  2모델 합의가 더 갈려 sparse·noisy. 일부는 과라벨(쉬운 양성) 제거의 정당한
+  결과지만 순회귀는 사실 — **EVT는 미해결, 별도 손질 필요**(EVT few-shot·합의 정책).
+- 채점: 옛 phobert 예측을 v2 gold로 재채점하면 0.711→0.655(하락)인데, 이는
+  *옛 모델*을 새 gold로 본 불공정 비교 — *재학습*하면 0.792로 오름(데이터 한계 확증).
+
+산출물: `results/classifier/vi/resilver_v2/<model>/fold{0..4}/`, gold
+`data/wikiann_vi/pii_all_v2.jsonl`(기존 gold 보존, #103 baseline 불변).
+
 ## 검증
 
 - [x] `pytest tests/ner/classifier/ -q` green (52) + labelers/vi·augmenters
