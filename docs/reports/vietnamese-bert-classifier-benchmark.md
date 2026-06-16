@@ -16,6 +16,9 @@
 
 - **상위 무승부**: `vinai/phobert-base-v2` (0.9461) ≈ `xlm-roberta-base`
   (0.9459) — 0.02pp 차로 통계적 동률.
+- **동률의 비용 결판(아래 §배포 비용)**: phobert가 메모리 41%↓·단문 레이턴시
+  20%↓·params 절반, pyvi 오버헤드는 +1ms로 무시 가능. 남는 건 운영축
+  (pyvi 의존성·정렬 0.996)뿐.
 - **CafeBERT(VI continued-pretrain)는 base를 못 넘음** (0.9367 < 0.9459) —
   베트남어 추가 사전학습이 이 태스크엔 이득 없음.
 - **`xlm-roberta-large` 불안정** — 5-fold 중 fold0이 all-O로 완전 붕괴(F1=0),
@@ -99,6 +102,35 @@ cafebert 32.8 · xlm-r-large 32.8.
 
 †xlm-r-large는 붕괴 fold0 포함 pooled — per-entity 전반이 낮은 것은 fold0의
 all-O 때문이며 정상 4-fold는 타 모델과 동급(아래).
+
+## 배포 비용 (추론) — accuracy 동률의 결판
+
+accuracy가 phobert ≈ xlm-r-base 동률이라 선택은 **비용 축**에서 갈린다. fold0
+test 7,675문장, float32, RTX A6000 1장(`CUDA_VISIBLE_DEVICES=0`)에서 측정
+(batch=32 throughput / batch=1 latency 200문장 median). 측정: `python
+src/ner/scripts/bench_vi_inference_cost.py`. 상세 출처: `docs/issues/
+issue-106-vi-classifier-inference-cost.md`.
+
+| 모델 | params | peak GPU mem | encode/sent | latency b=1 | throughput b=32 | strict F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| **`phobert-base-v2`** | 134M | **789MB** | 1.21ms (pyvi) | **6.03ms** | 345/s | 0.9461 |
+| `xlm-roberta-base` | 277M | 1,335MB | 0.22ms | 7.54ms | 343/s | 0.9459 |
+| `mmbert-base` | 307M | 1,470MB | 0.22ms | 20.1ms | 209/s | 0.9395 |
+| `cafebert` | 559M | 2,496MB | 0.22ms | 15.3ms | 101/s | 0.9367 |
+| `xlm-roberta-large` | 559M | 2,496MB | 0.21ms | 15.3ms | 101/s | 0.8364† |
+
+- **하드웨어 비용은 전부 phobert 우위**: 메모리 41%↓(789 vs 1,335MB)·단문
+  레이턴시 20%↓(6.03 vs 7.54ms)·params·disk 절반. throughput만 동률(345≈343).
+- **pyvi 오버헤드는 실재하나 무시 가능**: encode 1.21 vs 0.22ms(~5.5×)지만 절대
+  +1ms. end-to-end(encode+forward) phobert 7.24ms < xlm-r-base 7.76ms —
+  pyvi를 더해도 phobert가 더 빠르다.
+- **남는 trade-off는 순수 운영축**(성능 아님): xlm-r-base의 유일한 이점은 pyvi
+  의존성 없음 + fast(Rust) 토크나이저 + char 정렬 1.0(phobert 0.996 = 0.4%
+  구조적 손실 + inference 시 분절 드리프트라는 라이브 실패 모드). phobert는 그
+  0.4% 핸디캡을 안고도 F1 동률 → 내재 모델은 오히려 약간 우수.
+- **권고**: 메모리/지연 제약이면 phobert(절반 자원). pyvi 의존·정렬 리스크 회피 +
+  2× 자원 감수 가능이면 xlm-r-base. cafebert·xlm-r-large(550M)는 정확도 열위/불안정
+  + 최고 비용이라 비채택. mmbert는 정확도도 낮고 b=1 레이턴시 최악(20ms)이라 비채택.
 
 ## `xlm-roberta-large` 불안정 (large 모델 확률적 붕괴)
 
