@@ -14,7 +14,7 @@
 | `dataset_loader.py` | HuggingFace datasets 로딩 (`NERRecord` 반환) |
 | `tag_aligner.py` | BIO 태그 정렬·정규화·span 추출 유틸리티 |
 | `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
-| `ko/` | 한국어 NER 라벨러 (vllm, openai) — KLUE 6종 (PS/LC/OG/DT/TI/QT) |
+| `ko/` | 한국어 NER 라벨러 (vllm, openai) — canonical 4종 (PER/LOC/ORG/DAT), KLUE 유래·TI/QT 드롭 |
 | `ja/` | 일본어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
 | `vi/` | 베트남어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
 
@@ -69,7 +69,7 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 
 ## 라벨 스키마
 
-- **KO**: KLUE 6종 = `PS, LC, OG, DT, TI, QT`
+- **KO**: canonical 4종 = `PER, LOC, ORG, DAT` (KLUE 유래, TI/QT 드롭; PROD/EVT·PII 후속)
 - **JA·VI 공통**: canonical 10종 평면 = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
