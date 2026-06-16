@@ -36,10 +36,10 @@ bash docker/vllm/start-gemma4-31b-awq-8bit.sh
 # Qwen3.6-35B-A3B-AWQ-4bit 시작 (GPU2, 8082)
 bash docker/vllm/start-qwen3.6-35b-a3b-awq.sh
 
-# 중지
+# 중지 (기본: vllm-gemma vllm-qwen 모두)
 bash docker/vllm/stop.sh
 
-# 로그
+# 로그 (기본: vllm-gemma; 예: logs.sh vllm-qwen)
 bash docker/vllm/logs.sh
 ```
 
