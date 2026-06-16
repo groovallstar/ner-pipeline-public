@@ -10,7 +10,7 @@ export VLLM_MAX_MODEL_LEN=8192
 export VLLM_TENSOR_PARALLEL=2
 export VLLM_DTYPE=bfloat16
 export VLLM_PORT=8081
-export VLLM_IMAGE=vllm/vllm-openai:gemma4
+export VLLM_IMAGE=vllm/vllm-openai:v0.23.0
 export CUDA_VISIBLE_DEVICES=1,2
 
 echo "기존 컨테이너 정리..."

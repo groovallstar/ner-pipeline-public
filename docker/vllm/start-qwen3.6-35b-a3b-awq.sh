@@ -11,7 +11,7 @@ export VLLM_TENSOR_PARALLEL=1
 export VLLM_DTYPE=auto
 export VLLM_PORT=8082
 export VLLM_EXTRA_ARGS=""
-export VLLM_IMAGE=vllm/vllm-openai:v0.19.0
+export VLLM_IMAGE=vllm/vllm-openai:v0.23.0
 export VLLM_CONTAINER=vllm-qwen
 export CUDA_VISIBLE_DEVICES=2
 

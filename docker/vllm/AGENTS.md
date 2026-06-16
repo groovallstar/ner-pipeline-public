@@ -4,7 +4,7 @@
 # vllm
 
 ## Purpose
-Runs a vLLM OpenAI-compatible inference server (v0.19.0) with tensor parallelism across GPUs 1,2 for high-throughput LLM inference. Includes model-specific start scripts (all default to port 8081; compose default is 8000) and automated benchmark orchestration.
+Runs a vLLM OpenAI-compatible inference server (v0.23.0) with tensor parallelism across GPUs 1,2 for high-throughput LLM inference. Includes model-specific start scripts (all default to port 8081; compose default is 8000) and automated benchmark orchestration.
 
 ## Key Files
 
