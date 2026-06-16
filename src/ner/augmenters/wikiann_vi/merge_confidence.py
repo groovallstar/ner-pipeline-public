@@ -16,6 +16,11 @@
 - `full`          : 전부 포함 (conflict 포함)
 - `recall_strict` : recall 정책 + PROD/EVT 는 high 만 (PROD/EVT 합의율
                     낮은 점을 보정하기 위해 신규 type 의 medium 을 drop)
+- `recall_strict_evt` : recall_strict 와 동일하되 EVT single-model 중 §3
+                    명시 legit 카테고리(연도대회·조약·전쟁·재해·선거) 매칭분만
+                    구제. Qwen 의 구조적 EVT recall 병목(보통명사-핵 서술구
+                    누락)이 strict 교집합을 천장 걸어 legit EVT 를 떨구는 회귀
+                    보정. 구제 = §3 결정론 규칙의 regex 재적용(self-confirm 아님)
 
 신뢰도 계층별 학습 데이터 활용 구조의 단일-파일 구현.
 타입별 신뢰도 격차를 반영한 type-aware 필터(`recall_strict`)를 함께 제공한다.
@@ -23,16 +28,58 @@
 import argparse
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-POLICIES = ('recall', 'precision', 'high_only', 'full', 'recall_strict')
+POLICIES = (
+    'recall', 'precision', 'high_only', 'full', 'recall_strict',
+    'recall_strict_evt',
+)
 
 # recall_strict 에서 high 만 허용할 type — 신규 5종 중 합의율 낮은 두 type
 HIGH_ONLY_TYPES = frozenset({'PROD', 'EVT'})
+
+# ── EVT legit-카테고리 패턴 (recall_strict_evt 구제 게이트) ──────────────
+# Qwen 은 베트남어 EVT(보통명사-핵 서술구: Cúp·Trận·Công ước·Bão…)를
+# 자유 생성에서 누락하는 구조적 recall 병목이 있어, strict 교집합이 EVT 를
+# Qwen recall 에 천장 건다. §3 가 *명시적으로* EVT 로 규정한 결정론 규칙의
+# 표면형에 매칭되는 single-model EVT 만 구제 — Gemma/Qwen 이 surface 한 span
+# 에 §3 규칙을 regex 로 독립 재적용하는 것이라 self-confirm/유도 모두 회피한다.
+# 미매칭 long-tail(투어·금융위기·영화제 등)은 의도적 보수 drop.
+_EVT_YEAR = re.compile(r'(?:19|20)\d{2}|\d{4}-\d{2,4}')
+_EVT_LEGIT_PATTERNS = (
+    # 연도별 대회 에디션 — 정기 대회의 특정 연도/회차 (§3: "World Cup 2022")
+    lambda t: bool(_EVT_YEAR.search(t)) and bool(re.search(
+        r'Cúp|Giải|Đại hội|Olympic|World Cup|UEFA|League|Siêu cúp|'
+        r'Thế vận|Vô địch', t)),
+    # 조약/협약/공의회/회의/협상 (§3: hiệp ước = EVT)
+    lambda t: bool(re.match(
+        r'(Công ước|Hiệp định|Hiệp ước|Công đồng|Hội nghị|Đàm phán|'
+        r'Vòng đàm phán)\b', t)),
+    # 전쟁/전투/작전/내전 (§3: chiến tranh = EVT)
+    lambda t: bool(re.search(
+        r'\b(Chiến tranh|Trận|Chiến dịch|Nội chiến|Xung đột)\b', t)),
+    # 명명 재해/테러 (§3: thảm họa có tên = EVT)
+    lambda t: bool(re.match(
+        r'(Bão|Động đất|Sóng thần|Đánh bom|Vụ (đánh bom|tấn công)|'
+        r'Thảm họa)\b', t)),
+    # 선거/봉기/쿠데타/혁명 (§3: bầu cử·phong trào có mốc = EVT)
+    lambda t: bool(re.search(
+        r'\b(Bầu cử|Trưng cầu|Phong trào|Khởi nghĩa|Đảo chính|Cách mạng)\b',
+        t)),
+)
+
+
+def _is_evt_legit(text: str) -> bool:
+    """EVT 표면형이 §3 명시 legit 카테고리(연도대회·조약·전쟁·재해·선거)에
+    매칭되는지 — single-model EVT 구제 게이트."""
+    if not text:
+        return False
+    return any(p(text) for p in _EVT_LEGIT_PATTERNS)
 
 
 def _span_map(spans: List[dict]) -> Dict[Tuple[int, int], dict]:
@@ -135,6 +182,26 @@ def _filter_by_policy(
                 and s['confidence'] in {'high', 'medium_recall'}
             )
         ]
+    elif policy == 'recall_strict_evt':
+        # recall_strict 와 동일하되, EVT single-model(gemma_only/qwen_only)
+        # 중 §3 legit 카테고리 매칭분을 구제 (Qwen EVT recall 병목 우회).
+        # PROD 는 여전히 high 만, conflict 는 전 type drop.
+        out: List[dict] = []
+        for s in spans:
+            t = s['type']
+            c = s['confidence']
+            if t == 'EVT':
+                if c == 'high' or (
+                    c in {'medium_recall', 'medium_prec'}
+                    and _is_evt_legit(s.get('text', ''))
+                ):
+                    out.append(s)
+            elif t == 'PROD':
+                if c == 'high':
+                    out.append(s)
+            elif c in {'high', 'medium_recall'}:
+                out.append(s)
+        return out
     else:
         raise ValueError(f'unknown policy: {policy}')
     return [s for s in spans if s['confidence'] in allowed]
