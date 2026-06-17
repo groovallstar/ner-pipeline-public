@@ -53,6 +53,11 @@ def _build_parser() -> argparse.ArgumentParser:
         '--llm-concurrency', type=int, default=16,
         help='Max concurrent LLM requests for --mode llm',
     )
+    p.add_argument(
+        '--inject-temperature', type=float, default=0.7,
+        help='Sampling temperature for LLM injection (lower = more '
+             'faithful verbatim copy)',
+    )
 
     # 교차 검증 옵션
     p.add_argument(
@@ -175,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
             base_url=inject_url,
             model=inject_model,
             concurrency=args.llm_concurrency,
+            temperature=args.inject_temperature,
         )
         density = _truncate_density(cfg.density, args.pii_max)
         llm_injector = LLMInjector(
