@@ -30,6 +30,7 @@ JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 �
 | `generators/base.py` | `generate_pii(label, lang, rng)` 언어·라벨 디스패치 + 공용 유틸(`random_email`·`random_credit_card_number`·`EMAIL_DOMAINS` 등) |
 | `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
 | `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
+| `generators/ko.py` | 한국어 PII 생성기 (이름/전화(`010`/`02`/지역)/주소/날짜/주민등록번호 — 체크섬 무효로 실유효 번호 비생성) |
 
 #### 라벨 스키마
 - **내부 PII 토큰**(생성·병합 전): `NAME`, `PHONE`, `ADDRESS`, `DAT`,
@@ -72,7 +73,19 @@ python -m ner.augmenters.pii --source jsonl --input /data/raw/crawl.jsonl \
 # HF Hub 데이터셋에 주입
 python -m ner.augmenters.pii --source hf --hf-name llm-book/ner-wikipedia-dataset \
     --lang ja --output /data/ner/ja_wiki_pii.jsonl
+
+# 한국어 canonical 10종 gold (PII 4종만, llm 자연삽입, verify 없음)
+# KLUE 유래 NER 5종+DAT gold(origin.jsonl)에 PII 4종을 문중 자연삽입.
+# verify 미사용: llm extract_spans 가 offset 을 정확 보장(사람 KLUE gold 보존).
+python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
+    --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
+    --inject-url http://localhost:8081/v1 \
+    --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
+    --output data/klue/pii_all.jsonl
 ```
+
+`--pii-labels` 로 주입 PII 라벨을 제한한다(기본 7종 → 지정 라벨만). 미지정
+시 `DEFAULT_PII_LABELS` 전체.
 
 ## 모드 선택 가이드
 

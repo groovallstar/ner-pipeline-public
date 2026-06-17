@@ -31,11 +31,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--hf-name', type=str, default=None,
                    help='HF dataset name (for --source hf)')
     p.add_argument('--hf-split', type=str, default='train')
-    p.add_argument('--lang', choices=['ja', 'vi'], default='ja')
+    p.add_argument('--lang', choices=['ja', 'vi', 'ko'], default='ja')
     p.add_argument('--output', type=str, required=True,
                    help='Output JSONL path')
     p.add_argument('--n-samples', type=int, default=None,
                    help='Limit the number of input samples')
+    p.add_argument('--pii-labels', nargs='+', default=None,
+                   help='Restrict injected PII labels '
+                        '(default: all 7). e.g. EMAIL PHONE ID_NUM '
+                        'CREDIT_CARD')
     p.add_argument('--pii-max', type=int, default=3,
                    help='Max PII injected per sample (truncates density)')
     p.add_argument('--seed', type=int, default=42)
@@ -151,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = InjectionConfig(lang=args.lang, seed=args.seed)
     cfg.density = _truncate_density(cfg.density, args.pii_max)
+    if args.pii_labels:
+        cfg.pii_labels = list(args.pii_labels)
     cfg.validate()
 
     logger.info('Loading records from source=%s', args.source)
@@ -175,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             client=client,
             lang=args.lang,
             seed=args.seed,
+            pii_labels=cfg.effective_labels(),
             density=density,
         )
         logger.info(

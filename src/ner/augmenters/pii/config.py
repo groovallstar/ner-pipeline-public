@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-Lang = Literal['ja', 'vi']
+Lang = Literal['ja', 'vi', 'ko']
 
 DEFAULT_DENSITY: dict[int, float] = {0: 0.2, 1: 0.4, 2: 0.3, 3: 0.1}
 # `NAME`·`ADDRESS`는 내부 생성 토큰이며 `DEFAULT_MERGE_RULES`로 canonical
@@ -45,7 +45,7 @@ class InjectionConfig:
         for k, v in self.density.items():
             if v < 0:
                 raise ValueError(f'density[{k}] must be >= 0 (got {v})')
-        if self.lang not in ('ja', 'vi'):
+        if self.lang not in ('ja', 'vi', 'ko'):
             raise ValueError(f'unsupported lang: {self.lang}')
 
     def effective_labels(self) -> list[str]:

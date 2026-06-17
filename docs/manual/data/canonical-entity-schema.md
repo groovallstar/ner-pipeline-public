@@ -8,14 +8,20 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
   `src/ner/augmenters/wikiann_vi/`
 - 적용 데이터: `data/stockmark/` (JA NER 5종 + PII 주입 10종),
   `data/wikiann_vi/` (VI silver 10종)
-- KO (`src/ner/labelers/ko/**`): KLUE 유래 canonical **부분 정렬** —
-  NER 5종(`PER/LOC/ORG/PROD/EVT`) + `DAT` 보유. `PROD/EVT`는 KLUE 문장
-  LLM 재라벨로 증분(§3.1~§3.3 회색지대 기준 적용), 기존 4종과
-  containment-replace 병합(outermost flat). PII 4종 미보유(후속 증분).
-  분류기 미완(10종 완성 후).
+- KO: canonical **10종 평면 완성**. NER 5종(`PER/LOC/ORG/PROD/EVT`) +
+  `DAT`는 KLUE 유래(라벨러 `src/ner/labelers/ko/**`, `PROD/EVT`는 LLM
+  재라벨 증분). PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 PII를
+  **llm 자연삽입**으로 증분(`data/klue/pii_all.jsonl`). 분류기 미완(후속 이슈).
 
 ## 변경 이력
 
+- **2026-06-16 (이슈 #115)**: KO canonical **10종 완성** — PII 4종
+  (`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)을 합성 PII **llm 자연삽입**으로 증분
+  (`augmenters/pii --lang ko --mode llm`, gemma-4-31B). 접두 패턴 편향을
+  피하려 문중 자연삽입(경직 접두 직후 PII 0%), `extract_spans` string-match로
+  offset 정확(0 mismatch). verify 미사용(사람 KLUE gold 보존). gold
+  `data/klue/pii_all.jsonl` 25989행, PII 각 ~8.3k, 원문 NER 보존 99.3%.
+  주민등록번호는 체크섬 무효로 실유효 번호 비생성. ko 생성기 `generators/ko.py`.
 - **2026-06-16 (이슈 #111)**: KO NER 5종 완성 — KLUE 문장 LLM 재라벨로
   `PROD/EVT` 증분(`scripts/ko_prod_evt_relabel.py`, gemma-4-31B). canonical
   §3.1~§3.3 회색지대 기준을 ko 프롬프트에 이식(운영리그=`ORG` vs 특정

@@ -11,6 +11,7 @@ EMAIL_DOMAINS: list[str] = [
     'gmail.com.vn', 'yahoo.com.vn', 'example.com.vn', 'corp.vn',
     'mail.vn', 'vnn.vn', 'fpt.com.vn', 'viettel.com.vn', 'vnpt.vn',
     'icloud.com', 'gmx.com', 'zoho.com',
+    'naver.com', 'daum.net', 'hanmail.net', 'kakao.com', 'nate.com',
 ]
 
 ALLOWED_EMAIL_SPECIALS = '.-_'
@@ -79,6 +80,8 @@ def generate_pii(
         from ner.augmenters.pii.generators import ja as mod
     elif lang == 'vi':
         from ner.augmenters.pii.generators import vi as mod
+    elif lang == 'ko':
+        from ner.augmenters.pii.generators import ko as mod
     else:
         raise ValueError(f'Unsupported language: {lang}')
 
