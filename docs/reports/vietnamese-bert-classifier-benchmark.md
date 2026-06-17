@@ -5,6 +5,7 @@
 - 데이터: `data/wikiann_vi/pii_all.jsonl` (**중복 제거 후 38,371 행**, canonical 10종 = NER 5 + PII 5)
 - 평가: char-offset span F1 (`src/ner/metrics/span_metrics.compute_offset_span_f1`), **stratified 5-fold pooled micro-average**
 - 출처: `docs/issues/issue-103-vi-classifier-canonical-benchmark.md`
+- 실험 연대기(phase별 직전상태→시도→결과·gold 계보): `docs/reports/vietnamese-bert-classifier-history.md`
 - 일본어 동일 셋업 결과는 `docs/reports/japanese-bert-classifier-benchmark.md` 참조
 
 > **이전 표(production 0.8985, sweep, v1~v4 ablation)는 폐기·대체됨.** 두 가지
@@ -175,14 +176,20 @@ fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
   (fold0 기준 — EVT fold0 orig 0.851 > pooled 0.792라 pooled EVT 보정은 더 낮음).
   클래스 정의(§3) 모호성은 병목 아님(schema_gap 0, IAA 1.0) — VI gold가 §3.1/
   3.2(법령·서비스·창작물 규칙)를 미반영한 게 원인.
-- **remediation 실측(#108)**: VI 프롬프트 §3 정렬 → 2모델 합의 re-silver(기준
-  유지) → 5-fold 재학습. **PROD pooled 0.717→0.792(phobert)·0.710→0.761
+- **remediation 실측(#108, v2)**: VI 프롬프트 §3 정렬 → 2모델 합의 re-silver
+  (기준 유지) → 5-fold 재학습. **PROD pooled 0.717→0.792(phobert)·0.710→0.761
   (xlm-r)** — 보정 추정(0.81) 사실상 적중, 천장은 데이터 문제로 확인. overall·
-  LOC·ORG 동반 상승. **단 EVT는 회귀**(−1.9/−6.8pp, 저support 합의 noise) →
-  미해결. 산출 gold `pii_all_v2.jsonl`(본 표 baseline은 v1로 불변).
+  LOC·ORG 동반 상승. 단 EVT는 회귀(−1.9/−6.8pp). 산출 gold `pii_all_v2.jsonl`.
+- **EVT 회귀 해결(#112, v3)**: 회귀의 본질은 평균이 아니라 2모델 합의 불안정
+  (per-fold std 부풀음)이었음을 규명 — Qwen 이 VI EVT(보통명사-핵 서술구)를 자유
+  생성에서 누락(Gemma-only EVT 178 중 151 이 Qwen 무-span). `recall_strict_evt`
+  병합 정책(single-model EVT 중 §3 legit 카테고리 regex 매칭분만 구제) → 재학습.
+  **EVT pooled 0.773→0.822(phobert)·0.735→0.837(xlm-r)**, 양 모델 v1 초과 +
+  per-fold std 붕괴(0.089→0.011). PROD give-back −2.2~2.4pp(v1 대비 유지),
+  overall flat. 산출 gold `pii_all_v3.jsonl`(본 표 baseline 은 v1 로 불변).
 - PII 5종은 0.98~1.00 포화. NER 5종 중 PER/LOC/ORG는 0.88~0.93.
-- 개선 레버(범위 밖): EVT 합의 정책·few-shot 보강(미해결), 외부 코퍼스(VLSP/
-  PhoNER, 단 오염 위험).
+- 잔여 천장(범위 밖): PROD recall(모델 약점)·EVT long-tail 패턴(투어·금융위기
+  등 미커버), 외부 코퍼스(VLSP/PhoNER, 단 오염 위험).
 
 ## 재현
 
