@@ -8,11 +8,27 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
   `src/ner/augmenters/wikiann_vi/`
 - 적용 데이터: `data/stockmark/` (JA NER 5종 + PII 주입 10종),
   `data/wikiann_vi/` (VI silver 10종)
-- 본 스키마 적용 범위 외(별도 스키마): KO (`src/ner/labelers/ko/**`,
-  KLUE `PS/LC/OG/DT/TI/QT`)
+- KO (`src/ner/labelers/ko/**`): KLUE 유래 canonical **부분 정렬** —
+  NER 5종(`PER/LOC/ORG/PROD/EVT`) + `DAT` 보유. `PROD/EVT`는 KLUE 문장
+  LLM 재라벨로 증분(§3.1~§3.3 회색지대 기준 적용), 기존 4종과
+  containment-replace 병합(outermost flat). PII 4종 미보유(후속 증분).
+  분류기 미완(10종 완성 후).
 
 ## 변경 이력
 
+- **2026-06-16 (이슈 #111)**: KO NER 5종 완성 — KLUE 문장 LLM 재라벨로
+  `PROD/EVT` 증분(`scripts/ko_prod_evt_relabel.py`, gemma-4-31B). canonical
+  §3.1~§3.3 회색지대 기준을 ko 프롬프트에 이식(운영리그=`ORG` vs 특정
+  연도판=`EVT`, 법령·시대구분·추상 쟁점 비-entity). 병합은
+  containment-replace(outermost flat, overlap 0) — flat BIO 분류기 제약.
+  gold `data/klue/origin.jsonl` 5종 승격(`PROD` 3313·`EVT` 1191 추가,
+  KLUE 1192 sub-span outermost 교체).
+
+- **2026-06-15 (이슈 #109)**: KO 라벨러·seed gold를 canonical 명칭으로
+  정렬. `PS→PER, LC→LOC, OG→ORG, DT→DAT` 개명, KLUE `TI/QT` 드롭.
+  `tag_aligner` ko/ja normalize 맵 분리(ja 불변). KLUE 유래 4종 seed
+  gold(`scripts/klue_to_canonical_gold.py` → `data/ko_klue/`) 생성.
+  `PROD/EVT`·PII 6종은 후속 증분.
 - **2026-06-09 (이슈 #85)**: JA EVT scope 재정의 — 회색지대
   규정(§3.3). **EVT 포함 명문화**: 자연재해·대형사고·named 경제/정치
   위기·주기적 복합 행사명사(선거·투표·`国勢調査`)·경기/컵/토너먼트/
@@ -438,7 +454,10 @@ canonical 형태로 저장된다.
 
 - **본 스키마 적용 제외**:
   - `src/ner/llm_eval/**` — 후속 정리 예정
-  - `src/ner/labelers/ko/**` — 별도 KLUE 스키마(`PS/LC/OG/DT/TI/QT`) 사용
+  - `src/ner/labelers/ko/**` — canonical **NER 5종**(`PER/LOC/ORG/PROD/EVT`)
+    + `DAT` 적용(KLUE 유래, `TI/QT` 드롭; `PROD/EVT`는 §3.1~§3.3 회색지대
+    기준, KLUE 문장 LLM 재라벨). PII 4종 미적용(후속). 이슈 #109(4종)·
+    #111(`PROD/EVT`)
   - 참고: `src/ner/classifier/**` 는 issue #40 에서 본 스키마(canonical 10종 평면)로 정합 완료
 
 ## 7. 평가 시 주의

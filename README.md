@@ -26,7 +26,7 @@ src/ner/
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
 └── scripts/               # 보조 스크립트
-docker/{dev,vllm,ollama}/  # 개발 컨테이너 + vLLM·Ollama 서비스
+docker/{dev,vllm}/         # 개발 컨테이너 + vLLM 서비스
 results/                   # 벤치마크 산출 (gitignored)
 tests/ner/                 # pytest 테스트
 docs/                      # manual·reports·issues·wiki·specs
