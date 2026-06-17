@@ -11,7 +11,7 @@ LLM NER 라벨링 결과를 gold 데이터와 비교하여 span 수준 메트릭
 
 ## 공개 API
 
-### `evaluate(gold_records, labeler, *, max_samples=None, show_progress=True) -> dict`
+### `evaluate(gold_records, labeler, *, max_samples=None, show_progress=True, collect_diffs=False) -> dict`
 
 `bio_dataset.load()` 반환 레코드를 gold로, `labeler.label_spans(sentence)` 결과를 pred로 받아 span 수준 메트릭을 계산한다.
 
@@ -23,7 +23,7 @@ from ner.llm_eval.span_evaluator import evaluate
 gold = load("klue", "validation", max_samples=500)
 labeler = VllmNERLabeler(
     base_url="http://localhost:8081/v1",
-    model="Qwen/Qwen3.5-35B-A3B",
+    model="Qwen/Qwen3.5-27B",
     concurrency=32,
 )
 result = evaluate(gold, labeler)
@@ -37,6 +37,7 @@ result = evaluate(gold, labeler)
 | `labeler` | any | `label_spans(text) -> list[{"text", "type"}]` 메서드를 가진 객체 |
 | `max_samples` | `int \| None` | 평가할 최대 레코드 수 제한 |
 | `show_progress` | `bool` | tqdm 진행 표시 (기본값: `True`) |
+| `collect_diffs` | `bool` | `True`이면 반환값에 레코드별 diff 분석 `"diffs"` 키 추가 (기본값: `False`) |
 
 #### 반환값
 
@@ -64,6 +65,8 @@ result = evaluate(gold, labeler)
     "latency": {
         "total_seconds": 568.02,
     },
+    # collect_diffs=True 시에만 포함
+    "diffs": [ ... ],  # 레코드별 diff 분석 리스트
 }
 ```
 
@@ -90,7 +93,7 @@ gold span과 pred span의 **텍스트와 타입이 모두 동일**할 때 매칭
 
 ### Per-entity 메트릭
 
-엔티티 타입별(PS, LC, OG, DT, TI, QT) precision, recall, F1을 독립 산출한다.
+엔티티 타입별(PS, LC, OG, DT, TI) precision, recall, F1을 독립 산출한다. KLUE NER gold 태그셋은 PS/LC/OG/DT/TI 5종이며 QT는 포함되지 않는다.
 
 ## 에러 처리
 

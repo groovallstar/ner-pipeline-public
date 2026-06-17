@@ -90,12 +90,12 @@ openspec의 proposal → design → tasks 흐름이 이미 Plan mode 역할을 �
 
 ```
 ner_pipeline/
-├── CLAUDE.md              # 프로젝트 전체 (현재 존재)
-├── src/
+├── CLAUDE.md              # 프로젝트 전체
+├── src/ner/
 │   └── CLAUDE.md          # 소스 코드 컨벤션
 ├── docker/
 │   └── CLAUDE.md          # Docker 환경 상세
-└── tests/
+└── tests/ner/
     └── CLAUDE.md          # 테스트 전략/실행 방법
 ```
 
@@ -107,11 +107,16 @@ ner_pipeline/
 
 ```
 .claude/skills/
+├── debug-triage/
+├── docwiki/
 ├── omc-reference/
 ├── openspec-apply-change/
 ├── openspec-archive-change/
 ├── openspec-explore/
-└── openspec-propose/
+├── openspec-propose/
+├── perf-measure/
+├── refuter/
+└── tdd/
 ```
 
 **추가 스킬 후보:**

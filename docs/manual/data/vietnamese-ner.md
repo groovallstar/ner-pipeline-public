@@ -74,10 +74,11 @@ WikiANN split → augmenters/wikiann_vi/__main__.py (모델별 1회)
 
 | 경로 | 소스 | 조건 |
 |---|---|---|
-| JSONL 폴백 | `/data/ner/unimelb-nlp_wikiann/test.jsonl` | 파일 존재 시 우선 사용 |
-| HuggingFace | `load_dataset('unimelb-nlp/wikiann', 'vi', split='test')` | JSONL 없을 때 |
+| JSONL | `data/wikiann_vi/test.jsonl` | 기본값; 파일 없으면 `FileNotFoundError` (HF 자동 폴백 없음) |
 
-진입점: `_create_labeler_vi()` in `src/ner/llm_eval/__main__.py`. 기본 split 은 `test` (KLUE 의 `validation` 과 다름 — WikiANN-vi 의 validation 은 작거나 없음).
+gold 로딩 진입점: `_load_gold()` in `src/ner/llm_eval/__main__.py`.
+`_create_labeler_vi()`는 LLM 라벨러 생성 전용이며 데이터 로딩과 무관.
+기본 split 은 `test` (KLUE 의 `validation` 과 다름 — WikiANN-vi 의 validation 은 작거나 없음).
 
 ### 출력 — `NERRecord`
 

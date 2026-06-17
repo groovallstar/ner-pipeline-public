@@ -342,7 +342,7 @@ f1        = 2 * precision * recall / (precision + recall)
 | 항목 | 한국어 (KLUE) | 일본어 (Stockmark) |
 |------|---------------|-------------------|
 | 데이터셋 | KLUE NER (`klue/ner`) | Stockmark NER Wikipedia (`stockmark/ner-wikipedia-dataset`) |
-| 엔티티 수 | 6 타입 (PS, LC, OG, DT, TI, QT) | 10 타입 평면 (PER, LOC, ORG, PROD, EVT, DAT, EMAIL, PHONE, ID_NUM, CREDIT_CARD) |
+| 엔티티 수 | 6 타입 (PER, LOC, ORG, DAT, PROD, EVT) | 10 타입 평면 (PER, LOC, ORG, PROD, EVT, DAT, EMAIL, PHONE, ID_NUM, CREDIT_CARD) |
 | 태그 표기 | KLUE 약어 | canonical 영문 (PER/LOC/ORG/PROD/EVT + PII) |
 | gold 데이터 형식 | 음절 BIO (`tokens` + `ner_tags`) | 문자 오프셋 span (`text` + `gold_spans`) |
 | 데이터 로딩 | JSONL 폴백 우선, HF 폴백 | canonical JSONL 덤프 전용 (HF 자동 로딩 없음) |
@@ -350,7 +350,7 @@ f1        = 2 * precision * recall / (precision + recall)
 | 조사 처리 | 프롬프트 규칙 + `_spans_to_bio()` substring match | 프롬프트 규칙 + `span_matcher._strip_particles()` |
 | 조사·경칭 목록 | 은/는/이/가/을/를/에/에서/으로/의/과/와/부터/까지 | は/が/を/に/で/と/の/へ/から/まで/も/や/より + 경칭(氏/さん/君/ちゃん/様) |
 | span → 태그 변환 | `_spans_to_bio()` (BIO 생성) | `match_spans()` (오프셋 부여, BIO 변환 없음) |
-| 태그 정규화 | 필요 (PER→PS 등) | 불필요 (canonical 그대로) |
+| 태그 정규화 | 필요 (KLUE 약어→canonical 변환) | 맵 존재(`_TAG_NORMALIZE_MAP_JA`)하나 JA 평가 경로에서 미호출 |
 | 평가 메트릭 | Span Match + seqeval BIO F1 + Char Span F1 | Offset Span F1 단일 |
 | 평가 라이브러리 | seqeval 의존 | 자체 구현 (`metrics/span_metrics.py`) |
 | TagAligner | 필수 | 미사용 |
@@ -366,7 +366,7 @@ f1        = 2 * precision * recall / (precision + recall)
 | 2 | 데이터 | canonical JSONL 덤프 전용 | 라벨 매핑·세이프티 정정 등 한 번 결정해야 할 변환을 1회성 도구에 격리. 런타임에서는 단순 읽기 | HF 자동 로딩 + 런타임 매핑 (변환 분산·재현성 약화) |
 | 3 | 프롬프트 | canonical 영문 라벨 (10종 평면) | OntoNotes 관용 표기로 다국어 라벨 공간 일관성 확보 + NER/PII 구분 없는 평면 단순화 | 데이터셋 원어 라벨 그대로 (다국어 통합 곤란, leakage 위험) |
 | 4 | 프롬프트 | LOC=지리만, ORG=인공시설 전부 | 접미사·운영체 룰로 봉합하던 LOC/FAC/CORP/POL/ORG 경계 모호성을 구조적으로 제거 | 시설/조직 분리 (경계 분쟁 누적, 평가 편차 큼) |
-| 5 | 프롬프트 | 메인 8 + DAT/LOC 2 + EMAIL 카운터 1 = 11개 Few-shot | 5종 NER + 5종 PII 동시 커버 + EMAIL 누락·번지 주소 같은 함정 케이스 학습 | Zero-shot (정확도 저하) |
+| 5 | 프롬프트 | 메인 9 + DAT/LOC 2 + EMAIL 카운터 1 = 12개 Few-shot | 5종 NER + 5종 PII 동시 커버 + EMAIL 누락·번지 주소 같은 함정 케이스 학습 | Zero-shot (정확도 저하) |
 | 6 | 라벨링 | `match_spans()` 별도 모듈 | LLM 출력(위치 없음) ↔ gold(위치 있음) 간 독립적 브릿지 | BIO 변환 후 비교 (변환 노이즈) |
 | 7 | 라벨링 | 길이 역순 + `consumed` 추적 | 부분 문자열 충돌·중복 매칭 방지 | 출현 순서대로 매칭 (충돌 위험) |
 | 8 | 라벨링 | 3단계 매칭 (exact → 공백 제거 → 조사 제거) | 일본어 조사·공백 부착 문제를 단계적 해결 | exact만 (매칭률 저하) |

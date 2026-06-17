@@ -24,14 +24,14 @@
 1. **문맥 부자연** — "…である。 電話 090-1234-5678" 처럼 문장과 무관하게 끼워 넣으면, BERT의 positional embedding과 `[SEP]`·구두점 경계 토큰에 대한 self-attention이 결합해 "문장 처음과 끝 근처의 숫자열·@ = PII"라는 위치 기반 shortcut을 학습한다. 결과적으로 정규식 수준의 표면 패턴만 잡고, 문장 중간에 자연스럽게 등장하는 PII에는 일반화하지 못하는 shortcut learning 문제가 발생한다.
 2. **주변 단서 결여** — 자연 문장에서 PII는 보통 「担当の○○」「連絡先は○○」처럼 trigger phrase와 함께 등장하는데, 랜덤 삽입에서는 이 단서가 사라져 실제 문서에서는 PII가 등장해도 감지하지 못할 가능성이 있다.
 
-이를 회피하기 위해 **LLM에게 "원문에 PII를 자연스러운 문맥으로 삽입하라"고 요청**해 학습 데이터를 만든다 (`src/ner/augmenters/pii/llm_injector.py::LLMInjector`, 프롬프트 `_INJECTION_PROMPT`).
+이를 회피하기 위해 **LLM에게 "원문에 PII를 자연스러운 문맥으로 삽입하라"고 요청**해 학습 데이터를 만든다 (`src/ner/augmenters/pii/llm_injector.py::LLMInjector`). 프롬프트는 언어별 `_INJECTION_PROMPT_JA`·`_INJECTION_PROMPT_VI`로 분리되어 있고, `_INJECTION_PROMPTS` dict에서 `lang` 키로 선택된다. `_INJECTION_PROMPT`는 `_INJECTION_PROMPT_JA`의 하위 호환 alias다.
 
 ### 1.2 2단계 구조 (Inject + Verify)
 
 | 단계 | 클래스 | 역할 |
 |---|---|---|
 | 1. Inject | `LLMInjector` | 원문에 PII를 자연스럽게 삽입하고 생성 텍스트에서 span offset을 추출 |
-| 2. Verify | `PIIVerifier` | 주입 결과를 **독립적으로 재라벨링**, 주입 LLM이 만든 span이 자연 문맥에 녹아들어 PII·원본 엔티티 양쪽에서 재검출되는지 교차 검증. `policy=drop_span`으로 상충 span만 제거(레코드 보존) |
+| 2. Verify | `PIIVerifier` | 주입 결과를 **독립적으로 재라벨링**, 주입 LLM이 만든 span이 자연 문맥에 녹아들어 PII·원본 엔티티 양쪽에서 재검출되는지 교차 검증. `policy=drop_span`으로 검증자가 미검출한 `missed` span과 타입 불일치 `conflicts` span을 모두 제거(레코드 자체는 보존) |
 
 CLI(`src/ner/augmenters/pii/__main__.py`)는 `--inject-url/--inject-model`과 `--verify-url/--verify-model`을 분리 지정할 수 있어, **성능이 가장 높은 상위 2개 모델을 각각 주입·검증 역할로 배치**하는 실제 워크플로우와 일치한다.
 

@@ -23,7 +23,7 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
   `data/klue/pii_all.jsonl` 25989행, PII 각 ~8.3k, 원문 NER 보존 99.3%.
   주민등록번호는 체크섬 무효로 실유효 번호 비생성. ko 생성기 `generators/ko.py`.
 - **2026-06-16 (이슈 #111)**: KO NER 5종 완성 — KLUE 문장 LLM 재라벨로
-  `PROD/EVT` 증분(`scripts/ko_prod_evt_relabel.py`, gemma-4-31B). canonical
+  `PROD/EVT` 증분(`src/ner/scripts/ko_prod_evt_relabel.py`, gemma-4-31B). canonical
   §3.1~§3.3 회색지대 기준을 ko 프롬프트에 이식(운영리그=`ORG` vs 특정
   연도판=`EVT`, 법령·시대구분·추상 쟁점 비-entity). 병합은
   containment-replace(outermost flat, overlap 0) — flat BIO 분류기 제약.
@@ -33,7 +33,7 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 - **2026-06-15 (이슈 #109)**: KO 라벨러·seed gold를 canonical 명칭으로
   정렬. `PS→PER, LC→LOC, OG→ORG, DT→DAT` 개명, KLUE `TI/QT` 드롭.
   `tag_aligner` ko/ja normalize 맵 분리(ja 불변). KLUE 유래 4종 seed
-  gold(`scripts/klue_to_canonical_gold.py` → `data/ko_klue/`) 생성.
+  gold(`src/ner/scripts/klue_to_canonical_gold.py` → `data/ko_klue/`) 생성.
   `PROD/EVT`·PII 6종은 후속 증분.
 - **2026-06-09 (이슈 #85)**: JA EVT scope 재정의 — 회색지대
   규정(§3.3). **EVT 포함 명문화**: 자연재해·대형사고·named 경제/정치
@@ -455,7 +455,7 @@ canonical 형태로 저장된다.
   - `src/ner/labelers/vi/ner_prompts.py`, `src/ner/labelers/vi/dataset_loader.py`
   - `src/ner/augmenters/pii/` 프롬프트·verifier·generators (10종 평면)
   - `src/ner/augmenters/pii/config.py` 의 `DEFAULT_MERGE_RULES`
-    (`ADDRESS→LOC`, `DOB→DAT`, `ID_NUMBER→ID_NUM`)
+    (`NAME→PER`, `ADDRESS→LOC`)
   - `src/ner/augmenters/wikiann_vi/` (silver 재라벨 파이프라인)
 
 - **본 스키마 적용 제외**:
