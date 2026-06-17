@@ -898,7 +898,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Test-set error analysis (classifier).'
     )
-    parser.add_argument('--lang', choices=['ja', 'vi'], required=True)
+    parser.add_argument('--lang', choices=['ja', 'vi', 'ko'], required=True)
     parser.add_argument(
         '--from-predictions', action='store_true',
         help='Diagnose saved K-fold pooled predictions instead of running '
@@ -998,6 +998,7 @@ def main():
     default_data = {
         'ja': 'data/stockmark/pii_all.jsonl',
         'vi': 'data/wikiann_vi/pii_all.jsonl',
+        'ko': 'data/klue/pii_all.jsonl',
     }
     data_path = args.data or default_data[args.lang]
 
