@@ -25,7 +25,7 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 - PER: Tên người (họ và tên đầy đủ, họ, tên, biệt hiệu, nghệ danh). Loại trừ chức danh: "Ông", "Bà", "Chủ tịch", "Thủ tướng", "Tướng", "GS"
 - LOC: **Chỉ vị trí địa lý** — quốc gia, tỉnh, thành phố, huyện, xã, sông, núi, biển, đảo, vịnh, hồ, địa chỉ (số nhà/tòa nhà/tầng). **Cơ sở nhân tạo (ga, sân bay, bệnh viện, trường học, bảo tàng, chùa, v.v.) thuộc ORG, không phải LOC**
 - ORG: Tổ chức và mọi cơ sở nhân tạo — doanh nghiệp, tập đoàn, ngân hàng, hãng hàng không, đài truyền hình, **trường đại học (pháp nhân, khuôn viên, cơ sở phụ thuộc — toàn bộ)**, đảng phái, bộ/cơ quan chính phủ, quân đội, tòa án, quốc hội, tổ chức quốc tế, câu lạc bộ thể thao, hiệp hội, liên đoàn, dàn nhạc giao hưởng + **ga/nhà ga, sân bay, cảng, bệnh viện, trường tiểu học/THCS/THPT, bảo tàng, thư viện, chùa, nhà thờ, đền, sân vận động, tháp**
-- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình (không bao gồm tên công ty, tên người, tên cơ sở)
+- PROD: Sản phẩm hữu hình, tác phẩm sáng tạo (âm nhạc/phim/sách/truyện tranh/anime/game/chương trình TV), phần mềm đóng gói, phương tiện/vũ khí/tàu/máy bay có tên model. **KHÔNG gồm: dịch vụ, SaaS, viễn thông, game vận hành trực tuyến, tiêu chuẩn/định dạng/giao thức kỹ thuật, giải thưởng/huân chương** (→ phi-thực-thể); tên công ty/người/cơ sở (→ ORG/PER)
 - EVT: Sự kiện một lần — giải đấu lớn, chiến tranh, hiệp ước, đại hội, cuộc cách mạng (không bao gồm giải đấu thường niên/câu lạc bộ)
 
 ## Quy tắc phân loại (áp dụng khi phân vân)
@@ -44,6 +44,10 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 - **Mã số mẫu/series đứng một mình ("RV522", "XF-91") → KHÔNG PHẢI PROD**. Chỉ thương hiệu+mã ("Galaxy S24", "iPhone 14 Pro") mới là PROD
 - **Cơ sở hạ tầng giao thông (đường sắt, tuyến tàu điện ngầm)**: đơn vị vận hành (Đường sắt Việt Nam) → ORG; tuyến/đường (Tuyến số 1, Đường sắt xuyên Sibir) → LOC; KHÔNG PHẢI PROD
 - **Khái niệm/đơn vị đo/hệ thống ("Hệ thống đo lường Planck") → KHÔNG PHẢI thực thể**, bỏ qua
+- **Luật/pháp lệnh/nghị định/quy định/dự luật → KHÔNG PHẢI thực thể** (văn bản pháp lý; chỉ hiệp ước mới là EVT)
+- **Thảm họa/tai nạn lớn, khủng hoảng kinh tế·chính trị có tên, bầu cử/trưng cầu/tổng điều tra, phong trào/khởi nghĩa có mốc thời gian → EVT**
+- **Triển lãm/tour/buổi ra mắt, dự án/kế hoạch/chiến lược có tên → EVT**
+- **Quá trình kéo dài nhiều năm (Chiến tranh Lạnh, Cách mạng Công nghiệp, Minh Trị Duy tân), thời đại/kỷ nguyên, chủ đề trừu tượng ("vấn đề ~") → KHÔNG PHẢI thực thể**
 
 ## Quy tắc
 1. Giữ nguyên dấu tiếng Việt, trích xuất chính xác văn bản gốc
@@ -89,6 +93,15 @@ SINGLE_PROMPT_TEMPLATE = """Bạn là chuyên gia nhận dạng thực thể có
 Đầu vào: Đường sắt xuyên Sibir là tuyến đường sắt dài nhất thế giới, vận hành bởi Công ty Đường sắt Nga.
 Đầu ra: [{{"text": "Đường sắt xuyên Sibir", "type": "LOC"}}, {{"text": "Công ty Đường sắt Nga", "type": "ORG"}}]
 
+Đầu vào: '' Diễm xưa '' ( Trịnh Công Sơn ).
+Đầu ra: [{{"text": "Diễm xưa", "type": "PROD"}}, {{"text": "Trịnh Công Sơn", "type": "PER"}}]
+
+Đầu vào: Quốc hội thông qua Luật Giao thông đường bộ năm 2008.
+Đầu ra: [{{"text": "Quốc hội", "type": "ORG"}}]
+
+Đầu vào: Chiến tranh Lạnh kết thúc và Liên Xô tan rã.
+Đầu ra: [{{"text": "Liên Xô", "type": "LOC"}}]
+
 Đầu vào: {sentence}
 Đầu ra:"""
 
@@ -100,7 +113,7 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ th
 - PER: Tên người (không bao gồm chức danh "Ông/Bà/Chủ tịch/Thủ tướng")
 - LOC: **Chỉ vị trí địa lý** (quốc gia/thành phố/sông/núi/đảo/địa chỉ). Cơ sở nhân tạo thuộc ORG
 - ORG: Tổ chức và mọi cơ sở nhân tạo (công ty/tập đoàn/ngân hàng/hãng/đài/trường đại học toàn bộ/đảng/bộ/quân đội/CLB/hiệp hội/tổ chức quốc tế + ga/sân bay/bệnh viện/trường PT/bảo tàng/thư viện/chùa/nhà thờ/sân vận động)
-- PROD: Sản phẩm, dịch vụ, phần mềm, tác phẩm, chương trình
+- PROD: Sản phẩm hữu hình, tác phẩm sáng tạo (âm nhạc/phim/sách/anime/game/TV), phần mềm đóng gói, phương tiện/vũ khí có tên model. **KHÔNG gồm dịch vụ/SaaS/tiêu chuẩn kỹ thuật/giải thưởng** (→ phi-thực-thể)
 - EVT: Sự kiện một lần — chiến tranh, hiệp ước, đại hội, giải đấu lớn
 
 ## Quy tắc phân loại (áp dụng khi phân vân)
@@ -114,6 +127,7 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ th
 - "Danh sách..."/Wikipedia list, tên khoa học Latin (Bulbophyllum X), khái niệm/đơn vị → KHÔNG trích xuất
 - Mã số mẫu đơn (RV522, XF-91) → KHÔNG PHẢI PROD. Chỉ thương hiệu+mã (Galaxy S24) mới là PROD
 - Cơ sở hạ tầng (đường sắt/tuyến tàu): vận hành = ORG, tuyến = LOC, KHÔNG PHẢI PROD
+- Luật/pháp lệnh/nghị định → KHÔNG PHẢI thực thể (chỉ hiệp ước = EVT). Thảm họa/khủng hoảng có tên/bầu cử/phong trào có mốc → EVT. Quá trình nhiều năm (Chiến tranh Lạnh, Minh Trị Duy tân)/thời đại/chủ đề trừu tượng → KHÔNG trích xuất
 
 ## Quy tắc
 1. Giữ nguyên dấu tiếng Việt
@@ -129,6 +143,13 @@ BATCH_PROMPT_TEMPLATE = """Bạn là chuyên gia NER tiếng Việt theo hệ th
 2: Samsung giới thiệu Galaxy S24.
 
 Đầu ra: {{"0": [{{"text": "Hồ Chí Minh", "type": "PER"}}, {{"text": "Chùa Một Cột", "type": "ORG"}}], "1": [{{"text": "Vietnam Airlines", "type": "ORG"}}, {{"text": "Sân bay Nội Bài", "type": "ORG"}}], "2": [{{"text": "Samsung", "type": "ORG"}}, {{"text": "Galaxy S24", "type": "PROD"}}]}}
+
+Đầu vào:
+0: '' Diễm xưa '' ( Trịnh Công Sơn ).
+1: Quốc hội thông qua Luật Giao thông đường bộ.
+2: Chiến tranh Lạnh kết thúc và Liên Xô tan rã.
+
+Đầu ra: {{"0": [{{"text": "Diễm xưa", "type": "PROD"}}, {{"text": "Trịnh Công Sơn", "type": "PER"}}], "1": [{{"text": "Quốc hội", "type": "ORG"}}], "2": [{{"text": "Liên Xô", "type": "LOC"}}]}}
 
 ## Các câu đầu vào
 {sentences}

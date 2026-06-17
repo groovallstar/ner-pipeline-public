@@ -1,9 +1,7 @@
 services:
   vllm:
-    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.19.0}
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.23.0}
     container_name: ${VLLM_CONTAINER:-vllm-server}
-    env_file:
-      - ./config/.env
     environment:
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
     volumes:

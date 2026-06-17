@@ -24,14 +24,14 @@ Orchestrates two Docker service layers: a GPU-enabled development container (dev
 ### Working In This Directory
 - Read `CLAUDE.md` first for mount topology and env var overview
 - GPU allocation: vLLM labeler=GPU1 (gemma, 8081) + verifier=GPU2 (qwen, 8082), each tensor-parallel=1; dev=all GPUs
-- Container names: `ner_pipeline_dev` (dev); `vllm-gemma4-31b-awq8` + `vllm-qwen36-35b-a3b-awq4` (production); `vllm-server` (load-and-bench.sh default project)
+- Container names: `ner_pipeline_dev` (dev); `vllm-gemma` + `vllm-qwen` (production), each under its own `-p <name>` compose project
 - All lifecycle scripts use `cd "$(dirname "$0")"` — run from their subdirectories
 - Host paths `/work` and `/data` must exist
 
 ### Common Patterns
-- vllm/ has 2 production `start-*.sh` (gemma labeler, qwen verifier) launched under `-p <name>` projects; `stop.sh`/`logs.sh` only manage the default `vllm` project (load-and-bench's `vllm-server`)
+- vllm/ has 2 production `start-*.sh` (gemma labeler, qwen verifier) launched under `-p <name>` projects; `stop.sh`/`logs.sh` target the named containers (`vllm-gemma`/`vllm-qwen` by default)
 - dev/ has only `init_with_claude_extension.sh` (first-run setup); no start/stop/logs scripts
-- Env vars: host CLIs auto-load repo-root `.env` (gitignored) via `_load_env`; vllm/ uses its own gitignored `config/.env` (model selection, written by `load-and-bench.sh`)
+- Env vars: host CLIs auto-load repo-root `.env` (gitignored) via `_load_env`; vllm/ start scripts export `VLLM_*` env vars (image/container/port) directly
 
 ## Dependencies
 
