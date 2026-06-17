@@ -3,7 +3,8 @@
 ## Purpose
 다국어 NER(Named Entity Recognition) 파이프라인. 멀티 백엔드 LLM 지원(OpenAI 호환
 API: vLLM, OpenAI) + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 기반 학습 데이터
-생성. 한국어(KLUE 6종), 일본어·베트남어(canonical 10종 평면) 지원.
+생성. 한국어·일본어·베트남어 모두 canonical 10종 평면 지원 (한국어 NER 5종+DAT 는
+KLUE 유래, PII 4종은 합성 주입).
 
 ## Key Files
 

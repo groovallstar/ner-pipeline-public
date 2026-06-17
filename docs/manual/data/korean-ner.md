@@ -1,6 +1,6 @@
 # 한국어 NER 라벨링 방법론
 
-> 대상 데이터셋: KLUE NER (6 엔티티 타입)
+> 대상 데이터셋: KLUE NER → canonical 6종(PER/LOC/ORG/DAT/PROD/EVT)
 > 대상 코드: `src/ner/labelers/ko/`, `src/ner/llm_eval/`, `src/ner/metrics/`, `src/ner/labelers/{dataset_loader,tag_aligner,llm_helpers}.py`
 
 ## 목차
@@ -28,19 +28,19 @@ List[NERRecord] {tokens, ner_tags, id, sentence?}
     ▼ split_sentences(text, lang='ko')              [labelers/llm_helpers.py]
 문장 리스트 → concurrency 단위 동시 호출
     │
-    ▼ ner_prompts.py (SINGLE / BATCH / SYSTEM+USER 템플릿)
+    ▼ ner_prompts.py (SINGLE / SYSTEM+USER 템플릿)
 프롬프트 문자열                                       [labelers/ko/ner_prompts.py]
     │
     ▼ vLLM(AsyncOpenAI) / OpenAI(temperature=0, JSON mode)
 LLM JSON 응답
     │
     ▼ parse_spans(raw)                              [labelers/llm_helpers.py]
-[{"text": "경찰", "type": "OG"}, ...]
+[{"text": "경찰", "type": "ORG"}, ...]
     │
     ├──▶ label_spans() 경로: raw spans 직접 반환
     │
     └──▶ label() 경로: spans_to_bio() 변환
-         BIO 태그 리스트 ["B-OG", "O", "B-PS", ...] [labelers/llm_helpers.py]
+         BIO 태그 리스트 ["B-ORG", "O", "B-PER", ...] [labelers/llm_helpers.py]
     │
     ▼ BenchmarkRunner._run_single()                 [llm_eval/benchmark_runner.py]
     │   eval_mode='bio' (ko/vi 공통)
@@ -71,7 +71,7 @@ KLUE NER 데이터셋. 두 가지 로딩 경로가 존재한다:
 | JSONL 폴백 | `/data/ner/klue/validation.jsonl` | 파일이 존재하면 우선 사용 |
 | HuggingFace | `load_dataset("klue", "ner", split="validation")` | JSONL 없을 때 |
 
-**코드:** `DatasetLoader.load()` (`src/ner/labelers/dataset_loader.py`)
+**코드:** `DatasetLoader.load()` (= `HFTokenDatasetLoader` 의 별칭, `src/ner/labelers/dataset_loader.py`)
 
 > BIO 토큰 시퀀스 데이터셋(KLUE·KMOU 등)의 1급 진입점은
 > `src/ner/labelers/bio_dataset.py`(REGISTRY 기반). 라벨러 통합용 레거시 진입점은
@@ -121,6 +121,11 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
     ner_tags = [label_feature.int2str(t) for t in raw_tags]  # 0 → "O", 1 → "B-PS", ...
 ```
 
+> 로딩 직후 `ner_tags`는 **KLUE 원본 약어**(`PS/LC/OG/DT/TI/QT`)를 그대로 담는다.
+> 이후 평가 단계의 `normalize_tag(lang='ko')`가 canonical(`PER/LOC/ORG/DAT`)로
+> 정규화하며, KLUE `TI/QT`는 매핑 없이 통과해 gold span 단계에서 드롭된다.
+> 따라서 §3 이후 본 문서의 태그 표기는 모두 canonical이다.
+
 ### 왜 이렇게 설계했는가
 
 | 결정 | 이유 |
@@ -136,15 +141,20 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 ### 엔티티 타입 정의
 
 **코드:** `src/ner/labelers/ko/ner_prompts.py`의 `DEFAULT_ENTITY_TYPES`
+(`["PER", "LOC", "ORG", "DAT", "PROD", "EVT"]` — canonical 6종)
 
 | 태그 | 의미 | 설명 | 예시 |
 |------|------|------|------|
-| PS | 인명 (Person) | 사람 이름, 성만도 가능. 가수/아이돌 그룹명 포함 | "김철수", "BTS", "소녀시대" |
-| LC | 지명 (Location) | 장소, 지역, 국가, 도시, 건물, 시설. 복합 지명 전체를 하나로 | "서울삼성동그랜드인터콘티넨탈" |
-| OG | 기관명 (Organization) | 회사, 기관, 단체, 정당, 팀. "경찰"도 기관 맥락이면 OG | "삼성전자", "경찰" |
-| DT | 날짜 (Date) | 연도, 월, 일, 기간, 상대날짜, 시대, 요일 | "지난19일", "5공화국시절" |
-| TI | 시간 (Time) | 시각, 시간대, 경과시간. "새벽", "오전" 단독도 TI | "오후 2시", "새벽" |
-| QT | 수량 (Quantity) | 숫자+단위, 금액, 비율, 순서, 서수, 횟수 | "100명", "50억원", "첫번째" |
+| PER | 인명 (Person) | 사람 이름, 성만 나오면 성만 추출. 익명 알파벳(A·B)·가수/아이돌 그룹명·외국인·등장인물명 포함 | "김철수", "박"(씨), "원더걸스", "카게무샤" |
+| LOC | 지명 (Location) | 장소·지역·국가·도시·건물·시설. 복합 지명은 전체를 하나로 묶음. 국가명은 기본 LOC | "서울삼성동그랜드인터콘티넨탈", "경남진해", "몽골" |
+| ORG | 기관 (Organization) | 회사·기관·단체·정당·팀·대표팀·학교. "경찰"·"정부" 등 일반명사도 기관 맥락이면 ORG. 운영 리그·구단도 ORG | "삼성전자", "경찰", "프리미어리그", "엠비씨" |
+| DAT | 날짜 (Date) | 연도·월·일·기간·상대날짜·시대·시절·요일. 숫자+날짜단위를 하나로 묶음 | "지난19일", "5공화국시절", "14년" |
+| PROD | 제품·작품 (Product) | 시판 물품·창작 작품(영화·드라마·노래·서적·만화·게임·방송 프로그램)·패키지 SW/OS·형식·모델명 제조물 | "갤럭시S24", "기생충", "황금어장" |
+| EVT | 행사·사건 (Event) | 1회성 행사·대회·경기·전쟁·조약·사건·자연재해·named 위기·주기적 선거/투표 | "임진왜란", "외환위기", "총선", "한일월드컵" |
+
+> KLUE 원본의 `TI`(시간)·`QT`(수량)는 canonical에서 **드롭**(개체명 비추출).
+> `PROD`/`EVT` 경계는 canonical 스키마 §3·§3.1~§3.3 기준(운영 리그=ORG vs
+> 경기·대회=EVT, 법령·시대구분·추상 쟁점·상/훈장·무형 서비스는 비-entity).
 
 ### 핵심 라벨링 규칙
 
@@ -152,47 +162,49 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 1. **조사 제외**: 은/는/이/가/을/를/에/에서/으로/의/과/와/부터/까지/도/만 — 반드시 제거
 2. **접미사 처리**: "씨"/"님" 제외. "김모"/"이모" → "김"/"이"만 추출 (성+익명). "강모연" (3글자+) → 전체 추출
-3. **복합 개체명 묶기**: 붙어 있는 개체명은 하나로 ("지난19일" → DT, "경남진해" → LC)
-4. **괄호 내 처리**: 괄호 안 숫자 → QT, 괄호 안 날짜 → 별도 DT
-5. **추출 제외 대상**: 사건명, 프로그램명, 작품명, 선박명은 개체명이 아님
+3. **복합 개체명 묶기**: 붙어 있는 개체명은 하나로 ("지난19일" → DAT, "경남진해" → LOC)
+4. **괄호 내 날짜**: 괄호 안 날짜는 별도 DAT로 분리 ("어제(10월 10일)" → "어제"=DAT, "10월10일"=DAT)
+5. **타입 판정·제외**: 사건·전쟁·대회 = EVT, 작품·프로그램·상품·선박 = PROD. 법령·시대구분·추상 쟁점·상/훈장·무형 서비스는 개체명 아님(추출 금지). 모호하면 우선순위 ORG→LOC→PROD→EVT
 6. **출력 형식**: JSON 배열만 출력, 다른 설명 금지
 7. **빈 결과**: 개체명 없으면 `[]` 반환
 
 ### 프롬프트 구조
 
-3종류의 프롬프트 템플릿이 존재한다:
+2종류의 프롬프트 템플릿이 존재한다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없음 — `augmenters/wikiann_vi/` 재라벨 파이프라인 전용):
 
 | 템플릿 | 변수명 | 용도 | 형식 |
 |--------|--------|------|------|
-| SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 | `입력: {sentence}\n출력:` |
-| BATCH | `BATCH_PROMPT_TEMPLATE` | 다중 문장 배치 라벨링 | `0: {sent0}\n1: {sent1}\n...` → `{"0": [...], "1": [...]}` |
-| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 | system/user 메시지 분리 |
+| SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 (vLLM) | `입력: {sentence}\n출력:` |
+| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 (다문 묶음) | system/user 메시지 분리 |
 
 ### Few-shot 예시의 설계 의도
 
-`SINGLE_PROMPT_TEMPLATE` 본문에 10개의 입력/출력 예시가 포함된다. 각 예시가 커버하는 엣지 케이스:
+`SINGLE_PROMPT_TEMPLATE` 본문에 13개의 입력/출력 예시가 포함된다. 각 예시가 커버하는 엣지 케이스:
 
 | 예시 | 커버하는 엣지 케이스 |
 |------|---------------------|
-| 1. 경찰은 박씨의 딸(32)과... | 일반명사 기관(경찰=OG), 접미사 제거(박씨→박), 괄호 내 숫자(32=QT) |
-| 2. 18번 홀(파5)에서... | 숫자+단위 묶기(18번홀=QT), 스포츠 용어(파5=QT), 서수(첫 번째=QT) |
-| 3. 지난19일 오전9시30분... | 붙어쓰기 날짜(지난19일=DT), 시간(오전9시30분=TI), 복합 지명 |
-| 4. 이번 주 월요일 새벽에... | 복합 날짜(이번 주 월요일=DT), 시간 단독(새벽=TI), 시대(5공화국시절=DT) |
-| 5. 삼성전자는 오늘 오후 2시... | DT/TI 분리(오늘=DT, 오후 2시=TI), 복수 LC(서울, 강남구, 코엑스) |
-| 6. 각 조 3위에 오른 6개국 중... | 스포츠 국가→OG(한국=OG), 단위 없는 숫자(4=QT, 0=QT) |
-| 7. 어제(10월 10일) 방송된... | 괄호 안 날짜 분리(어제=DT + 10월10일=DT), 그룹명→PS(원더걸스, 소녀시대) |
-| 8. 경남 진해에서... | 복합 LC 묶기(경남진해=LC), 외국 국가 LC(몽골), 시간 표현 처리 |
-| 9. 김 선수 소속팀 두산 베어스는... | 성만 추출(김), 팀명 OG, 시리즈명 OG, 기간 DT(14년) |
-| 10. 부산시 사하구 하단동... | 행정구역 한 덩어리 LC, 고유어 수사+단위 QT(두사람) |
+| 1. 경찰은 박씨의 딸(32)과 김모(33)씨... | 일반명사 기관(경찰=ORG), 접미사·익명 제거(박씨→박, 김모→김), 괄호 내 숫자는 비추출(QT 드롭) |
+| 2. 18번 홀(파5)에서... 최운정 장하나 LPGA | 인명 2명=PER, ORG(LPGA), 스포츠 수량(18번홀·파5)은 비추출 |
+| 3. 지난19일 오전9시30분 서울삼성동그랜드인터콘티넨탈... | 붙어쓰기 날짜(지난19일=DAT), 복합 LOC 한 덩어리, 시간(오전9시30분)은 비추출(TI 드롭) |
+| 4. 이번 주 월요일 새벽에... 5공화국시절 | 복합 날짜(이번 주 월요일=DAT), 시대(5공화국시절=DAT), 시간 단독(새벽)은 비추출 |
+| 5. 삼성전자는 오늘 오후 2시 서울 강남구 코엑스... | ORG, DAT(오늘), 복수 LOC(서울·강남구·코엑스), 시각·금액은 비추출 |
+| 6. 각 조 3위 6개국 중 한국이... | 스포츠 국가대표팀(한국=ORG), 숫자는 비추출 |
+| 7. 어제(10월 10일) 방송된 원더걸스... 소녀시대 | 괄호 안 날짜 분리(어제=DAT + 10월10일=DAT), 그룹명→PER(원더걸스·소녀시대) |
+| 8. 경남 진해에서 국악예술단... 최씨 지난 2010년 | 복합 LOC 묶기(경남진해=LOC), ORG, 성만 추출(최), 붙은 날짜(지난2010년=DAT) |
+| 9. 김 선수 소속팀 두산 베어스는... 한국시리즈 | 성만 추출(김), 팀명 ORG(두산 베어스·삼성), 기간 DAT(14년), 대회=EVT(한국시리즈) |
+| 10. 부산시 사하구 하단동... 몽골 선적 한수원 | 행정구역 한 덩어리 LOC, 국가 LOC(몽골), ORG(한수원), 수량은 비추출 |
+| 11. 봉준호 감독의 기생충은 임진왜란을... 명량 | 감독=PER, 작품=PROD(기생충·명량), 전쟁=EVT(임진왜란) |
+| 12. 외환위기 직후 총선에서 엠비씨 황금어장... | named 위기=EVT(외환위기), 선거=EVT(총선), 방송사=ORG(엠비씨), 프로그램=PROD(황금어장), 법령(도로교통법)은 비추출 |
+| 13. 프리미어리그 토트넘은 챔피언스리그... 갤럭시S24 | 운영 리그·팀=ORG(프리미어리그·토트넘), 대회=EVT(챔피언스리그), 제품=PROD(갤럭시S24) |
 
 ### 왜 이렇게 설계했는가
 
 | 결정 | 이유 |
 |------|------|
-| 3종류 프롬프트 | 백엔드별 최적 형식이 다름: vLLM은 단일 프롬프트, OpenAI는 system/user 분리가 성능 우수 |
+| 2종류 프롬프트 | 백엔드별 최적 형식이 다름: vLLM은 단일(SINGLE) 프롬프트, OpenAI는 system/user 분리 |
 | 상세한 엔티티 정의 + 규칙 | LLM의 라벨링 일관성을 높이기 위함. 특히 조사 제외, 복합 개체명 묶기는 한국어 특유의 문제 |
 | 다수의 Few-shot 예시 | 각 예시가 서로 다른 엣지 케이스를 커버하여, LLM이 다양한 패턴을 학습 |
-| BATCH 프롬프트의 인덱스 키 | 다중 문장 처리 시 문장-결과 매핑을 명확히 하기 위함 (`{"0": [...], "1": [...]}`) |
+| OpenAI USER 프롬프트의 인덱스 키 | 다중 문장 처리 시 문장-결과 매핑을 명확히 하기 위함 (`{"0": [...], "1": [...]}`) |
 
 ---
 
@@ -244,7 +256,7 @@ KO 라벨러는 공통 베이스(`src/ner/labelers/base_vllm_labeler.py`,
 
 ### 4.2 호출 단위 구성
 
-- **vLLM**: `_split_sentences()` 결과 문장 각각을 SINGLE 프롬프트로 1회씩 호출. `concurrency`(기본 32)로 동시 실행.
+- **vLLM**: `split_sentences()` 결과 문장 각각을 SINGLE 프롬프트로 1회씩 호출. `concurrency`(기본 32)로 동시 실행.
 - **OpenAI**: 문장을 `max_tokens_per_batch`(기본 1000) 토큰 한도로 묶어 USER 프롬프트의 `{sentences}`에 주입. 배치 단위를 `concurrency`(기본 4)로 동시 실행.
 - 빈 문장은 양쪽 모두 사전 필터링.
 
@@ -346,13 +358,13 @@ gold record {tokens, ner_tags, sentence}
     ├── (1) 텍스트 재구성: sentence 필드 또는 reconstruct_text()
     │
     ├── (2) gold spans 추출: extract_spans_from_bio(gold_tokens, gold_tags, lang='ko')
-    │       → [{"text": "경찰", "type": "OG"}, ...]
+    │       → [{"text": "경찰", "type": "ORG"}, ...]  (KLUE OG → canonical ORG 정규화됨)
     │
     ├── (3) LLM 라벨링: labeler.label_spans(text)
-    │       → [{"text": "경찰", "type": "OG"}, ...]  (predicted spans)
+    │       → [{"text": "경찰", "type": "ORG"}, ...]  (predicted spans)
     │
     ├── (4) 음절 BIO 변환: spans_to_syllable_bio(text, gold_tokens, pred_spans)
-    │       → ["B-OG", "I-OG", "O", ...]  (predicted BIO, gold 토큰 그리드에 정렬)
+    │       → ["B-ORG", "I-ORG", "O", ...]  (predicted BIO, gold 토큰 그리드에 정렬)
     │
     └── (5) 메트릭 계산 (전체 샘플에 대해)
 ```
@@ -361,12 +373,12 @@ gold record {tokens, ner_tags, sentence}
 
 **코드:** `normalize_tag(tag, lang='ko')` (`src/ner/labelers/tag_aligner.py`)
 
-LLM이 다양한 태그 형식을 출력할 수 있으므로, 모든 태그를 KLUE 표준으로 정규화한다 (`_TAG_NORMALIZE_MAP_KO`):
+LLM·gold가 KLUE 약어를 출력할 수 있으므로, 모든 태그를 canonical 표준(PER/LOC/ORG/DAT)으로 정규화한다 (`_TAG_NORMALIZE_MAP_KO`):
 
 ```
-PER → PS,  LOC → LC,  ORG → OG
-DATE → DT, TIME → TI, QUANTITY → QT
-PERSON → PS, LOCATION → LC, ORGANIZATION → OG
+PS → PER,  LC → LOC,  OG → ORG,  DT → DAT
+PERSON → PER, LOCATION → LOC, ORGANIZATION → ORG, DATE → DAT
+(TI·QT는 매핑하지 않고 통과 → 후속 gold 단계에서 드롭)
 ```
 
 ### spans → 음절 BIO 변환
@@ -382,9 +394,10 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
    - 중복 처리: `_next_search` 딕셔너리로 이미 매칭된 위치 이후부터 탐색
 3. **BIO 태그 할당**: 매칭된 문자 범위의 음절 토큰에 B-/I- 태그 부여
 
-### 4종 메트릭
+### 3종 메트릭
 
-**코드:** `MetricsCalculator` (`src/ner/metrics/bio_metrics.py`) + `compute_offset_span_f1` (`src/ner/metrics/span_metrics.py`)
+**코드:** `MetricsCalculator` (`src/ner/metrics/bio_metrics.py`)의 아래 3개 메서드
+(KO `bio` 경로는 `compute_offset_span_f1`를 쓰지 않는다 — 그것은 JA·VI offset-span 경로 전용)
 
 | 메트릭 | 메서드 | 역할 | 비고 |
 |--------|--------|------|------|
@@ -422,4 +435,4 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
 | 7 | 라벨링 | 2단계 span→BIO 매칭 | 조사 부착 처리 | exact match만 (누락 증가) |
 | 8 | 라벨링 | 배치 실패 시 개별 폴백 | 결과 확보 극대화 | 실패 시 에러 반환 |
 | 9 | 평가 | Span Match primary | BIO 변환 오류 우회 | seqeval만 사용 (변환 노이즈) |
-| 10 | 평가 | 4종 메트릭 병행 | 다각적 품질 평가 | 단일 메트릭 |
+| 10 | 평가 | 3종 메트릭 병행 | 다각적 품질 평가 | 단일 메트릭 |

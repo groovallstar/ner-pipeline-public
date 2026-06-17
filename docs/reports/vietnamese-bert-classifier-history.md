@@ -14,6 +14,11 @@
 | 1 | #108 | v2 | 0.9529 / 0.9543 | PROD 천장 §3 re-silver(+5~7.5pp), EVT 회귀 |
 | 2 | #112 | v3 | 0.9513 / 0.9525 | EVT 회귀 해결(recall_strict_evt), PROD give-back |
 
+> **⚠️ 위 overall·NER 수치는 원문 cross-fold 누출 인플레 포함(#124)**: full-text
+> dedup 이 원문 중복을 못 막아 NER 5종 절대값이 +1.1~1.4pp(EVT/ORG/PROD +3~5pp)
+> 부풀려져 있다. PII 5종·**phase 간 델타는 유효**(같은 누출이 v1/v2/v3 에 동일
+> 적재). 정량·정정: benchmark.md §원문 누출 정정 (#124).
+
 ## Phase 0 — 캐노니컬 5-fold 베이스라인 확립 (#103, 추론비용 #106)
 
 ### 직전 상태
@@ -21,8 +26,13 @@
   offset 정렬 버그 + WikiANN-vi 내재 train/test 누출.
 
 ### 본 단계에서 시도
-- **누출 제거**: 원문 키 중복 제거 40,000→**38,371**(−1,629). 어떤 fold 조합도
-  cross-split 중복 0 재검증(CafeBERT leaky 0.9504 → clean 0.9259로 부풀림 확인).
+- **누출 제거(불완전 — #124 정정)**: 40,000→**38,371**(−1,629) "원문 키 중복
+  제거". 그러나 원본 WikiANN-vi(40,000행)의 유니크 원문은 **29,343개뿐**(#124
+  측정)인데 1,629행만 제거 → 실제로는
+  *주입 후* 전체텍스트 중복만 제거됐고 'cross-split 중복 0' 재검증도 주입 텍스트
+  (행마다 유니크) 기준이라 **원문 cross-fold 누출이 남았다**(test 행 ~30%). 본
+  phase 와 #108/#112 의 **NER 5종 절대값은 +1.1~1.4pp(EVT/ORG/PROD +3~5pp)
+  인플레** — 상세·정정은 benchmark.md §원문 누출 정정 (#124).
 - **offset-trim 정렬 수정**(`data_utils._encode_vi`): SentencePiece `▁` 선행
   공백·숫자 entity 후행 부호 흡착 교정 → **mmBERT 0.53→0.94 구제**, XLM-R·
   CafeBERT 정렬 0.966→1.0.

@@ -220,6 +220,82 @@ def test_kfold_n_folds_exceeds_rows():
         split_kfold_stratified(rows, n_folds=10, fold_index=0, seed=42)
 
 
+def _grouped_rows() -> List[dict]:
+    """원문 중복을 시뮬레이션한 rows: 30개 원문, 각 1~3행(주입텍스트 유니크)."""
+    rows: List[dict] = []
+    rid = 0
+    for g in range(30):
+        for _ in range(1 + g % 3):
+            rows.append({
+                'text': f'inj-{rid}',
+                'orig': f'orig-{g}',
+                'entities': [],
+                'id': str(rid),
+            })
+            rid += 1
+    return rows
+
+
+def test_group_kfold_none_equals_rowlevel():
+    """group_key=None 은 인자 생략(행 단위)과 완전히 동일한 분할."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]
+    a = split_kfold_stratified(rows, 5, 1, 42)
+    b = split_kfold_stratified(rows, 5, 1, 42, group_key=None)
+    for left, right in zip(a, b):
+        assert [r['id'] for r in left] == [r['id'] for r in right]
+
+
+def test_group_kfold_no_cross_fold_leak():
+    """group_key 분할 시 test 원문이 train·valid 원문과 절대 겹치지 않는다."""
+    rows = _grouped_rows()
+    for fi in range(5):
+        tr, va, te = split_kfold_stratified(
+            rows, n_folds=5, fold_index=fi, seed=42, group_key='orig'
+        )
+        test_orig = {r['orig'] for r in te}
+        seen_orig = {r['orig'] for r in tr} | {r['orig'] for r in va}
+        assert test_orig.isdisjoint(seen_orig)
+
+
+def test_group_kfold_groups_intact():
+    """같은 orig 의 모든 행은 항상 한 split 에만 속한다."""
+    rows = _grouped_rows()
+    where: dict = {}
+    for fi in range(5):
+        tr, va, te = split_kfold_stratified(
+            rows, n_folds=5, fold_index=fi, seed=42, group_key='orig'
+        )
+        for name, split in (('train', tr), ('valid', va), ('test', te)):
+            for r in split:
+                where.setdefault((fi, r['orig']), set()).add(name)
+    for (_, orig), splits in where.items():
+        assert len(splits) == 1, f'{orig} split across {splits}'
+
+
+def test_group_kfold_every_row_tested_once():
+    """group 분할도 fold 순회 시 모든 행이 정확히 한 번 test 된다."""
+    rows = _grouped_rows()
+    seen: List[str] = []
+    for fi in range(5):
+        _, _, te = split_kfold_stratified(
+            rows, n_folds=5, fold_index=fi, seed=42, group_key='orig'
+        )
+        seen.extend(r['id'] for r in te)
+    assert len(seen) == len(set(seen))
+    assert set(seen) == {r['id'] for r in rows}
+
+
+def test_group_kfold_n_folds_exceeds_groups():
+    """group 수보다 n_folds 가 크면 ValueError (행 수는 충분해도)."""
+    rows = []
+    for _ in range(20):
+        rows.append({'text': '', 'orig': 'one', 'entities': [],
+                     'id': str(len(rows))})
+    with pytest.raises(ValueError):
+        split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
+                               group_key='orig')
+
+
 def test_ner_pii_partition():
     """NER_TYPES + PII_TYPES = CANONICAL_LABELS, 교집합 없음."""
     assert set(NER_TYPES).isdisjoint(set(PII_TYPES))

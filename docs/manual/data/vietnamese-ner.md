@@ -28,7 +28,7 @@ List[NERRecord] {tokens, ner_tags, id}
     ▼ TagAligner.reconstruct_text()                 [labelers/tag_aligner.py]
 원본 텍스트 (word-level 토큰 space-join)
     │
-    ▼ ner_prompts.py SINGLE/BATCH 템플릿            [labelers/vi/ner_prompts.py]
+    ▼ ner_prompts.py SINGLE/SYSTEM+USER 템플릿     [labelers/vi/ner_prompts.py]
 프롬프트 (베트남어, 10종 라벨 공간)
     │
     ▼ vLLM 또는 OpenAI 호출                          [labelers/vi/{vllm,openai}_ner_labeler.py]
@@ -120,15 +120,15 @@ PROD/EVT/PII 5종 출력은 FP 로 잡혀 precision 이 인위적으로 하락�
 
 ## 4. Stage 3 — 프롬프트 설계
 
-### 4.1 3종 프롬프트 템플릿
+### 4.1 2종 프롬프트 템플릿
 
-`src/ner/labelers/vi/ner_prompts.py`:
+`src/ner/labelers/vi/ner_prompts.py` (BATCH 템플릿은 라벨러에 없고
+`augmenters/wikiann_vi/prompts.py` 재라벨 파이프라인 전용):
 
 | 템플릿 | 변수명 | 용도 | 형식 |
 |---|---|---|---|
-| SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 | `Đầu vào: {sentence}\nĐầu ra:` |
-| BATCH | `BATCH_PROMPT_TEMPLATE` | 다중 문장 배치 | `0: ...\n1: ...` → `{"0":[...], "1":[...]}` |
-| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 | system/user 메시지 분리 |
+| SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 (vLLM) | `Đầu vào: {sentence}\nĐầu ra:` |
+| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 (다문 묶음) | system/user 메시지 분리 |
 
 ### 4.2 6가지 핵심 라벨링 규칙
 
@@ -152,7 +152,7 @@ silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-s
 
 ### 4.4 Few-shot 예시
 
-`src/ner/labelers/vi/ner_prompts.py` SINGLE 템플릿에 약 9개 예시 (메인 8 + PII 종합 1):
+`src/ner/labelers/vi/ner_prompts.py` SINGLE 템플릿에 약 10개 예시 (메인 9 + PII 종합 1):
 - PER + LOC + ORG 혼합 (`Chủ tịch Nguyễn Xuân Phúc...`)
 - 정당 + 정부기관 + 대학 (`Đảng Cộng sản Việt Nam và Bộ Giáo dục...`)
 - 시설 (공항·병원) (`Vietnam Airlines vận hành chuyến bay...`)
@@ -162,6 +162,7 @@ silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-s
 - PII 종합 (`Phụ trách là Trần Minh ... CCCD: 079123456789.`)
 - 자연지명 (`Vịnh Hạ Long là một kỳ quan thiên nhiên...`)
 - 시설 + 자연지명 분리 (`Chùa Một Cột nằm ở quận Ba Đình, Hà Nội.`)
+- 작품(음악) (`'' Diễm xưa '' ( Trịnh Công Sơn ).` → `Diễm xưa`=PROD, `Trịnh Công Sơn`=PER)
 
 ---
 
@@ -181,19 +182,19 @@ silver 재라벨 (`augmenters/wikiann_vi/prompts.py`) 에는 `canonical-entity-s
 
 ```
 입력 텍스트
-    ▼ _split_sentences()       정규식 [.!?]+공백 으로 문장 분리
+    ▼ split_sentences()        정규식 [.!?]+공백 으로 문장 분리
 문장 리스트
-    ▼ batch_size 단위 그룹핑
-배치 리스트
-    ▼ _call_llm_batch()        BATCH 프롬프트 호출. 단일 문장이면 SINGLE 폴백
+    ▼ 백엔드별 호출 단위 구성
+    │   ├─ vLLM:   문장 단위 SINGLE 프롬프트 × concurrency 동시 호출
+    │   └─ OpenAI: _make_batches() 토큰 한도 묶음 → SYSTEM+USER × concurrency
     ▼ JSON 파싱                <think> 태그 제거 + json.loads + 정규식 [...] 폴백
 [{"text": "...", "type": "..."}, ...]
-    ├── label_spans() 경로: raw spans 반환
-    └── label() 경로: spans → BIO 변환 (2단계: exact → substring 매칭)
+    ├── label_spans() 경로: raw spans 반환 (VI 평가 경로)
+    └── label() 경로: spans → BIO 변환 (KO 전용 경로, VI 미사용)
 ```
 
 설정:
-- `temperature=0` — NER 결정성
+- `temperature` — vLLM `0.0`(결정성), OpenAI `1`(provider 기본값)
 - `format=json` 또는 `response_format={"type": "json_object"}` — 유효 JSON 강제
 - vLLM 컨테이너 `enable_thinking=false` — thinking 토큰이 JSON 파싱 방해 방지
 - 폴백: 배치 호출 실패 시 개별 문장 단위 재시도
@@ -267,15 +268,15 @@ gold·pred 모두 문자 오프셋 span(`{type, start, end}`)으로 직접 비�
 
 ### 7.3 confidence 카테고리 + 정책 (`merge_confidence.py`)
 
-두 모델 출력 비교로 4 카테고리 분류 (`high`/`medium_recall`/`medium_prec`/`conflict`), 5 정책 중 선택:
+두 모델 출력 비교로 4 카테고리 분류 (`high`/`medium_recall`/`medium_prec`/`conflict`), 6 정책 중 선택(아래 5종 + EVT 구제 변형 `recall_strict_evt`). CLI `--policy` 기본값은 `recall`, silver 빌드 권장값은 `recall_strict`:
 
 | 정책 | PER/LOC/ORG | PROD/EVT |
 |---|---|---|
-| `recall` | high + medium_recall | high + medium_recall |
+| `recall` (CLI 기본값) | high + medium_recall | high + medium_recall |
 | `precision` | high + medium_prec | high + medium_prec |
 | `high_only` | high 만 | high 만 |
 | `full` | 전체 (conflict 포함) | 전체 |
-| **`recall_strict`** (권장) | **high + medium_recall** | **high 만** |
+| **`recall_strict`** (빌드 권장) | **high + medium_recall** | **high 만** |
 
 상세 평가 결과·신뢰 등급은 `docs/reports/vietnamese-ner-silver-quality.md` 참조.
 
