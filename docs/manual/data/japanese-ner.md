@@ -26,7 +26,7 @@ List[dict] {id, text, gold_spans:[{text, type, start, end}]}
     v record["text"] (원본 텍스트 그대로 사용)
 원본 텍스트 문자열                                    [llm_eval/benchmark_runner.py]
     |
-    v _split_sentences() → 동시성 그룹/배치 구성     [labelers/base_vllm_labeler.py · base_openai_labeler.py]
+    v split_sentences() → 동시성 그룹/배치 구성     [labelers/base_vllm_labeler.py · base_openai_labeler.py]
 문장 리스트
     |
     v ner_prompts.py (SINGLE / SYSTEM+USER 템플릿)
@@ -50,7 +50,7 @@ LLM JSON 응답
 벤치마크 결과 (CLI 테이블 + JSON 파일)
 ```
 
-**한국어 파이프라인과의 핵심 차이**: BIO 태그 변환 단계가 없다. LLM 출력 → `match_spans()` → 문자 오프셋 span → `compute_offset_span_f1()`로 직접 평가한다. seqeval, TagAligner, `_spans_to_bio()` 등 BIO 관련 모듈을 우회한다.
+**한국어 파이프라인과의 핵심 차이**: BIO 태그 변환 단계가 없다. LLM 출력 → `match_spans()` → 문자 오프셋 span → `compute_offset_span_f1()`로 직접 평가한다. seqeval, TagAligner, `spans_to_bio()` 등 BIO 관련 모듈을 우회한다.
 
 ---
 
@@ -144,7 +144,7 @@ records = JapaneseDatasetLoader.load_local('data/.../pii_injected.jsonl')
 
 ### Few-shot 예시 구성
 
-`SINGLE_PROMPT_TEMPLATE`에 11개 예시가 포함되어 있다.
+`SINGLE_PROMPT_TEMPLATE`에 12개 예시가 포함되어 있다.
 
 | 그룹 | 예시 | 커버하는 케이스 |
 |------|------|----------------|
@@ -153,7 +153,7 @@ records = JapaneseDatasetLoader.load_local('data/.../pii_injected.jsonl')
 | | `神栖郵便局は茨城県神栖市にある郵便局。` | 우체국 = ORG, 행정구역 = LOC |
 | | `国旗団は第一次世界大戦に出征した退役軍人の連合会…` | ORG + EVT |
 | | `藤岡高校から高崎鉄道管理局を経て、大映スターズへ入団。` | 학교·관리국·스포츠팀 모두 ORG |
-| | `ラ・リーガのFCバルセロナはチャンピオンズリーグで優勝した。` | 리그·팀 모두 ORG |
+| | `ラ・リーガのFCバルセロナはチャンピオンズリーグで優勝した。` | 리그·팀=ORG, 대회(チャンピオンズリーグ)=EVT |
 | | `東京駅から成田空港まで電車で移動した。` | 역·공항 = ORG |
 | | `富士山は日本最高峰で、東京から見える。` | 자연지명·국가·도시 = LOC |
 | PII 종합 | `担当は山田太郎（1985年4月3日生）。連絡先：090-…、メール：…` | PER + DAT + PHONE + EMAIL + LOC + CREDIT_CARD + ID_NUM |
@@ -174,7 +174,7 @@ JA 라벨러(`VllmNERLabeler`, `OpenAINERLabeler`)는 공통 베이스(`labelers
 ```
 입력 텍스트
     |
-    v _split_sentences()             (1) 문장 분리
+    v split_sentences()             (1) 문장 분리
 문장 리스트
     |
     v 백엔드별 호출 단위 구성          (2) 분할
@@ -193,15 +193,15 @@ JA 라벨러(`VllmNERLabeler`, `OpenAINERLabeler`)는 공통 베이스(`labelers
 [{"text": "東京", "type": "LOC", "start": 5, "end": 7}]
 ```
 
-**한국어와의 핵심 차이**: `label()` 경로의 `_spans_to_bio()` 변환 대신, `label_spans()` 경로로 raw span을 반환한 뒤 `match_spans()`로 문자 오프셋을 부여한다. 벤치마크 평가 시 BIO 변환이 일어나지 않는다.
+**한국어와의 핵심 차이**: `label()` 경로의 `spans_to_bio()` 변환 대신, `label_spans()` 경로로 raw span을 반환한 뒤 `match_spans()`로 문자 오프셋을 부여한다. 벤치마크 평가 시 BIO 변환이 일어나지 않는다.
 
 ### 4.1 문장 분리
 
-베이스 클래스의 `_split_sentences()`가 일본어 문장 부호(`。`, `！`, `？`)를 포함한 정규식으로 텍스트를 분리한다. 짧은 단편은 최소 길이 버퍼링으로 통합한다.
+베이스 클래스가 호출하는 `split_sentences()`(`ner.labelers.llm_helpers`)가 일본어 문장 부호(`。`, `！`, `？`)를 포함한 정규식으로 텍스트를 분리한다. 짧은 단편은 최소 길이 버퍼링으로 통합한다.
 
 ### 4.2 호출 단위 구성
 
-- **vLLM**: `_split_sentences()` 결과 문장 각각을 SINGLE 프롬프트로 1회씩 호출. `concurrency`(기본 32)로 동시 실행.
+- **vLLM**: `split_sentences()` 결과 문장 각각을 SINGLE 프롬프트로 1회씩 호출. `concurrency`(기본 32)로 동시 실행.
 - **OpenAI**: `_make_batches()`가 문장을 `max_tokens_per_batch`(기본 1000) 토큰 한도로 묶어 USER 프롬프트의 `{sentences}`에 주입. 배치 단위를 `concurrency`(기본 4)로 동시 실행.
 - 빈 문장은 양쪽 모두 사전 필터링.
 
@@ -347,9 +347,9 @@ f1        = 2 * precision * recall / (precision + recall)
 | gold 데이터 형식 | 음절 BIO (`tokens` + `ner_tags`) | 문자 오프셋 span (`text` + `gold_spans`) |
 | 데이터 로딩 | JSONL 폴백 우선, HF 폴백 | canonical JSONL 덤프 전용 (HF 자동 로딩 없음) |
 | split 제공 | validation split 사용 | canonical 덤프에 train/test 두 파일 분리 보관 |
-| 조사 처리 | 프롬프트 규칙 + `_spans_to_bio()` substring match | 프롬프트 규칙 + `span_matcher._strip_particles()` |
+| 조사 처리 | 프롬프트 규칙 + `spans_to_bio()` substring match | 프롬프트 규칙 + `span_matcher._strip_particles()` |
 | 조사·경칭 목록 | 은/는/이/가/을/를/에/에서/으로/의/과/와/부터/까지 | は/が/を/に/で/と/の/へ/から/まで/も/や/より + 경칭(氏/さん/君/ちゃん/様) |
-| span → 태그 변환 | `_spans_to_bio()` (BIO 생성) | `match_spans()` (오프셋 부여, BIO 변환 없음) |
+| span → 태그 변환 | `spans_to_bio()` (BIO 생성) | `match_spans()` (오프셋 부여, BIO 변환 없음) |
 | 태그 정규화 | 필요 (KLUE 약어→canonical 변환) | 맵 존재(`_TAG_NORMALIZE_MAP_JA`)하나 JA 평가 경로에서 미호출 |
 | 평가 메트릭 | Span Match + seqeval BIO F1 + Char Span F1 | Offset Span F1 단일 |
 | 평가 라이브러리 | seqeval 의존 | 자체 구현 (`metrics/span_metrics.py`) |
@@ -366,7 +366,7 @@ f1        = 2 * precision * recall / (precision + recall)
 | 2 | 데이터 | canonical JSONL 덤프 전용 | 라벨 매핑·세이프티 정정 등 한 번 결정해야 할 변환을 1회성 도구에 격리. 런타임에서는 단순 읽기 | HF 자동 로딩 + 런타임 매핑 (변환 분산·재현성 약화) |
 | 3 | 프롬프트 | canonical 영문 라벨 (10종 평면) | OntoNotes 관용 표기로 다국어 라벨 공간 일관성 확보 + NER/PII 구분 없는 평면 단순화 | 데이터셋 원어 라벨 그대로 (다국어 통합 곤란, leakage 위험) |
 | 4 | 프롬프트 | LOC=지리만, ORG=인공시설 전부 | 접미사·운영체 룰로 봉합하던 LOC/FAC/CORP/POL/ORG 경계 모호성을 구조적으로 제거 | 시설/조직 분리 (경계 분쟁 누적, 평가 편차 큼) |
-| 5 | 프롬프트 | 메인 9 + DAT/LOC 2 + EMAIL 카운터 1 = 12개 Few-shot | 5종 NER + 5종 PII 동시 커버 + EMAIL 누락·번지 주소 같은 함정 케이스 학습 | Zero-shot (정확도 저하) |
+| 5 | 프롬프트 | 메인 8 + PII 종합 1 + DAT/LOC 2 + EMAIL 카운터 1 = 12개 Few-shot | 5종 NER + 5종 PII 동시 커버 + EMAIL 누락·번지 주소 같은 함정 케이스 학습 | Zero-shot (정확도 저하) |
 | 6 | 라벨링 | `match_spans()` 별도 모듈 | LLM 출력(위치 없음) ↔ gold(위치 있음) 간 독립적 브릿지 | BIO 변환 후 비교 (변환 노이즈) |
 | 7 | 라벨링 | 길이 역순 + `consumed` 추적 | 부분 문자열 충돌·중복 매칭 방지 | 출현 순서대로 매칭 (충돌 위험) |
 | 8 | 라벨링 | 3단계 매칭 (exact → 공백 제거 → 조사 제거) | 일본어 조사·공백 부착 문제를 단계적 해결 | exact만 (매칭률 저하) |
