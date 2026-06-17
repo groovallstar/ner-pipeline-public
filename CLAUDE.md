@@ -6,7 +6,7 @@
 
 **다국어 NER(Named Entity Recognition) 파이프라인** — 멀티 백엔드 LLM 지원(OpenAI 호환 API) + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 기반 학습 데이터 생성.
 
-- 한국어: KLUE 유래 canonical 정렬 진행 (현재 4종: PER/LOC/ORG/DAT; KLUE TI/QT 드롭, PROD/EVT·PII 후속)
+- 한국어: canonical 10종 평면 완성 — NER 5종(PER/LOC/ORG/PROD/EVT) + DAT 은 KLUE 유래(PROD/EVT LLM 재라벨 증분, TI/QT 드롭), PII 4종(EMAIL/PHONE/ID_NUM/CREDIT_CARD)은 합성 주입
 - 일본어·베트남어: canonical 10종 평면 = NER 5종(PER/LOC/ORG/PROD/EVT) + PII 5종(DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD)
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
@@ -42,8 +42,8 @@ src/ner/
 ├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/AGENTS.md)
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
 │   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
-├── classifier/        # JA·VI canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
-│   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi ...)
+├── classifier/        # JA·VI·KO canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
+│   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi|ko ...)
 │   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
 └── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
@@ -64,7 +64,7 @@ docs/                  # 문서
 ## 주요 CLI 엔트리포인트
 
 - `python -m ner.llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
-- `python -m ner.classifier --lang {ja,vi}` — BERT 파인튜닝·평가 (canonical 10종 평면)
+- `python -m ner.classifier --lang {ja,vi,ko}` — BERT 파인튜닝·평가 (canonical 10종 평면; `--group-key orig` 로 누출-free group K-fold)
 - `python -m ner.augmenters.pii` — 합성 PII 주입
 - `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
 
