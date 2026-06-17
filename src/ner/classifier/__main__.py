@@ -45,18 +45,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_DATA = {
     'ja': 'data/stockmark/pii_all.jsonl',
     'vi': 'data/wikiann_vi/pii_all.jsonl',
+    'ko': 'data/klue/pii_all.jsonl',
 }
 DEFAULT_MODEL = {
     'ja': 'tohoku-nlp/bert-base-japanese-v3',
     'vi': 'xlm-roberta-base',
+    'ko': 'kakaobank/kf-deberta-base',
 }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='NER BERT fine-tune (canonical 10-class, JA·VI)'
+        description='NER BERT fine-tune (canonical 10-class, JA·VI·KO)'
     )
-    parser.add_argument('--lang', choices=['ja', 'vi'], required=True)
+    parser.add_argument('--lang', choices=['ja', 'vi', 'ko'], required=True)
     parser.add_argument('--data', help='Override JSONL path')
     parser.add_argument('--model-name', help='Override HF model name')
     parser.add_argument('--epochs', type=int, default=5)
