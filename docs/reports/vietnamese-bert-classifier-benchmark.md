@@ -10,8 +10,10 @@
 
 > **이전 표(production 0.8985, sweep, v1~v4 ablation)는 폐기·대체됨.** 두 가지
 > 혼입(confound)이 있었다 — ① fast-tokenizer offset 정렬 버그(아래 §코드 수정),
-> ② WikiANN-vi 내재 train/test 누출(아래 §누출). 본 표는 둘을 모두 제거한
-> 캐노니컬 단일 출처다.
+> ② WikiANN-vi 내재 train/test 누출(아래 §누출). ①은 제거됐으나 ②는 **부분
+> 제거에 그쳤다** — full-text dedup 이 원문 중복을 못 막아 NER 5종 절대값이
+> 여전히 +1.1~1.4pp(EVT/ORG/PROD +3~5pp) 인플레돼 있다(아래 §원문 누출 정정
+> (#124)). 본 표 수치는 누출 포함 as-is, 정정·누출-free 추정은 §원문 누출 정정.
 
 ## 요약
 
@@ -47,17 +49,59 @@ exact 문자열을 바꾸며 이 누출을 **가렸다**(겉보기 중복은 줄
 겹침). 40,000 행을 random 재셔플하면 test의 **4.17%(글자 그대로 일치)/
 6.33%(원문 일치)** 가 train과 겹쳐 모델이 라벨을 암기 → F1 부풀림.
 
-**조치**: PII를 제외한 원문 문장(이하 '원문 키')이 같은 행을 하나만 남기는
-**중복 제거(deduplication)** → 38,371 행(중복 1,629행 제거). 재검증: 중복 제거 후
-어떤 split·fold 조합에서도 train·test 간 같은 문장 출현(cross-split 중복) **0**. 실증으로
-CafeBERT가 leaky single-split 0.9504 → clean fold0 0.9259로 떨어져 부풀림을 확인.
+**조치(당시)**: PII를 제외한 원문 문장(이하 '원문 키')이 같은 행을 하나만
+남기는 **중복 제거(deduplication)** → 38,371 행(중복 1,629행 제거). 재검증:
+중복 제거 후 어떤 split·fold 조합에서도 train·test 간 같은 문장 출현(cross-split
+중복) **0**. 실증으로 CafeBERT가 leaky single-split 0.9504 → clean fold0 0.9259로
+떨어져 부풀림을 확인.
+
+> **⚠️ 정정(#124): 위 "cross-split 중복 0"은 잘못된 안심이었다.** 원본
+> WikiANN-vi(`all.jsonl`, 40,000행)의 유니크 원문은 **29,343개뿐**인데(#124
+> 측정) #103 dedup 은 1,629행만 제거 → 38,371행에 원문 중복이 ~9,000행 그대로
+> 남았다. 즉 1,629행만 제거된 것은 *주입 후* 전체텍스트 기준 중복 제거였고(주입 PII가
+> 행마다 달라 원문 중복을 가림), 'cross-split 중복 0' 재검증도 행마다 유니크한
+> *주입 텍스트* 기준이라 **원문 단위 누출이 통과됐다**. 결과적으로 #103/#108/
+> #112의 NER 5종 절대 수치는 원문 cross-fold 누출로 부풀려져 있다(아래
+> §원문 누출 정정 (#124)). 영구 차단은 분할 단계에서 group-kfold(`--group-key
+> orig`)로 박았다.
 
 > **잔여 한계(제거 불가)**: 전 인코더가 위키백과(VI)로 사전학습됨 → WikiANN
 > 문장 *텍스트*는 사전학습에 노출(라벨은 아님). 전 모델 공통이라 *상대 비교는
 > 유효*하나 *절대 F1은 낙관적*. 단, 사전학습 코퍼스 편중(PhoBERT/CafeBERT는
 > VI 위키·뉴스 집중)이 위키 출처 벤치에 유리할 수 있음은 해석 시 유의.
 
-## 5-fold 결과 (pooled, 중복 제거 후)
+## 원문 누출 정정 (#124)
+
+위 §누출의 full-text dedup 이 *원문* 중복을 못 막아, 같은 WikiANN-vi 원문
+문장이 train·test 로 갈리는 cross-fold 누출이 남았다(자연 코퍼스 37,706행
+기준 test 행 30.2%, NER 엔티티 27.7%; suffix v3 도 27.9%로 유사). 모델이
+일반화가 아니라 암기로 맞춰 **NER 5종 절대 F1 이 부풀려진다**.
+
+**정량(자연 코퍼스 37,706행 고정, 분할만 leaked 행단위 vs grouped 원문
+group-kfold 로 변경 — 누출 효과만 분리).**
+
+| 모델 | overall | NER 5종 micro | PII 5종 micro |
+|---|---:|---:|---:|
+| phobert leaked → grouped | 0.9506 → 0.9437 (**+0.69**) | 0.9198 → 0.9086 (**+1.12**) | 0.9985 → 0.9983 (+0.02) |
+| xlm-r leaked → grouped | 0.9517 → 0.9430 (**+0.87**) | 0.9226 → 0.9083 (**+1.43**) | 0.9972 → 0.9974 (−0.02) |
+
+per-entity 인플레(pp, phobert/xlm-r): **EVT +4.0/+5.3 · ORG +2.4/+3.4 ·
+PROD +2.9/+3.1** · PER +0.9/+1.3 · LOC +0.6/+0.6. 즉 인플레는 저support·고난도
+엔티티(특히 EVT/ORG/PROD)에 집중되고, **PII 5종은 불변**(±0.02pp — 행별 랜덤
+값이라 누출 0). grouped 분할 cross-fold 원문중복 0(`kfold_pool` 가드 확인,
+leaked 는 6,973).
+
+**아래 표 수치(v1 suffix, leaked 분할)에 대한 해석.**
+- **NER 5종 절대값은 위 인플레만큼 낙관적**이다(EVT/ORG/PROD 는 +3~5pp).
+  진짜 누출-free 값 ≈ 표값 − 인플레(자연 코퍼스 측정의 대표 추정 — suffix
+  코퍼스 파일은 폐기돼 정확 재측정 불가, 누출률이 27.9%로 유사해 규모 추정).
+- **상대 비교·델타는 유효**: phobert≈xlm-r, #108/#112 re-silver 이득(PROD·EVT
+  델타)은 같은 누출이 양쪽에 동일하게 실려 보존된다.
+- **PII 5종(0.98~1.00)은 인플레 아님** — 누출 0 확인.
+- 영구 차단: `split_kfold_stratified(group_key='orig')` + 분류기 `--group-key`
+  + `kfold_pool` 원문 단위 가드 + pytest(cross-fold 원문중복 0 강제).
+
+## 5-fold 결과 (pooled, 중복 제거 후 — NER 5종은 누출 인플레, §원문 누출 정정 참조)
 
 | 모델 | strict F1 | Precision | Recall | relaxed F1 | 비고 |
 |---|---:|---:|---:|---:|---|
@@ -87,6 +131,9 @@ fold0 붕괴로 산술평균(0.7531)·pooled(0.8364)·정상4fold평균(0.9414)�
 cafebert 32.8 · xlm-r-large 32.8.
 
 ### per-entity strict F1 (pooled)
+
+> NER 5종(PER/LOC/ORG/PROD/EVT)은 원문 cross-fold 누출로 인플레됨 — EVT·ORG·
+> PROD 가 +3~5pp 로 가장 큼(§원문 누출 정정). PII 5종은 불변.
 
 | Entity | support | phobert | xlm-r-base | mmbert | cafebert | xlm-r-large† |
 |---|---:|---:|---:|---:|---:|---:|
