@@ -77,6 +77,12 @@ def main():
         help='Fold used as test split (0 <= fold-index < kfold). '
              'Required when --kfold is set.',
     )
+    parser.add_argument(
+        '--group-key', default=None,
+        help='Row field to group by for leak-free K-fold (e.g. "orig"): '
+             'rows sharing the value go to the same fold, preventing '
+             'cross-fold original-text leakage. Default: row-level split.',
+    )
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output-dir', help='Override output dir')
     parser.add_argument(
@@ -157,13 +163,14 @@ def main():
     rows = load_jsonl(data_path)
     if args.kfold is not None:
         train_rows, valid_rows, test_rows = split_kfold_stratified(
-            rows, args.kfold, args.fold_index, args.seed
+            rows, args.kfold, args.fold_index, args.seed,
+            group_key=args.group_key,
         )
         logger.info(
             'Stratified K-fold: kfold=%d, fold_index=%d (test fold), '
-            'valid fold=%d',
+            'valid fold=%d, group_key=%s',
             args.kfold, args.fold_index,
-            (args.fold_index + 1) % args.kfold,
+            (args.fold_index + 1) % args.kfold, args.group_key,
         )
     else:
         train_rows, valid_rows, test_rows = split_train_valid_test(
@@ -342,12 +349,14 @@ def main():
     )
 
     if is_kfold:
-        # kfold pooled 평가용: test_rows 의 id·text 와 gold/pred span 을 zip.
-        # text 는 pooling 단계의 fold 간 중복 문장 검증 기준 (id 는 비고유)
+        # kfold pooled 평가용: test_rows 의 id·text·orig 와 gold/pred span 을
+        # zip. orig(원문)은 pooling 단계의 cross-fold 원문 누출 검증 기준이고
+        # text 는 레거시 전체문장 중복 검증 기준 (id 는 비고유)
         preds_out = [
             {
                 'id': row.get('id'),
                 'text': row['text'],
+                'orig': row.get('orig'),
                 'gold_spans': gold,
                 'pred_spans': pred,
             }
@@ -401,6 +410,7 @@ def main():
         'test_ratio': args.test_ratio,
         'kfold': args.kfold,
         'fold_index': args.fold_index if is_kfold else None,
+        'group_key': args.group_key if is_kfold else None,
         'seed': args.seed,
         'offset_trim': trim_offsets,
         'metric_for_best': 'eval_loss',

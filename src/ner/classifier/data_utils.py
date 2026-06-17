@@ -79,24 +79,31 @@ def split_train_valid_test(rows: List[dict],
 
 
 def split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
-                           strat_labels=('PROD', 'EVT')):
+                           strat_labels=('PROD', 'EVT'), group_key=None):
     """층화 K-fold 분할. (train, valid, test) 3-way 반환.
 
-    층화 기준: 각 row 의 entities 에 등장하는 strat_labels 부분집합
+    분할 단위(unit): group_key 가 None 이면 row 1개가 unit 1개(행 단위).
+    group_key 가 주어지면 같은 row[group_key] 값을 공유하는 row 들을 한
+    unit 으로 묶고, unit 을 통째로 한 fold 에 배정한다. 이렇게 하면 같은
+    원문에서 파생된 여러 행(예: 같은 원문에 서로 다른 PII 를 주입한 행들)이
+    train·test 로 갈리는 cross-fold 누출이 구조적으로 불가능해진다.
+
+    층화 기준: 각 unit 안 row 들의 entities 에 등장하는 strat_labels 합집합
     (예: 없음/PROD만/EVT만/둘다 = 최대 4개 층). stratum key 는 정렬된 tuple.
 
-    각 층 내에서 row 인덱스를 random.Random(seed) 로 셔플한 뒤 라운드로빈
+    각 층 내에서 unit 인덱스를 random.Random(seed) 로 셔플한 뒤 라운드로빈
     (shuffled_position % n_folds) 으로 fold 에 배정한다. 층은 stratum key
     정렬 순서로 결정적으로 순회하므로, 같은 seed 면 fold_index 와 무관하게
     fold 배정이 항상 동일하다.
 
-    test = fold_index 에 배정된 rows, valid = (fold_index+1) % n_folds 에
-    배정된 rows, train = 나머지.
+    test = fold_index 에 배정된 unit 들의 rows, valid = (fold_index+1) %
+    n_folds 에 배정된 unit 들의 rows, train = 나머지.
 
     핵심 보장: fold_index 를 0..n_folds-1 로 바꿔가며 호출하면 모든 row 가
-    정확히 한 번씩 test 에 등장한다 (valid 도 동일).
+    정확히 한 번씩 test 에 등장한다 (valid 도 동일). group_key 가 None 이면
+    기존 행 단위 분할과 완전히 동일하다(같은 seed → 동일 결과).
 
-    층 크기가 n_folds 로 나누어 떨어지지 않으면 나머지 row 는 낮은 번호의
+    층 크기가 n_folds 로 나누어 떨어지지 않으면 나머지 unit 은 낮은 번호의
     fold 에 먼저 배정된다 (라운드로빈 잔여분).
 
     Args:
@@ -105,6 +112,8 @@ def split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
         fold_index: test 로 쓸 fold 번호 (0 <= fold_index < n_folds)
         seed: 셔플 시드
         strat_labels: 층화 기준 라벨 튜플
+        group_key: 같은 fold 로 묶을 그룹 키 필드명(예: 'orig'). None 이면
+            행 단위 분할.
 
     Returns:
         (train_rows, valid_rows, test_rows)
@@ -113,38 +122,61 @@ def split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
         raise ValueError(
             f'n_folds must be >= 3 for 3-way split, got {n_folds}'
         )
-    if n_folds > len(rows):
-        raise ValueError(
-            f'n_folds ({n_folds}) must not exceed number of rows '
-            f'({len(rows)})'
-        )
     if fold_index < 0 or fold_index >= n_folds:
         raise ValueError(
             f'fold_index must be in [0, {n_folds}), got {fold_index}'
         )
 
-    strat_set = set(strat_labels)
-    # 층화 기준: row 의 entities 에 등장하는 strat_labels 부분집합 (정렬 tuple)
-    strata: Dict[tuple, List[int]] = {}
-    for i, row in enumerate(rows):
-        present = {
-            e['label'] for e in row['entities']
-            if e['label'] in strat_set
-        }
-        key = tuple(sorted(present))
-        strata.setdefault(key, []).append(i)
+    # 분할 단위 구성. group_key=None 이면 unit=행 1개(기존과 동일한 순서).
+    if group_key is None:
+        units: List[List[int]] = [[i] for i in range(len(rows))]
+    else:
+        groups: Dict[object, List[int]] = {}
+        order: List[object] = []
+        for i, row in enumerate(rows):
+            k = row[group_key]
+            if k not in groups:
+                groups[k] = []
+                order.append(k)
+            groups[k].append(i)
+        units = [groups[k] for k in order]
 
-    # fold 별 row 인덱스 버킷
-    fold_indices: List[List[int]] = [[] for _ in range(n_folds)]
+    if n_folds > len(units):
+        raise ValueError(
+            f'n_folds ({n_folds}) must not exceed number of split units '
+            f'({len(units)}; group_key={group_key!r})'
+        )
+
+    strat_set = set(strat_labels)
+    # 층화 기준: unit 안 row 들의 strat_labels 합집합 (정렬 tuple)
+    strata: Dict[tuple, List[int]] = {}
+    for ui, unit in enumerate(units):
+        present: set = set()
+        for ri in unit:
+            present |= {
+                e['label'] for e in rows[ri]['entities']
+                if e['label'] in strat_set
+            }
+        key = tuple(sorted(present))
+        strata.setdefault(key, []).append(ui)
+
+    # fold 별 unit 인덱스 버킷
+    fold_units: List[List[int]] = [[] for _ in range(n_folds)]
     rng = random.Random(seed)
     for key in sorted(strata.keys()):
         bucket = strata[key][:]
         rng.shuffle(bucket)
-        for pos, row_idx in enumerate(bucket):
-            fold_indices[pos % n_folds].append(row_idx)
+        for pos, ui in enumerate(bucket):
+            fold_units[pos % n_folds].append(ui)
 
-    test_idx = fold_indices[fold_index]
-    valid_idx = fold_indices[(fold_index + 1) % n_folds]
+    def _row_indices(fold_unit_idx: List[int]) -> List[int]:
+        out: List[int] = []
+        for ui in fold_unit_idx:
+            out.extend(units[ui])
+        return out
+
+    test_idx = _row_indices(fold_units[fold_index])
+    valid_idx = _row_indices(fold_units[(fold_index + 1) % n_folds])
     test_set = set(test_idx)
     valid_set = set(valid_idx)
     train_rows = [

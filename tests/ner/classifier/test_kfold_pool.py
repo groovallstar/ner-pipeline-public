@@ -69,6 +69,58 @@ def test_pool_fold_predictions_duplicate_text(tmp_path):
         pool_fold_predictions([fold0, fold1])
 
 
+def test_pool_cross_fold_orig_leak_raises(tmp_path):
+    """같은 orig 가 두 fold 의 test 에 걸치면 ValueError (주입텍스트는 달라도)."""
+    fold0 = str(tmp_path / 'fold0')
+    fold1 = str(tmp_path / 'fold1')
+    _write_fold(fold0, [{
+        'id': 'a', 'text': 'injected one', 'orig': 'same original',
+        'gold_spans': [], 'pred_spans': [],
+    }])
+    _write_fold(fold1, [{
+        'id': 'b', 'text': 'injected two', 'orig': 'same original',
+        'gold_spans': [], 'pred_spans': [],
+    }])
+    with pytest.raises(ValueError):
+        pool_fold_predictions([fold0, fold1])
+
+
+def test_pool_same_orig_within_fold_ok(tmp_path):
+    """같은 orig 가 한 fold 안에서 여러 번(group 정상)이면 누출 아님."""
+    fold0 = str(tmp_path / 'fold0')
+    fold1 = str(tmp_path / 'fold1')
+    _write_fold(fold0, [
+        {'id': 'a', 'text': 'inj a', 'orig': 'g1',
+         'gold_spans': [], 'pred_spans': []},
+        {'id': 'b', 'text': 'inj b', 'orig': 'g1',
+         'gold_spans': [], 'pred_spans': []},
+    ])
+    _write_fold(fold1, [
+        {'id': 'c', 'text': 'inj c', 'orig': 'g2',
+         'gold_spans': [], 'pred_spans': []},
+    ])
+    result = pool_fold_predictions([fold0, fold1])
+    assert result['n_sentences'] == 3
+    assert result['cross_fold_orig_dups'] == 0
+
+
+def test_pool_allow_cross_fold_leak_counts(tmp_path):
+    """require_no_leak=False 면 누출에 ValueError 대신 카운트만."""
+    fold0 = str(tmp_path / 'fold0')
+    fold1 = str(tmp_path / 'fold1')
+    _write_fold(fold0, [{
+        'id': 'a', 'text': 'inj one', 'orig': 'shared orig',
+        'gold_spans': [], 'pred_spans': [],
+    }])
+    _write_fold(fold1, [{
+        'id': 'b', 'text': 'inj two', 'orig': 'shared orig',
+        'gold_spans': [], 'pred_spans': [],
+    }])
+    result = pool_fold_predictions([fold0, fold1], require_no_leak=False)
+    assert result['n_sentences'] == 2
+    assert result['cross_fold_orig_dups'] == 1
+
+
 def test_pool_fold_predictions_duplicate_id_allowed(tmp_path):
     """id 가 중복돼도 text 가 다르면 정상 동작 (데이터셋 id 비고유 허용)."""
     fold0 = str(tmp_path / 'fold0')
