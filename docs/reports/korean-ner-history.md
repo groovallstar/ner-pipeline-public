@@ -2,8 +2,7 @@
 
 한국어 canonical 파이프라인(`src/ner/labelers/ko/`, `data/klue/`)이 KLUE
 원본에서 canonical **10종 평면** gold까지 도달한 과정을 단계별로 누적
-정리한다. 각 단계의 상세·반증은 GitHub Issue + `docs/issues/`에 있고, 여기서는
-"무엇을·왜·결과"를 축약한다.
+정리한다. 각 단계의 "무엇을·왜·결과"를 축약해 누적한다.
 
 - 대상: ko gold `data/klue/origin.jsonl`(NER) + `data/klue/pii_all.jsonl`(10종)
 - 단일 스키마 출처: `docs/manual/data/canonical-entity-schema.md`
@@ -19,8 +18,7 @@
 ## 단계 3 (#115) — PII 4종 → 10종 완성 (2026-06-16)
 
 ja/vi의 suffix PII 주입 파이프라인을 한국어로 지역화하며, *분류기 학습용*
-gold 품질을 위해 다음 설계 결정을 거쳤다. 상세·refuter 반증:
-`docs/issues/issue-115-ko-pii-canonical-10type.md`.
+gold 품질을 위해 다음 설계 결정을 거쳤다.
 
 **설계 결정 흐름** (이번 세션의 핵심):
 
@@ -50,6 +48,14 @@ gold 품질을 위해 다음 설계 결정을 거쳤다. 상세·refuter 반증:
 | 자연삽입 | 경직 접두 직후 0/33819 (0.00%) |
 | 주민등록번호 체크섬 | 8469/8469 무효 (실유효 번호 비생성) |
 | 원문 NER 보존 | 99.30% (스킵 제외 99.40%) |
+
+- 원문 손실 0.7%: LLM 재작성이 상대날짜(`7년전`)·복합 작품명을 패러프레이즈해
+  string-match 미발견 → drop된 것(허용 범위).
+- 주입 PII는 문법은 자연스러우나 KLUE 뉴스 주제와 의미상 어색 — 형식(format)으로
+  인식되는 타입(13자리=ID_NUM 등)이라 분류 학습엔 무해하고, 접두 의존을 차단해
+  "너무 쉽지 않게"라는 의도와 부합.
+- 검증: `pytest tests/ner` 323 green, ruff clean, 격리 반박자(refuter) PASS
+  (측정 숫자 독립 재계산 일치, 테스트 무결성 확인).
 
 산출: 커밋 `dcfb2e0`, PR #118. 재현:
 
