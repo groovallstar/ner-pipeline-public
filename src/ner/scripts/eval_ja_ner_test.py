@@ -2,8 +2,9 @@
 
 학습/검증 없이 고정 test 세트와 저장된 per-class 임계값(thresholds.json)만
 사용한다(실제 추론 기능). 각 test 문장이 어떻게 태깅됐는지 먼저 보여주고,
-임계값 적용 후 Precision / Recall / F1-Score 를 출력한다. 모델·test·임계값
-경로는 전체(절대) 경로만 받는다(상대 경로 거부).
+단계별 소요 시간(모델·토크나이저 로드 / 추론 전체 / 1문장당 추론)을 초 단위로
+출력한 뒤, 임계값 적용 후 Precision / Recall / F1-Score 를 출력한다. 모델·
+test·임계값 경로는 전체(절대) 경로만 받는다(상대 경로 거부).
 
 사용:
     python src/ner/scripts/eval_ja_ner_test.py
@@ -13,6 +14,7 @@
 """
 import argparse
 import os
+import time
 
 from transformers import AutoTokenizer
 
@@ -71,19 +73,36 @@ def main():
     require_abs(args.thresholds, 'thresholds path')
 
     label2id, id2label = build_label_maps()
+
+    t0 = time.perf_counter()
     tok = AutoTokenizer.from_pretrained(args.model_dir, use_fast=False)
+    tok_load_sec = time.perf_counter() - t0
+
     rows = load_jsonl(args.test)
     feats, offs = encode_dataset(rows, tok, label2id, 'ja', 256)
     res = evaluate_model(
         model_path=args.model_dir, eval_features=feats, eval_offsets=offs,
         eval_rows=rows, id2label=id2label, return_spans=True,
-        capture_scores=True)
+        capture_scores=True, capture_timing=True)
 
     thr = load_thresholds(args.thresholds)
     pred = apply_thresholds(res['pred_spans_list'], thr)
 
+    # 1) 샘플 추론 내용
     show_tagging(rows, pred)
 
+    # 2) 추론 시간 — 모델·토크나이저 로드 / 추론 전체 / 1문장당 추론
+    load_sec = tok_load_sec + res['load_seconds']
+    infer_sec = res['infer_seconds']
+    n = len(rows)
+    per_sent = infer_sec / n if n else 0.0
+    print('\n' + '=' * 60)
+    print('=== 추론 시간 ===')
+    print(f'Model + tokenizer load: {load_sec:.3f} sec')
+    print(f'Inference (total):      {infer_sec:.3f} sec  ({n} sentences)')
+    print(f'Inference (per sentence): {per_sent:.4f} sec')
+
+    # 3) 평가지표
     op = compute_offset_span_f1(res['gold_spans_list'], pred)['overall']
     print('\n' + '=' * 60)
     print('=== 평가지표 ===')

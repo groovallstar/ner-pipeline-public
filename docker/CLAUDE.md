@@ -26,21 +26,20 @@ cd docker/dev && bash init_with_claude_extension.sh
 
 ## vLLM 서비스 (docker/vllm/)
 
-GPU 1,2 사용, tensor_parallel=2.
-포트: start 스크립트 기본값 8081 (`VLLM_PORT=8081`);
-compose 자체 기본값은 8000 (`${VLLM_PORT:-8000}`).
+각 모델을 tensor_parallel=1로 전용 GPU에 띄운다 (gemma: GPU1, qwen: GPU2).
+포트: gemma 8081, qwen 8082; compose 자체 기본값은 8000 (`${VLLM_PORT:-8000}`).
 
 ```bash
-# 27B 모델 시작
-bash docker/vllm/start-27b.sh
+# gemma-4-31B-it-AWQ-8bit 시작 (GPU1, 8081)
+bash docker/vllm/start-gemma4-31b-awq-8bit.sh
 
-# 35B-A3B 모델 시작
-bash docker/vllm/start-35b-a3b.sh
+# Qwen3.6-35B-A3B-AWQ-4bit 시작 (GPU2, 8082)
+bash docker/vllm/start-qwen3.6-35b-a3b-awq.sh
 
-# 중지
+# 중지 (기본: vllm-gemma vllm-qwen 모두)
 bash docker/vllm/stop.sh
 
-# 로그
+# 로그 (기본: vllm-gemma; 예: logs.sh vllm-qwen)
 bash docker/vllm/logs.sh
 ```
 

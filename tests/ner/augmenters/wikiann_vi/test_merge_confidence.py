@@ -3,6 +3,7 @@ import pytest
 
 from ner.augmenters.wikiann_vi.merge_confidence import (
     _filter_by_policy,
+    _is_evt_legit,
     categorize_spans,
     merge_records,
 )
@@ -131,6 +132,79 @@ class TestFilterByPolicy:
         # conflict / medium_prec 는 모든 type 에서 drop
         assert ('PER', 'conflict') not in kept
         assert ('PER', 'medium_prec') not in kept
+
+
+class TestEvtLegit:
+    """§3 legit 카테고리 패턴 게이트."""
+
+    @pytest.mark.parametrize('text', [
+        'Cúp bóng đá châu Á 2007',          # 연도대회
+        'World Cup 2022',
+        'UEFA Champions League 2007-08',
+        'Công ước Genève',                   # 조약
+        'Hiệp định Paris',
+        'Hội nghị cấp cao Đông Á',
+        'Chiến tranh Nga-Ba Tư',             # 전쟁
+        'Trận Ngọc Hồi - Đống Đa',
+        'Bão Haiyan',                        # 재해
+        'Vụ đánh bom xe lửa tại Madrid',
+        'Phong trào Cần Vương',              # 봉기
+        'Bầu cử Duma Quốc gia năm 2007',
+    ])
+    def test_legit_matches(self, text):
+        assert _is_evt_legit(text) is True
+
+    @pytest.mark.parametrize('text', [
+        'Minh Trị Duy tân',                  # 다년 process — 정당 drop
+        'Chiến Quốc',                        # 시대
+        'Cải cách Taika',
+        'Đại hội Thể thao châu Á',           # 연도 없는 정기대회 → ORG
+        'Galaxy S24',                        # PROD
+        'Hà Nội',                            # LOC
+        '',                                  # 빈 문자열
+    ])
+    def test_nonlegit_no_match(self, text):
+        assert _is_evt_legit(text) is False
+
+
+class TestRecallStrictEvt:
+    """recall_strict_evt — EVT single-model legit 매칭분 구제."""
+
+    def _span(self, type_, conf, text):
+        return {'type': type_, 'confidence': conf, 'text': text}
+
+    def test_rescues_single_model_legit_evt(self):
+        spans = [
+            self._span('EVT', 'high', 'Chiến tranh Việt Nam'),
+            self._span('EVT', 'medium_recall', 'Cúp bóng đá châu Á 2007'),
+            self._span('EVT', 'medium_prec', 'Công ước Genève'),
+            self._span('EVT', 'medium_recall', 'Minh Trị Duy tân'),
+            self._span('EVT', 'conflict', 'Trận X 2008'),
+            self._span('PROD', 'medium_recall', 'Galaxy S24'),
+            self._span('PROD', 'high', 'iPhone 14'),
+            self._span('LOC', 'medium_recall', 'Hà Nội'),
+            self._span('PER', 'medium_prec', 'Nam'),
+        ]
+        r = _filter_by_policy(spans, 'recall_strict_evt')
+        kept = {(s['type'], s['confidence'], s['text']) for s in r}
+        # EVT high + legit single-model 구제
+        assert ('EVT', 'high', 'Chiến tranh Việt Nam') in kept
+        assert ('EVT', 'medium_recall', 'Cúp bóng đá châu Á 2007') in kept
+        assert ('EVT', 'medium_prec', 'Công ước Genève') in kept
+        # 비-legit EVT single-model 은 drop
+        assert ('EVT', 'medium_recall', 'Minh Trị Duy tân') not in kept
+        # conflict 는 전 type drop
+        assert ('EVT', 'conflict', 'Trận X 2008') not in kept
+        # PROD 는 high 만, medium_recall drop
+        assert ('PROD', 'high', 'iPhone 14') in kept
+        assert ('PROD', 'medium_recall', 'Galaxy S24') not in kept
+        # PER/LOC 는 medium_recall 보존, medium_prec drop
+        assert ('LOC', 'medium_recall', 'Hà Nội') in kept
+        assert ('PER', 'medium_prec', 'Nam') not in kept
+
+    def test_in_policies(self):
+        from ner.augmenters.wikiann_vi.merge_confidence import POLICIES
+        assert 'recall_strict_evt' in POLICIES
 
 
 class TestMergeRecords:

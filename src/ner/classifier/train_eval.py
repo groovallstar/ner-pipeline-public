@@ -139,7 +139,8 @@ def evaluate_model(*, model_path: str,
                    id2label: Dict[int, str],
                    batch_size: int = 32,
                    return_spans: bool = False,
-                   capture_scores: bool = False) -> dict:
+                   capture_scores: bool = False,
+                   capture_timing: bool = False) -> dict:
     """best 모델 로드 → predict → BIO decode → strict + relaxed span F1 계산.
 
     eval_rows 는 augmenters JSONL 형식 그대로 (label/start_char/end_char).
@@ -151,6 +152,8 @@ def evaluate_model(*, model_path: str,
         capture_scores: True 면 토큰 softmax 신뢰도를 포착해 각 pred span 에
             'score'(conf_mean)를 부착한다 (abstention fit·apply 용). score 는
             metrics 에 영향 없음(여전히 strict/relaxed 는 임계값 미적용 raw 기준).
+        capture_timing: True 면 반환 dict 에 'load_seconds'(모델 로드),
+            'infer_seconds'(추론 루프 전체) 키를 초 단위로 추가한다.
 
     Returns:
         {"strict": {overall, per_entity}, "relaxed": {overall, per_entity}}
@@ -160,14 +163,17 @@ def evaluate_model(*, model_path: str,
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # 평가는 항상 float32 로 (DeBERTa-v3 family 의 fp16 NaN underflow 회피)
+    t_load = time.perf_counter()
     model = AutoModelForTokenClassification.from_pretrained(
         model_path, dtype=torch.float32
     ).to(device).eval()
+    load_seconds = time.perf_counter() - t_load
 
     pred_spans_list: List[List[dict]] = []
     gold_spans_list: List[List[dict]] = []
 
     n = len(eval_features)
+    t_infer = time.perf_counter()
     with torch.no_grad():
         for i in range(0, n, batch_size):
             batch = eval_features[i:i + batch_size]
@@ -203,6 +209,7 @@ def evaluate_model(*, model_path: str,
                     for e in eval_rows[i + j]['entities']
                 ]
                 gold_spans_list.append(gold)
+    infer_seconds = time.perf_counter() - t_infer
 
     result = {
         'strict': compute_offset_span_f1(gold_spans_list, pred_spans_list),
@@ -213,4 +220,7 @@ def evaluate_model(*, model_path: str,
     if return_spans:
         result['gold_spans_list'] = gold_spans_list
         result['pred_spans_list'] = pred_spans_list
+    if capture_timing:
+        result['load_seconds'] = load_seconds
+        result['infer_seconds'] = infer_seconds
     return result

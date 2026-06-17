@@ -16,6 +16,9 @@
 
 - **상위 무승부**: `vinai/phobert-base-v2` (0.9461) ≈ `xlm-roberta-base`
   (0.9459) — 0.02pp 차로 통계적 동률.
+- **동률의 비용 결판(아래 §배포 비용)**: phobert가 메모리 41%↓·단문 레이턴시
+  20%↓·params 절반, pyvi 오버헤드는 +1ms로 무시 가능. 남는 건 운영축
+  (pyvi 의존성·정렬 0.996)뿐.
 - **CafeBERT(VI continued-pretrain)는 base를 못 넘음** (0.9367 < 0.9459) —
   베트남어 추가 사전학습이 이 태스크엔 이득 없음.
 - **`xlm-roberta-large` 불안정** — 5-fold 중 fold0이 all-O로 완전 붕괴(F1=0),
@@ -100,6 +103,35 @@ cafebert 32.8 · xlm-r-large 32.8.
 †xlm-r-large는 붕괴 fold0 포함 pooled — per-entity 전반이 낮은 것은 fold0의
 all-O 때문이며 정상 4-fold는 타 모델과 동급(아래).
 
+## 배포 비용 (추론) — accuracy 동률의 결판
+
+accuracy가 phobert ≈ xlm-r-base 동률이라 선택은 **비용 축**에서 갈린다. fold0
+test 7,675문장, float32, RTX A6000 1장(`CUDA_VISIBLE_DEVICES=0`)에서 측정
+(batch=32 throughput / batch=1 latency 200문장 median). 측정: `python
+src/ner/scripts/bench_vi_inference_cost.py`. 상세 출처: `docs/issues/
+issue-106-vi-classifier-inference-cost.md`.
+
+| 모델 | params | peak GPU mem | encode/sent | latency b=1 | throughput b=32 | strict F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| **`phobert-base-v2`** | 134M | **789MB** | 1.21ms (pyvi) | **6.03ms** | 345/s | 0.9461 |
+| `xlm-roberta-base` | 277M | 1,335MB | 0.22ms | 7.54ms | 343/s | 0.9459 |
+| `mmbert-base` | 307M | 1,470MB | 0.22ms | 20.1ms | 209/s | 0.9395 |
+| `cafebert` | 559M | 2,496MB | 0.22ms | 15.3ms | 101/s | 0.9367 |
+| `xlm-roberta-large` | 559M | 2,496MB | 0.21ms | 15.3ms | 101/s | 0.8364† |
+
+- **하드웨어 비용은 전부 phobert 우위**: 메모리 41%↓(789 vs 1,335MB)·단문
+  레이턴시 20%↓(6.03 vs 7.54ms)·params·disk 절반. throughput만 동률(345≈343).
+- **pyvi 오버헤드는 실재하나 무시 가능**: encode 1.21 vs 0.22ms(~5.5×)지만 절대
+  +1ms. end-to-end(encode+forward) phobert 7.24ms < xlm-r-base 7.76ms —
+  pyvi를 더해도 phobert가 더 빠르다.
+- **남는 trade-off는 순수 운영축**(성능 아님): xlm-r-base의 유일한 이점은 pyvi
+  의존성 없음 + fast(Rust) 토크나이저 + char 정렬 1.0(phobert 0.996 = 0.4%
+  구조적 손실 + inference 시 분절 드리프트라는 라이브 실패 모드). phobert는 그
+  0.4% 핸디캡을 안고도 F1 동률 → 내재 모델은 오히려 약간 우수.
+- **권고**: 메모리/지연 제약이면 phobert(절반 자원). pyvi 의존·정렬 리스크 회피 +
+  2× 자원 감수 가능이면 xlm-r-base. cafebert·xlm-r-large(550M)는 정확도 열위/불안정
+  + 최고 비용이라 비채택. mmbert는 정확도도 낮고 b=1 레이턴시 최악(20ms)이라 비채택.
+
 ## `xlm-roberta-large` 불안정 (large 모델 확률적 붕괴)
 
 fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
@@ -136,11 +168,21 @@ fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
 
 ## 천장 원인 (본 리포트 범위 밖)
 
-- **PROD(~0.71)·EVT(~0.80)** 가 단일 최대 천장. WikiANN-vi silver 노이즈(PROD
-  precision 낮음) + 상대적 support 부족(EVT 474, PROD 2,005 vs PER/LOC 2만대).
+- **PROD(~0.71)·EVT(~0.80)** 가 단일 최대 천장. **§3 기준 gold 감사로 분해**
+  (#108, fold0, gemma-31B 판정): 천장은 *축별로 갈린다* — PROD precision
+  (.725→보정 .897)은 **silver 누락**(창작물 미라벨)이 주범, PROD recall
+  (.698→보정 .743)은 **모델 실측 약점**. 보정(진짜) 천장 ≈ PROD 0.81·EVT 0.90
+  (fold0 기준 — EVT fold0 orig 0.851 > pooled 0.792라 pooled EVT 보정은 더 낮음).
+  클래스 정의(§3) 모호성은 병목 아님(schema_gap 0, IAA 1.0) — VI gold가 §3.1/
+  3.2(법령·서비스·창작물 규칙)를 미반영한 게 원인.
+- **remediation 실측(#108)**: VI 프롬프트 §3 정렬 → 2모델 합의 re-silver(기준
+  유지) → 5-fold 재학습. **PROD pooled 0.717→0.792(phobert)·0.710→0.761
+  (xlm-r)** — 보정 추정(0.81) 사실상 적중, 천장은 데이터 문제로 확인. overall·
+  LOC·ORG 동반 상승. **단 EVT는 회귀**(−1.9/−6.8pp, 저support 합의 noise) →
+  미해결. 산출 gold `pii_all_v2.jsonl`(본 표 baseline은 v1로 불변).
 - PII 5종은 0.98~1.00 포화. NER 5종 중 PER/LOC/ORG는 0.88~0.93.
-- 개선 레버(범위 밖, 착수 시 이슈 분리): silver→gold 부분 정제(PROD/EVT),
-  외부 코퍼스(VLSP/PhoNER, 단 오염 위험), EVT oversampling.
+- 개선 레버(범위 밖): EVT 합의 정책·few-shot 보강(미해결), 외부 코퍼스(VLSP/
+  PhoNER, 단 오염 위험).
 
 ## 재현
 
