@@ -14,7 +14,7 @@
 | `dataset_loader.py` | HuggingFace datasets 로딩 (`NERRecord` 반환) |
 | `tag_aligner.py` | BIO 태그 정렬·정규화·span 추출 유틸리티 |
 | `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
-| `ko/` | 한국어 NER 라벨러 (vllm, openai) — canonical 4종 (PER/LOC/ORG/DAT), KLUE 유래·TI/QT 드롭 |
+| `ko/` | 한국어 NER 라벨러 (vllm, openai) — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분) |
 | `ja/` | 일본어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
 | `vi/` | 베트남어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
 
@@ -43,16 +43,16 @@
 
 ### classifier/
 
-JA·VI canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/AGENTS.md`.
+JA·VI·KO canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/AGENTS.md`.
 
 | 파일 | 역할 |
 |------|------|
-| `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi}` |
-| `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기 정렬 / BIO ↔ char-span 변환 |
+| `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko}` (`--group-key orig` 로 누출-free group K-fold) |
+| `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기 정렬 / BIO ↔ char-span 변환 / 층화·group K-fold 분할 |
 | `train_eval.py` | HF Trainer 래퍼 + char-offset span F1 (`src/ner/metrics` 공용) |
 | `abstention.py` | per-class 신뢰도 임계값 fit·apply |
 | `error_analysis.py` | 오류 유형 분류 CLI |
-| `kfold_pool.py` | K-fold 데이터 풀 구성 유틸 |
+| `kfold_pool.py` | fold별 test 예측 pooled span F1 + 원문(orig) 단위 cross-fold 누출 검증 |
 
 ### metrics/
 
@@ -69,8 +69,8 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 
 ## 라벨 스키마
 
-- **KO**: canonical 4종 = `PER, LOC, ORG, DAT` (KLUE 유래, TI/QT 드롭; PROD/EVT·PII 후속)
-- **JA·VI 공통**: canonical 10종 평면 = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
+- **KO·JA·VI 공통**: canonical 10종 평면 = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
+- **KO**: NER 5종 + `DAT` 은 KLUE 유래(`PROD/EVT` 는 LLM 재라벨 증분, TI/QT 드롭), PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 주입
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 코딩 컨벤션

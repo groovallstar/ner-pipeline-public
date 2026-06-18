@@ -4,7 +4,7 @@ LLM이 붙인 NER 라벨이 외부 지식 베이스(Wikipedia·Wikidata) 기준�
 
 - 소스: `src/ner/augmenters/wikiann_vi/wikidata_anchor.py`
 - 실행: `python -m ner.augmenters.wikiann_vi.wikidata_anchor`
-- 관련 리포트: `docs/reports/vietnamese-ner-schema-expansion-2026-04.md` §5
+- 관련 리포트: `docs/reports/vietnamese-ner-silver-quality.md` §5
 
 ## 배경
 
@@ -114,7 +114,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 - 스키마: `{'qid': {표면형: Q-ID}, 'p31': {Q-ID: [P31, ...]}}`
 - 실행 시 캐시에 없는 항목만 새로 네트워크 호출. 매핑 테이블(3단계)은 코드에 내장되어 있어 테이블 확장 후 재실행해도 네트워크 재호출 없이 재집계 가능 → 10K 앵커 재측정(v1→v2)이 분 단위로 가능
 
-리포트 §5.5의 "캐시 재활용으로 매핑 테이블만 확장해 재측정"은 이 설계 덕분이다.
+`docs/reports/vietnamese-ner-silver-quality.md` §5의 "캐시 재활용으로 매핑 테이블만 확장해 재측정"은 이 설계 덕분이다.
 
 ## 실행 예
 
@@ -166,4 +166,4 @@ Top unmapped P31 Q-IDs (to consider for table expansion):
 
 - 스펙: `docs/manual/data/vietnamese-ner.md` §7 (silver 검증 전략 — 두 번째 검증 레이어)
 - 이슈: `docs/issues/issue-10-vi-ner-8type-relabel.md`
-- 리포트: `docs/reports/vietnamese-ner-schema-expansion-2026-04.md` §5, §5.5
+- 리포트: `docs/reports/vietnamese-ner-silver-quality.md` §5

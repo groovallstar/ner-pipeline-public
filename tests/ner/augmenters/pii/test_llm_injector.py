@@ -160,6 +160,18 @@ class TestExtractSpans:
         # 두 span이 겹치지 않아야 한다
         assert len(set(offsets)) == len(offsets)
 
+    def test_pii_whitespace_normalized_match(self):
+        """LLM이 PII 연속 공백을 정규화해도 매칭(카드 이중 공백 등)."""
+        # 생성기는 이중 공백이지만 LLM이 단일 공백으로 정규화한 경우
+        text = '결제는 3791 1888 6964 4832 카드로 처리했습니다.'
+        pii = {'CREDIT_CARD': '3791  1888  6964  4832'}
+        spans = extract_spans(text, pii_values=pii, original_entities=[])
+
+        cc = next(s for s in spans if s.label == 'CREDIT_CARD')
+        # 실제 텍스트 표면형(단일 공백)으로 저장, offset 정확
+        assert cc.text == '3791 1888 6964 4832'
+        assert text[cc.start_char:cc.end_char] == cc.text
+
 
 # ── PII 포맷 충돌 하드닝 ──────────────────────────────────────────────────
 

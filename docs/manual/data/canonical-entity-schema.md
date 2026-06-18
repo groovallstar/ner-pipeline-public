@@ -7,17 +7,23 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 - 적용 코드: `src/ner/labelers/{ja,vi}/`, `src/ner/augmenters/pii/`,
   `src/ner/augmenters/wikiann_vi/`
 - 적용 데이터: `data/stockmark/` (JA NER 5종 + PII 주입 10종),
-  `data/wikiann_vi/` (VI silver 10종)
-- KO (`src/ner/labelers/ko/**`): KLUE 유래 canonical **부분 정렬** —
-  NER 5종(`PER/LOC/ORG/PROD/EVT`) + `DAT` 보유. `PROD/EVT`는 KLUE 문장
-  LLM 재라벨로 증분(§3.1~§3.3 회색지대 기준 적용), 기존 4종과
-  containment-replace 병합(outermost flat). PII 4종 미보유(후속 증분).
-  분류기 미완(10종 완성 후).
+  `data/wikiann_vi/` (VI 재라벨 NER 5종 + PII 주입 10종)
+- KO: canonical **10종 평면 완성**. NER 5종(`PER/LOC/ORG/PROD/EVT`) +
+  `DAT`는 KLUE 유래(라벨러 `src/ner/labelers/ko/**`, `PROD/EVT`는 LLM
+  재라벨 증분). PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 PII를
+  **llm 자연삽입**으로 증분(`data/klue/pii_all.jsonl`). 분류기 미완(후속 이슈).
 
 ## 변경 이력
 
+- **2026-06-16 (이슈 #115)**: KO canonical **10종 완성** — PII 4종
+  (`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)을 합성 PII **llm 자연삽입**으로 증분
+  (`augmenters/pii --lang ko --mode llm`, gemma-4-31B). 접두 패턴 편향을
+  피하려 문중 자연삽입(경직 접두 직후 PII 0%), `extract_spans` string-match로
+  offset 정확(0 mismatch). verify 미사용(사람 KLUE gold 보존). gold
+  `data/klue/pii_all.jsonl` 25989행, PII 각 ~8.3k, 원문 NER 보존 99.3%.
+  주민등록번호는 체크섬 무효로 실유효 번호 비생성. ko 생성기 `generators/ko.py`.
 - **2026-06-16 (이슈 #111)**: KO NER 5종 완성 — KLUE 문장 LLM 재라벨로
-  `PROD/EVT` 증분(`scripts/ko_prod_evt_relabel.py`, gemma-4-31B). canonical
+  `PROD/EVT` 증분(`src/ner/scripts/ko_prod_evt_relabel.py`, gemma-4-31B). canonical
   §3.1~§3.3 회색지대 기준을 ko 프롬프트에 이식(운영리그=`ORG` vs 특정
   연도판=`EVT`, 법령·시대구분·추상 쟁점 비-entity). 병합은
   containment-replace(outermost flat, overlap 0) — flat BIO 분류기 제약.
@@ -27,7 +33,7 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 - **2026-06-15 (이슈 #109)**: KO 라벨러·seed gold를 canonical 명칭으로
   정렬. `PS→PER, LC→LOC, OG→ORG, DT→DAT` 개명, KLUE `TI/QT` 드롭.
   `tag_aligner` ko/ja normalize 맵 분리(ja 불변). KLUE 유래 4종 seed
-  gold(`scripts/klue_to_canonical_gold.py` → `data/ko_klue/`) 생성.
+  gold(`src/ner/scripts/klue_to_canonical_gold.py` → `data/ko_klue/`) 생성.
   `PROD/EVT`·PII 6종은 후속 증분.
 - **2026-06-09 (이슈 #85)**: JA EVT scope 재정의 — 회색지대
   규정(§3.3). **EVT 포함 명문화**: 자연재해·대형사고·named 경제/정치
@@ -349,9 +355,10 @@ JSONL 덤프(`data/stockmark/{train,test}.jsonl`)를 그대로 읽기만 한다.
 | (WikiANN 미커버) | `DAT`, `EMAIL`, `PHONE`, `ID_NUM`, `CREDIT_CARD` | PII 주입 또는 LLM 신규 추출 |
 
 매핑 적용은 `src/ner/augmenters/wikiann_vi/` 의 silver 재라벨 파이프라인에서
-LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 산출 데이터는
-`data/wikiann_vi/{train,valid,test}.jsonl` 에 NER 5종 + PII 5종 = 10종
-canonical 형태로 저장된다.
+LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨 산출은 위 표대로
+**NER 5종**(`PER/LOC/ORG/PROD/EVT` — `relabel_8type.py`·`prompts.py` 의
+`DEFAULT_ENTITY_TYPES`)이고, PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은
+별도 `augmenters/pii --lang vi` 주입으로 추가된다(JA `data/stockmark/pii_*` 와 동형).
 
 ### 4.3 8종 canonical → 5종 canonical (이슈 #21·#27 1회성 축소·재배치)
 
@@ -366,7 +373,7 @@ canonical 형태로 저장된다.
 | `PROD` | `PROD` | identity |
 | `EVT` | `EVT` | identity |
 
-구현: `src/ner/augmenters/migration/reduce_5type.py`(1회성, 적용 후 삭제).
+구현: 1회성 축소·재배치 스크립트(적용 후 삭제 — 현재 코드 부재).
 
 ### 4.4 PII 라벨 (#17 정리)
 
@@ -442,22 +449,23 @@ canonical 형태로 저장된다.
 - **데이터 파일** (#27 LOC/ORG 경계 적용):
   - `data/stockmark/{train,test}.jsonl` — JA Stockmark HF → canonical 덤프, NER 5종
   - `data/stockmark/pii_{train,test}.jsonl`, `.stats.json`, `.verify.json` — JA NER 5종 + PII 5종 = 10종 평면
-  - `data/wikiann_vi/{train,valid,test}.jsonl` — VI silver 10종 (Stockmark 포맷)
+  - `data/wikiann_vi/{train,valid,test}.jsonl` — VI silver: 재라벨은 NER 5종, PII 5종은 `augmenters/pii --lang vi` 주입으로 추가 (Stockmark 포맷)
 
 - **코드**:
   - `src/ner/labelers/ja/ner_prompts.py`, `src/ner/labelers/ja/dataset_loader.py`
   - `src/ner/labelers/vi/ner_prompts.py`, `src/ner/labelers/vi/dataset_loader.py`
   - `src/ner/augmenters/pii/` 프롬프트·verifier·generators (10종 평면)
   - `src/ner/augmenters/pii/config.py` 의 `DEFAULT_MERGE_RULES`
-    (`ADDRESS→LOC`, `DOB→DAT`, `ID_NUMBER→ID_NUM`)
+    (`NAME→PER`, `ADDRESS→LOC`)
   - `src/ner/augmenters/wikiann_vi/` (silver 재라벨 파이프라인)
 
 - **본 스키마 적용 제외**:
   - `src/ner/llm_eval/**` — 후속 정리 예정
-  - `src/ner/labelers/ko/**` — canonical **NER 5종**(`PER/LOC/ORG/PROD/EVT`)
-    + `DAT` 적용(KLUE 유래, `TI/QT` 드롭; `PROD/EVT`는 §3.1~§3.3 회색지대
-    기준, KLUE 문장 LLM 재라벨). PII 4종 미적용(후속). 이슈 #109(4종)·
-    #111(`PROD/EVT`)
+  - `src/ner/labelers/ko/**` — 라벨러는 canonical **6종**(`PER/LOC/ORG/DAT/PROD/EVT`)
+    출력(KLUE 유래, `TI/QT` 드롭; `PROD/EVT`는 §3.1~§3.3 회색지대 기준, KLUE
+    문장 LLM 재라벨). 라벨러는 PII 미생성 — PII 4종은 별도 `augmenters/pii
+    --lang ko` 주입으로 gold(`data/klue/pii_all.jsonl`)에 반영(§1). 분류기 미완.
+    이슈 #109(4종)·#111(`PROD/EVT`)·#115(PII 주입)
   - 참고: `src/ner/classifier/**` 는 issue #40 에서 본 스키마(canonical 10종 평면)로 정합 완료
 
 ## 7. 평가 시 주의

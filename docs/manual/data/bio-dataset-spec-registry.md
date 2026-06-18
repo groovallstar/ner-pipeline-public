@@ -62,7 +62,8 @@ records = load("klue", "validation", max_samples=5)
 #     "id": "0",
 #     "tokens": ["경", "찰", "은", " ", ...],
 #     "bio_tags": ["B-OG", "I-OG", "O", "O", ...],
-#     "spans": [{"text": "경찰", "type": "OG"}, ...]
+#     "spans": [{"text": "경찰", "type": "OG"}, ...],
+#     "sentence": "경찰은 ...",
 # }
 ```
 
@@ -97,7 +98,7 @@ normalize_bio_variant (KMOU: B_TYPE→B-TYPE, I→I-TYPE)
     ↓
 extract_spans (IOB2 → [{text, type}])
     ↓
-{"id", "tokens", "bio_tags", "spans"}
+{"id", "tokens", "bio_tags", "spans", "sentence"}
 ```
 
 ## 확장
@@ -149,7 +150,7 @@ Stockmark NER(일본어)처럼 raw text + char offset span 포맷인 데이터�
 
 | 클래스 | 테스트 | 검증 내용 |
 |--------|--------|-----------|
-| `TestSmokeKLUE` | `test_load_returns_valid_records` | `load("klue", ...)` 반환 레코드가 `{id, tokens, bio_tags, spans}` 구조이고 bio_tags가 IOB2 형식 |
+| `TestSmokeKLUE` | `test_load_returns_valid_records` | `load("klue", ...)` 반환 레코드가 `{id, tokens, bio_tags, spans, sentence}` 구조이고 bio_tags가 IOB2 형식 |
 | | `test_at_least_one_span` | 5개 레코드 중 최소 1개에 비어있지 않은 spans |
 | | `test_entity_types_in_range` | span의 type이 KLUE 6종(PS/LC/OG/DT/TI/QT) 범위 내 |
 | `TestSmokeKMOU` | `test_load_returns_iob2_normalized` | KMOU 원본의 `B_TYPE`/`I` 태그가 정규화되어 bare `"I"`나 underscore 태그가 없는지 |

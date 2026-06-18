@@ -26,7 +26,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 
 | Directory | Purpose |
 |-----------|---------|
-| `ko/` | 한국어 NER 라벨러 — canonical 4종 (PER/LOC/ORG/DAT), KLUE 유래·TI/QT 드롭 (see `ko/AGENTS.md`) |
+| `ko/` | 한국어 NER 라벨러 — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분; PII는 augmenters에서 합성 주입) (see `ko/AGENTS.md`) |
 | `ja/` | 일본어 NER 라벨러 — canonical 10종 평면; pre-dumped Stockmark JSONL 전용 (see `ja/AGENTS.md`) |
 | `vi/` | 베트남어 NER 라벨러 — canonical 10종 평면; canonical WikiANN-vi JSONL 덤프 전용 |
 

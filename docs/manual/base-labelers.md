@@ -8,7 +8,7 @@
 - **파일**: `src/ner/labelers/base_vllm_labeler.py`
 - **공개 메서드**:
   - `label(text: str) -> List[dict]` — 문장 분할 후 BIO 태그 레코드 반환
-  - `label_spans(text: str) -> List[dict]` — BIO 변환 없이 원시 span 리스트 반환
+  - `label_spans(text: str, split: bool = True) -> List[dict]` — BIO 변환 없이 원시 span 리스트 반환. `split=True`(기본)이면 문장 분리 후 독립 LLM 호출, `split=False`이면 전체 텍스트 단일 프롬프트
   - `label_records(records: List[dict]) -> List[dict]` — `text` 필드 레코드 배치 처리
 
 **주요 `__init__` 파라미터**: `base_url`, `model`, `entity_types`, `max_tokens`,
@@ -20,7 +20,7 @@ OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrenc
 ## BaseOpenAILabeler
 
 - **파일**: `src/ner/labelers/base_openai_labeler.py`
-- **공개 메서드**: `label` (sync), `label_spans` (async concurrent), `label_records`.
+- **공개 메서드**: `label` (sync), `label_spans` (sync 래퍼 — 내부적으로 `asyncio.run(self.alabel_spans(text))` 호출), `label_records` (sync). async 처리는 내부 `alabel_spans`가 담당한다.
 
 **주요 `__init__` 파라미터**: `model`, `entity_types`, `max_tokens_per_batch`,
 `base_url`, `concurrency`, `lang`, `system_prompt`, `user_prompt_template`.
@@ -35,14 +35,10 @@ OpenAI 호환 API를 `AsyncOpenAI`로 호출하며 `asyncio.Semaphore(concurrenc
 
 ## 서브클래스
 
-| 백엔드 | ko | ja |
-|-------|----|----|
-| vLLM | `labelers.ko.vllm_ner_labeler.VllmNERLabeler` | `labelers.ja.vllm_ner_labeler.VllmNERLabeler` |
-| OpenAI | `labelers.ko.openai_ner_labeler.OpenAINERLabeler` | `labelers.ja.openai_ner_labeler.OpenAINERLabeler` |
+| 백엔드 | ko | ja | vi |
+|-------|----|----|-----|
+| vLLM | `labelers.ko.vllm_ner_labeler.VllmNERLabeler` | `labelers.ja.vllm_ner_labeler.VllmNERLabeler` | `labelers.vi.vllm_ner_labeler.VllmNERLabeler` |
+| OpenAI | `labelers.ko.openai_ner_labeler.OpenAINERLabeler` | `labelers.ja.openai_ner_labeler.OpenAINERLabeler` | `labelers.vi.openai_ner_labeler.OpenAINERLabeler` |
 
 모든 서브클래스는 `__init__`만 오버라이드하며 `super().__init__(..., lang=<lang>,
-<prompt kwargs>)`로 언어팩을 주입한다 (AC13 드리프트 가드 참조).
-
-> vi(베트남어) 라벨러(`labelers.vi.{vllm,openai}_ner_labeler`)는 현재 Base*를
-> 상속받지 않는 독립 구현이다. 추후 공통 베이스로 통합 예정이며, 그 전까지는 위
-> 표에서 제외한다.
+<prompt kwargs>)`로 언어팩을 주입한다.

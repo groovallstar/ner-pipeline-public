@@ -82,9 +82,34 @@ như tiếng Việt thường ngày.
 
 ## Văn bản đã biên tập"""
 
+_INJECTION_PROMPT_KO = """\
+당신은 한국어 문장 편집 전문가입니다.
+
+## 작업
+아래 【원문】에 지정된 【PII 정보】를 자연스러운 한국어로 문장 속에 녹여 넣으세요.
+
+## 규칙
+1. PII 값은 **한 글자도 바꾸지 않고** 그대로 복사한다.
+2. 원문의 고유표현(인명·지명·기관명·작품명·사건명 등)은 최대한 보존한다.
+3. 자연스러운 문맥으로 삽입한다(문장 끝에 나열하지 말고 문장 중간·적절한 위치에 녹여 넣는다. 예: 「담당 ○○○이…」 「연락은 ○○○으로…」 「○○○에 사는…」).
+4. **금지**: PII 값을 다음과 같은 경직된 안내어 바로 뒤에 두지 않는다:
+   「담당자:」 「연락처:」 「전화:」 「전화번호:」 「이메일:」 「주소:」 「주민등록번호:」 「카드번호:」 「생년월일:」.
+   자연스러운 문장에 녹여 넣는다(예: 「연락은 taro@example.com 으로 주세요」, × 「이메일: taro@example.com」).
+5. **금지**: 영어 라벨명("NAME", "PHONE", "EMAIL", "ID_NUM", "ID_NUMBER", "CREDIT_CARD", "DAT", "ADDRESS")을 본문에 출력하지 않는다. 실제 값만 사용한다.
+6. 출력은 **편집된 문장만**. 설명·주석·괄호/markdown 래핑·안내어는 불필요.
+
+## 원문
+{original_text}
+
+## PII 정보(참고용. 라벨명은 그대로 출력하지 않음)
+{pii_list}
+
+## 출력"""
+
 _INJECTION_PROMPTS: dict[str, str] = {
     'ja': _INJECTION_PROMPT_JA,
     'vi': _INJECTION_PROMPT_VI,
+    'ko': _INJECTION_PROMPT_KO,
 }
 
 # 기존 호환용 별칭 (JA 기본 템플릿).
@@ -93,6 +118,7 @@ _INJECTION_PROMPT = _INJECTION_PROMPT_JA
 _EMPTY_PII_LIST: dict[str, str] = {
     'ja': '（なし）',
     'vi': '(không có)',
+    'ko': '(없음)',
 }
 
 
@@ -178,54 +204,72 @@ def extract_spans(
     spans: list[Entity] = []
     used_ranges: list[tuple[int, int]] = []
 
-    def _find_non_overlapping(needle: str) -> int | None:
-        """used_ranges와 겹치지 않는 첫 번째 위치를 반환한다."""
+    def _overlaps(s: int, e: int) -> bool:
+        return any(s < ue and us < e for us, ue in used_ranges)
+
+    def _find_non_overlapping(
+        needle: str,
+    ) -> tuple[int, int, str] | None:
+        """needle 의 (start, end, 실제매칭문자열) 을 찾는다.
+
+        exact 매칭 우선, 실패 시 공백 정규화 매칭(needle 내부 공백 run 을
+        `\\s+` 로). LLM 이 PII/엔티티의 연속 공백(카드번호 이중 공백 등)을
+        단일 공백으로 정규화하는 경우를 흡수한다. 반환 문자열은 텍스트에
+        실제로 박힌 표면형이라 offset 이 정확하다.
+        """
+        # 1차: exact
         start = 0
         while True:
             idx = text.find(needle, start)
             if idx == -1:
-                return None
+                break
             end = idx + len(needle)
-            if not any(
-                s < end and idx < e for s, e in used_ranges
-            ):
-                return idx
+            if not _overlaps(idx, end):
+                return idx, end, needle
             start = idx + 1
+        # 2차: 공백 정규화 (다중 토큰일 때만)
+        parts = needle.split()
+        if len(parts) > 1:
+            pat = re.compile(r'\s+'.join(re.escape(p) for p in parts))
+            for m in pat.finditer(text):
+                if not _overlaps(m.start(), m.end()):
+                    return m.start(), m.end(), m.group()
+        return None
 
     # 1. PII 값 (필수 — 없으면 에러)
     for label, value in pii_values.items():
-        idx = _find_non_overlapping(value)
-        if idx is None:
+        found = _find_non_overlapping(value)
+        if found is None:
             raise ValueError(
                 f'PII value not found in generated text: '
                 f'label={label} value={value!r}'
             )
-        end = idx + len(value)
+        start_char, end_char, matched = found
         spans.append(Entity(
             label=label,
-            start_char=idx,
-            end_char=end,
-            text=value,
+            start_char=start_char,
+            end_char=end_char,
+            text=matched,
         ))
-        used_ranges.append((idx, end))
+        used_ranges.append((start_char, end_char))
 
     # 2. 원본 엔티티 (선택 — 없으면 drop)
     for ent in original_entities:
-        idx = _find_non_overlapping(ent.text)
-        if idx is None:
+        found = _find_non_overlapping(ent.text)
+        if found is None:
             logger.warning(
                 'Original entity dropped (not found): '
                 'label=%s text=%r', ent.label, ent.text,
             )
             continue
-        end = idx + len(ent.text)
+        start_char, end_char, matched = found
         spans.append(Entity(
             label=ent.label,
-            start_char=idx,
-            end_char=end,
-            text=ent.text,
+            start_char=start_char,
+            end_char=end_char,
+            text=matched,
         ))
-        used_ranges.append((idx, end))
+        used_ranges.append((start_char, end_char))
 
     # 3. 무라벨 PII 포맷 충돌 하드닝 (LLM 환각 카드/마이넘버 relabel)
     spans = harden_pii_format_collisions(text, spans)
@@ -252,6 +296,7 @@ class VllmClient:
         model: str = 'Qwen/Qwen3.5-27B',
         max_tokens: int = 2048,
         concurrency: int = 16,
+        temperature: float = 0.7,
     ) -> None:
         from openai import AsyncOpenAI
         self._client = AsyncOpenAI(
@@ -259,6 +304,7 @@ class VllmClient:
         )
         self.model = model
         self.max_tokens = max_tokens
+        self.temperature = temperature
         self._semaphore = asyncio.Semaphore(concurrency)
 
     async def generate(self, prompt: str) -> str:
@@ -267,7 +313,7 @@ class VllmClient:
                 model=self.model,
                 messages=[{'role': 'user', 'content': prompt}],
                 max_tokens=self.max_tokens,
-                temperature=0.7,
+                temperature=self.temperature,
             )
         return resp.choices[0].message.content or ''
 

@@ -58,6 +58,22 @@ _VI_CONNECTORS: dict[str, str] = {
     'CREDIT_CARD': ' Thẻ: {v}.',
 }
 
+_KO_CONNECTORS: dict[str, str] = {
+    'NAME': ' 담당자: {v}.',
+    'PHONE': ' 연락처: {v}.',
+    'ADDRESS': ' 주소: {v}.',
+    'DAT': ' 날짜: {v}.',
+    'ID_NUM': ' 주민등록번호: {v}.',
+    'EMAIL': ' 이메일: {v}.',
+    'CREDIT_CARD': ' 카드번호: {v}.',
+}
+
+_CONNECTORS_BY_LANG: dict[str, dict[str, str]] = {
+    'ja': _JA_CONNECTORS,
+    'vi': _VI_CONNECTORS,
+    'ko': _KO_CONNECTORS,
+}
+
 
 class PIIInjector:
     """NER 레코드에 합성 PII를 주입한다."""
@@ -66,9 +82,7 @@ class PIIInjector:
         config.validate()
         self.config = config
         self.rng = random.Random(config.seed)
-        self._connectors = (
-            _JA_CONNECTORS if config.lang == 'ja' else _VI_CONNECTORS
-        )
+        self._connectors = _CONNECTORS_BY_LANG[config.lang]
         self._labels = config.effective_labels()
 
     def _sample_n(self) -> int:
