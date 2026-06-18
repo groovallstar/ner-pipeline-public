@@ -1,13 +1,16 @@
-# 한국어 canonical NER — 트랙 히스토리
+# 한국어 BERT NER 분류기 — 엔티티별 성능 진단·보정
 
-한국어 canonical 파이프라인(`src/ner/labelers/ko/`, `data/klue/`)이 KLUE
-원본에서 canonical **10종 평면** gold까지 도달한 과정을 단계별로 누적
-정리한다. 각 단계의 "무엇을·왜·결과"를 축약해 누적한다.
+한국어 canonical 분류기(`python -m ner.classifier --lang ko`, gold
+`data/klue/`)의 엔티티별 잔여 성능을 진단·기록한다. **Part 0**은 gold 계보
+(KLUE 원본 → canonical 10종 구축 단계), **Part 1**은 엔티티별 진단이다.
 
 - 대상: ko gold `data/klue/origin.jsonl`(NER) + `data/klue/pii_all.jsonl`(10종)
 - 단일 스키마 출처: `docs/manual/data/canonical-entity-schema.md`
+- baseline 수치: `korean-bert-classifier-benchmark.md` (#122, koelectra-base-v3)
 
-## 단계 요약
+## Part 0 — gold 계보
+
+### 단계 요약
 
 | 단계 | 이슈 | 한 일 | gold |
 |---|---|---|---|
@@ -15,7 +18,7 @@
 | 2 | #111 | KLUE 문장 LLM 재라벨로 `PROD/EVT` 증분(§3.1~3.3 회색지대) | NER 5종 + DAT |
 | 3 | #115 | PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`) llm 자연삽입 | **canonical 10종** |
 
-## 단계 3 (#115) — PII 4종 → 10종 완성 (2026-06-16)
+### 단계 3 (#115) — PII 4종 → 10종 완성 (2026-06-16)
 
 ja/vi의 suffix PII 주입 파이프라인을 한국어로 지역화하며, *분류기 학습용*
 gold 품질을 위해 다음 설계 결정을 거쳤다.
@@ -67,7 +70,50 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
     --output data/klue/pii_all.jsonl
 ```
 
+## Part 1 — 엔티티별 진단
+
+### EVT — support-limited (학습가능성 절벽) (#125)
+
+koelectra-base-v3 baseline에서 EVT가 NER-5 최저(F1 0.581). 정체를 진단한
+결과 **gold 양 부족(support-limited)** 으로 확정 — 경계·커버리지 결함이 아니다.
+
+**진단 경로:**
+
+- **오류 감사** (test 오류 distinct 86): gold-side 45%(경계 비일관·gold 누락)
+  / model-side 34%(recall 실패·조각 예측) / EVT↔ORG·DAT 정의모호 21%. EVT
+  gold는 KLUE 문장 LLM 재라벨 silver(#111)이고 표면형 83%가 hapax.
+- **커버리지 축소 가설 → 반증**: 앵커(행사유형 head) 없는 idiosyncratic
+  1회성 고유명을 비-entity로 강등(EVT 1187→904)하면 EVT가 **개선이 아니라
+  악화**(F1 0.581→0.447). 강등 span이 예측에서 FP로 전환되고 recall이
+  과붕괴 → flat-span NER에서 "비학습 꼬리 제거"는 역효과(커버리지 축소·
+  관련 스키마 절 시도는 폐기).
+- **support-limited 가설 → 확정**: 클래스별 Pearson(log-support, F1)=0.986,
+  EVT가 최소 support=최저 F1(ORG만 ORG↔LOC confusion으로 outlier). EVT train
+  서브샘플 learning curve(고정 full test)에서 **viability cliff** — ~600–890
+  span 미만이면 모델이 EVT를 전부 abstain(F1=0), 그 위에서 켜짐. 현재 1187은
+  절벽을 막 넘은 가파른 상승 구간(100%에서도 Δ+0.061, 포화 아님).
+
+**EVT P/R/F1 측정** (strict, koelectra-base-v3, 고정 full test):
+
+| 조건 | EVT gold(train) | P | R | F1 | test sup |
+|---|---|---|---|---|---|
+| baseline (#122) | 1187 | 0.530 | 0.642 | **0.581** | 123 |
+| 커버리지 축소 (반증) | 904 | 0.462 | 0.433 | 0.447 | 97 |
+| learning curve 25% | 297 | 0.000 | 0.000 | **0.000** | 123 |
+| learning curve 50% | 594 | 0.000 | 0.000 | **0.000** | 123 |
+| learning curve 75% | 891 | 0.574 | 0.537 | **0.555** | 123 |
+| learning curve 100% | 1187 | 0.579 | 0.659 | **0.616** | 123 |
+
+> 컨트롤(EVT만 변경): 같은 런들에서 ORG F1 range 0.011·PROD range 0.070 —
+> EVT 신호(0→0.616)는 저support 단일런 noise를 압도. 100%(0.616)와 #122
+> baseline(0.581) 차이는 fresh 재학습 분산 범위.
+
+**진단 결론**: EVT = support-limited(비학습 아님 — gold가 PROD급 ~3k이면
+~0.70, LOC급 ~8k이면 ~0.85 기대). 천장 레버는 경계·커버리지·스키마가 아니라
+**EVT gold 증강**(곡선이 근거, 단 1187 너머는 외삽). cliff 근처라 high-variance
+동반. 재현: `src/ner/scripts/subsample_evt.py`.
+
 ## 다음 (후속 이슈 후보)
 
-- ko 분류기 학습·벤치마크 — canonical 10종 gold(`pii_all.jsonl`) 소비.
+- EVT gold 증강 — KLUE 미검출 이벤트 문장 추가 relabel로 절벽에서 끌어올리기.
 - ko LLM NER 10종 라벨러 확장·벤치마크 — 측정과 함께 별도.
