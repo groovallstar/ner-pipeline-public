@@ -296,6 +296,7 @@ class VllmClient:
         model: str = 'Qwen/Qwen3.5-27B',
         max_tokens: int = 2048,
         concurrency: int = 16,
+        temperature: float = 0.7,
     ) -> None:
         from openai import AsyncOpenAI
         self._client = AsyncOpenAI(
@@ -303,6 +304,7 @@ class VllmClient:
         )
         self.model = model
         self.max_tokens = max_tokens
+        self.temperature = temperature
         self._semaphore = asyncio.Semaphore(concurrency)
 
     async def generate(self, prompt: str) -> str:
@@ -311,7 +313,7 @@ class VllmClient:
                 model=self.model,
                 messages=[{'role': 'user', 'content': prompt}],
                 max_tokens=self.max_tokens,
-                temperature=0.7,
+                temperature=self.temperature,
             )
         return resp.choices[0].message.content or ''
 
