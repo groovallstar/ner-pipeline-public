@@ -54,7 +54,7 @@ results/               # 벤치마크 결과 JSON + 리포트
 tests/                 # 테스트 (상세: tests/ner/CLAUDE.md)
 docs/                  # 문서
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
-│   ├── specs/         # 개발 규약·템플릿 (코딩 컨벤션, 신규 저장소 템플릿)
+│   ├── specs/         # 개발 규약 (코딩 컨벤션)
 │   ├── manual/        # 프로젝트 구현 레퍼런스 (src/ 모듈 API·알고리즘 맵)
 │   │   └── data/      # 데이터 스키마·엔티티 정의·데이터셋 스펙·데이터 검증
 │   ├── reports/       # 자유 형식 벤치마크·실험 리포트 (GitHub Issue 무관)
