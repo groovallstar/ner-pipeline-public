@@ -14,7 +14,7 @@ suffix marker → 전체 텍스트 폴백)로 복원한다. 경계 이전 영역
 `python -m ner.augmenters.pii --source jsonl` 가 그대로 소비한다.
 
 사용:
-    python src/ner/scripts/build_vi_natural_source.py \
+    python src/ner/augmenters/wikiann_vi/build_vi_natural_source.py \
         --pii data/wikiann_vi/pii_all.jsonl \
         --all data/wikiann_vi/all.jsonl \
         --out results/classifier/vi/audit/natural_source.jsonl
@@ -23,7 +23,10 @@ import argparse
 import json
 import os
 
-from ner.scripts.resilver_vi_isolated import _load_jsonl, build_source
+from ner.augmenters.wikiann_vi.resilver_vi_isolated import (
+    _load_jsonl,
+    build_source,
+)
 
 NER_TYPES = ('PER', 'LOC', 'ORG', 'PROD', 'EVT')
 

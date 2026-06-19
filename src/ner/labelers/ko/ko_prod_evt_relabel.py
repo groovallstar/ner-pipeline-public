@@ -11,12 +11,12 @@ ko 라벨러(PROD/EVT 포함 6종)로 gold 문장을 재라벨해 PROD/EVT span�
   merge    gold + relabel → 비-overlap PROD/EVT 증분 → 5종 gold JSONL
 
 사용:
-    python -m ner.scripts.ko_prod_evt_relabel relabel \
+    python -m ner.labelers.ko.ko_prod_evt_relabel relabel \
         --gold data/klue/origin.jsonl \
         --out results/classifier/ko/prod_evt_relabel.jsonl \
         --base-url http://localhost:8081/v1 \
         --model cyankiwi/gemma-4-31B-it-AWQ-8bit [--limit 500]
-    python -m ner.scripts.ko_prod_evt_relabel merge \
+    python -m ner.labelers.ko.ko_prod_evt_relabel merge \
         --gold data/klue/origin.jsonl \
         --relabel results/classifier/ko/prod_evt_relabel.jsonl \
         --out data/klue/origin.jsonl  # in-place 5종 승격 (gold 선로드 후 기록)

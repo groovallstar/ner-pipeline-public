@@ -108,6 +108,8 @@ PII). 행 단위 분할은 이 파생 행들이 train·test 로 갈려 **cross-f
   측정할 때만 `--allow-cross-fold-leak` 로 카운트만 받는다.
 - `orig` 가 없는 레거시 코퍼스는 `text` 전체 문장 중복으로 fallback 검증.
   `id` 는 비고유(한 원문 파생 다행 공유)라 검증 기준으로 쓰지 않는다.
+- 발견·진단·정량 방법론(왜 dedup 으로 못 막았나, 측정 설계, 인플레 수치):
+  `docs/manual/data/vi-bert-crossfold-leak.md`
 
 ## JSONL contract (입력 계약)
 

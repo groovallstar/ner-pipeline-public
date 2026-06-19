@@ -8,8 +8,9 @@
   P/R/F1·검증·refuter는 각 `docs/issues/issue-N` 에, 현 수치는 benchmark.md 에.
 - **gold 계보**: v1 `pii_all.jsonl`(#103) → v2 `pii_all_v2.jsonl`(#108 re-silver)
   → v3 `pii_all_v3.jsonl`(#112) → **Phase 3 자연 주입**으로 단일
-  `pii_all.jsonl` 재생성(#116, suffix 코퍼스·버전 접미사 폐기). benchmark.md
-  표 baseline 은 **v1 불변**.
+  `pii_all.jsonl` 재생성(#116, suffix 코퍼스·버전 접미사 폐기) → **Phase 4
+  prodrecover**(#131, 창작물 PROD silver-갭 회복으로 `pii_all.jsonl` 승격).
+  benchmark.md 표 baseline 은 **v1 불변**.
 
 | phase | 이슈 | gold | overall leaked (phobert/xlm-r) | overall grouped (phobert/xlm-r) | 핵심 |
 |---|---|---|---|---|---|
@@ -17,6 +18,7 @@
 | 1 | #108 | v2 suffix | 0.9529 / 0.9543 | ≈0.946 / ≈0.946† | PROD 천장 §3 re-silver(+5~7.5pp), EVT 회귀 |
 | 2 | #112 | v3 suffix | 0.9513 / 0.9525 | ≈0.944 / ≈0.944† | EVT 회귀 해결(recall_strict_evt), PROD give-back |
 | 3 | #116 | natural | 0.9506 / 0.9517 | **0.9437 / 0.9430** | suffix→자연 주입; PII 0.99=포맷학습(가설 반증) |
+| 4 | #131 | prodrecover | — | **0.9459 (phobert)** | PROD 창작물 silver-갭 회복 0.701→0.791(+9pp), EVT 비-회귀 |
 
 > **grouped 열 — 측정 vs 추정**: Phase 3(자연 코퍼스)은 **측정값**(원문
 > group-kfold 직접 평가). Phase 0–2(suffix)는 **추정(≈†)** = leaked − Phase 3
@@ -72,7 +74,7 @@
   모델오류/schema-갭 3분류 + IAA(temp0 vs temp0.7).
 - **VI 프롬프트 §3 정렬**: 서비스(`dịch vụ`) 제거·법령/다년 process=비-entity·
   창작물 positive few-shot — 재라벨·LLM 라벨러 4사이트.
-- **격리 re-silver**(`scripts/resilver_vi_isolated.py`): 원문 NER만 2모델
+- **격리 re-silver**(`augmenters/wikiann_vi/resilver_vi_isolated.py`): 원문 NER만 2모델
   (Gemma+Qwen) `recall_strict` 합의로 재라벨, 주입 PII·텍스트·split 고정(변수=
   프롬프트 하나) → `pii_all_v2.jsonl`. 5-fold×2 재학습.
 
@@ -194,3 +196,52 @@ n_sentences=37,706 · 10 folds · 전수 1회 pooled micro. PII 5종 0.997~1.000
   무엇인지 미분리 — suffix 코퍼스 폐기로 동일분할 재측정 불가.
 - 측정 출처: `results/classifier/vi/audit/{natural_gate_deployed,
   natural_vs_suffix_comparison}.json`, `leak_audit/leak_inflation_summary.json`.
+
+## Phase 4 — PROD 창작물 silver-갭 회복 (prodrecover) (#131)
+
+### 직전 가설
+- PROD(leak-free 0.7014)가 5종 중 최저. #108 천장(0.81)은 leaked v1 fold0 값이라
+  무효(#124 인플레 + gold 변경) → 현 배포 gold 기준 천장 재추정 필요.
+
+### 본 단계에서 시도
+- **누출-free 전수 감사**(gemma-31B §3 판정, grouped 10-fold 1,549 케이스):
+  보정 천장 **PROD 0.84**(P 0.841·R 0.839), 헤드룸 ≈14pp. precision이 지배
+  레버 — 모델 FP 1,061 중 603이 silver 창작물 미라벨(model 정답). schema_gap 0.
+- **메커니즘**: 추가 분석서 silver-갭 97%가 창작물 제목(표면 패턴 부재) →
+  `recall_strict_evt`식 결정론 구제 이식 불가. 대신 `recall_strict_prod`(PROD
+  high→high+gemma_only 완화) + **Wikidata P31 종-FP 필터** + 사람 spot-audit.
+- **자연-코퍼스 re-silver**(`augmenters/wikiann_vi/resilver_vi_natural.py`): 배포 text 직접
+  Gemma 전수 + Qwen 후보(1,412) 재라벨 → additive PROD(기존 엔티티 불변).
+  후보 Gemma 1,447 → Qwen conflict 1,410 → Wikidata 종 145·타입 35 drop →
+  **1,194 추가**. gold PROD 2,314→3,508.
+
+### 결과 (baseline → prodrecover, phobert 10-fold grouped, strict)
+
+`cross_fold_orig_dups=0`, n_sentences=37,706. PROD support 2,314→3,508(+1,194
+추가), 그 외 support 불변.
+
+| entity | base P | base R | base F1 | prod P | prod R | prod F1 | ΔF1(pp) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **overall** | 0.9390 | 0.9524 | 0.9457 | 0.9416 | 0.9503 | 0.9459 | +0.03 |
+| **PROD** | 0.6321 | 0.7878 | 0.7014 | 0.7749 | 0.8084 | **0.7913** | **+8.99** |
+| EVT | 0.7690 | 0.8515 | 0.8081 | 0.7524 | 0.8587 | 0.8020 | −0.61 |
+| PER | 0.9117 | 0.9238 | 0.9177 | 0.9113 | 0.9212 | 0.9162 | −0.15 |
+| LOC | 0.9408 | 0.9536 | 0.9472 | 0.9377 | 0.9561 | 0.9468 | −0.04 |
+| ORG | 0.8717 | 0.8758 | 0.8738 | 0.8780 | 0.8689 | 0.8734 | −0.03 |
+| DAT | 0.9975 | 0.9992 | 0.9983 | 0.9959 | 0.9987 | 0.9973 | −0.10 |
+| EMAIL | 0.9997 | 0.9999 | 0.9998 | 0.9996 | 0.9996 | 0.9996 | −0.02 |
+| PHONE | 0.9973 | 0.9993 | 0.9983 | 0.9970 | 0.9990 | 0.9980 | −0.03 |
+| ID_NUM | 0.9962 | 0.9975 | 0.9968 | 0.9986 | 0.9955 | 0.9970 | +0.02 |
+| CREDIT_CARD | 0.9989 | 0.9990 | 0.9989 | 0.9975 | 0.9992 | 0.9983 | −0.06 |
+
+- ✅ **PROD +8.99pp**(헤드룸 ~65% 회복) — **P 0.632→0.775(+14.3pp)** 가 주동력
+  (창작물 silver-갭 해소), R 0.788→0.808. per-fold 이득 >2 std(유의), std
+  0.038→0.028 안정.
+- **EVT −0.61pp**: per-fold <1 std = 노이즈(비-회귀). EVT gold 바이트 불변이라
+  PROD↔EVT 모델 경쟁 효과(#112 동일 기제).
+- overall·PER·LOC·ORG·PII 평탄(±0.15pp). 배포 gold 승격(`pii_all.jsonl` ←
+  prodrecover). 상세·검증: `docs/issues/issue-131-vi-prod-headroom-gated-lift.md`.
+
+### 잔여 한계
+- gold=LLM+Wikidata 추정(사람 전수 아님). 미회복 헤드룸 ~35%는 모델 recall
+  하드 플로어 + Wikidata 미해석 창작물 보수 drop.

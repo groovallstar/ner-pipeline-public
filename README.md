@@ -6,9 +6,11 @@
 
 | 언어 | 데이터셋 | 라벨 공간 |
 |------|---------|----------|
-| 한국어 | KLUE NER | 6종 (PS, LC, OG, DT, TI, QT) |
-| 일본어 | Stockmark NER Wikipedia | canonical 5종 NER + 5종 PII = 10종 평면 |
-| 베트남어 | WikiANN-vi (silver 재라벨) | canonical 10종 평면 (JA 와 공통) |
+| 한국어 | KLUE NER (PROD/EVT LLM 재라벨 + PII 합성 주입) | canonical 10종 평면 |
+| 일본어 | Stockmark NER Wikipedia (PII 합성 주입) | canonical 10종 평면 |
+| 베트남어 | WikiANN-vi (silver 재라벨 + PII 합성 주입) | canonical 10종 평면 |
+
+세 언어 공통 **canonical 10종 평면** = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`). 한국어는 `DAT`가 KLUE 유래, `PROD/EVT`는 KLUE 문장 LLM 재라벨 증분이며 KLUE `TI/QT`는 드롭, PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 주입이다.
 
 라벨 정의·매핑·경계 규칙: [`docs/manual/data/canonical-entity-schema.md`](docs/manual/data/canonical-entity-schema.md)
 
@@ -48,9 +50,11 @@ python -m ner.llm_eval --lang {ko,ja,vi} \
     --models "vllm:<model>" --max-samples 200 \
     --vllm-url "http://localhost:8081/v1"
 
-# BERT 파인튜닝·평가
-python -m ner.classifier --lang ja    # 일본어 canonical 10종
-python -m ner.classifier --lang vi    # 베트남어 canonical 10종
+# BERT 파인튜닝·평가 (canonical 10종 평면)
+python -m ner.classifier --lang ja    # 일본어
+python -m ner.classifier --lang vi    # 베트남어
+python -m ner.classifier --lang ko    # 한국어
+python -m ner.classifier --lang vi --kfold 10 --group-key orig  # 원문 단위 누출-free K-fold
 
 # 데이터 증강
 python -m ner.augmenters.pii          # 합성 PII 주입
@@ -62,7 +66,7 @@ python -m ner.augmenters.wikiann_vi   # WikiANN-vi 재라벨
 ## 테스트
 
 ```bash
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 ## 벤치마크 리포트
