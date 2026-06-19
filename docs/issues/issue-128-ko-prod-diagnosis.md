@@ -1,7 +1,7 @@
 # issue-128: 한국어 PROD 오류 진단 + silver junk 정리·재학습
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/128
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner_pipeline/pull/134
 - 브랜치: `feat/issue-128-ko-prod-diagnosis`
 - 승인일: 2026-06-18
 
@@ -65,4 +65,4 @@ koelectra-base-v3 의 PROD F1 0.690(NER-5 2nd 최저) 정체를 FP+FN 전수 진
 
 ## 관련 커밋
 
-- `<hash>`: feat(scripts) entity_revalidate + docs PROD 오류 진단·정리
+- `5139be7`: feat(scripts) entity_revalidate + docs PROD 오류 진단·정리
