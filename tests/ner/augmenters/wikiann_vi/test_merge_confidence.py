@@ -207,6 +207,55 @@ class TestRecallStrictEvt:
         assert 'recall_strict_evt' in POLICIES
 
 
+class TestRecallStrictProd:
+    """recall_strict_prod — PROD high+gemma_only 완화, EVT 구제 비-회귀."""
+
+    def _span(self, type_, conf, text):
+        return {'type': type_, 'confidence': conf, 'text': text}
+
+    def test_rescues_gemma_only_prod(self):
+        spans = [
+            self._span('PROD', 'high', 'iPhone 14'),
+            self._span('PROD', 'medium_recall', 'Black or White'),
+            self._span('PROD', 'medium_prec', 'Thám tử Conan'),
+            self._span('PROD', 'conflict', 'X'),
+        ]
+        r = _filter_by_policy(spans, 'recall_strict_prod')
+        kept = {(s['type'], s['confidence'], s['text']) for s in r}
+        # PROD high + gemma_only(medium_recall) 구제
+        assert ('PROD', 'high', 'iPhone 14') in kept
+        assert ('PROD', 'medium_recall', 'Black or White') in kept
+        # qwen_only(medium_prec) · conflict PROD 는 drop
+        assert ('PROD', 'medium_prec', 'Thám tử Conan') not in kept
+        assert ('PROD', 'conflict', 'X') not in kept
+
+    def test_evt_behaviour_unchanged(self):
+        """EVT 는 recall_strict_evt 와 동일 — legit 구제 유지(비-회귀)."""
+        spans = [
+            self._span('EVT', 'high', 'Chiến tranh Việt Nam'),
+            self._span('EVT', 'medium_recall', 'Cúp bóng đá châu Á 2007'),
+            self._span('EVT', 'medium_recall', 'Minh Trị Duy tân'),
+            self._span('LOC', 'medium_recall', 'Hà Nội'),
+            self._span('PER', 'medium_prec', 'Nam'),
+        ]
+        prod = _filter_by_policy(spans, 'recall_strict_prod')
+        evt = _filter_by_policy(spans, 'recall_strict_evt')
+
+        def key(r):
+            return {(s['type'], s['confidence'], s['text']) for s in r}
+        # EVT·PER·LOC 동작은 두 정책에서 동일
+        assert key(prod) == key(evt)
+        kept = key(prod)
+        assert ('EVT', 'medium_recall', 'Cúp bóng đá châu Á 2007') in kept
+        assert ('EVT', 'medium_recall', 'Minh Trị Duy tân') not in kept
+        assert ('LOC', 'medium_recall', 'Hà Nội') in kept
+        assert ('PER', 'medium_prec', 'Nam') not in kept
+
+    def test_in_policies(self):
+        from ner.augmenters.wikiann_vi.merge_confidence import POLICIES
+        assert 'recall_strict_prod' in POLICIES
+
+
 class TestMergeRecords:
     def _record(self, rid, spans):
         return {
