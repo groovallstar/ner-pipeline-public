@@ -9,8 +9,9 @@
 - **gold 계보**: v1 `pii_all.jsonl`(#103) → v2 `pii_all_v2.jsonl`(#108 re-silver)
   → v3 `pii_all_v3.jsonl`(#112) → **Phase 3 자연 주입**으로 단일
   `pii_all.jsonl` 재생성(#116, suffix 코퍼스·버전 접미사 폐기) → **Phase 4
-  prodrecover**(#131, 창작물 PROD silver-갭 회복으로 `pii_all.jsonl` 승격).
-  benchmark.md 표 baseline 은 **v1 불변**.
+  prodrecover**(#131, 창작물 PROD silver-갭 회복으로 `pii_all.jsonl` 승격) →
+  **Phase 5 evtfix**(#133, EVT silver-갭 39건 gold-fix 559→598 + 재학습;
+  구판 `pii_all_pre_evtfix.jsonl`). benchmark.md 표 baseline 은 **v1 불변**.
 
 | phase | 이슈 | gold | overall leaked (phobert/xlm-r) | overall grouped (phobert/xlm-r) | 핵심 |
 |---|---|---|---|---|---|
@@ -19,6 +20,7 @@
 | 2 | #112 | v3 suffix | 0.9513 / 0.9525 | ≈0.944 / ≈0.944† | EVT 회귀 해결(recall_strict_evt), PROD give-back |
 | 3 | #116 | natural | 0.9506 / 0.9517 | **0.9437 / 0.9430** | suffix→자연 주입; PII 0.99=포맷학습(가설 반증) |
 | 4 | #131 | prodrecover | — | **0.9459 (phobert)** | PROD 창작물 silver-갭 회복 0.701→0.791(+9pp), EVT 비-회귀 |
+| 5 | #133 | evtfix | — | **0.9474 (phobert)** | EVT silver-갭 gold-fix 559→598 + 재학습; EVT 0.8020→0.8249(**+2.29pp=0.38std=노이즈 내**), PROD·overall 비-회귀. 천장 재추정 0.857 |
 
 > **grouped 열 — 측정 vs 추정**: Phase 3(자연 코퍼스)은 **측정값**(원문
 > group-kfold 직접 평가). Phase 0–2(suffix)는 **추정(≈†)** = leaked − Phase 3
@@ -245,3 +247,20 @@ n_sentences=37,706 · 10 folds · 전수 1회 pooled micro. PII 5종 0.997~1.000
 ### 잔여 한계
 - gold=LLM+Wikidata 추정(사람 전수 아님). 미회복 헤드룸 ~35%는 모델 recall
   하드 플로어 + Wikidata 미해석 창작물 보수 drop.
+
+## Phase 5 — EVT 천장 재감사 + gold-fix + 재학습 (evtfix) (#133)
+
+- **직전상태**: prodrecover EVT 0.8020(P 0.752 약축 / R 0.859, support 559
+  최저). #131이 측정한 EVT per-fold std 0.054(10종 최고 분산).
+- **시도**: #131 동형 leak-free 전수 audit(gemma §3) → 보정 천장·헤드룸·축분해.
+  std-상대 게이트(go ⟺ 헤드룸 ≥ 1 std). gold-fix 후 재학습으로 실측 검증.
+- **결과**: 보정 천장 **0.8574**, 헤드룸 **5.54pp ≈ 1.02 std**(턱걸이) — 헤드룸
+  100%가 precision silver-갭(recall 헤드룸 0). gemma-검증 안전 additive 39건
+  (O→EVT, 칸영화제·Euro 2008·투어 등 #112 drop long-tail)만 gold-fix →
+  `pii_all.jsonl` EVT 559→598, 비-EVT 9종 0 변동. 보정 gold 로 phobert 10-fold
+  재학습: **EVT 0.8020→0.8249 · PROD 0.7913→0.7992 · overall 0.9459→0.9474**,
+  회귀 없음 → evtfix 승격. 상세·검증: `docs/issues/issue-133-vi-evt-headroom-
+  gated-lift.md`.
+- **잔여 한계**: EVT +2.29pp = **0.38 std = 노이즈 내** → 검증가능한 lift 아님
+  (헤드룸≈1 std 예측을 실측 확인). 0.8020→0.8249 델타는 gold 변경 + 재학습
+  혼재. 모델-FP 100·모델-FN 79는 가용 레버 없음.
