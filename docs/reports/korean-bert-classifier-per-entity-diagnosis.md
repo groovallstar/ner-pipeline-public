@@ -72,6 +72,29 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
 
 ## Part 1 — 엔티티별 진단
 
+### baseline 전체 P/R/F1 (재학습 #128, koelectra-base-v3, seed 42)
+
+strict span-F1, 단일 split(test 0.1, seed 42), `pii_all.jsonl`. #122 모델은
+워크트리 정리로 삭제돼 재학습(동일 레시피) — PROD·EVT 는 저support 라 단일런
+분산(각 진단 절 참조)을 동반하므로 NER-5 집계는 분산 범위로 읽는다.
+
+| entity | P | R | F1 | sup |
+|---|---|---|---|---|
+| PER | 0.9211 | 0.9220 | 0.9216 | 1924 |
+| LOC | 0.8818 | 0.8321 | 0.8562 | 780 |
+| ORG | 0.8136 | 0.8183 | 0.8159 | 1040 |
+| PROD | 0.6593 | 0.7229 | 0.6897 | 332 |
+| EVT | 0.5417 | 0.6341 | 0.5843 | 123 |
+| DAT | 0.8355 | 0.8737 | 0.8542 | 1029 |
+| EMAIL·PHONE·ID_NUM·CREDIT_CARD | 1.0000 | 1.0000 | 1.0000 | 각 ~840 |
+| **overall (10종)** | 0.9075 | 0.9143 | **0.9109** | 8597 |
+| **NER-5 micro** | 0.8520 | 0.8554 | **0.8537** | 4199 |
+| **NER-5 macro** | — | — | **0.7735** | — |
+
+> #122 벤치(NER-5 micro 0.8581 / macro 0.7773) 대비 micro −0.004 — 단일런
+> 분산 내. PII 4종은 format 단서라 F1≈1.0(백본 차이를 가림 → 백본 선정은
+> NER-5 로). 천장은 PROD(0.690)·EVT(0.584) — 아래 절에서 진단.
+
 ### EVT — support-limited (학습가능성 절벽) (#125)
 
 koelectra-base-v3 baseline에서 EVT가 NER-5 최저(F1 0.581). 정체를 진단한
@@ -114,7 +137,56 @@ koelectra-base-v3 baseline에서 EVT가 NER-5 최저(F1 0.581). 정체를 진단
 동반. 재현용 EVT 서브샘플러(`subsample_evt.py`)는 1회 측정 후 제거 —
 로직(EVT span 안정 해시 rate% nested 서브샘플)은 커밋 이력 보존.
 
+### PROD — silver junk 과발화 (오류 진단·정리·재학습) (#128)
+
+koelectra-base-v3 baseline 에서 PROD 가 NER-5 2번째 최저(F1 0.690, P0.659
+/R0.723, test sup 332). FP+FN 전수 진단 → silver gold junk 정리 → 재학습으로
+**PROD F1 0.724, distinct 오류 189→149(−21%)**. 핵심: silver 가 비-제품을
+PROD 로 과태깅해 모델이 PROD 를 과발화하도록 학습 → junk 제거 시 precision↑.
+
+**1) 오류 4버킷 진단** (baseline test, distinct 189):
+
+| 채널 | n | 4버킷 귀속 |
+|---|---|---|
+| HALLUCINATION (pred PROD, gold ∅) | 54 | gold 누락(실제품 미태깅) ~26 + subword garbage ~28 |
+| PROD↔PER type-mismatch | 38 | eponymy(작품명↔인명: 동주·람보·미이라) — 구조적 |
+| MISS (gold PROD, pred ∅) | 37 | 실작품 recall ~26 + silver junk ~11 |
+| BOUNDARY (PROD–PROD 경계) | 27 | gold extent(소총·시리즈·3부작 포함) |
+| PROD↔ORG/LOC/EVT/DAT | 33 | 정의 모호(브랜드↔회사·작품↔날짜/사건) |
+
+HALLUCINATION 의 절반(~26)은 실제 제품(SM5·사드·윈도10·리그오브레전드)을
+silver 가 누락 → 측정 precision(0.66) 저평가. garbage(~28)는 다수가 주입
+PII 인접 토큰 부산물. PROD↔PER(20%)은 작품명=인명/배역 동형이라 구조적.
+
+**2) gold 재검증** (gemma 전체 3253 PROD span, `entity_revalidate.py`):
+
+canonical rubric(`ner_prompts.py`)으로 span 별 keep/drop/retype 판정.
+**kept 3099 / dropped 123(junk 3.8%) / retyped 31(ORG11·EVT10·PER7·LOC3)**
+→ gold **95% 재확인**, junk 만 ~5%. PER/LOC/DAT(사람 KLUE gold)·PII 불변.
+표본 16건 수기 검수 94% 정확(예: "예뻤다 끝!"·"마지막" DROP, "해프닝"→EVT).
+
+**3) 정리 후 재학습** (cleaned gold, koelectra seed 42, strict):
+
+| 조건 | P | R | F1 | distinct 오류 |
+|---|---|---|---|---|
+| baseline / 원본 test(332) | 0.659 | 0.723 | **0.690** | 189 |
+| baseline / cleaned test(317) | 0.651 | 0.748 | 0.696 | — |
+| clean / cleaned test(317) | 0.723 | 0.726 | **0.724** | 149 |
+
+분해: cleaned test 가 쉬워진 효과 +0.006 + **cleaned 학습 효과 +0.028**.
+채널 감소: **HALLUCINATION 54→31**·PROD↔ORG 18→10(junk 제거·definitional
+정리). joint gate: clean 모델 NER-5 micro 0.860 / macro 0.790 / PER 0.925
+— 무회귀(LOC −0.016 은 noise 내).
+
+**결론**: silver junk(~5%)가 모델을 PROD 과발화로 학습시킨 게 천장의 한 축
+— 정리 시 precision 0.66→0.72(HALLUCINATION 절반↓). 단 F1 +0.028 은 PROD
+단일런 노이즈(~±0.03) 수준이라 modest, **channel −21% 가 더 robust 한 근거**.
+잔여 천장: **PROD↔PER eponymy(35, 구조적·data 불응)** + 실작품 recall
+miss(37) + 경계(26). 재현: `entity_revalidate.py --label PROD` → 재학습.
+
 ## 다음 (후속 이슈 후보)
 
 - EVT gold 증강 — KLUE 미검출 이벤트 문장 추가 relabel로 절벽에서 끌어올리기.
+- PROD gold 누락 recall — silver junk 정리는 #128 에서 완료(F1 0.690→0.724).
+  잔여는 미태깅 실제품(SM5류) 추가 relabel(recall 패스) + PROD↔PER eponymy.
 - ko LLM NER 10종 라벨러 확장·벤치마크 — 측정과 함께 별도.
