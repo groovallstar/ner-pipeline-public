@@ -11,7 +11,7 @@ JSONL을 만든다.
   (adjudicate 는 vLLM 판정 단계에서 추가)
 
 사용:
-    python src/ner/scripts/audit_vi_prod_evt.py extract \
+    python src/ner/augmenters/wikiann_vi/audit_vi_prod_evt.py extract \
         --pred results/classifier/vi/canonical5fold/phobert-base-v2/fold0/test_predictions.json \
         --out results/classifier/vi/audit/prod_evt_cases.jsonl
 """

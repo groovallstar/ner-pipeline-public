@@ -12,12 +12,12 @@
            + 추가분 diff(spot-audit 용)
 
 사용:
-    python src/ner/scripts/resilver_vi_natural.py relabel \
+    python src/ner/augmenters/wikiann_vi/resilver_vi_natural.py relabel \
         --pii data/wikiann_vi/pii_all.jsonl \
         --base-url http://localhost:8081/v1 \
         --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
         --out results/classifier/vi/audit/natural_relabel_gemma.jsonl
-    python src/ner/scripts/resilver_vi_natural.py apply \
+    python src/ner/augmenters/wikiann_vi/resilver_vi_natural.py apply \
         --pii data/wikiann_vi/pii_all.jsonl \
         --gemma ...gemma.jsonl --qwen ...qwen.jsonl \
         --out data/wikiann_vi/pii_all_prodrecover.jsonl \

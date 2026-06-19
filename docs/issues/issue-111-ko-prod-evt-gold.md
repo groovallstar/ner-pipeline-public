@@ -63,7 +63,7 @@ issue #109의 KLUE 유래 4종(PER/LOC/ORG/DAT) seed gold에 PROD·EVT를 LLM
 
 ## 구현 단계 (가변, 선택)
 - [x] 1. ko 라벨러 프롬프트 PROD/EVT 추가 (canonical §2.2/§3/§3.1~§3.3)
-- [x] 2. relabel+merge 스크립트 `scripts/ko_prod_evt_relabel.py`
+- [x] 2. relabel+merge 스크립트 `labelers/ko/ko_prod_evt_relabel.py`
 - [x] 3. relabel 실행 (full 26k, gemma `:8081`) + containment-replace 병합
 - [x] 4. 검증 — 5종 분포·회색지대 spot-check·flat(overlap 0)·pytest 313 pass
 - [x] 5. docs 갱신 (canonical-entity-schema ko 포함, korean-ner-datasets, ko AGENTS)
@@ -74,7 +74,7 @@ issue #109의 KLUE 유래 4종(PER/LOC/ORG/DAT) seed gold에 PROD·EVT를 LLM
 - ko 라벨러(`ner_prompts.py`) 6종 전환: PROD/EVT 정의·규칙·예시 + 기존 "사건/
   작품/선박 제외" 규칙을 PROD/EVT로 재작성 (canonical §2.2/§3/§3.1~§3.3
   회색지대). SINGLE+SYSTEM 프롬프트 정렬
-- `scripts/ko_prod_evt_relabel.py` 신규: relabel(vLLM PROD/EVT 수확,
+- `labelers/ko/ko_prod_evt_relabel.py` 신규: relabel(vLLM PROD/EVT 수확,
   resume·post-filter) + merge(containment-replace, flat 보장)
 - gold `data/klue/origin.jsonl` 4종→5종 in-place 승격
 - docs: canonical-entity-schema(ko NER 5종)·korean-ner-datasets·ko AGENTS

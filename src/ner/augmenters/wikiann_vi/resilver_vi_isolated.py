@@ -13,13 +13,13 @@
   assemble      재라벨 + 보존 entity overlay → pii_all_v2.jsonl
 
 사용:
-    python src/ner/scripts/resilver_vi_isolated.py build-source \
+    python src/ner/augmenters/wikiann_vi/resilver_vi_isolated.py build-source \
         --pii data/wikiann_vi/pii_all.jsonl --all data/wikiann_vi/all.jsonl \
         --out results/classifier/vi/audit/resilver_source.jsonl
-    python src/ner/scripts/resilver_vi_isolated.py relabel \
+    python src/ner/augmenters/wikiann_vi/resilver_vi_isolated.py relabel \
         --source results/classifier/vi/audit/resilver_source.jsonl \
         --out results/classifier/vi/audit/resilver_relabel.jsonl
-    python src/ner/scripts/resilver_vi_isolated.py assemble \
+    python src/ner/augmenters/wikiann_vi/resilver_vi_isolated.py assemble \
         --pii data/wikiann_vi/pii_all.jsonl \
         --source results/classifier/vi/audit/resilver_source.jsonl \
         --relabel results/classifier/vi/audit/resilver_relabel.jsonl \

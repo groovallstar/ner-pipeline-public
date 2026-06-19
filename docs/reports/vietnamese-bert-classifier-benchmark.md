@@ -155,9 +155,9 @@ all-O 때문이며 정상 4-fold는 타 모델과 동급(아래).
 
 accuracy가 phobert ≈ xlm-r-base 동률이라 선택은 **비용 축**에서 갈린다. fold0
 test 7,675문장, float32, RTX A6000 1장(`CUDA_VISIBLE_DEVICES=0`)에서 측정
-(batch=32 throughput / batch=1 latency 200문장 median). 측정: `python
-src/ner/scripts/bench_vi_inference_cost.py`. 상세 출처: `docs/issues/
-issue-106-vi-classifier-inference-cost.md`.
+(batch=32 throughput / batch=1 latency 200문장 median). 측정 스크립트
+`bench_vi_inference_cost.py`는 1회 측정 후 제거 — 재현 절차·상세 출처:
+`docs/issues/issue-106-vi-classifier-inference-cost.md`(커밋 이력 보존).
 
 | 모델 | params | peak GPU mem | encode/sent | latency b=1 | throughput b=32 | strict F1 |
 |---|---:|---:|---:|---:|---:|---:|

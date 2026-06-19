@@ -111,7 +111,8 @@ koelectra-base-v3 baseline에서 EVT가 NER-5 최저(F1 0.581). 정체를 진단
 **진단 결론**: EVT = support-limited(비학습 아님 — gold가 PROD급 ~3k이면
 ~0.70, LOC급 ~8k이면 ~0.85 기대). 천장 레버는 경계·커버리지·스키마가 아니라
 **EVT gold 증강**(곡선이 근거, 단 1187 너머는 외삽). cliff 근처라 high-variance
-동반. 재현: `src/ner/scripts/subsample_evt.py`.
+동반. 재현용 EVT 서브샘플러(`subsample_evt.py`)는 1회 측정 후 제거 —
+로직(EVT span 안정 해시 rate% nested 서브샘플)은 커밋 이력 보존.
 
 ## 다음 (후속 이슈 후보)
 

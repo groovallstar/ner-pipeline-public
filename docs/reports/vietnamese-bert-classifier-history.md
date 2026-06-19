@@ -74,7 +74,7 @@
   모델오류/schema-갭 3분류 + IAA(temp0 vs temp0.7).
 - **VI 프롬프트 §3 정렬**: 서비스(`dịch vụ`) 제거·법령/다년 process=비-entity·
   창작물 positive few-shot — 재라벨·LLM 라벨러 4사이트.
-- **격리 re-silver**(`scripts/resilver_vi_isolated.py`): 원문 NER만 2모델
+- **격리 re-silver**(`augmenters/wikiann_vi/resilver_vi_isolated.py`): 원문 NER만 2모델
   (Gemma+Qwen) `recall_strict` 합의로 재라벨, 주입 PII·텍스트·split 고정(변수=
   프롬프트 하나) → `pii_all_v2.jsonl`. 5-fold×2 재학습.
 
@@ -210,7 +210,7 @@ n_sentences=37,706 · 10 folds · 전수 1회 pooled micro. PII 5종 0.997~1.000
 - **메커니즘**: 추가 분석서 silver-갭 97%가 창작물 제목(표면 패턴 부재) →
   `recall_strict_evt`식 결정론 구제 이식 불가. 대신 `recall_strict_prod`(PROD
   high→high+gemma_only 완화) + **Wikidata P31 종-FP 필터** + 사람 spot-audit.
-- **자연-코퍼스 re-silver**(`scripts/resilver_vi_natural.py`): 배포 text 직접
+- **자연-코퍼스 re-silver**(`augmenters/wikiann_vi/resilver_vi_natural.py`): 배포 text 직접
   Gemma 전수 + Qwen 후보(1,412) 재라벨 → additive PROD(기존 엔티티 불변).
   후보 Gemma 1,447 → Qwen conflict 1,410 → Wikidata 종 145·타입 35 drop →
   **1,194 추가**. gold PROD 2,314→3,508.

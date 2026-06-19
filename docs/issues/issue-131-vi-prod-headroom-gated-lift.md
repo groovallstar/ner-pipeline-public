@@ -15,7 +15,7 @@ R 0.788, 10종 중 최저)를 개선. 단 #108 천장 추정(0.81)은 **leaked v
 
 ## 진단 (AC1·AC2) — 누출-free 전수 10-fold
 
-도구: `scripts/audit_vi_prod_evt.py`(다중-fold 확장) extract→adjudicate→analyze.
+도구: `augmenters/wikiann_vi/audit_vi_prod_evt.py`(다중-fold 확장) extract→adjudicate→analyze.
 판정 = gemma-4-31B-it-AWQ-8bit @ vLLM, §3 루브릭, temp 0. 대상: phobert grouped
 10-fold `test_predictions.json` 전수(37,706행), 현재 배포 gold. 추출 1,549
 케이스(PROD FN 496·FP 836 + EVT 170 + 대조군 60), unparsed 0. 무결성: analyze
@@ -55,7 +55,7 @@ R 0.788, 10종 중 최저)를 개선. 단 #108 천장 추정(0.81)은 **leaked v
    `recall_strict_evt`와 동일(EVT legit 구제 유지 = 비-회귀)하되 PROD 를
    high+medium_recall(gemma_only)로 완화. conflict·qwen_only PROD 는 drop.
    단위 테스트 추가(EVT 동작 동일성 포함).
-2. **자연-코퍼스 re-silver**(`scripts/resilver_vi_natural.py`, 신규): suffix
+2. **자연-코퍼스 re-silver**(`augmenters/wikiann_vi/resilver_vi_natural.py`, 신규): suffix
    전용 `resilver_vi_isolated.py`(경계 로직)는 자연 주입(#116)에 못 써, 배포
    `text`를 직접 Gemma+Qwen 재라벨 → `recall_strict_prod` PROD를 **기존
    엔티티에 겹치지 않게 additive 추가**(기존 PII·PER·LOC·ORG·EVT 불변).
