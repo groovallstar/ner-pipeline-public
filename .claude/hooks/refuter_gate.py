@@ -93,10 +93,12 @@ def _spawn_instructions(diff_hash, verdict_file):
     return (
         'Loop completion gate: spawn an ISOLATED-CONTEXT refuter before '
         'finishing.\n'
-        'Invoke the `refuter` skill (or an Agent with model=sonnet) whose '
-        'job is to REFUTE — not approve — the current diff against the '
-        'original acceptance criteria (nearest docs/issues/issue-*.md plan '
-        'section or the active PRD).\n\n'
+        'Invoke the `refuter` skill (or an Agent whose model is chosen by '
+        'diff risk: Sonnet by default, Opus when refuting needs adversarial '
+        'reasoning beyond number/JSON matching — see the skill\'s model '
+        'selection rule) whose job is to REFUTE — not approve — the current '
+        'diff against the original acceptance criteria (nearest '
+        'docs/issues/issue-*.md plan section or the active PRD).\n\n'
         'The refuter MUST write its verdict to:\n'
         f'  {verdict_file}\n'
         'as JSON: {"verdict":"PASS"|"FAIL","diff_hash":"' + diff_hash +

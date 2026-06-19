@@ -5,9 +5,11 @@ description: 격리 컨텍스트 반박자 — 현재 diff를 원기준에 대�
 
 # refuter — 격리 컨텍스트 반박자
 
-완료 직전, **기억이 깨끗한 Sonnet 서브에이전트**를 띄워 현재 변경을
+완료 직전, **기억이 깨끗한 서브에이전트**를 띄워 현재 변경을
 *승인이 아니라 반증*시킨다. 산출물을 만든 본인(메인 세션)이 자기 답을
-후하게 보는 self-preferential bias를 피하는 게 목적이다.
+후하게 보는 self-preferential bias를 피하는 게 목적이다. 모델은 diff
+위험도로 자동 선택한다(기본 Sonnet, 측정-타당성 위험 diff는 Opus — 아래
+§모델 선택).
 
 ## 언제
 
@@ -24,7 +26,8 @@ description: 격리 컨텍스트 반박자 — 현재 diff를 원기준에 대�
 2. **기준 출처 확보**: 가장 가까운 `docs/issues/issue-*.md`의 계획/성공
    기준 섹션, 또는 활성 PRD(`.omc/state/sessions/<id>/prd.json`)의
    acceptance criteria. 없으면 직전 사용자 요청을 기준으로 삼는다.
-3. **반박자 spawn** — Agent 툴, 격리 컨텍스트, `model=sonnet`:
+3. **반박자 spawn** — Agent 툴, 격리 컨텍스트, `model`은 **§모델 선택**
+   규칙으로 정한다(기본 `sonnet`, 측정-타당성 위험이면 `opus`):
    - OMC 환경이면 `subagent_type`을 `code-reviewer`(또는 더 적대적인
      `critic`)로 지정해 OMC 검증-위임 정책(approval pass는
      code-reviewer/verifier)과 정합시킨다. 미설치 시 기본 서브에이전트.
@@ -46,7 +49,7 @@ description: 격리 컨텍스트 반박자 — 현재 diff를 원기준에 대�
    {"verdict": "PASS" | "FAIL",
     "diff_hash": "<앞 12자>",
     "findings": ["...", "..."],
-    "model": "sonnet",
+    "model": "sonnet | opus",
     "round": 1}
    ```
 5. **후속**:
@@ -54,9 +57,22 @@ description: 격리 컨텍스트 반박자 — 현재 diff를 원기준에 대�
    - FAIL → findings를 수정한다. 코드가 바뀌면 diff_hash가 달라지므로
      게이트가 새 판정을 다시 요구한다(같은 결함 재발 방지).
 
+## 모델 선택 (Sonnet/Opus)
+
+기본 **Sonnet**. 반증이 *대조*로 끝나면(숫자↔`results/*.json` 일치, 국소
+코드 회귀, 테스트 삭제·약화 여부) 충분하다.
+
+**Opus로 격상하는 기준은 하나** — *틀린 답이 그럴듯해서 통과할 위험*, 즉
+반증에 **적대적 추론**이 필요할 때. 수치가 다 맞아도 결론이 틀릴 수 있는
+경우다. 흔한 신호(규칙 아닌 예시): 측정의 입력(gold/eval)이나 측정 코드
+(메트릭·분할·누출)가 바뀜 / "수치가 올랐다=개선"의 인과가 비자명(순환·교란·
+인플레) / 변경이 넓어 한눈에 회귀를 못 짚음.
+
+그 외는 Sonnet. 판정 JSON `"model"` 필드에 실제 모델을 기록한다.
+
 ## 비용 메모
 
-- 반박자는 **Sonnet** 고정(메인 Opus 대비 ~45% 저렴, 측정 오류엔 충분).
+- 모델은 위 §모델 선택으로 자동(기본 Sonnet, 측정-타당성 위험 시 Opus).
   서브에이전트는 별 컨텍스트라 메인 캐시를 깨지 않는다.
 - 느리고 넓게 읽으면 메인 세션 캐시 TTL(5분)을 넘겨 재진입 비용이
   10배 튄다. **빠르고 좁게** 유지하라.
