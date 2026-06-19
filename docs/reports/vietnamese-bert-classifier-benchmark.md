@@ -8,6 +8,11 @@
 - 실험 연대기(phase별 직전상태→시도→결과·gold 계보): `docs/reports/vietnamese-bert-classifier-history.md`
 - 일본어 동일 셋업 결과는 `docs/reports/japanese-bert-classifier-benchmark.md` 참조
 
+> **현 canonical 모델 = evtfix (Phase 5, #133).** leak-free group-kfold:
+> overall **0.9474** · EVT **0.8249** · PROD **0.7992** (`pii_all.jsonl`
+> EVT 598). 본 표는 원본 stratified 5-fold(누출 포함) **모델-선정 baseline**
+> 으로 동결이며, grouped 누출-free 현 수치·phase 진화는 history.md 참조.
+
 > **이전 표(production 0.8985, sweep, v1~v4 ablation)는 폐기·대체됨.** 두 가지
 > 혼입(confound)이 있었다 — ① fast-tokenizer offset 정렬 버그(아래 §코드 수정),
 > ② WikiANN-vi 내재 train/test 누출(아래 §누출). ①은 제거됐으나 ②는 **부분
