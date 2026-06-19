@@ -32,11 +32,11 @@ PII 5종 F1 ~0.99 가 과대평가다. 자연 문맥 PII 일반화가 미검증.
 
 ## 구현
 
-- `scripts/build_vi_natural_source.py`: suffix gold → (원문, 원문 NER) 추출
+- `augmenters/wikiann_vi/build_vi_natural_source.py`: suffix gold → (원문, 원문 NER) 추출
   (`resilver_vi_isolated.build_source` 경계 복원, 경계 이후 주입 PII 제거).
 - `augmenters/pii --mode llm`: 원문에 PII 문중 자연 삽입(`--inject-temperature`
   기본 0.7, 낮출수록 PII verbatim 충실도 ↑) → `pii_all.jsonl`(37,706 행).
-- `scripts/validate_vi_natural.py`: 결정론 게이트(마커·offset round-trip·드롭율·
+- `augmenters/wikiann_vi/validate_vi_natural.py`: 결정론 게이트(마커·offset round-trip·드롭율·
   원문 NER 보존율·무라벨 email/phone 스캔).
 
 ## 측정 결과

@@ -155,9 +155,9 @@ all-O 때문이며 정상 4-fold는 타 모델과 동급(아래).
 
 accuracy가 phobert ≈ xlm-r-base 동률이라 선택은 **비용 축**에서 갈린다. fold0
 test 7,675문장, float32, RTX A6000 1장(`CUDA_VISIBLE_DEVICES=0`)에서 측정
-(batch=32 throughput / batch=1 latency 200문장 median). 측정: `python
-src/ner/scripts/bench_vi_inference_cost.py`. 상세 출처: `docs/issues/
-issue-106-vi-classifier-inference-cost.md`.
+(batch=32 throughput / batch=1 latency 200문장 median). 측정 스크립트
+`bench_vi_inference_cost.py`는 1회 측정 후 제거 — 재현 절차·상세 출처:
+`docs/issues/issue-106-vi-classifier-inference-cost.md`(커밋 이력 보존).
 
 | 모델 | params | peak GPU mem | encode/sent | latency b=1 | throughput b=32 | strict F1 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -234,6 +234,13 @@ fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
   **EVT pooled 0.773→0.822(phobert)·0.735→0.837(xlm-r)**, 양 모델 v1 초과 +
   per-fold std 붕괴(0.089→0.011). PROD give-back −2.2~2.4pp(v1 대비 유지),
   overall flat. 산출 gold `pii_all_v3.jsonl`(본 표 baseline 은 v1 로 불변).
+- **PROD 천장 재감사·회복(#131, prodrecover)**: 누출-free 전수 감사로 현 배포
+  gold 기준 보정 천장 **PROD 0.84**(헤드룸 ~14pp, precision 지배 — 창작물 silver
+  미라벨 603). 창작물은 §3 표면 패턴이 없어 `recall_strict_prod`(PROD high+
+  gemma_only 완화) + **Wikidata P31 종-FP 필터** + spot-audit 로 1,194 추가
+  re-silver(gold PROD 2,314→3,508). **PROD pooled 0.7014→0.7913(+8.99pp,
+  phobert 10-fold grouped)**, EVT 비-회귀(<1 std), overall 0.9457→0.9459.
+  배포 gold 승격. 상세: `docs/issues/issue-131-vi-prod-headroom-gated-lift.md`.
 - PII 5종은 0.98~1.00 포화. NER 5종 중 PER/LOC/ORG는 0.88~0.93.
 - 잔여 천장(범위 밖): PROD recall(모델 약점)·EVT long-tail 패턴(투어·금융위기
   등 미커버), 외부 코퍼스(VLSP/PhoNER, 단 오염 위험).

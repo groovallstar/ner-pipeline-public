@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # KLUE 약어 → canonical. 미등록(TI/QT)은 드롭한다.
 _KLUE_TO_CANONICAL = {"PS": "PER", "LC": "LOC", "OG": "ORG", "DT": "DAT"}
 
-# 출력 기준 디렉토리: 프로젝트 루트 data/ko_klue/ (src/ner/scripts/ → parents[3])
-_OUT_DIR = Path(__file__).resolve().parents[3] / "data" / "ko_klue"
+# 출력 기준 디렉토리: 프로젝트 루트 data/ko_klue/ (src/ner/labelers/ko/ → parents[4])
+_OUT_DIR = Path(__file__).resolve().parents[4] / "data" / "ko_klue"
 
 
 def bio_to_char_spans(tokens, tags):

@@ -21,6 +21,13 @@
                     구제. Qwen 의 구조적 EVT recall 병목(보통명사-핵 서술구
                     누락)이 strict 교집합을 천장 걸어 legit EVT 를 떨구는 회귀
                     보정. 구제 = §3 결정론 규칙의 regex 재적용(self-confirm 아님)
+- `recall_strict_prod` : recall_strict_evt 와 동일(EVT legit 구제 유지)하되
+                    PROD 를 high → high + medium_recall(gemma_only) 로 완화.
+                    VI PROD 헤드룸은 창작물(노래·영화·앨범·TV 등 임의 제목)
+                    silver 누락이 지배하는데, EVT 와 달리 §3 표면 패턴이 없어
+                    결정론 구제가 불가 → Gemma 의 창작물 recall 을 신뢰해 회복.
+                    단일모델 신뢰라 FP·약한 순환 리스크 동반(사람 spot-audit +
+                    재학습 비-회귀로 가드). conflict·qwen_only PROD 는 drop.
 
 신뢰도 계층별 학습 데이터 활용 구조의 단일-파일 구현.
 타입별 신뢰도 격차를 반영한 type-aware 필터(`recall_strict`)를 함께 제공한다.
@@ -37,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 POLICIES = (
     'recall', 'precision', 'high_only', 'full', 'recall_strict',
-    'recall_strict_evt',
+    'recall_strict_evt', 'recall_strict_prod',
 )
 
 # recall_strict 에서 high 만 허용할 type — 신규 5종 중 합의율 낮은 두 type
@@ -198,6 +205,24 @@ def _filter_by_policy(
                     out.append(s)
             elif t == 'PROD':
                 if c == 'high':
+                    out.append(s)
+            elif c in {'high', 'medium_recall'}:
+                out.append(s)
+        return out
+    elif policy == 'recall_strict_prod':
+        # recall_strict_evt 와 동일(EVT legit 구제 유지)하되 PROD 를
+        # high + medium_recall(gemma_only) 로 완화 — 창작물(임의 제목,
+        # §3 표면 패턴 부재)을 Gemma recall 로 회복. conflict·qwen_only
+        # PROD 는 drop(단일모델 신뢰는 gemma_only 한정).
+        out = []
+        for s in spans:
+            t = s['type']
+            c = s['confidence']
+            if t == 'EVT':
+                if c == 'high' or (
+                    c in {'medium_recall', 'medium_prec'}
+                    and _is_evt_legit(s.get('text', ''))
+                ):
                     out.append(s)
             elif c in {'high', 'medium_recall'}:
                 out.append(s)

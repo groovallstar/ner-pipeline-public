@@ -36,7 +36,7 @@ ja·vi는 canonical 10종 평면 스키마를 공유해 분류기·메트릭·�
 - [x] 1. 라벨러 프롬프트 canonical 전환 + `tag_aligner` ko/ja normalize
        맵 분리
 - [x] 2. KLUE → canonical **seed gold**(4종 char-span JSONL) 생성
-       — `scripts/klue_to_canonical_gold.py`
+       — `labelers/ko/klue_to_canonical_gold.py`
 - [ ] 3. docs 갱신 (`canonical-entity-schema`, `korean-ner-datasets`,
        `tag_aligner`, ko AGENTS)
 
@@ -69,7 +69,7 @@ ja·vi는 canonical 10종 평면 스키마를 공유해 분류기·메트릭·�
 
 ### 변경
 
-- `scripts/klue_to_canonical_gold.py` 신설: KLUE 음절 BIO →
+- `labelers/ko/klue_to_canonical_gold.py` 신설: KLUE 음절 BIO →
   canonical char-span gold JSONL.
   - `PS→PER, LC→LOC, OG→ORG, DT→DAT` 재매핑, TI/QT 스팬 드롭
   - 음절 토큰 재구성 텍스트 기준 char offset(start/end) 부여

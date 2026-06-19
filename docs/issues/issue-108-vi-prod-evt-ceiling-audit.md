@@ -58,7 +58,7 @@ VI PROD(strict F1 ~0.71)·EVT 천장이 (a) silver 노이즈 / (b) 모델 한계
 
 ## 구현 결과
 
-도구: `src/ner/scripts/audit_vi_prod_evt.py` (extract/adjudicate/analyze).
+도구: `src/ner/augmenters/wikiann_vi/audit_vi_prod_evt.py` (extract/adjudicate/analyze).
 판정: gemma-4-31B-it-AWQ-8bit @ vLLM, §3 루브릭 주입, temp=0. 대상: fold0
 phobert. 산출: `results/classifier/vi/audit/`(gitignore).
 
@@ -126,7 +126,7 @@ remediation의 직접 검증은 과라벨 2건이 새 프롬프트로 비-entity
 
 ## remediation 측정 결과 (격리 re-silver + 5-fold 재학습)
 
-방법(`src/ner/scripts/resilver_vi_isolated.py`): 변수를 *프롬프트 하나*로 격리
+방법(`src/ner/augmenters/wikiann_vi/resilver_vi_isolated.py`): 변수를 *프롬프트 하나*로 격리
 — pii_all 각 행의 원문(주입 전)만 새 §3 프롬프트로 **두 모델(Gemma+Qwen)
 재라벨 → 동일 `recall_strict` 합의 merge**(2-LLM 합의 기준 *유지*) → 원문
 NER만 교체(주입 PII·텍스트·5-fold split 고정) → `pii_all_v2.jsonl`. 검증:

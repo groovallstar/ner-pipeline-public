@@ -11,7 +11,7 @@ JSONL을 만든다.
   (adjudicate 는 vLLM 판정 단계에서 추가)
 
 사용:
-    python src/ner/scripts/audit_vi_prod_evt.py extract \
+    python src/ner/augmenters/wikiann_vi/audit_vi_prod_evt.py extract \
         --pred results/classifier/vi/canonical5fold/phobert-base-v2/fold0/test_predictions.json \
         --out results/classifier/vi/audit/prod_evt_cases.jsonl
 """
@@ -291,14 +291,32 @@ def analyze(adjudicated: List[dict], rows: List[dict]) -> dict:
     return report
 
 
+def _load_pred(paths: List[str]) -> List[dict]:
+    """하나 이상의 test_predictions(.json/.jsonl) 를 로드·연결.
+
+    grouped K-fold 전수 감사는 fold별 예측 파일을 모두 합쳐 누출-free
+    전체 코퍼스를 한 번에 본다(각 행은 정확히 한 fold 의 test 라 중복 없음).
+    단일 경로도 허용(백워드 호환).
+    """
+    rows: List[dict] = []
+    for path in paths:
+        if path.endswith('.jsonl'):
+            rows.extend(json.loads(ln)
+                        for ln in open(path, encoding='utf-8'))
+        else:
+            rows.extend(json.load(open(path)))
+    return rows
+
+
 def main():
     p = argparse.ArgumentParser(
         description='Extract VI PROD/EVT silver-vs-model disagreements '
                     'for canonical §3 adjudication.')
     sub = p.add_subparsers(dest='cmd', required=True)
     pe = sub.add_parser('extract', help='Extract disagreement cases')
-    pe.add_argument('--pred', required=True,
-                    help='Absolute/relative test_predictions.json path')
+    pe.add_argument('--pred', required=True, nargs='+',
+                    help='One or more test_predictions.json paths '
+                         '(pass all grouped folds for full leak-free audit)')
     pe.add_argument('--out', required=True, help='Output cases JSONL')
     pe.add_argument('--control-size', type=int, default=40,
                     help='Number of agreement control cases to sample')
@@ -314,14 +332,14 @@ def main():
 
     pn = sub.add_parser('analyze', help='Classify + corrected F1')
     pn.add_argument('--adjudicated', required=True)
-    pn.add_argument('--pred', required=True, help='original predictions')
+    pn.add_argument('--pred', required=True, nargs='+',
+                    help='Original predictions (one or more fold files)')
     pn.add_argument('--out', default=None)
 
     args = p.parse_args()
 
     if args.cmd == 'extract':
-        rows = [json.loads(ln) for ln in open(args.pred, encoding='utf-8')] \
-            if args.pred.endswith('.jsonl') else json.load(open(args.pred))
+        rows = _load_pred(args.pred)
         cases = extract_cases(rows)
 
         rng = random.Random(args.seed)
@@ -366,9 +384,7 @@ def main():
     elif args.cmd == 'analyze':
         adj = [json.loads(ln)
                for ln in open(args.adjudicated, encoding='utf-8')]
-        rows = json.load(open(args.pred)) \
-            if not args.pred.endswith('.jsonl') else \
-            [json.loads(ln) for ln in open(args.pred, encoding='utf-8')]
+        rows = _load_pred(args.pred)
         report = analyze(adj, rows)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if args.out:
