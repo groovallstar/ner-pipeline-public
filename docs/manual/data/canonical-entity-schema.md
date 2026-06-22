@@ -1,4 +1,4 @@
-# Canonical Entity Schema (JA · VI)
+# Canonical Entity Schema (JA · VI · KO)
 
 `src/ner/labelers/ja/`·`src/ner/augmenters/pii/` (Stockmark) 와 `src/ner/labelers/vi/`·
 `src/ner/augmenters/wikiann_vi/` (WikiANN) 가 공유하는 통합 엔티티 라벨 공간.
@@ -11,10 +11,20 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 - KO: canonical **10종 평면 완성**. NER 5종(`PER/LOC/ORG/PROD/EVT`) +
   `DAT`는 KLUE 유래(라벨러 `src/ner/labelers/ko/**`, `PROD/EVT`는 LLM
   재라벨 증분). PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 PII를
-  **llm 자연삽입**으로 증분(`data/klue/pii_all.jsonl`). 분류기 미완(후속 이슈).
+  **llm 자연삽입**으로 증분(`data/klue/pii_all.jsonl`). KO PROD 경계 회색지대(eponymy·명명 탈것·
+  SW·span 범위)는 §3.4·§5.3 결정표로 명문화.
 
 ## 변경 이력
 
+- **2026-06-22**: KO PROD 경계 회색지대 명문화 — KLUE 유래 KO gold PROD
+  측정 천장 FP+FN 전수 진단에서 §3.1~§3.3(JA 이식분: 운영리그·법령·시대
+  구분)으로 안 가려지던 **KO 고유 모호 4류** 규정: eponymy(작품명↔인물·
+  배역, 치환 테스트), 명명 탈것(단독 표면=PROD·사건 head 명시 시 EVT),
+  패키지 SW·동음이의(알파고=PROD, 신세계=문맥), span 범위(고유명 핵심만 —
+  영숫자 모델 designator 포함·일반 분류명사 제외). §3.4·§5.3 추가. **gold
+  정의·일관성 보정이지 F1 레버 아님**(sup~317 train-seed 노이즈·gold-변경
+  순환으로 F1 무중재). 소급 재적용 보류(코퍼스 재생성 시 반영). KLUE 사람
+  gold 도 silver(전 타입 noise) 전제.
 - **2026-06-16 (이슈 #115)**: KO canonical **10종 완성** — PII 4종
   (`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)을 합성 PII **llm 자연삽입**으로 증분
   (`augmenters/pii --lang ko --mode llm`, gemma-4-31B). 접두 패턴 편향을
@@ -314,6 +324,37 @@ canonical 미규정이 同 표면형 라벨/무라벨·타입 혼재(gold 비일
 > 5303·943→942)으로 ΔEVT 단독 격리 불가 — 성능 레버 아닌 **gold 정의·
 > 일관성 보정**. 상세 이슈 #85.
 
+### 3.4 KO PROD 경계 — eponymy·명명 탈것·SW·span 범위
+
+KLUE 유래 KO gold 의 PROD 측정 천장을 FP+FN 전수 진단한 결과, §3.1~§3.3
+(JA 이식분: 운영리그·법령·시대구분)으로 가려지지 않던 **KO 고유 모호 4류**가
+gold 비일관의 실제 원인이었다. 아래로 닫는다. KLUE 사람 gold 의 PER/LOC/
+ORG/DAT 도 silver(경계·타입 noise 존재) — 본 규칙은 전 타입 적용이며, PROD
+가 상세표를 받는 건 거기서 오차를 *측정*했기 때문이지 나머지가 무오류라서가
+아니다.
+
+| 류 | 규칙 | 예시 |
+|---|---|---|
+| **eponymy** (작품명↔인물·배역) | "이 영화/드라마/노래/작품"으로 치환되면 `PROD`, "이 사람/배우/감독/배역"이면 `PER`. 단서: 봤다·개봉·명작·OST→PROD / 출연·연기·役→PER | `동주`(영화)=PROD / `동주`(役)=PER, `미이라`·`드라큐라`·`스탠바이미`·`오로라공주` |
+| **명명 탈것·무기·함정·항공기** | 탈것 *자체* = `PROD`(§3.1 과 정합). **단독 표면형은 PROD** — 명시적 사건 head(`…참사`·`…침몰 사고`·`…폭발 사고`)가 붙을 때만 `EVT` | `세월호`=PROD / `세월호 참사`=EVT, `칼라시니코프`·`S-300` |
+| **패키지 SW·동음이의** | 시판/패키지 SW·OS·named 프로그램 = `PROD`(§3.2). 회사·지명 동음이의는 문맥 시그널로 분기 | `알파고`(바둑 프로그램)=PROD, `신세계`=ORG(회사)·LOC(지명)·PROD(영화) |
+| **span 범위**(boundary) | 고유명 *핵심* 까지만. 영숫자 모델·버전 designator 는 포함(`S-300`·`SM5`·`아이폰5`), 일반 분류·형식·편성 명사는 제외(`소총`·`공중미사일방어시스템`·`극장판`·`시리즈`·`시즌 N`) | `칼라시니코프 소총`→`칼라시니코프`, `스킨스시즌 1`→`스킨스` |
+
+보조 원칙:
+- **eponymy 치환 테스트가 1순위**: 같은 표면형이 문맥별로 PROD/PER 갈린다
+  (분류기는 문맥으로 학습). 작품이 인물·배역명에서 유래해도 *작품을 지시*하면
+  PROD, *사람·배역을 지시*하면 PER.
+- **명명 탈것은 표면-literal**: §3.3 의 자연재해·named 사고(EVT)와 구분 —
+  사고를 가리키는 *사건 head*(참사·침몰 사고·폭발 사고)가 명시될 때만 EVT,
+  탈것 이름 단독은 PROD(JA 의 탈것=PROD / 사고=EVT 분리와 동형).
+- **span 범위는 §3 "브랜드+모델 결합만 PROD" 와 동형**: 영숫자 designator
+  (`S-300`·`SM5`)는 고유명 일부라 포함, 한국어 일반 분류명사(`소총`·`시스템`)
+  는 제외. gold 의 긴쪽/짧은쪽 혼재를 짧은쪽(핵심)으로 통일.
+
+> 적용: 규칙 명문화·소급 재적용 보류(코퍼스 재생성 시 반영). **gold 정의·
+> 일관성 보정이지 F1 레버 아님** — sup~317 train-seed 노이즈(±0.066)와
+> gold-변경의 *옛 gold 기준* F1 순환으로 PROD 규칙 품질은 F1 으로 중재 불가.
+
 ## 4. 원본 → canonical 매핑
 
 ### 4.1 JA: HF Stockmark → canonical
@@ -443,6 +484,24 @@ LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨
 | `Galaxy S24` | (없음) | **PROD** | 브랜드+모델 결합 |
 | `Đường sắt xuyên Sibir` | (없음) | **LOC** | 철도 노선 자체 = LOC |
 | `Thành phố Hồ Chí Minh` | LOC | **LOC** | 행정 지명 전체 단일 LOC. `Hồ Chí Minh` 단독은 PER |
+
+### 5.3 KO
+
+| 표면형 | 판정 | 근거 |
+|---|---|---|
+| `동주`(영화) | `PROD` | eponymy — 작품 지시("이 영화") |
+| `동주`(役 윤동주) | `PER` | eponymy — 인물·배역 지시 |
+| `미이라`·`드라큐라`·`중경삼림`·`스탠바이미` | `PROD` | 작품 지시 (배역·감독 지시면 PER) |
+| `오로라공주`(드라마) | `PROD` | 작품 지시 (현 gold PER — 규칙 미적용분) |
+| `세월호` | `PROD` | 명명 탈것 자체 (표면-literal) |
+| `세월호 참사`·`세월호 침몰 사고` | `EVT` | 명시적 사건 head |
+| `칼라시니코프`(← `칼라시니코프 소총`) | `PROD` | 고유명 핵심, 분류명사 `소총` 제외 |
+| `S-300`(← `S-300 공중미사일방어시스템`) | `PROD` | 모델 designator 포함, 분류명사 제외 |
+| `스킨스`(← `스킨스시즌 1`) | `PROD` | 편성명사 `시즌 N` 제외 |
+| `SM5`·`아이폰5` | `PROD` | 브랜드+모델 결합 (영숫자 designator 포함) |
+| `알파고` | `PROD` | 바둑 프로그램 = 패키지 SW(§3.2) |
+| `신세계`(회사) / `신세계`(영화) | `ORG` / `PROD` | 회사 시그널→ORG, 작품 시그널→PROD |
+| `비밀`·`무도`·`괴물` | 비-entity | 일반명사 동음이의 (빈도 필터로 못 거름 — 문맥 판정) |
 
 ## 6. 적용 범위
 
