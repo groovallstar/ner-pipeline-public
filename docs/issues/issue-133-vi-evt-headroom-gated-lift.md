@@ -104,11 +104,15 @@ Child World Tour" — **#112가 drop 한 투어·영화제를 gemma 가 회복**
 - [x] leak-free: `cross_fold_orig_dups=0`(evtfix·prodrecover 모두), n=37,706
 - [x] gold 무결성: 37,706행·id/orig/text 불변, **EVT +39·비-EVT 9종 0 변동**
 - [x] `ruff check` clean / `pytest tests/ner -q` green(363, 신규 8건 포함)
-- [x] 측정 정합: 본문 수치 ↔ `evtfix/pooled_metrics.json`(EVT 0.8249·PROD
-  0.7992·overall 0.9474) ↔ `prod_evt_analysis_prodrecover10.json`(천장 0.8574)
-- [x] refuter 게이트 PASS (Opus 격리 — 재학습 diff 재실행: evtfix 수치 ↔ JSON
-  정확·std 0.0599 재계산·+2.29pp=0.38std 노이즈 내 정직 프레이밍·3-문서 정합·
-  과대주장 0·테스트 8건 무결 독립 확인)
+- [x] 측정 정합(머지 시점): #133 승격런 본문 수치 ↔ 당시
+  `evtfix/pooled_metrics.json`(EVT 0.8249·PROD 0.7992·overall 0.9474) ↔
+  `prod_evt_analysis_prodrecover10.json`(천장 0.8574). **이후 de5acf2 출하
+  재실행이 JSON 을 덮어씀 → 현 디스크값 EVT 0.8159·PROD 0.8070·overall
+  0.9478(GPU 비결정성 노이즈 내). #133 승격런 값은 기록 보존, 현 canonical
+  수치는 `docs/reports/vietnamese-bert-classifier-spec.md`.**
+- [x] refuter 게이트 PASS (Opus 격리, 머지 시점 diff 기준 — std 0.0599
+  재계산·+2.29pp=0.38std 노이즈 내 정직 프레이밍·3-문서 정합·과대주장 0·
+  테스트 8건 무결 독립 확인)
 
 산출물(gitignore): `data/wikiann_vi/{pii_all,pii_all_pre_evtfix}.jsonl`,
 `results/classifier/vi/evtfix/phobert-base-v2/{fold0..9,pooled_metrics}`,

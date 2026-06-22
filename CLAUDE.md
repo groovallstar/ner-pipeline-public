@@ -80,7 +80,6 @@ docs/                  # 문서
 
 - `print()` / `logger.*` / 예외 메시지 / argparse `help`: **영문**
 - 함수·클래스·모듈 docstring, 인라인 `#` 주석: **한국어**
-- 문자열 리터럴: **홑따옴표(`'`) 기본**, escape 필요 시 `"` 허용
 - 한 줄 **79자 이내**, 함수 사이는 **한 줄만** 비운다, trailing whitespace 금지
 - **코드·주석·식별자에 이슈/PR 번호·날짜·사람 이름 금지** — 영구 맥락은 커밋 메시지 `refs #N` 또는 `docs/issues/`에만
 - 상세 규칙 및 예시: `docs/specs/coding-conventions.md`
@@ -114,6 +113,11 @@ docs/                  # 문서
 ## 이슈 관리
 
 - **GitHub Issues**(`groovallstar/ner_pipeline`)로 작업 단위를 관리한다. 자동 채번으로 중복을 방지한다.
+- **무엇이 이슈가 되는가 — 사람이 소유, 에이전트는 default 실행.** 작업 단위 결정(이슈 등록 여부)·수락 기준 승인은 사람이 쥔다(에이전트 자기 채점 금지). 에이전트는 type+path 기반 default를 실행한다:
+  - `feat`·`fix` ∧ `src/ner/**` 런타임 변경 → **이슈+브랜치+PR** (추적 가치 있는 제품 진화)
+  - `docs`·`chore`·`refactor` (동작 불변·구조·문서·도구) → **develop 직접** (이슈/PR 없이, 크기 무관). PR이 별도 리뷰어를 붙이지 않아 이 부류엔 PR 오버헤드가 추적 이득보다 크다 — 실제 회귀 게이트는 refuter.
+  - **type↔path 불일치**(예: `feat`인데 src 런타임 미변경, `chore`인데 src 런타임 변경) **또는 추적가치 모호** → 사람에게 에스컬레이션. 과소추적(조용한·비싼 실패) > 과다추적(시끄러운·싼 실패)이므로 모호하면 이슈 쪽으로 기운다.
+- **측정-숫자 게이트(lane 무관).** `docs/reports/`·`docs/issues/`에 메트릭(수치)이 **신규·변경**되는 커밋은 직접 lane이라도 **commit 전 refuter 먼저** 실행한다 — 리퓨터 1번 축이 "리포트·docs 숫자 ↔ `results/*.json` 정합"이라, 숫자가 영구 기록에 진입하는 순간이 게이트 대상이다(트리거는 *재량*이 아니라 *사건*에 묶는다). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
 - 마일스톤은 사용하지 않는다. 영역은 라벨로 구분한다 (`area:labelers`, `area:classifier`, `area:augmenters`, `area:llm-eval`, `area:infra`, `docs` 등).
 - 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>` (`.github/ISSUE_TEMPLATE/` 템플릿 사용 권장)
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
@@ -136,21 +140,21 @@ docs/issues/
 
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
-3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `results/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해.
+3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `results/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 확정 직후 *정의-시점* 반박자**(`refuter`)로 eval 설계가 구조적으로 누출-free·non-gameable한지 검증한 뒤 승인받는다 — 구현 전에 형식 오류를 잡는다(상세: "반박자 검증 게이트" 섹션).
 4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조. 구현을 ralph 등 자율 루프로 돌리는 것은 3단계 기준이 기계검증 가능·신뢰되고 작업이 다회차/반복-shape일 때만 — 단발은 "분해는 내가 → 한 스텝만 위임 → 내가 기준으로 검증"이 기본.
 5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **산출물 확인**: `refuter` 스킬로 현재 diff를 이 이슈의 성공 기준에 대해 반증(PASS면 진행, FAIL이면 4단계로 회귀) → `docs/issues/issue-{N}-{slug}.md`에 설계 + 구현 결과·검증 작성 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
 
-> **산출물 확인(반박자)**: 4단계 구현 후 이슈 종료 전, `refuter` 스킬을 호출해 기억이 깨끗한 Sonnet 서브에이전트로 현재 diff를 *승인이 아니라 반증*시킨다 — 코드 정합성·측정 무결성(리포트·`docs/issues` 숫자 ↔ `results/*.json`)·테스트 무결성 3축. PASS면 종료, FAIL이면 구현으로 회귀. 상세는 "루프 검증 게이트" 섹션 및 `.claude/skills/refuter/`.
+> **산출물 확인(반박자)**: 5단계 *결과 시점* 반박자 — 현재 diff를 수락 기준에 대해 반증, PASS면 종료·FAIL이면 4단계 회귀. 정의·결과 2시점 정의는 아래 "반박자 검증 게이트" 섹션.
 
-## 루프 검증 게이트 (격리 컨텍스트 반박자)
+## 반박자 검증 게이트 (격리 컨텍스트, 정의·결과 2시점)
 
-ralph/ultrawork 등 **루프 모드일 때만** 작동하는 Stop 훅 게이트. 일상 단발 편집·대화 턴에는 뜨지 않는다.
+기억이 깨끗한 Sonnet/Opus 서브에이전트가 *승인이 아니라 반증*을 전담한다 — 작성자의 자기 채점을 격리된 적대자로 교차 검증. 3축: 코드 정합성·회귀 / 측정 무결성(리포트·`docs/issues` 숫자 ↔ `results/*.json`) / 테스트 삭제·약화 여부. 절차는 `refuter` 스킬.
 
-- **발동 조건**: 루프 활성(`.omc/state/sessions/<id>/prd.json`에 미완료 story 존재, 또는 수동 토글 `.omc/state/refuter-gate.on`) **+** 미커밋 diff 존재.
-- **순서**: ① 변경된 `.py`에 `ruff check`(결정적 선통과, 실패 시 완료 차단) → ② 현재 diff에 대한 반박자 판정 요구.
-- **반박자**: 기억이 깨끗한 Sonnet 서브에이전트가 *승인이 아니라 반증*을 전담 — 코드 정합성·회귀, 측정 무결성(리포트·`docs/issues` 숫자 ↔ `results/*.json`), 테스트 삭제·약화 여부를 본다. 절차는 `refuter` 스킬.
-- **판정 파일**: `.omc/state/refuter/<diff_hash>.json`(`verdict: PASS|FAIL`). 훅은 모델 말이 아니라 이 파일을 직접 읽는다. PASS만 완료 허용.
-- **무한루프 차단**: 재진입 Stop(`stop_hook_active`)에서는 재-block하지 않는다(Claude Code 연속-block 안전장치 존중, OMC persistent-mode와 동일 패턴). 세션 누적 block 6회 초과 시에도 통과·에스컬레이션.
-- **OMC 공존**: persistent-mode(계속 일하라)와 **보완적** — 게이트는 *완료 관문*이라 직교한다. 둘 다 루프 모드에서만 작동하고 재진입 비-block으로 deadlock을 피한다.
-- **끄기**: 루프를 안 돌리면 자동 비활성. 강제로 끄려면 `DISABLE_OMC=1` 또는 `OMC_SKIP_HOOKS=refuter-gate`(게이트가 이 토큰을 인식), 또는 `.claude/settings.json`의 `hooks.Stop`에서 제거.
-- 구현: `.claude/hooks/refuter_gate.py`, `.claude/skills/refuter/`.
+검증을 끝에 몰지 않고 **두 시점**에 호출한다:
+
+- **정의 시점(3단계 직후)** — eval 설계·수락 기준의 *형식*을 반증한다: falsifiable한가, gameable한가, **eval이 구조적으로 누출-free인가**(split·group-key·metric·임계). 의도("무엇을 중시하나")는 사람 고유라 반증 대상이 아니다 — 형식·방법론만 본다. *정의 오류가 가장 비싸다 — 누출된 eval은 완벽 구현·정직 기록을 전부 무효화한다. 구현 전에 잡는다.* diff가 없으니 **게이트가 아니라 리뷰** — 판정 파일 없이 findings를 사람에게 보고(절차: `refuter` §정의-시점 모드).
+- **결과 시점(5단계)** — 현재 diff를 수락 기준에 대해 반증한다: 구현↔기준 정합, 숫자↔JSON 정합, 테스트 무결성.
+
+**판정 파일(결과 시점)**: `.omc/state/refuter/<diff_hash>.json`(`verdict: PASS|FAIL`). 게이트는 모델 말이 아니라 이 파일을 직접 읽는다. PASS만 진행.
+
+**자동화(선택)**: 루프 모드(ralph/ultrawork)에선 Stop 훅이 *결과 시점* 반박자를 자동 호출한다(`.claude/hooks/refuter_gate.py`). 단발·정의 시점은 수동 호출이고, 루프 미사용 시 hook은 휴면이다. 끄기: `OMC_SKIP_HOOKS=refuter-gate` 또는 `.claude/settings.json` `hooks.Stop`에서 제거.
