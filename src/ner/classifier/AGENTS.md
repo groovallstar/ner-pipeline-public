@@ -39,7 +39,7 @@ python -m ner.classifier --lang ja --smoke
 # 모델·데이터 override
 python -m ner.classifier --lang vi \
     --model-name vinai/phobert-base \
-    --data data/wikiann_vi/pii_all.jsonl \
+    --data data/wikiann_vi/origin.jsonl \
     --max-length 256 --lr 5e-5
 
 # 층화 K-fold 교차 검증 (fold 별 1회 학습 후 pooled 평가)
@@ -83,7 +83,7 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 
 기본값:
 - `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`
-- `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/pii_all.jsonl`
+- `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/origin.jsonl`
 - `--lang ko`: 모델 `kakaobank/kf-deberta-base`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). DeBERTa 계열이라 `--precision bf16` 권장
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.

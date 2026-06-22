@@ -997,7 +997,7 @@ def main():
 
     default_data = {
         'ja': 'data/stockmark/pii_all.jsonl',
-        'vi': 'data/wikiann_vi/pii_all.jsonl',
+        'vi': 'data/wikiann_vi/origin.jsonl',
         'ko': 'data/klue/pii_all.jsonl',
     }
     data_path = args.data or default_data[args.lang]

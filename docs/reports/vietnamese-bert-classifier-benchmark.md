@@ -8,10 +8,13 @@
 - 실험 연대기(phase별 직전상태→시도→결과·gold 계보): `docs/reports/vietnamese-bert-classifier-history.md`
 - 일본어 동일 셋업 결과는 `docs/reports/japanese-bert-classifier-benchmark.md` 참조
 
-> **현 canonical 모델 = evtfix (Phase 5, #133).** leak-free group-kfold:
-> overall **0.9474** · EVT **0.8249** · PROD **0.7992** (`pii_all.jsonl`
-> EVT 598). 본 표는 원본 stratified 5-fold(누출 포함) **모델-선정 baseline**
-> 으로 동결이며, grouped 누출-free 현 수치·phase 진화는 history.md 참조.
+> **현 canonical 모델 = evtfix (Phase 5, #133).** #133 승격런(leak-free
+> group-kfold): overall **0.9474** · EVT **0.8249** · PROD **0.7992**
+> (`origin.jsonl` EVT 598). **출하 스펙·현 per-entity 실측은
+> `vietnamese-bert-classifier-spec.md`** — 동일설정 재측정으로 overall
+> 0.9478≈0.9474, EVT/PROD 미세차는 GPU 비결정성 노이즈 내(spec 각주). 본 표는
+> 원본 stratified 5-fold(누출 포함) **모델-선정 baseline** 으로 동결, phase
+> 진화는 history.md 참조.
 
 > **이전 표(production 0.8985, sweep, v1~v4 ablation)는 폐기·대체됨.** 두 가지
 > 혼입(confound)이 있었다 — ① fast-tokenizer offset 정렬 버그(아래 §코드 수정),
