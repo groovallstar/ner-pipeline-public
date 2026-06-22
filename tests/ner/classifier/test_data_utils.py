@@ -9,9 +9,11 @@ from ner.classifier.data_utils import (
     NER_TYPES,
     PII_TYPES,
     _bio_labels_from_offsets,
+    _context_word_count,
     build_label_maps,
     decode_bio_to_spans,
     mask_pii_in_features,
+    split_holdout_deploy,
     split_kfold_stratified,
     split_train_valid_test,
 )
@@ -294,6 +296,132 @@ def test_group_kfold_n_folds_exceeds_groups():
     with pytest.raises(ValueError):
         split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
                                group_key='orig')
+
+
+def test_holdout_deploy_partition():
+    """test n_test 홀드아웃 + train/valid/test disjoint, union=전체, 8:2."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]
+    train, valid, test = split_holdout_deploy(
+        rows, n_test=10, valid_ratio=0.2, seed=42
+    )
+    assert len(test) == 10
+    assert len(valid) == 18  # 남은 90행의 20%
+    assert len(train) == 72
+    train_ids = {r['id'] for r in train}
+    valid_ids = {r['id'] for r in valid}
+    test_ids = {r['id'] for r in test}
+    assert train_ids.isdisjoint(valid_ids)
+    assert train_ids.isdisjoint(test_ids)
+    assert valid_ids.isdisjoint(test_ids)
+    assert train_ids | valid_ids | test_ids == {str(i) for i in range(100)}
+
+
+def test_holdout_deploy_deterministic():
+    """같은 seed 면 train/valid/test 모두 동일."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]
+    a = split_holdout_deploy(rows, n_test=10, valid_ratio=0.2, seed=7)
+    b = split_holdout_deploy(rows, n_test=10, valid_ratio=0.2, seed=7)
+    for left, right in zip(a, b):
+        assert [r['id'] for r in left] == [r['id'] for r in right]
+
+
+def test_holdout_deploy_group_no_leak():
+    """group_key 홀드아웃: test 원문이 train·valid 와 안 겹치고 group 무결."""
+    rows = _grouped_rows()
+    train, valid, test = split_holdout_deploy(
+        rows, n_test=10, valid_ratio=0.2, seed=42, group_key='orig'
+    )
+    assert len(test) >= 10
+    test_orig = {r['orig'] for r in test}
+    seen_orig = {r['orig'] for r in train} | {r['orig'] for r in valid}
+    assert test_orig.isdisjoint(seen_orig)
+    # 같은 원문은 정확히 한 split 에만
+    where: dict = {}
+    for name, split in (('train', train), ('valid', valid), ('test', test)):
+        for r in split:
+            where.setdefault(r['orig'], set()).add(name)
+    for orig, names in where.items():
+        assert len(names) == 1, f'{orig} split across {names}'
+    # union = 전체
+    got = (test_orig | {r['orig'] for r in train} | {r['orig'] for r in valid})
+    assert got == {r['orig'] for r in rows}
+
+
+def test_holdout_deploy_test_require_types():
+    """test_require_types: test 는 해당 라벨 보유 unit 만, 빈 샘플은 제외."""
+    rows = []
+    for i in range(60):
+        rows.append({'text': '', 'orig': f'o{i}',
+                     'entities': [{'label': 'PER', 'start_char': 0,
+                                   'end_char': 1, 'text': 'x'}],
+                     'id': f'ent-{i}'})
+    for i in range(40):  # 엔티티 없는 빈 샘플
+        rows.append({'text': '', 'orig': f'e{i}',
+                     'entities': [], 'id': f'empty-{i}'})
+    train, valid, test = split_holdout_deploy(
+        rows, n_test=10, valid_ratio=0.2, seed=42, group_key='orig',
+        test_require_types=set(CANONICAL_LABELS),
+    )
+    assert len(test) >= 10
+    # test 전원 엔티티 보유, 빈 샘플 0
+    assert all(r['entities'] for r in test)
+    assert all(not r['id'].startswith('empty') for r in test)
+    # 빈 샘플은 train/valid 로
+    assert all(r['entities'] == [] for r in train + valid
+               if r['id'].startswith('empty'))
+    # leak-free 유지
+    test_orig = {r['orig'] for r in test}
+    seen = {r['orig'] for r in train} | {r['orig'] for r in valid}
+    assert test_orig.isdisjoint(seen)
+
+
+def test_context_word_count():
+    """엔티티 밖 문맥 토큰만 센다(엔티티 span 내부는 제외)."""
+    # 'Anh ấy sống tại Ha Noi' — 'Ha Noi'(15-21)만 엔티티 → 문맥어 4
+    row = {'text': 'Anh ấy sống tại Ha Noi',
+           'entities': [{'label': 'LOC', 'start_char': 16,
+                         'end_char': 22, 'text': 'Ha Noi'}]}
+    assert _context_word_count(row) == 4
+    # 전체가 엔티티 → 문맥어 0
+    frag = {'text': 'Cục Điều tra',
+            'entities': [{'label': 'ORG', 'start_char': 0,
+                          'end_char': 12, 'text': 'Cục Điều tra'}]}
+    assert _context_word_count(frag) == 0
+    # 구두점·괄호는 단어 아님: 'Valve ( công ty )' → 문맥어 2(công, ty)
+    disamb = {'text': 'Valve ( công ty )',
+              'entities': [{'label': 'ORG', 'start_char': 0,
+                            'end_char': 5, 'text': 'Valve'}]}
+    assert _context_word_count(disamb) == 2
+
+
+def test_holdout_deploy_min_context_words():
+    """test_min_context_words: 문맥어 부족한 단편은 test 제외, 문장만 test."""
+    frag = {'text': 'Cục Điều tra', 'orig': 'frag',
+            'entities': [{'label': 'ORG', 'start_char': 0,
+                          'end_char': 12, 'text': 'Cục Điều tra'}],
+            'id': 'frag-0'}
+    sents = [{'text': f'Anh ay song tai Ha Noi so {i}', 'orig': f's{i}',
+              'entities': [{'label': 'LOC', 'start_char': 16,
+                            'end_char': 22, 'text': 'Ha Noi'}],
+              'id': f's-{i}'} for i in range(30)]
+    rows = [frag] + sents
+    train, valid, test = split_holdout_deploy(
+        rows, n_test=5, valid_ratio=0.2, seed=42, group_key='orig',
+        test_require_types=set(CANONICAL_LABELS), test_min_context_words=3,
+    )
+    assert len(test) >= 5
+    # 단편은 test 에서 빠지고 train/valid 로
+    assert all(r['id'] != 'frag-0' for r in test)
+    assert any(r['id'] == 'frag-0' for r in train + valid)
+    # test 전원 문맥어 ≥3
+    assert all(_context_word_count(r) >= 3 for r in test)
+
+
+def test_holdout_deploy_insufficient_rows():
+    """n_test 가 전체 행보다 크면 ValueError."""
+    rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(5)]
+    with pytest.raises(ValueError):
+        split_holdout_deploy(rows, n_test=10, seed=42)
 
 
 def test_ner_pii_partition():

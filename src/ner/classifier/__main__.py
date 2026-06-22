@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # 언어별 기본값 (round 2 deep-interview lock-in)
 DEFAULT_DATA = {
     'ja': 'data/stockmark/pii_all.jsonl',
-    'vi': 'data/wikiann_vi/pii_all.jsonl',
+    'vi': 'data/wikiann_vi/origin.jsonl',
     'ko': 'data/klue/pii_all.jsonl',
 }
 DEFAULT_MODEL = {
