@@ -1,6 +1,7 @@
 # 베트남어 BERT NER 분류기 — 실험 히스토리 상세
 
 - 현 production 요약·영구 인용 표: `docs/reports/vietnamese-bert-classifier-benchmark.md`
+- 출하 스펙(현 per-entity 실측, 단일 출처): `docs/reports/vietnamese-bert-classifier-spec.md`
 - 측정 프로토콜: pooled micro-average char-offset span F1 (`seed=42`).
   suffix 코퍼스 38,371 행(stratified 5-fold), 자연 코퍼스(Phase 3) 37,706 행
   (`--group-key orig` 누출-free group-kfold).
@@ -12,6 +13,8 @@
   prodrecover**(#131, 창작물 PROD silver-갭 회복으로 `pii_all.jsonl` 승격) →
   **Phase 5 evtfix**(#133, EVT silver-갭 39건 gold-fix 559→598 + 재학습;
   구판 `pii_all_pre_evtfix.jsonl`). benchmark.md 표 baseline 은 **v1 불변**.
+  현 배포 파일은 `data/wikiann_vi/origin.jsonl`(evtfix 를 `pii_all.jsonl`
+  에서 리네임, 단일 출처).
 
 | phase | 이슈 | gold | overall leaked (phobert/xlm-r) | overall grouped (phobert/xlm-r) | 핵심 |
 |---|---|---|---|---|---|
@@ -260,7 +263,9 @@ n_sentences=37,706 · 10 folds · 전수 1회 pooled micro. PII 5종 0.997~1.000
   `pii_all.jsonl` EVT 559→598, 비-EVT 9종 0 변동. 보정 gold 로 phobert 10-fold
   재학습: **EVT 0.8020→0.8249 · PROD 0.7913→0.7992 · overall 0.9459→0.9474**,
   회귀 없음 → evtfix 승격. 상세·검증: `docs/issues/issue-133-vi-evt-headroom-
-  gated-lift.md`.
+  gated-lift.md`. **위 grouped 수치는 #133 승격런 기록**(디스크 아티팩트 소실)
+  — 현 출하 실측은 동일설정 재측정인 `vietnamese-bert-classifier-spec.md`
+  (overall 0.9478≈0.9474, EVT 0.8159 · PROD 0.8070; GPU 비결정성 노이즈 내).
 - **잔여 한계**: EVT +2.29pp = **0.38 std = 노이즈 내** → 검증가능한 lift 아님
   (헤드룸≈1 std 예측을 실측 확인). 0.8020→0.8249 델타는 gold 변경 + 재학습
   혼재. 모델-FP 100·모델-FN 79는 가용 레버 없음.
