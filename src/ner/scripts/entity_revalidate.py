@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 CANON = {'PER', 'LOC', 'ORG', 'PROD', 'EVT', 'DAT'}
 
-# 라벨별 판정 rubric (ner_prompts.py 의 PROD 정의와 정합)
+# 라벨별 판정 rubric — 단일 출처는 canonical-entity-schema.md
+# §3.4·§5.3(KO PROD 경계) + §3.1~§3.3, ner_prompts.py PROD 정의와 정합
 GUIDE = {
     'PROD': (
         'PROD(제품·작품)=시판 물품(전자기기·식품·약품·차량·무기·함정·항공기)·'
