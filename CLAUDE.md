@@ -15,7 +15,7 @@
 - **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스 전용 — 개발 컨테이너에 진입하지 않는다)
 - 패키지 관리자: **UV** (`uv sync` 또는 `uv pip install -e .` 으로 editable install)
 - `PYTHONPATH` **설정·주입 금지** — uv editable install이 `.pth`로 `src/`를 `sys.path`에 자동 등록한다
-- import 형태: `from ner.labelers.xxx import Xxx`, `from ner.llm_eval.xxx import Xxx`, `from ner.classifier.xxx import Xxx` 등 (src 접두어 없이)
+- import 형태(모두 src 접두어 없이): 라이브러리는 `from ner.<모듈>.xxx import Xxx`(labelers·classifier·llm_eval·augmenters·metrics), REST API 서비스는 `from server.xxx import Xxx` (`ner` 와 분리된 top-level 패키지)
 - 상세 원리·설정: `docs/wiki/concepts/src-layout-packaging.md`
 
 ## 핵심 디렉토리 구조
@@ -47,6 +47,12 @@ src/ner/
 │   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
 └── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
+src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소비; 상세: src/server/AGENTS.md)
+├── __main__.py        # CLI (python -m server) — uvicorn 기동
+├── app.py             # FastAPI /v1/ner(단일·배치)·/health
+├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
+├── detect.py          # 언어 자동감지 (가나→ja, 그 외→vi)
+└── chunking.py        # 긴 입력 문장분할 + offset 보존
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
 └── vllm/              # vLLM 서비스
@@ -67,6 +73,7 @@ docs/                  # 문서
 - `python -m ner.classifier --lang {ja,vi,ko}` — BERT 파인튜닝·평가 (canonical 10종 평면; `--group-key orig` 로 누출-free group K-fold)
 - `python -m ner.augmenters.pii` — 합성 PII 주입
 - `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
+- `python -m server` — ja·vi NER REST API 서버 (uvicorn; 상세: `src/server/AGENTS.md`)
 
 상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.
 
