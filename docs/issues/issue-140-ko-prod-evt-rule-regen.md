@@ -56,26 +56,28 @@ merge(961 replace·525 skip) → eponymy 315 PER→PROD. production `pii_all.jso
 ## 검증                                                            [필수]
 
 - 테스트: `python -m pytest tests/ner` / ruff: 변경 .py clean.
-- **무회귀 (clean NER-only, 10-fold pooled, `--no-stratify`, seed 42)** —
-  baseline `origin.jsonl`(#111) vs 신규 `origin.boundary.eponymy`:
+- **무회귀 (koelectra-base-v3, clean NER-only, 10-fold pooled, `--no-stratify`,
+  seed 42)** — baseline `origin.jsonl`(#111) vs 신규 `origin.boundary.eponymy`:
 
   | type | baseline | boundary | Δ(pp) | gate |
   |---|---|---|---|---|
-  | LOC | 0.8190 | 0.8224 | +0.34 | ✅ |
-  | ORG | 0.8071 | 0.8114 | +0.43 | ✅ |
-  | DAT | 0.8651 | 0.8610 | −0.41 | ✅ |
-  | PER | 0.9184 | 0.9180 | −0.04 | 보고 |
-  | PROD | 0.6979 | 0.7222 | +2.42 | 보고 |
-  | EVT | 0.5766 | 0.6154 | +3.88 | 보고 |
-  | micro | 0.8472 | 0.8481 | +0.09 | |
-  | macro | 0.7807 | 0.7917 | +1.10 | |
+  | LOC | 0.8292 | 0.8319 | +0.28 | ✅ |
+  | ORG | 0.8116 | 0.8094 | −0.22 | ✅ |
+  | DAT | 0.8563 | 0.8572 | +0.09 | ✅ |
+  | PER | 0.9239 | 0.9218 | −0.20 | 보고 |
+  | PROD | 0.6608 | 0.6917 | +3.09 | 보고 |
+  | EVT | 0.5878 | 0.6078 | +2.00 | 보고 |
+  | micro | 0.8478 | 0.8475 | −0.03 | |
+  | macro | 0.7783 | 0.7866 | +0.84 | |
 
-  게이트(LOC/ORG/DAT) 모두 ±0.5pp = 노이즈 범위, PER 불변 → **무회귀 PASS**.
-  PROD/EVT 향상은 gold 정의 변경 포함이라 *보고만*.
-- **Caveat**: 절대 F1 은 clean NER-only(PII 없음)+row-level split 척도라 #128
-  의 0.860(PII 포함·다른 split)과 직접 비교 불가 — 게이트 유효성은 baseline↔
-  boundary **델타**. clean gold dup leak 은 12행(0.05%)로 무시.
-- 산출: `results/classifier/ko/cmp_{baseline,boundary}/pooled.json`.
+  게이트(LOC/ORG/DAT) 모두 ±0.3pp = 노이즈 범위, PER·micro 불변 → **무회귀 PASS**.
+  PROD/EVT 향상은 gold 정의 변경 포함이라 *보고만*. koelectra(ELECTRA) fold 1개
+  학습 붕괴는 동일 seed 재학습으로 수렴(cuDNN 비결정성). (Δ 는 4-dec 반올림 전
+  full-precision 기준.)
+- **Caveat**: production 모델 koelectra 로 측정 — #128 과 같은 모델이나 eval
+  (10-fold pooled·clean NER-only) 이 달라 절대값(#128 single-split 0.86대)과
+  직접 비교 불가. 게이트 유효성은 baseline↔boundary **델타**. dup leak 12행 무시.
+- 산출: `results/classifier/ko/cmp_{baseline,boundary}_koel/pooled.json`.
 
 ## 관련 커밋                                                       [옵션]
 
