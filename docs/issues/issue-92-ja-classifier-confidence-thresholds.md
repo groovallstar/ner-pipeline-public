@@ -1,4 +1,4 @@
-# issue-92: JA classifier abstention 운영점 — per-class 신뢰도 임계값 통합
+# issue-92: JA classifier 신뢰도 임계값(confidence threshold) 운영점 통합
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/92
 - PR: https://github.com/groovallstar/ner_pipeline/pull/93
@@ -39,7 +39,7 @@ P·R·F1 ≥ 0.93 운영점을 재현 가능하게 통합. opt-in·default OFF (
 
 ## 결정 로그 (append-only)
 
-- 2026-06-10: 레버 A(abstention) 단독으로 held-out 0.93 확인 → 모델 개선
+- 2026-06-10: 레버 A(신뢰도 임계값) 단독으로 held-out 0.93 확인 → 모델 개선
   아닌 운영점으로 통합. 임계값 하드코딩 대신 valid-fit·저장 경로 채택
   (모델 종속·재현성).
 
@@ -52,14 +52,15 @@ P·R·F1 ≥ 0.93 운영점을 재현 가능하게 통합. opt-in·default OFF (
 
 - [x] 1. `decode_bio_to_spans(..., confs=None)` + `evaluate_model(capture_scores=)`
 - [x] 2. `apply_thresholds` (순수 함수, span 필터)
-- [x] 3. `fit_thresholds` greedy + save/load (`abstention.py`)
-- [x] 4. CLI `--fit-abstain` / `--abstain-thresholds`, predictions score, metrics 블록
+- [x] 3. `fit_thresholds` greedy + save/load (`confidence_threshold.py`)
+- [x] 4. CLI `--fit-threshold` / `--confidence-thresholds`, predictions score, metrics 블록
 - [x] 5. E2E 재현 검증
 - [x] 6. docs (AGENTS.md)
 
 > 설계 조정: 임계값 적용을 `evaluate_model` 내부가 아니라 순수 함수
 > `apply_thresholds` 로 분리(테스트성·추론 서빙 재사용). `evaluate_model` 은
-> `capture_scores` 만 추가, 적용·fit·리포트는 `__main__`/`abstention` 이 조립.
+> `capture_scores` 만 추가, 적용·fit·리포트는 `__main__`/`confidence_threshold`
+> 이 조립.
 
 ---
 
@@ -68,15 +69,15 @@ P·R·F1 ≥ 0.93 운영점을 재현 가능하게 통합. opt-in·default OFF (
 - `data_utils.decode_bio_to_spans(confs=)` — 토큰 신뢰도 입력 시 span 에
   conf_mean `score` 부착(미입력 시 BC). `train_eval.evaluate_model(capture_scores=)`
   — softmax 신뢰도 포착(non-CRF).
-- `abstention.py`(신규) — `fit_thresholds`(valid greedy, P·R≥target) /
-  `apply_thresholds` / `save·load_thresholds`. NER 4종만 대상.
-- `__main__` — `--fit-abstain`(valid fit→`thresholds.json` 저장→test 적용
-  리포트) / `--abstain-thresholds PATH`. opt-in·default OFF, `overall` 키는
-  baseline 보존, 운영점은 `metrics.json` `abstention` 블록.
+- `confidence_threshold.py`(신규) — `fit_thresholds`(valid greedy, P·R≥target)
+  / `apply_thresholds` / `save·load_thresholds`. NER 4종만 대상.
+- `__main__` — `--fit-threshold`(valid fit→`thresholds.json` 저장→test 적용
+  리포트) / `--confidence-thresholds PATH`. opt-in·default OFF, `overall` 키는
+  baseline 보존, 운영점은 `metrics.json` `confidence_threshold` 블록.
 
 ## 검증
 
-- 테스트: `pytest tests/ner/classifier/` 59 pass (신규 `test_abstention.py` 6:
+- 테스트: `pytest tests/ner/classifier/` 59 pass (신규 `test_confidence_threshold.py` 6:
   scored decode·apply·fit·save/load + BC). 변경 파일 `ruff check` 클린.
 - 메트릭(동결 gold `pii_all_phonediv.jsonl`, 10-fold pooled, production 경로):
   baseline P=0.9121/R=0.9429/F1=0.9273 → 운영점 **P=0.9420/R=0.9302/F1=0.9361

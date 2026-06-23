@@ -3,7 +3,7 @@
 K-fold(교차검증 추정)와 별개로, 배포용 단일 모델을 만든다. test 100문장을
 누출-free(orig 그룹 단위)로 홀드아웃하고 나머지를 train/valid 8:2 로 나눠
 phobert 를 파인튜닝한 뒤, `data/stockmark/<lang>_ner_prod_seed*/` 포맷으로
-패키지를 저장한다(abstention 미적용 — VI 는 임계값 안 씀).
+패키지를 저장한다(신뢰도 임계 미적용 — VI 는 임계값 안 씀).
 
 산출 구조:
     <out>/
@@ -63,7 +63,7 @@ def write_model_card(path, *, model_name, data_path, n_total, sizes,
     card = f"""# VI NER production 모델
 
 베트남어 canonical 10종 평면 NER BERT 분류기. 실제 추론 배포용.
-abstention(임계값) 미적용 — raw 모델 출력 그대로.
+신뢰도 임계값(confidence threshold) 미적용 — raw 모델 출력 그대로.
 
 ## 구성
 
@@ -121,7 +121,7 @@ def main():
                     'test set (leak-free by orig group), split the rest '
                     'train/valid, fine-tune one model, and save the package '
                     'in the data/stockmark/<lang>_ner_prod_seed* layout. '
-                    'No abstention (VI ships raw).')
+                    'No confidence thresholding (VI ships raw).')
     p.add_argument('--data', default='data/wikiann_vi/origin.jsonl',
                    help='Gold JSONL path')
     p.add_argument('--model-name', default='vinai/phobert-base-v2',
