@@ -26,12 +26,8 @@ from ner.classifier.data_utils import (
 from ner.classifier.train_eval import evaluate_model
 from ner.metrics.span_metrics import compute_offset_span_f1
 
-# 리포지토리 루트 기준 in-repo 배포 패키지를 기본값(절대경로)으로 해석
-_REPO_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-_PKG = os.path.join(_REPO_ROOT, 'data', 'wikiann_vi', 'vi_ner_prod_seed1')
-DEFAULT_MODEL_DIR = os.path.join(_PKG, 'model')
-DEFAULT_TEST = os.path.join(_PKG, 'data', 'test.jsonl')
+DEFAULT_MODEL_DIR = '/data/ner/vi/model'
+DEFAULT_TEST = '/data/ner/vi/data/test.jsonl'
 
 
 def require_abs(path, label):
