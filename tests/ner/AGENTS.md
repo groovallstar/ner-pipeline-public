@@ -20,8 +20,8 @@ tests/ner/
 ├── augmenters/
 │   ├── pii/           # suffix·llm injector, label merger, loader, verifier
 │   └── wikiann_vi/    # 재라벨 파서·kappa·Wikidata anchor·confidence 병합
-├── classifier/        # abstention, boundary weights, data_utils, encode,
-│   │                  # error_analysis, kfold_pool
+├── classifier/        # confidence_threshold, boundary weights, data_utils,
+│   │                  # encode, error_analysis, kfold_pool
 ├── labelers/
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)

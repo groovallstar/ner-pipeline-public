@@ -683,8 +683,8 @@ NER 4종(ORG·LOC·EVT·PROD)은 Part 1 에서 gold 천장으로 확정돼 데�
 보정으로는 추가 헤드룸이 없다. 출하 시 overall P·R·F1 을 모두 ≥ 0.93 으로
 맞춰야 할 때 쓰는 **후처리 선택 경로**가 신뢰도 임계값 적용 — 모델이
 저신뢰로 찍은 NER 4종 span 을 per-class 임계값 미만이면 출력에서 걸러
-정밀도를 끌어올린다. opt-in, default OFF(`--fit-abstain` /
-`--abstain-thresholds`), 미지정 시 raw 모델 출력 그대로.
+정밀도를 끌어올린다. opt-in, default OFF(`--fit-threshold` /
+`--confidence-thresholds`), 미지정 시 raw 모델 출력 그대로.
 
 측정 런 = `reach_threshold_sweep/kfold_prod`: §ID_NUM 의 idnumfix gold
 (ORG 5303 / LOC 2899 / EVT 992 / PROD 942 / CC 961 / ID_NUM 965, support

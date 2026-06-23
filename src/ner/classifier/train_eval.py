@@ -150,7 +150,7 @@ def evaluate_model(*, model_path: str,
         return_spans: True 면 반환 dict 에 'gold_spans_list',
             'pred_spans_list' 키를 추가한다 (kfold pooled 평가용).
         capture_scores: True 면 토큰 softmax 신뢰도를 포착해 각 pred span 에
-            'score'(conf_mean)를 부착한다 (abstention fit·apply 용). score 는
+            'score'(conf_mean)를 부착한다 (신뢰도 임계값 fit·apply 용). score 는
             metrics 에 영향 없음(여전히 strict/relaxed 는 임계값 미적용 raw 기준).
         capture_timing: True 면 반환 dict 에 'load_seconds'(모델 로드),
             'infer_seconds'(추론 루프 전체) 키를 초 단위로 추가한다.

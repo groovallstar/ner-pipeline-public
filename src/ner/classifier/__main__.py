@@ -25,8 +25,8 @@ from ner.classifier.data_utils import (
     split_kfold_stratified,
     split_train_valid_test,
 )
-from ner.classifier.abstention import (
-    DEFAULT_ABSTAIN_TYPES,
+from ner.classifier.confidence_threshold import (
+    DEFAULT_THRESHOLD_TYPES,
     apply_thresholds,
     fit_thresholds,
     load_thresholds,
@@ -128,21 +128,22 @@ def main():
              'where leak-free evaluation is required.',
     )
     parser.add_argument(
-        '--fit-abstain', action='store_true',
+        '--fit-threshold', action='store_true',
         help='Fit per-class confidence thresholds on the VALID split '
              '(greedy, overall P/R >= target) and save thresholds.json, '
-             'then report the abstention operating point on test. '
-             'NER-4 types only (ORG/LOC/EVT/PROD).',
+             'then report the confidence-threshold operating point on '
+             'test. NER-4 types only (ORG/LOC/EVT/PROD).',
     )
     parser.add_argument(
-        '--abstain-thresholds', default=None,
-        help='Path to a thresholds.json (from --fit-abstain) to apply at '
-             'test eval. Mutually informative with --fit-abstain; if both '
-             'given, --fit-abstain wins (re-fits on this run model).',
+        '--confidence-thresholds', default=None,
+        help='Path to a thresholds.json (from --fit-threshold) to apply '
+             'at test eval. Mutually informative with --fit-threshold; if '
+             'both given, --fit-threshold wins (re-fits on this run '
+             'model).',
     )
     parser.add_argument(
-        '--abstain-target', type=float, default=0.93,
-        help='Target for both P and R when fitting abstention thresholds '
+        '--threshold-target', type=float, default=0.93,
+        help='Target for both P and R when fitting confidence thresholds '
              '(default 0.93).',
     )
     args = parser.parse_args()
@@ -300,13 +301,14 @@ def main():
 
     is_kfold = args.kfold is not None
 
-    # abstention 운영점: valid 에서 per-class 임계값 fit(저장) 또는 외부 load.
-    # 임계값은 모델 종속 — 이 run 모델의 valid 신뢰도로 fit 해야 정합적이라
-    # --fit-abstain 이 --abstain-thresholds 보다 우선한다.
-    abstain_thr = None
-    abstain_meta = None
-    if args.fit_abstain:
-        logger.info('Fitting abstention thresholds on VALID split...')
+    # 신뢰도 임계값(confidence threshold) 운영점: valid 에서 per-class
+    # 임계값 fit(저장) 또는 외부 load. 임계값은 모델 종속 — 이 run 모델의
+    # valid 신뢰도로 fit 해야 정합적이라 --fit-threshold 가
+    # --confidence-thresholds 보다 우선한다.
+    conf_thr = None
+    conf_meta = None
+    if args.fit_threshold:
+        logger.info('Fitting confidence thresholds on VALID split...')
         valid_scored = evaluate_model(
             model_path=best_dir,
             eval_features=valid_features,
@@ -316,36 +318,38 @@ def main():
             return_spans=True,
             capture_scores=True,
         )
-        abstain_thr = fit_thresholds(
+        conf_thr = fit_thresholds(
             valid_scored['gold_spans_list'],
             valid_scored['pred_spans_list'],
-            target_p=args.abstain_target, target_r=args.abstain_target,
+            target_p=args.threshold_target,
+            target_r=args.threshold_target,
         )
-        abstain_meta = {
+        conf_meta = {
             'conf_key': 'conf_mean', 'fit_set': 'valid',
-            'target_p': args.abstain_target, 'target_r': args.abstain_target,
-            'types': list(DEFAULT_ABSTAIN_TYPES),
+            'target_p': args.threshold_target,
+            'target_r': args.threshold_target,
+            'types': list(DEFAULT_THRESHOLD_TYPES),
         }
         thr_path = os.path.join(output_dir, 'thresholds.json')
-        save_thresholds(thr_path, abstain_thr, meta=abstain_meta)
-        logger.info('Saved abstention thresholds: %s %s',
-                    thr_path, abstain_thr)
-    elif args.abstain_thresholds:
-        abstain_thr = load_thresholds(args.abstain_thresholds)
-        abstain_meta = {'source': args.abstain_thresholds}
-        logger.info('Loaded abstention thresholds: %s %s',
-                    args.abstain_thresholds, abstain_thr)
+        save_thresholds(thr_path, conf_thr, meta=conf_meta)
+        logger.info('Saved confidence thresholds: %s %s',
+                    thr_path, conf_thr)
+    elif args.confidence_thresholds:
+        conf_thr = load_thresholds(args.confidence_thresholds)
+        conf_meta = {'source': args.confidence_thresholds}
+        logger.info('Loaded confidence thresholds: %s %s',
+                    args.confidence_thresholds, conf_thr)
 
     logger.info('Evaluating on test split...')
-    abstain_active = abstain_thr is not None
+    conf_active = conf_thr is not None
     metrics = evaluate_model(
         model_path=best_dir,
         eval_features=test_features,
         eval_offsets=test_offsets,
         eval_rows=test_rows,
         id2label=id2label,
-        return_spans=is_kfold or abstain_active,
-        capture_scores=abstain_active,
+        return_spans=is_kfold or conf_active,
+        capture_scores=conf_active,
     )
 
     if is_kfold:
@@ -374,21 +378,22 @@ def main():
     strict_m = metrics['strict']
     relaxed_m = metrics['relaxed']
 
-    # abstention 운영점 메트릭: 임계값 적용 결과. raw strict 는 baseline 으로
-    # 보존(아래 'overall' 키)하고, 운영점은 별도 'abstention' 블록에 둔다.
-    abstention_block = None
-    if abstain_active:
-        filtered = apply_thresholds(metrics['pred_spans_list'], abstain_thr)
+    # 신뢰도 임계값 운영점 메트릭: 임계값 적용 결과. raw strict 는 baseline
+    # 으로 보존(아래 'overall' 키)하고, 운영점은 별도 'confidence_threshold'
+    # 블록에 둔다.
+    conf_block = None
+    if conf_active:
+        filtered = apply_thresholds(metrics['pred_spans_list'], conf_thr)
         op = compute_offset_span_f1(metrics['gold_spans_list'], filtered)
-        abstention_block = {
-            'thresholds': abstain_thr,
-            'meta': abstain_meta,
+        conf_block = {
+            'thresholds': conf_thr,
+            'meta': conf_meta,
             'overall_baseline': strict_m['overall'],
             'overall_operating': op['overall'],
             'per_entity_operating': op['per_entity'],
         }
         logger.info(
-            'Abstention operating point: P=%.4f R=%.4f F1=%.4f '
+            'Confidence-threshold operating point: P=%.4f R=%.4f F1=%.4f '
             '(baseline F1=%.4f)',
             op['overall']['precision'], op['overall']['recall'],
             op['overall']['f1'], strict_m['overall']['f1'],
@@ -426,8 +431,8 @@ def main():
         'overall_relaxed': relaxed_m['overall'],
         'per_entity_relaxed': relaxed_m['per_entity'],
     }
-    if abstention_block:
-        summary['abstention'] = abstention_block
+    if conf_block:
+        summary['confidence_threshold'] = conf_block
 
     metrics_path = os.path.join(output_dir, 'metrics.json')
     with open(metrics_path, 'w', encoding='utf-8') as f:
@@ -446,11 +451,11 @@ def main():
         _print_metrics_block('strict', strict_m)
     if show_relaxed:
         _print_metrics_block("relaxed (SemEval'13 Partial)", relaxed_m)
-    if abstention_block:
-        op = abstention_block['overall_operating']
-        bl = abstention_block['overall_baseline']
-        print(f"\n  [abstention operating point] thresholds="
-              f"{abstain_thr}")
+    if conf_block:
+        op = conf_block['overall_operating']
+        bl = conf_block['overall_baseline']
+        print(f"\n  [confidence-threshold operating point] thresholds="
+              f"{conf_thr}")
         print(f"  P={op['precision']:.4f}  R={op['recall']:.4f}  "
               f"F1={op['f1']:.4f}   (baseline F1={bl['f1']:.4f}, "
               f"ΔF1={op['f1'] - bl['f1']:+.4f})")

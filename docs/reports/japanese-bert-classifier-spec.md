@@ -86,7 +86,7 @@ for fold in 0 1 2 3 4 5 6 7 8 9; do
     --data data/stockmark/pii_all_phonediv.jsonl \
     --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
     --kfold 10 --fold-index ${fold} --seed 42 \
-    --fit-abstain \
+    --fit-threshold \
     --output-dir results/classifier/ja_sweep/<실험명>/fold${fold}
 done
 

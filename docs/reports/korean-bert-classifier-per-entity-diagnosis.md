@@ -113,7 +113,7 @@ koelectra-base-v3 baseline에서 EVT가 NER-5 최저(F1 0.581). 정체를 진단
 - **support-limited 가설 → 확정**: 클래스별 Pearson(log-support, F1)=0.986,
   EVT가 최소 support=최저 F1(ORG만 ORG↔LOC confusion으로 outlier). EVT train
   서브샘플 learning curve(고정 full test)에서 **viability cliff** — ~600–890
-  span 미만이면 모델이 EVT를 전부 abstain(F1=0), 그 위에서 켜짐. 현재 1187은
+  span 미만이면 모델이 EVT를 전부 미예측(F1=0), 그 위에서 켜짐. 현재 1187은
   절벽을 막 넘은 가파른 상승 구간(100%에서도 Δ+0.061, 포화 아님).
 
 **EVT P/R/F1 측정** (strict, koelectra-base-v3, 고정 full test):

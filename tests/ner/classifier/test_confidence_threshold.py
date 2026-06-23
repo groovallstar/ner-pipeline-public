@@ -1,7 +1,7 @@
-"""abstention 운영점: scored decode·apply·fit·save/load 단위 테스트."""
+"""신뢰도 임계값 운영점: scored decode·apply·fit·save/load 단위 테스트."""
 import json
 
-from ner.classifier.abstention import (
+from ner.classifier.confidence_threshold import (
     apply_thresholds,
     fit_thresholds,
     load_thresholds,
