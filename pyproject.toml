@@ -70,6 +70,7 @@ torch = { index = "pytorch-cu130" }
 [tool.pytest.ini_options]
 markers = [
     "integration: tests requiring HF dataset cache",
+    "live: tests that boot a real uvicorn server (need /data models)",
 ]
 
 [build-system]

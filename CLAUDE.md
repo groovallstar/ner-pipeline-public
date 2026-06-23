@@ -47,7 +47,7 @@ src/ner/
 │   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
 └── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
-src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소비; 상세: src/server/AGENTS.md)
+src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소비; 상세: src/server/CLAUDE.md)
 ├── __main__.py        # CLI (python -m server) — uvicorn 기동
 ├── app.py             # FastAPI /v1/ner(단일·배치)·/health
 ├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
@@ -73,7 +73,7 @@ docs/                  # 문서
 - `python -m ner.classifier --lang {ja,vi,ko}` — BERT 파인튜닝·평가 (canonical 10종 평면; `--group-key orig` 로 누출-free group K-fold)
 - `python -m ner.augmenters.pii` — 합성 PII 주입
 - `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
-- `python -m server` — ja·vi NER REST API 서버 (uvicorn; 상세: `src/server/AGENTS.md`)
+- `python -m server` — ja·vi NER REST API 서버 (uvicorn; 상세: `src/server/CLAUDE.md`)
 
 상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.
 

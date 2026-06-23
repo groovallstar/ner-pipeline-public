@@ -28,6 +28,32 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 `{results:[{lang, entities}, ...]}`(입력 순서 1:1). 에러는 구조화 `{error:
 {status, message}}` — 잘못된 lang→400, 모델 미로드→503, API-key 불일치→401.
 
+## 사용 예시 (curl)
+
+```bash
+# 단일(자동감지) — ja
+curl -s -X POST localhost:8000/v1/ner \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"織田信長は東京都千代田区に住んでいた。"}'
+# → {"lang":"ja","entities":[
+#      {"label":"PER","start_char":0,"end_char":4,"text":"織田信長","score":0.99},
+#      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区","score":0.99}]}
+
+# 배치(혼합 언어, 텍스트별 감지)
+curl -s -X POST localhost:8000/v1/ner \
+  -H 'Content-Type: application/json' \
+  -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
+# → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
+
+# 임계값 무시(raw)
+curl -s -X POST 'localhost:8000/v1/ner?abstain=false' \
+  -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
+
+# 헬스 / OpenAPI UI
+curl -s localhost:8000/health   # {"status":"ok","langs":{...}}
+# 브라우저: GET /docs
+```
+
 ## 파일
 
 | 파일 | 역할 |
@@ -45,9 +71,16 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → 긴 입력은
 chunk 별 추론 후 글로벌 offset 병합 → canonical 변환 → graceful abstention.
 
-## 테스트
+## 테스트·검증
 
-`tests/server/` — 계약·전송은 stub registry 로 모델 없이 CI 가능,
-모델 통합(offset 정합성·ja parity)은 `/data` 있을 때만(`pytest.skip` 가드).
-ja parity 는 `eval_*` 스크립트를 import 하지 않고 `/data/ner/ja/metrics.json`
-의 운영점과 대조한다.
+- **pytest**: `uv run pytest tests/server/` — 계약·전송은 stub registry 로
+  모델 없이 CI 가능, 모델 통합(offset 정합성·ja parity)은 `/data` 있을 때만
+  (`pytest.skip` 가드). ja parity 는 `eval_*` 스크립트를 import 하지 않고
+  `/data/ner/ja/metrics.json` 운영점과 대조한다.
+- **실서버 스모크(셸)**: `bash src/server/scripts/smoke_test.sh [PORT]` —
+  uvicorn 을 기동한 뒤 curl 로 `/health`·`/v1/ner`·에러 응답을 검증하고
+  PASS/FAIL 종료코드를 낸다. in-process TestClient 가 못 보는 실제 포트
+  바인딩·네트워크 경로를 확인하는 용도.
+- **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
+  서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
+  skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.

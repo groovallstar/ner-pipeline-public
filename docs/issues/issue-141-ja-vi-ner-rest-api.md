@@ -56,6 +56,9 @@ ambiguity 12%).
   top-level 패키지, pyproject 2-패키지). 서비스 레이어를 `ner` 라이브러리와
   표현상 분리 — import `from server.x`, CLI `python -m server`. 런타임은 여전히
   `ner.classifier` 의존(조직상 분리, 결합도 변화 없음).
+- 2026-06-23: 모듈 문서를 `server/AGENTS.md` → `server/CLAUDE.md` 로 통합
+  (디렉토리 진입 시 자동 로드 + 사용 예시·검증 보강). 실서버 검증 추가 —
+  셸 스모크 스크립트 + `live` 마커 pytest(서브프로세스 uvicorn, httpx).
 
 ## 미해결 질문 (open question)
 
@@ -69,12 +72,13 @@ ambiguity 12%).
 ModelRegistry, 추론 루프 직접 구현, 임계값은 classifier.confidence_threshold
 사용)·`app`(FastAPI `/v1/ner`·`/health`, 인증·구조화 에러)·`__main__`
 (uvicorn). `pyproject.toml`에 fastapi·uvicorn 추가. 모듈 가이드
-`server/AGENTS.md`.
+`server/CLAUDE.md`.
 
 ## 검증
 
-- 테스트: `uv run pytest tests/server/` → **32 passed**(26 계약·단위
-  stub + 6 실모델 통합). ruff clean.
+- 테스트: `uv run pytest tests/server/` → **35 passed**(26 계약·단위 stub +
+  6 실모델 통합 + 3 실서버 live). 셸 스모크 `src/server/scripts/smoke_test.sh`
+  PASS. ruff clean.
 - AC 충족:
   - [x] 단일·배치 스키마(canonical span)·순서 1:1 — `test_api`
   - [x] 언어 자동감지(한자혼입 vi→vi, 명시 우회) — `test_detect`·`test_api`
