@@ -6,7 +6,7 @@ from ner.labelers.ja.ner_prompts import (
     USER_PROMPT_TEMPLATE,
 )
 from ner.labelers.ja.dataset_loader import JapaneseDatasetLoader
-from ner.labelers.ja.span_matcher import match_spans
+from ner.labelers.span_matcher import match_spans
 from ner.labelers.ja.openai_ner_labeler import OpenAINERLabeler
 from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler
 

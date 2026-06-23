@@ -68,17 +68,17 @@ class TestIterEntities:
         records = [
             {
                 'id': '0', 'text': 't',
-                'gold_spans_8type': [
+                'gold_spans_relabel': [
                     {'text': 'Hà Nội', 'type': 'LOC'},
                     {'text': 'Samsung', 'type': 'ORG'},
                 ],
             },
             {
                 'id': '1', 'text': 't',
-                'gold_spans_8type': [],
+                'gold_spans_relabel': [],
             },
         ]
-        out = list(_iter_entities(records, 'gold_spans_8type'))
+        out = list(_iter_entities(records, 'gold_spans_relabel'))
         assert len(out) == 2
         assert ('Hà Nội', 'LOC', '0') in out
         assert ('Samsung', 'ORG', '0') in out
@@ -86,13 +86,13 @@ class TestIterEntities:
     def test_skips_empty_fields(self):
         records = [{
             'id': '0', 'text': 't',
-            'gold_spans_8type': [
+            'gold_spans_relabel': [
                 {'text': '', 'type': 'LOC'},
                 {'text': 'Hà Nội', 'type': ''},
                 {'text': 'Samsung', 'type': 'ORG'},
             ],
         }]
-        out = list(_iter_entities(records, 'gold_spans_8type'))
+        out = list(_iter_entities(records, 'gold_spans_relabel'))
         assert len(out) == 1
         assert out[0][0] == 'Samsung'
 

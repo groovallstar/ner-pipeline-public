@@ -37,7 +37,7 @@ def _to_span_map(spans: List[dict]) -> Dict[Tuple[int, int], str]:
 
 def _collect_pairs(
     records_a: List[dict], records_b: List[dict],
-    span_key: str = 'gold_spans_8type',
+    span_key: str = 'gold_spans_relabel',
 ) -> Tuple[List[str], List[str], int]:
     """두 JSONL에서 동일 id 레코드의 span 오프셋 합집합 기반 pair 수집.
 
@@ -130,7 +130,7 @@ def per_type_agreement(
 
 def compute(
     records_a: List[dict], records_b: List[dict],
-    span_key: str = 'gold_spans_8type',
+    span_key: str = 'gold_spans_relabel',
 ) -> Dict:
     """재라벨 JSONL 2종에 대해 kappa·혼동 행렬·per-type을 한 번에 계산."""
     labels_a, labels_b, common_n = _collect_pairs(
@@ -153,7 +153,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--a', required=True, help='JSONL path for model A')
     parser.add_argument('--b', required=True, help='JSONL path for model B')
     parser.add_argument(
-        '--span-key', default='gold_spans_8type',
+        '--span-key', default='gold_spans_relabel',
         help='Field name holding 5-type spans',
     )
     parser.add_argument(

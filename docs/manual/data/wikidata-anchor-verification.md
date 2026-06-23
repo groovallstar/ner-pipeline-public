@@ -38,7 +38,7 @@ LLM 재라벨(`Relabeler`)은 LLM 파라미터 지식만으로 타입을 결정�
 ## 전체 파이프라인
 
 ```
-재라벨 JSONL (gold_spans_8type)
+재라벨 JSONL (gold_spans_relabel)
   └─ 표면형 수집 (unique)
        └─ [1] vi.wikipedia.org/w/api.php   (pageprops)
             └─ Q-ID

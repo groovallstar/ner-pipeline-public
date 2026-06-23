@@ -13,15 +13,15 @@
 | `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, match_spans, OpenAINERLabeler, VllmNERLabeler |
 | `ner_prompts.py` | Japanese NER prompts — canonical 10종 평면 엔티티 타입 정의 및 disambiguation 규칙 |
 | `dataset_loader.py` | `JapaneseDatasetLoader` — reads canonical Stockmark JSONL dumps (`data/stockmark/{train,test}.jsonl`). No HF fetch, no label mapping — fails fast if dumps are missing |
-| `span_matcher.py` | `match_spans()` — converts LLM text spans to character offsets using longest-first matching with overlap prevention and Japanese particle stripping |
+| ~~`span_matcher.py`~~ | 공용 위치로 이동: `ner.labelers.span_matcher`. `match_spans()` — LLM text spans을 문자 오프셋으로 변환 (longest-first, overlap prevention, Japanese particle stripping) |
 | `vllm_ner_labeler.py` | Japanese vLLM labeler — sentence splitting includes Japanese punctuation `。！？` |
 | `openai_ner_labeler.py` | Japanese OpenAI labeler |
 
 ## For AI Agents
 
 ### Working In This Directory
-- Japanese evaluation uses character-offset spans (not BIO tags). `span_matcher.py` is the critical alignment module
-- `span_matcher.py` handles overlapping entities via consumed-range tracking — longest match wins
+- Japanese evaluation uses character-offset spans (not BIO tags). `ner.labelers.span_matcher` is the critical alignment module (공용 위치로 이동됨)
+- `match_spans()` handles overlapping entities via consumed-range tracking — longest match wins
 - `_strip_particles()` fallback strips trailing Japanese particles/honorific suffixes — can incorrectly strip legitimate entity characters
 - `JapaneseDatasetLoader` loads pre-dumped canonical JSONL. Deterministic train/test split (seed=42, test_size=0.2) is baked into the dump at generation time — consumers should not re-split
 - `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "PROD", "EVT", "EMAIL", "PHONE", "DAT", "ID_NUM", "CREDIT_CARD"]` — canonical 10종 평면 목록. 상세: `docs/manual/data/canonical-entity-schema.md`
@@ -38,7 +38,7 @@
 ## Dependencies
 
 ### Internal
-- `ner.labelers.ja.ner_prompts`, `ner.labelers.ja.span_matcher`, `ner.labelers.ja.dataset_loader`
+- `ner.labelers.ja.ner_prompts`, `ner.labelers.span_matcher` (공용), `ner.labelers.ja.dataset_loader`
 
 ### External
 - `openai`, `datasets`

@@ -24,7 +24,7 @@ from ner.metrics.span_metrics import compute_offset_span_f1
 logger = logging.getLogger(__name__)
 
 # silver JSONL 안에서 span 리스트가 들어 있는 키 후보 (입력 형태별).
-SILVER_SPAN_KEYS = ('gold_spans_8type_merged', 'gold_spans_8type')
+SILVER_SPAN_KEYS = ('gold_spans_relabel_merged', 'gold_spans_relabel')
 
 
 def _read_jsonl(path: Path) -> List[dict]:

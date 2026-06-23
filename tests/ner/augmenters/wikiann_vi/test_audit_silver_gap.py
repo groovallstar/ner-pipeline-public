@@ -1,6 +1,6 @@
 """apply_silver_gap 단위 테스트 — gemma-검증 silver-갭 additive 삽입."""
 
-from ner.augmenters.wikiann_vi.audit_vi_prod_evt import apply_silver_gap
+from ner.augmenters.wikiann_vi.silver_gap import apply_silver_gap
 
 
 def _case(sid, text, start, end, silver, model='EVT', correct='EVT',

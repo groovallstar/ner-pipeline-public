@@ -54,14 +54,14 @@ LLM JSON 응답 → spans 파싱
 
 ```
 WikiANN split → augmenters/wikiann_vi/__main__.py (모델별 1회)
-    → Gemma·Qwen 독립 재라벨 (각 gold_spans_8type)
-    → merge_confidence (recall_strict) → gold_spans_8type_merged 단일 덤프
+    → Gemma·Qwen 독립 재라벨 (각 gold_spans_relabel)
+    → merge_confidence (recall_strict) → gold_spans_relabel_merged 단일 덤프
     → kappa + Wikidata anchor 검증
     → entities 스키마 변환 + split → data/wikiann_vi/{train,valid,test}.jsonl
     → augmenters/pii 주입 → data/wikiann_vi/pii_{train,valid,test,all}.jsonl
 ```
 
-> merge_confidence 출력은 `gold_spans_8type_merged`(type/start/end) 필드를 가진
+> merge_confidence 출력은 `gold_spans_relabel_merged`(type/start/end) 필드를 가진
 > 덤프이며, 최종 `{train,valid,test}.jsonl`·`pii_*.jsonl` 은 `entities`
 > (label/start_char/end_char) 스키마(§7.4)다. 빌드 셸 절차는
 > `docs/reports/vietnamese-ner-silver-quality.md` §재현 참조.

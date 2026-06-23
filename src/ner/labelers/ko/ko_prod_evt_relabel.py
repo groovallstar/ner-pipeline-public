@@ -33,7 +33,7 @@ import logging
 import os
 from typing import List
 
-from ner.labelers.ja.span_matcher import match_spans
+from ner.labelers.span_matcher import match_spans
 from ner.labelers.ko.vllm_ner_labeler import VllmNERLabeler
 
 logger = logging.getLogger(__name__)

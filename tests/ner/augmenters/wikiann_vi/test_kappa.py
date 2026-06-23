@@ -79,7 +79,7 @@ class TestComputeFromRecords:
         return {
             'id': rid,
             'text': 't',
-            'gold_spans_8type': [
+            'gold_spans_relabel': [
                 {
                     'text': 'x',
                     'type': t,

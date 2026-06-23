@@ -397,7 +397,7 @@ JSONL 덤프(`data/stockmark/{train,test}.jsonl`)를 그대로 읽기만 한다.
 
 매핑 적용은 `src/ner/augmenters/wikiann_vi/` 의 silver 재라벨 파이프라인에서
 LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨 산출은 위 표대로
-**NER 5종**(`PER/LOC/ORG/PROD/EVT` — `relabel_8type.py`·`prompts.py` 의
+**NER 5종**(`PER/LOC/ORG/PROD/EVT` — `relabel.py`·`prompts.py` 의
 `DEFAULT_ENTITY_TYPES`)이고, PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은
 별도 `augmenters/pii --lang vi` 주입으로 추가된다(JA `data/stockmark/pii_*` 와 동형).
 

@@ -1,5 +1,5 @@
-"""WikiANN-vi relabel_8type 단위 테스트 (LLM 호출 없는 부분만)."""
-from ner.augmenters.wikiann_vi.relabel_8type import (
+"""WikiANN-vi relabel 단위 테스트 (LLM 호출 없는 부분만)."""
+from ner.augmenters.wikiann_vi.relabel import (
     Relabeler,
     match_offsets,
     parse_spans,
