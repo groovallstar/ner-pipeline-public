@@ -98,7 +98,7 @@ TP 230 / **FN 87 / FP 88 ≈ 1:1**. P 0.723 / R 0.726.
 
 PROD 천장은 eponymy(구조적) + hapax recall + 불완전 gold(precision 저평가)의
 합. 게이트 규모(0.85)는 support ~2배(외부 PROD 데이터) 없이는 불가 —
-±0.03-0.06 train-seed 노이즈가 남은 소형 레버(boundary·abstention)의 기대
+±0.03-0.06 train-seed 노이즈가 남은 소형 레버(boundary·신뢰도 임계값)의 기대
 이득을 덮는다. **0.724를 도달가능 천장으로 종결**, 외부 데이터 확보는 별도
 이슈 소관.
 

@@ -50,7 +50,7 @@ JA·VI·KO canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko}` (`--group-key orig` 로 누출-free group K-fold) |
 | `data_utils.py` | JSONL 로딩 (augmenters contract 소비) / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기 정렬 / BIO ↔ char-span 변환 / 층화·group K-fold 분할 |
 | `train_eval.py` | HF Trainer 래퍼 + char-offset span F1 (`src/ner/metrics` 공용) |
-| `abstention.py` | per-class 신뢰도 임계값 fit·apply |
+| `confidence_threshold.py` | per-class 신뢰도 임계값 fit·apply |
 | `error_analysis.py` | 오류 유형 분류 CLI |
 | `kfold_pool.py` | fold별 test 예측 pooled span F1 + 원문(orig) 단위 cross-fold 누출 검증 |
 
