@@ -1,4 +1,4 @@
-"""classifier CLI: JA·VI canonical 10종 평면 BERT fine-tune.
+"""classifier CLI: JA·VI·KO canonical 10종 평면 BERT fine-tune.
 
 augmenters 가 produce 한 PII 주입 JSONL 을 입력으로, BIO 21-class token classifier
 를 학습하고 char-offset span F1 을 측정한다.
