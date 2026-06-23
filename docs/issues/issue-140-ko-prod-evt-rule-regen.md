@@ -1,7 +1,7 @@
 # issue-140: 한국어 PROD/EVT gold §3.4 룰로 코퍼스 재생성
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/140
-- PR: (TBD)
+- PR: https://github.com/groovallstar/ner_pipeline/pull/142
 - 브랜치: `feat/issue-140-ko-prod-evt-rule-regen`
 - 승인일: 2026-06-23
 
@@ -79,4 +79,4 @@ merge(961 replace·525 skip) → eponymy 315 PER→PROD. production `pii_all.jso
 
 ## 관련 커밋                                                       [옵션]
 
-- (TBD)
+- `5ba397b`: feat(labelers) §3.4 코퍼스 재생성 + eponymy 감사 + 무회귀 검증
