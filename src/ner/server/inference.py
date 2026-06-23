@@ -1,8 +1,9 @@
 """추론 코어 — 언어별 모델을 1회 로드·재사용해 텍스트 → canonical span.
 
-안정적 `ner.classifier.data_utils`(build_label_maps / encode_row /
-decode_bio_to_spans)만 의존한다. 학습·평가 모듈(train_eval 등)은 import 하지
-않고, 추론 루프(softmax→argmax→BIO decode)를 서버 안에서 직접 돈다.
+`ner.classifier` 의 data_utils(build_label_maps / encode_row /
+decode_bio_to_spans)와 confidence_threshold(임계값 fit·apply)에 의존한다.
+학습·평가 모듈(train_eval 등)은 import 하지 않고, 추론 루프(softmax→argmax→
+BIO decode)를 서버 안에서 직접 돈다.
 
 출력 span 은 프로젝트 canonical 형식 `{label, start_char, end_char, text,
 score}` — `.jsonl` 데이터 관례와 일치해 API 결과를 파이프라인에 되먹일 수
@@ -10,6 +11,7 @@ score}` — `.jsonl` 데이터 관례와 일치해 API 결과를 파이프라인
 """
 
 import logging
+import os
 from typing import Dict, List, Optional
 
 import torch
@@ -18,6 +20,10 @@ from transformers import (
     AutoTokenizer,
 )
 
+from ner.classifier.confidence_threshold import (
+    apply_thresholds,
+    load_thresholds,
+)
 from ner.classifier.data_utils import (
     build_label_maps,
     decode_bio_to_spans,
@@ -25,7 +31,6 @@ from ner.classifier.data_utils import (
 )
 from ner.server.chunking import split_for_length
 from ner.server.config import ServerConfig
-from ner.server.thresholds import apply_thresholds, load_thresholds
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +83,10 @@ class LangModel:
         self.model = AutoModelForTokenClassification.from_pretrained(
             model_dir, dtype=torch.float32).to(self.device).eval()
         self.label2id, self.id2label = build_label_maps()
-        self.thresholds = load_thresholds(thresholds_path)
+        # graceful: 파일 있으면 적용, 없으면 raw(빈 dict). confidence_threshold.
+        # load_thresholds 는 부재 파일을 가드하지 않으므로 여기서 존재 확인.
+        self.thresholds = (load_thresholds(thresholds_path)
+                           if os.path.exists(thresholds_path) else {})
         self.has_thresholds = bool(self.thresholds)
 
     def _infer_spans(self, text: str) -> List[dict]:
@@ -114,12 +122,13 @@ class LangModel:
                 shifted['start'] = sp['start'] + base
                 shifted['end'] = sp['end'] + base
                 spans.append(shifted)
-        # decode_bio_to_spans 가 동일 (type,start,end) 를 이미 단일 span 으로
-        # 병합하므로, 임계값은 중복 없는 span 집합에 적용된다(dedup→threshold
-        # 순서 모호성 없음).
-        canonical = [_to_canonical(s, text) for s in spans]
+        # 임계값은 canonical 변환 전 내부 span({type,...})에 적용한다 —
+        # confidence_threshold.apply_thresholds 가 type 필드로 필터하며,
+        # 이는 학습-시점 eval 경로와 동일하다(parity 보장). decode 가 동일
+        # (type,start,end)를 이미 병합해 중복이 없다.
         if abstain and self.thresholds:
-            canonical = apply_thresholds(canonical, self.thresholds)
+            spans = apply_thresholds([spans], self.thresholds)[0]
+        canonical = [_to_canonical(s, text) for s in spans]
         return canonical
 
 

@@ -1,8 +1,9 @@
 # src/ner/server/ — ja·vi NER REST API 서비스
 
 학습된 BERT 분류기(`/data/ner/{ja,vi}/model/`)를 감싸 HTTP 로 NER 추론을
-제공한다. 안정적 `ner.classifier.data_utils` 만 의존하고(학습·평가 모듈
-비의존), 임계값 로딩·적용은 서버 자족 구현이다.
+제공한다. `ner.classifier` 의 data_utils(인코딩·디코드)와
+confidence_threshold(임계값 fit·apply)에 의존하고, 학습·평가 모듈은
+import 하지 않는다.
 
 ## 기동
 
@@ -33,9 +34,8 @@ python -m ner.server --host 127.0.0.1 --port 9000 --model-root /abs/root
 |------|------|
 | `config.py` | `ServerConfig` — env 설정·언어별 경로(`model_dir`/`thresholds_path`) |
 | `detect.py` | `detect_lang` — 가나(히라가나·가타카나)→ja, 그 외→vi. vi 코퍼스의 한자 혼입은 가나가 없어 vi 로 분류 |
-| `thresholds.py` | graceful 임계값 — `load_thresholds`(파일 없으면 빈 dict=raw)·`apply_thresholds`(score<임계값 span 제거). classifier 임계값 모듈 비의존, thresholds.json 형식만 contract |
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
-| `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용, char-offset span 추론)·`ModelRegistry`(언어별 보관, 미로드 언어→`ModelUnavailable`→503) |
+| `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용, char-offset span 추론)·`ModelRegistry`(언어별 보관, 미로드 언어→`ModelUnavailable`→503). 임계값은 `confidence_threshold.{load,apply}_thresholds` 사용 — graceful 로딩(파일 없으면 raw)은 서버에서 존재 확인, 적용은 canonical 변환 전 내부 span 에 |
 | `app.py` | `create_app(registry, config)` — FastAPI 라우트·Pydantic 모델·인증·에러 핸들러. registry 는 `predict`/`health` 를 가진 객체면 됨(실모델 또는 테스트 stub) |
 | `__main__.py` | uvicorn 기동 진입점 |
 
