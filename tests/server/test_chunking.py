@@ -4,7 +4,7 @@
 이게 보장돼야 청크 내 span offset 에 base 를 더해 원문 offset 으로 복원된다.
 """
 
-from ner.server.chunking import split_for_length
+from server.chunking import split_for_length
 
 
 class FakeTok:

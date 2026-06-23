@@ -1,4 +1,4 @@
-"""`python -m ner.server` — uvicorn 으로 ja/vi NER API 서버를 기동한다.
+"""`python -m server` — uvicorn 으로 ja/vi NER API 서버를 기동한다.
 
 설정은 `NER_SERVER_*` 환경변수(기본값은 config 참조)를 따르고, host/port 는
 커맨드라인으로도 덮어쓸 수 있다. 시작 시 두 언어 모델을 모두 로드하며, 일부
@@ -10,9 +10,9 @@ import logging
 
 import uvicorn
 
-from ner.server.app import create_app
-from ner.server.config import ServerConfig
-from ner.server.inference import ModelRegistry
+from server.app import create_app
+from server.config import ServerConfig
+from server.inference import ModelRegistry
 
 
 def main() -> None:

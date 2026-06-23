@@ -1,4 +1,4 @@
-# src/ner/server/ — ja·vi NER REST API 서비스
+# src/server/ — ja·vi NER REST API 서비스
 
 학습된 BERT 분류기(`/data/ner/{ja,vi}/model/`)를 감싸 HTTP 로 NER 추론을
 제공한다. `ner.classifier` 의 data_utils(인코딩·디코드)와
@@ -8,8 +8,8 @@ import 하지 않는다.
 ## 기동
 
 ```bash
-python -m ner.server                 # 0.0.0.0:8000, /data/ner 로드
-python -m ner.server --host 127.0.0.1 --port 9000 --model-root /abs/root
+python -m server                 # 0.0.0.0:8000, /data/ner 로드
+python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 ```
 
 설정은 `NER_SERVER_*` 환경변수: `MODEL_ROOT`(기본 `/data/ner`)·`MAX_LENGTH`
@@ -47,7 +47,7 @@ chunk 별 추론 후 글로벌 offset 병합 → canonical 변환 → graceful a
 
 ## 테스트
 
-`tests/ner/server/` — 계약·전송은 stub registry 로 모델 없이 CI 가능,
+`tests/server/` — 계약·전송은 stub registry 로 모델 없이 CI 가능,
 모델 통합(offset 정합성·ja parity)은 `/data` 있을 때만(`pytest.skip` 가드).
 ja parity 는 `eval_*` 스크립트를 import 하지 않고 `/data/ner/ja/metrics.json`
 의 운영점과 대조한다.

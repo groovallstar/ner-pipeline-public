@@ -8,7 +8,7 @@
 ## 목적
 
 학습된 BERT 분류기(`/data/ner/{ja,vi}/model/`)를 감싸 ja/vi NER 추론을
-제공하는 FastAPI REST API 서비스(`src/ner/server/`)를 신설한다. 단일·배치
+제공하는 FastAPI REST API 서비스(`src/server/`)를 신설한다. 단일·배치
 엔드포인트로 char-offset 엔티티 span 을 반환하며, abstention 임계값은
 graceful 로딩(파일 있으면 적용·없으면 raw). LLM 라벨러 경로 미사용.
 
@@ -17,7 +17,7 @@ ambiguity 12%).
 
 ## 범위
 
-- 포함: `src/ner/server/`(FastAPI 앱·추론 코어·언어감지·임계값·청킹),
+- 포함: `src/server/`(FastAPI 앱·추론 코어·언어감지·임계값·청킹),
   단일+배치 엔드포인트, 언어 자동감지, 긴 입력 auto-chunk, 경량 운영
   기본값(env API-key·입력 한도·구조화 에러), scale-ready 설계.
 - 제외: vi thresholds fit(별도 이슈, `area:classifier`), 배포·서빙
@@ -47,11 +47,15 @@ ambiguity 12%).
 - 2026-06-23: vi thresholds fit 은 별도 세션·이슈로 분리 → 서버는 graceful
   로딩으로 디커플. 동시 진행 `abstention→confidence_threshold` 리네임과
   코드로 안 엮이게 자족 임계값 모듈을 서버에 둔다.
-- 2026-06-23: 폴더명 `server/`(앱+생명주기 포함, `python -m ner.server`).
+- 2026-06-23: 폴더명 `server/`(앱+생명주기 포함, `python -m server`).
 - 2026-06-23: confidence_threshold 리네임(#144) develop 머지 → 서버 자족
   `thresholds.py` 제거하고 `ner.classifier.confidence_threshold` 사용으로
   전환(중복 제거). 임계값은 canonical 변환 전 내부 span 에 적용 — 학습-시점
   eval 경로와 동일해 parity 유지(파리티 테스트로 회귀 확인).
+- 2026-06-23: server 를 `src/ner/server/` → `src/server/` 로 승격(별도
+  top-level 패키지, pyproject 2-패키지). 서비스 레이어를 `ner` 라이브러리와
+  표현상 분리 — import `from server.x`, CLI `python -m server`. 런타임은 여전히
+  `ner.classifier` 의존(조직상 분리, 결합도 변화 없음).
 
 ## 미해결 질문 (open question)
 
@@ -60,7 +64,7 @@ ambiguity 12%).
 
 ## 구현 결과
 
-`src/ner/server/` 7 파일: `config`(env 설정)·`detect`(가나→ja, 그 외 vi)·
+`src/server/` 7 파일: `config`(env 설정)·`detect`(가나→ja, 그 외 vi)·
 `chunking`(문장분할 offset 보존)·`inference`(LangModel 1회 로드·재사용,
 ModelRegistry, 추론 루프 직접 구현, 임계값은 classifier.confidence_threshold
 사용)·`app`(FastAPI `/v1/ner`·`/health`, 인증·구조화 에러)·`__main__`
@@ -69,7 +73,7 @@ ModelRegistry, 추론 루프 직접 구현, 임계값은 classifier.confidence_t
 
 ## 검증
 
-- 테스트: `uv run pytest tests/ner/server/` → **32 passed**(26 계약·단위
+- 테스트: `uv run pytest tests/server/` → **32 passed**(26 계약·단위
   stub + 6 실모델 통합). ruff clean.
 - AC 충족:
   - [x] 단일·배치 스키마(canonical span)·순서 1:1 — `test_api`
@@ -91,4 +95,3 @@ ModelRegistry, 추론 루프 직접 구현, 임계값은 classifier.confidence_t
 ## 후속 작업
 
 - vi thresholds fit (별도 이슈, `area:classifier`) → 완료 시 vi parity 추가.
-- `src/ner/CLAUDE.md` server/ 행 추가 — 동시 리팩터 착지 후.

@@ -13,9 +13,9 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ner.server.config import SUPPORTED_LANGS, ServerConfig
-from ner.server.detect import detect_lang
-from ner.server.inference import ModelUnavailable
+from server.config import SUPPORTED_LANGS, ServerConfig
+from server.detect import detect_lang
+from server.inference import ModelUnavailable
 
 logger = logging.getLogger(__name__)
 

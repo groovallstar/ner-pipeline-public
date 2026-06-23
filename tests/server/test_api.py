@@ -6,9 +6,9 @@ lang 에코·감지·에러·인증·헬스·abstain 분기)만 검증한다.
 
 from fastapi.testclient import TestClient
 
-from ner.server.app import create_app
-from ner.server.config import ServerConfig
-from ner.server.inference import ModelUnavailable
+from server.app import create_app
+from server.config import ServerConfig
+from server.inference import ModelUnavailable
 
 
 class StubRegistry:

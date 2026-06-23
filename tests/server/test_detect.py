@@ -1,6 +1,6 @@
 """언어 자동 감지 단위 테스트 — 가나→ja, 한자 혼입 vi→vi."""
 
-from ner.server.detect import detect_lang
+from server.detect import detect_lang
 
 
 def test_hiragana_detected_as_ja():

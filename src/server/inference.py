@@ -29,8 +29,8 @@ from ner.classifier.data_utils import (
     decode_bio_to_spans,
     encode_row,
 )
-from ner.server.chunking import split_for_length
-from ner.server.config import ServerConfig
+from server.chunking import split_for_length
+from server.config import ServerConfig
 
 logger = logging.getLogger(__name__)
 

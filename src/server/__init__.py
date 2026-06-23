@@ -5,5 +5,5 @@
 `ner.classifier.data_utils` 만 의존하며, 임계값 로딩·적용은 서버 내부에
 자족 구현(`thresholds`)으로 둔다.
 
-기동: `python -m ner.server`
+기동: `python -m server`
 """

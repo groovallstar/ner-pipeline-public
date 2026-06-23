@@ -12,8 +12,8 @@ import pytest
 
 from ner.classifier.data_utils import load_jsonl
 from ner.metrics.span_metrics import compute_offset_span_f1
-from ner.server.config import ServerConfig
-from ner.server.inference import LangModel
+from server.config import ServerConfig
+from server.inference import LangModel
 
 _CONFIG = ServerConfig()
 _JA_DIR = _CONFIG.model_dir('ja')
@@ -64,7 +64,7 @@ def test_ja_long_input_chunk_offsets():
     chunk 가 실제로 쪼개지는지 확인한 뒤(>1), 병합된 모든 span 의 글로벌
     offset 정합성(`text[s:e]==surface`)을 검증한다 — auto-chunk offset 보정.
     """
-    from ner.server.chunking import split_for_length
+    from server.chunking import split_for_length
     model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
                       _CONFIG.max_length)
     text = '東京都に住む織田信長は安土城を築いた。' * 40

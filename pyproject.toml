@@ -57,6 +57,7 @@ package = true
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/ner",
+    "src/server",
 ]
 
 [[tool.uv.index]]
