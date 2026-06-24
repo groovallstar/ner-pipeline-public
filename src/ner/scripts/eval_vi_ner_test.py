@@ -8,6 +8,10 @@ span) 를 출력한다. 임계값 파일이 없으면 신뢰도 임계 미적용
 출력 그대로 평가한다. 모델·test·임계값 경로는 전체(절대) 경로만 받는다
 (상대 경로 거부).
 
+test 앞 100문장만 평가한다. 배포 test 는 orig 그룹 단위 홀드아웃이라 최소
+100을 그룹 통째로 채우다 ≥100(현재 101)이 되므로, 오버슈트분을 앞에서부터
+잘라 100에 맞춘다.
+
 사용:
     python src/ner/scripts/eval_vi_ner_test.py
     python src/ner/scripts/eval_vi_ner_test.py \\
@@ -35,6 +39,8 @@ from ner.metrics.span_metrics import compute_offset_span_f1
 DEFAULT_MODEL_DIR = '/data/ner/vi/model'
 DEFAULT_TEST = '/data/ner/vi/data/test.jsonl'
 DEFAULT_THRESHOLDS = '/data/ner/vi/thresholds.json'
+# 배포 test 는 orig 그룹 단위 홀드아웃이라 ≥100(현재 101) — 앞 N문장만 평가.
+N_TEST = 100
 
 
 def require_abs(path, label):
@@ -89,6 +95,10 @@ def main():
     tok_load_sec = time.perf_counter() - t0
 
     rows = load_jsonl(args.test)
+    # 앞 N_TEST 문장만 평가(오버슈트분 절단). 파일이 N_TEST 이하면 그대로.
+    if len(rows) > N_TEST:
+        print(f'Evaluating the first {N_TEST} of {len(rows)} sentences.')
+    rows = rows[:N_TEST]
     feats, offs = encode_dataset(rows, tok, label2id, 'vi', 256)
     res = evaluate_model(
         model_path=args.model_dir, eval_features=feats, eval_offsets=offs,
