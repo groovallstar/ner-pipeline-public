@@ -113,18 +113,31 @@ def test_invalid_lang_400():
     assert r.json()['error']['status'] == 400
 
 
-def test_max_batch_400():
+def test_max_batch_413():
+    """배치 개수 초과 → 413 Payload Too Large."""
     cfg = ServerConfig(max_batch=2)
     r = _client(config=cfg).post('/v1/ner', json={
         'texts': ['a', 'b', 'c'], 'lang': 'vi'})
-    assert r.status_code == 400
+    assert r.status_code == 413
+    assert r.json()['error']['status'] == 413
 
 
-def test_max_chars_400():
+def test_max_chars_413():
+    """텍스트 char 초과 → 413 Payload Too Large."""
     cfg = ServerConfig(max_chars=5)
     r = _client(config=cfg).post('/v1/ner', json={
         'text': 'way too long', 'lang': 'vi'})
-    assert r.status_code == 400
+    assert r.status_code == 413
+    assert r.json()['error']['status'] == 413
+
+
+def test_max_total_chars_413():
+    """개별 텍스트는 한도 내여도 배치 합산이 상한 초과 → 413(작업량 가드)."""
+    cfg = ServerConfig(max_chars=100, max_batch=10, max_total_chars=12)
+    r = _client(config=cfg).post('/v1/ner', json={
+        'texts': ['aaaaa', 'bbbbb', 'ccccc'], 'lang': 'vi'})  # 합 15 > 12
+    assert r.status_code == 413
+    assert r.json()['error']['status'] == 413
 
 
 def test_model_unavailable_503():

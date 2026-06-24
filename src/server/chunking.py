@@ -79,7 +79,9 @@ def split_for_length(text: str, tokenizer,
                 cur = ''
             chunks.extend(_char_windows(sent, start, tokenizer, budget))
             continue
-        cand = cur + sent if cur else sent
+        # cur 누적은 원문 슬라이스로 — 문장 사이 스킵된 공백/개행을 보존해
+        # offset 불변식(text[base:base+len]==sub)을 깨지 않는다.
+        cand = text[cur_start:start + len(sent)] if cur else sent
         if cur and _token_count(cand, tokenizer) > budget:
             chunks.append((cur, cur_start))
             cur, cur_start = sent, start

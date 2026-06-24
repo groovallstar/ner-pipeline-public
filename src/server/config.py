@@ -22,6 +22,7 @@ class ServerConfig:
     max_length: int = 256          # 모델 토큰 한도(초과 시 chunk)
     max_chars: int = 20000         # 요청 1건 텍스트 char 상한
     max_batch: int = 64            # 배치 텍스트 개수 상한
+    max_total_chars: int = 100000  # 배치 전체 char 합산 상한(작업량 가드)
     api_key: Optional[str] = None  # None 이면 인증 비활성
     host: str = '0.0.0.0'
     port: int = 8000
@@ -39,6 +40,7 @@ class ServerConfig:
             max_length=_int('NER_SERVER_MAX_LENGTH', 256),
             max_chars=_int('NER_SERVER_MAX_CHARS', 20000),
             max_batch=_int('NER_SERVER_MAX_BATCH', 64),
+            max_total_chars=_int('NER_SERVER_MAX_TOTAL_CHARS', 100000),
             api_key=os.environ.get('NER_SERVER_API_KEY') or None,
             host=os.environ.get('NER_SERVER_HOST', '0.0.0.0'),
             port=_int('NER_SERVER_PORT', 8000),
