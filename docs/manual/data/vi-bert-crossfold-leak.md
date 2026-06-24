@@ -9,7 +9,7 @@ dedup 으로는 못 막았나"와 "어떤 측정 설계로 누출 효과만 분�
   (`split_kfold_stratified(group_key=)`),
   `src/ner/classifier/kfold_pool.py` (원문 단위 가드),
   `src/ner/classifier/__main__.py` (`--group-key`)
-- 운영 가이드: `src/ner/classifier/AGENTS.md` §누출-free 분할
+- 운영 가이드: `src/ner/classifier/CLAUDE.md` §누출-free 분할
 - 영구 아카이브: `docs/issues/issue-124-vi-ner-crossfold-leak.md`
 - 정량 출처: `docs/reports/vietnamese-bert-classifier-{benchmark,history}.md`
 - 관련 스키마: `docs/manual/data/canonical-entity-schema.md`

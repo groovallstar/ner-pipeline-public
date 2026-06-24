@@ -1,5 +1,13 @@
 # docker/ — Docker 서비스 가이드
 
+GPU 개발 컨테이너(`dev/`)와 vLLM 추론 서버(`vllm/`) 두 서비스 계층을 묶는다.
+각 하위 디렉토리는 자체 `docker-compose.yml`·설정·라이프사이클 스크립트로 자족한다.
+
+| 하위 | 용도 |
+|------|------|
+| `dev/` | 개발 컨테이너 — PyTorch+CUDA·UV·Claude Code (상세: `dev/CLAUDE.md`) |
+| `vllm/` | NER 라벨링용 vLLM 추론 서버 — 2모델·포트 8081/8082 (상세: `vllm/CLAUDE.md`) |
+
 ## 개발 컨테이너 (docker/dev/)
 
 ```bash
@@ -54,3 +62,11 @@ bash docker/vllm/logs.sh
 - `HF_HOME=~/.huggingface/` (dev 컨테이너 내 사용자 홈 기준)
 - `OPENAI_API_KEY` — 레포 루트 `.env`에서 로드 (CLI `_load_env`)
 - `CUDA_VISIBLE_DEVICES` — vLLM 시작 스크립트에서 자동 설정
+
+## 의존성·운영 주의
+
+- 의존성: Docker Engine + Compose v2, NVIDIA Container Toolkit
+- GPU 배정: dev 컨테이너는 전체 GPU 예약; vLLM 은 gemma(labeler)=GPU1, qwen(verifier)=GPU2 각 tensor-parallel=1
+- 호스트 경로 `/work`·`/data` 가 존재해야 한다
+- 컨테이너명: `ner_pipeline_dev`(dev); `vllm-gemma`+`vllm-qwen`(운영, 각자 `-p <name>` compose 프로젝트)
+- 모든 라이프사이클 스크립트는 `cd "$(dirname "$0")"` 를 쓰므로 각 하위 디렉토리에서 실행한다

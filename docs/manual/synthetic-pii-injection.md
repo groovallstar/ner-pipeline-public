@@ -2,7 +2,7 @@
 
 > 프로젝트가 합성 PII를 **어떤 방식으로 주입**하고, **LLM을 언제
 > 쓰는지**, **검증·병합 정책**은 무엇인지 정리한다.
-> 모듈: `src/ner/augmenters/pii/` (파일별 API는 `src/ner/augmenters/AGENTS.md`).
+> 모듈: `src/ner/augmenters/pii/` (파일별 API는 `src/ner/augmenters/CLAUDE.md`).
 > 라벨 정의의 단일 출처: `docs/manual/data/canonical-entity-schema.md`.
 
 ---

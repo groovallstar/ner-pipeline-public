@@ -28,7 +28,7 @@ gold 품질을 위해 다음 설계 결정을 거쳤다.
 - **주입 라벨 = PII 4종만** — KLUE 유래 `PER/LOC/DAT`는 합성분 없이 순수 유지
   (`--pii-labels` CLI 신규).
 - **주입 방식 = llm 자연삽입(≠ suffix)** — suffix는 접두(`연락처:`) + 문말
-  나열이라 BERT가 접두 패턴으로 쉽게 풀어 학습 편향(`augmenters/AGENTS.md`
+  나열이라 BERT가 접두 패턴으로 쉽게 풀어 학습 편향(`augmenters/CLAUDE.md`
   "suffix BERT 적합성 낮음"). llm은 PII를 문중 자연삽입(경직 접두 0%).
 - **verify 제거** — `--verify` drop_span은 레코드 전체를 LLM과 대조해 못
   맞힌 항목을 삭제하는데, ko 원본은 *사람 KLUE gold*라 LLM(F1~0.9)이 재현
