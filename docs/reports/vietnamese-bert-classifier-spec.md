@@ -1,8 +1,8 @@
 # 베트남어 BERT NER 분류기 — 최종 스펙
 
 베트남어 NER classifier (`src/ner/classifier/`, `--lang vi`) 의 출하 스펙.
-현 시점 스크립트(`python -m ner.classifier`) 기준의 사용 모델·데이터·
-엔티티·평가지표만 기록한다. 실험 경위·후보 비교·천장 진단은 시리즈 문서
+현 시점 스크립트(`python -m ner.classifier`)가 쓰는 모델·데이터·엔티티·
+평가지표만 기록한다. 실험 경위·후보 비교·천장 진단은 시리즈 문서
 참조: `vietnamese-bert-classifier-benchmark.md`(모델 선정 요약·누출 정정) /
 `vietnamese-bert-classifier-history.md`(phase별 gold 계보·히스토리).
 일본어 동일 셋업 스펙은 `japanese-bert-classifier-spec.md`.
@@ -27,11 +27,11 @@
 | 규모 | 37,706 문장 / 91,639 entity span / 유니크 원문 29,337 |
 | 분할 | leak-free **group 10-fold** (`--group-key orig`, `seed=42`). fold 당 train ~30,090 / valid ~3,791 / test ~3,825. cross-fold 원문중복 0 |
 
-> **누출-free 분할이 핵심**: WikiANN-vi 원문은 train/test 로 갈리면 모델이
-> 일반화가 아닌 암기로 맞춰 NER 절대값을 부풀린다(원문 cross-fold 누출).
-> 원문(`orig`) 단위 group-kfold 로 영구 차단 — pooled 가드가
-> `cross_fold_orig_dups=0` 을 강제한다. 경위·정량: benchmark.md §원문 누출
-> 정정 (#124).
+> 누출-free 분할이 핵심이다. WikiANN-vi 원문이 train/test 로 갈리면
+> 모델은 일반화가 아니라 암기로 맞춰 NER 절대값을 부풀린다(원문
+> cross-fold 누출). 원문(`orig`) 단위 group-kfold 로 이를 영구
+> 차단하고, pooled 가드가 `cross_fold_orig_dups=0` 을 강제한다.
+> 경위·정량은 benchmark.md §원문 누출 정정 (#124).
 
 ## 엔티티 — canonical 10종 평면
 
