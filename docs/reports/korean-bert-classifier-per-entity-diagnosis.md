@@ -184,6 +184,34 @@ canonical rubric(`ner_prompts.py`)으로 span 별 keep/drop/retype 판정.
 잔여 천장: **PROD↔PER eponymy(35, 구조적·data 불응)** + 실작품 recall
 miss(37) + 경계(26). 재현: `entity_revalidate.py --label PROD` → 재학습.
 
+### §3.4 코퍼스 재생성 무회귀 (#140, koelectra-base-v3, 10-fold pooled)
+
+canonical §3.4·§5.3 룰로 PROD/EVT 를 4종 seed 부터 재라벨 + eponymy PER↔PROD
+333 충돌을 독립 에이전트 2회(κ=0.888)로 315건 교정한 신규 gold 의 무회귀
+(production 모델 koelectra-base-v3). clean NER-only(PII 제외)·`--no-stratify`
+(label-불변 고정 split)로 baseline(`origin.jsonl` #111) vs boundary
+(`origin.boundary.eponymy` #140)를 같은 fold 로 비교. **위 #128 single-split 과
+같은 모델이나 eval(10-fold pooled·clean NER-only) 이 달라 절대값 직접 비교 불가
+— 게이트는 baseline↔boundary 델타.**
+
+| Entity | baseline P/R/F1 | boundary P/R/F1 | ΔF1 | sup b→n |
+|---|---|---|---:|---|
+| overall | .8404/.8554/.8478 | .8403/.8549/.8475 | −0.03 | 51509→51679 |
+| PER | .9214/.9263/.9239 | .9192/.9245/.9218 | −0.20 | 18529→18238 |
+| LOC | .8463/.8127/.8292 | .8404/.8236/.8319 | +0.28 | 7964→7944 |
+| ORG | .7935/.8305/.8116 | .7961/.8232/.8094 | −0.22 | 10441→10434 |
+| DAT | .8415/.8717/.8563 | .8449/.8698/.8572 | +0.09 | 10071→10080 |
+| PROD | .6618/.6598/.6608 | .6952/.6883/.6917 | +3.09 | 3313→3593 |
+| EVT | .5293/.6608/.5878 | .5490/.6806/.6078 | +2.00 | 1191→1390 |
+
+**무회귀 PASS**: gold 불변 LOC/ORG/DAT 모두 ±0.3pp(train-seed 노이즈), PER·
+overall 불변. PROD +3.09·EVT +2.00 향상은 gold 정의 변경(eponymy·§3.4 경계)
+포함이라 *보고만*(옛 gold 기준 F1 순환). 이로써 #128 잔여 PROD↔PER eponymy 는
+gold-side 에서 333 충돌 audit 으로 처리. 단 koelectra(ELECTRA) 파인튜닝은
+fold 1개가 학습 붕괴(loss 정체·F1 0)해 **동일 seed 재학습으로 수렴**시킴(cuDNN
+비결정성). 재현: `cmp_{baseline,boundary}_koel` 10-fold + `kfold_pool
+--allow-cross-fold-leak`. 상세: issue-140.
+
 ## 다음 (후속 이슈 후보)
 
 - EVT gold 증강 — KLUE 미검출 이벤트 문장 추가 relabel로 절벽에서 끌어올리기.

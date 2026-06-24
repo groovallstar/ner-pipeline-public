@@ -436,3 +436,34 @@ LLM이 반환한 text spans를 KLUE의 음절 단위 BIO 태그로 변환하는 
 | 8 | 라벨링 | 배치 실패 시 개별 폴백 | 결과 확보 극대화 | 실패 시 에러 반환 |
 | 9 | 평가 | Span Match primary | BIO 변환 오류 우회 | seqeval만 사용 (변환 노이즈) |
 | 10 | 평가 | 3종 메트릭 병행 | 다각적 품질 평가 | 단일 메트릭 |
+
+## 7. gold 재생성·무회귀 비교 프로토콜
+
+PROD/EVT 등 NER 레이어를 LLM 재라벨로 갈아끼울 때(경계 룰 개정 등),
+재생성 전후 무회귀를 측정하는 표준 절차.
+
+### PII 주입은 비가역 — graft 금지
+
+KO PII 4종은 **llm 자연삽입**(`ner.augmenters.pii --mode llm`)으로 주입되며,
+PII 문자열만 끼우는 게 아니라 connective 절("관련 문의는 …으로")까지 더해
+**원문 일부를 재작성**한다. 따라서 PII-주입 텍스트에서 clean 본문을 복원하거나,
+clean gold 의 NER span 을 offset 으로 PII-텍스트에 얹는 graft 는 불가능하다
+(실측: span 의 ~1.7% 가 PII-텍스트에 그대로 없어 누락 → baseline 온전·신규
+누락의 **비대칭 편향**). PII 를 보존하려고 graft 하지 말 것.
+
+### clean NER-only 로 비교
+
+재생성 전후 비교는 **PII 없는 clean gold** 로 한다. 같은 KLUE 본문
+(`klue_to_canonical_gold` 는 결정적 → baseline·신규 text 100% 동일)에 NER 라벨만
+달리하고, `--no-stratify`(PROD/EVT 층화 비활성 = label-불변 split)로 학습해
+fold 멤버십을 재라벨 전후 동일하게 고정한다. PII 는 재생성과 직교하므로
+(주입 로직 불변) NER 무회귀 측정에서 빼도 무방하다.
+
+### 측정 정직성
+
+- gold 가 바뀐 타입(PROD/EVT, eponymy 로 라벨이 바뀐 PER span)은 **보고만** —
+  옛 gold 기준 F1 은 순환이라 개선/회귀를 주장하지 않는다.
+- 무회귀 게이트는 **gold 불변 타입**만: 미교체 LOC/ORG/DAT + eponymy 미접촉 PER
+  (merge contains-replace 가 교체한 LOC/ORG/DAT span 은 재라벨마다 달라 제외).
+- 출하 10종(PII 포함) 모델은 게이트 통과 후 **확정된 clean gold 에 PII 재주입**해
+  별도 빌드한다.

@@ -83,6 +83,13 @@ def main():
              'rows sharing the value go to the same fold, preventing '
              'cross-fold original-text leakage. Default: row-level split.',
     )
+    parser.add_argument(
+        '--no-stratify', action='store_true',
+        help='Disable PROD/EVT stratification: split becomes label-invariant '
+             '(seeded shuffle only), so fold membership stays identical before '
+             'and after a gold relabel. Use for controlled before/after '
+             'comparison on unchanged-gold types.',
+    )
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output-dir', help='Override output dir')
     parser.add_argument(
@@ -163,15 +170,17 @@ def main():
     logger.info('Loading data: %s', data_path)
     rows = load_jsonl(data_path)
     if args.kfold is not None:
+        strat_labels = () if args.no_stratify else ('PROD', 'EVT')
         train_rows, valid_rows, test_rows = split_kfold_stratified(
             rows, args.kfold, args.fold_index, args.seed,
-            group_key=args.group_key,
+            strat_labels=strat_labels, group_key=args.group_key,
         )
         logger.info(
-            'Stratified K-fold: kfold=%d, fold_index=%d (test fold), '
-            'valid fold=%d, group_key=%s',
+            'K-fold: kfold=%d, fold_index=%d (test fold), valid fold=%d, '
+            'group_key=%s, stratify=%s',
             args.kfold, args.fold_index,
             (args.fold_index + 1) % args.kfold, args.group_key,
+            not args.no_stratify,
         )
     else:
         train_rows, valid_rows, test_rows = split_train_valid_test(
