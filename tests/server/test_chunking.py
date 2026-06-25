@@ -53,3 +53,35 @@ def test_chunks_cover_all_entity_chars():
     chunks = split_for_length(text, tok, max_length=5)
     # 청크는 연속 타일이라 이어붙이면 원문과 동일
     assert ''.join(sub for sub, _ in chunks) == text
+
+
+def test_sentence_merge_preserves_offset_across_skipped_gap():
+    """문장 경계(。) 뒤 공백+개행이 낀 장문도 offset 보존.
+
+    `。 \\n` 처럼 문장부호 뒤 공백-개행은 독립 조각이 되어 _sentences 의
+    공백 스킵에 걸린다. 인접 문장을 이어붙일 때 그 스킵 길이만큼 원문과
+    어긋나, 청크 내 span offset 이 밀려 엔티티 위치가 깨진다.
+    """
+    tok = FakeTok()
+    text = 'aa bb。 \ncc dd。 \nee ff。'
+    chunks = split_for_length(text, tok, max_length=5)  # budget 3 tokens
+    assert len(chunks) > 1  # 병합 분할 확인 — 테스트가 공허하지 않음
+    _assert_contiguous(text, chunks)
+
+
+def test_sentence_entities_stay_within_chunks():
+    """문장부호로 나뉜 텍스트의 엔티티는 한 청크에 온전히 들어간다.
+
+    청크 경계가 문장 경계(。)에 맞아 문장 내부 엔티티는 잘리지 않는다 —
+    chunk recall 보존의 핵심 불변식(엔티티가 경계를 가로지르면 회수 실패).
+    """
+    tok = FakeTok()
+    text = 'aa BB cc。dd EE ff。gg HH ii。jj KK ll。'
+    chunks = split_for_length(text, tok, max_length=6)  # budget 4 tokens
+    assert len(chunks) > 1  # 강제 분할 확인 — 테스트가 공허하지 않음
+    spans = [(base, base + len(sub)) for sub, base in chunks]
+    for surface in ('BB', 'EE', 'HH', 'KK'):
+        s = text.index(surface)
+        e = s + len(surface)
+        assert any(cs <= s and e <= ce for cs, ce in spans), \
+            f'entity {surface!r} straddles a chunk boundary'

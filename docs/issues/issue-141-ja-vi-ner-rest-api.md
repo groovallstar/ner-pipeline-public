@@ -92,9 +92,13 @@ ModelRegistry, 추론 루프 직접 구현, 임계값은 classifier.confidence_t
 - 결과시점 refuter: PASS (`.omc/state/refuter/48829907e8d1.json`). parity
   비-tautology 확인. 후속 cleanup 반영(response_model 배선, 임계값/dedup
   순서 주석).
-- 알려진 한계: chunk 경로의 *엔티티 recall* 은 ground-truth 대비 미검증
-  (offset 정합성만 검증). 장문 entity 가 청크 경계에서 누락될 경우 recall
-  하락으로 드러나며 silent 오류는 아님. 필요 시 후속 보강.
+- chunk recall (후속 검증·종결): 실 ja·vi test gold 엔티티 전수가 청크
+  경계를 가로지르지 않음을 확인하고(엔티티는 문장 내부, 청크 경계는
+  문장·단어 경계에만 생성), 장문에서 후반 청크 엔티티가 정상 회수됨을
+  검증 — `test_*_gold_entities_never_straddle_chunk_boundary`·
+  `test_*_long_input_chunk_offsets` 로 회귀 가드. 잔여(이론): over-budget
+  단일 문장의 단어 분할은 다단어 엔티티를 자를 수 있으나, 실 test
+  데이터엔 단일 row 가 한도를 넘는 경우가 없어 미발생.
 
 ## 후속 작업
 
