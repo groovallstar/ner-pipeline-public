@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from server.config import SUPPORTED_LANGS, ServerConfig
-from server.detect import detect_lang
+from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,22 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     def _resolve_lang(text: str, given: Optional[str]) -> str:
         return given if given else detect_lang(text)
 
+    def _infer_one(text: str, given: Optional[str],
+                   abstain: bool) -> dict:
+        """텍스트 1건 추론 — 미지원이면 모델 호출 없이 빈 결과 반환.
+
+        자동 감지가 `unsupported`(ja·vi 신호 부재)면 200 으로 `{lang:
+        'unsupported', entities: []}` 를 돌려준다(에러 아님). 배치에서
+        항목별로 호출돼 부분 성공·응답 순서 1:1 을 보장한다. 명시 `lang`
+        은 상위에서 SUPPORTED_LANGS 로 검증돼 unsupported 가 될 수 없다.
+        """
+        _check_text(text)
+        lang = _resolve_lang(text, given)
+        if lang == UNSUPPORTED:
+            return {'lang': lang, 'entities': []}
+        return {'lang': lang,
+                'entities': registry.predict(text, lang, abstain)}
+
     @app.post('/v1/ner',
               response_model=Union[SingleResponse, BatchResponse],
               dependencies=[Depends(require_key)])
@@ -112,10 +128,7 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=400, detail=f"unsupported lang '{req.lang}'")
 
         if req.text is not None:
-            _check_text(req.text)
-            lang = _resolve_lang(req.text, req.lang)
-            entities = registry.predict(req.text, lang, abstain)
-            return {'lang': lang, 'entities': entities}
+            return _infer_one(req.text, req.lang, abstain)
 
         assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
         if len(req.texts) > config.max_batch:
@@ -128,13 +141,7 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=413,
                 detail=(f'batch total chars {total_chars} exceeds '
                         f'max_total_chars ({config.max_total_chars})'))
-        results = []
-        for text in req.texts:
-            _check_text(text)
-            lang = _resolve_lang(text, req.lang)
-            results.append(
-                {'lang': lang,
-                 'entities': registry.predict(text, lang, abstain)})
+        results = [_infer_one(t, req.lang, abstain) for t in req.texts]
         return {'results': results}
 
     @app.get('/health')

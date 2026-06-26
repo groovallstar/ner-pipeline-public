@@ -1,26 +1,49 @@
-"""언어 자동 감지 — ja/vi 판별.
+"""언어 자동 감지 — ja·vi 양성 감지 + 미지원 명시.
 
-판별 규칙: 텍스트에 히라가나·가타카나가 하나라도 있으면 `ja`, 아니면
-`vi`. 가나는 일본어 전용이라 베트남어엔 나타나지 않으므로 견고하다. 반대로
-베트남어 코퍼스에는 한자(chữ Hán)가 섞일 수 있어(예: 고유명사 병기)
-"한자 존재 → ja" 식 판별은 vi 텍스트를 오분류한다 — 그래서 한자가 아니라
-가나만 ja 신호로 삼는다.
+각 언어를 *양성 신호*로 감지한다 — 가나(일본어 전용)·vi-변별 코드포인트
+(베트남어 전용). 어느 신호도 없으면 `unsupported`(ja·vi 둘 다 아님)로
+명시한다. 'vi 기본값으로 떨어뜨리지' 않는다 — 무부호 ASCII 는 en·id·
+romaji·không-dấu-vi·노이즈 등 무엇이든 가능하므로 vi 단정은 거짓을 만든다.
 
-한계: 가나·베트남어 성조부호가 모두 없는 한자/ASCII 전용 텍스트는 기본값
-(`vi`)으로 떨어진다. 명시 `lang` 이 주어지면 감지를 우회한다(API 레이어).
+확장: `DETECTORS` 는 (신호 함수, 언어 코드) 순서 레지스트리다. 결정적
+스크립트 신호를 가진 언어(가나→ja, 한글→ko, 키릴→ru …)는 여기에 한 줄
+추가하면 되고, 위에서부터 처음 맞은 언어로 확정한다. 라틴 스크립트면서
+고유 코드포인트가 없는 언어(en·id)는 스크립트만으로 변별 불가라 양성 감지
+대상이 아니다(설계상 unsupported).
+
+vi-변별 술어는 가나가 결정적인 것과 달리 *부호*에 의존하므로, 부호를 뗀
+베트남어(không dấu)는 잡지 못한다 — 수용된 한계로 unsupported 가 된다.
+방법론·혼동행렬 근거: docs/reports/language-detection-benchmark.md.
 """
 
-# 히라가나 / 가타카나 / 가타카나 음성확장 / 반각 가타카나 코드포인트 범위
+import unicodedata
+from typing import Callable, List, Tuple
+
+# 미지원 명시값 — ja·vi 어느 신호도 없을 때
+UNSUPPORTED = 'unsupported'
+
+# 히라가나 / 가타카나 / 음성확장 / 반각 가타카나 — 일본어 전용 신호
 _KANA_RANGES = (
-    (0x3040, 0x309F),   # Hiragana
-    (0x30A0, 0x30FF),   # Katakana
-    (0x31F0, 0x31FF),   # Katakana Phonetic Extensions
-    (0xFF66, 0xFF9D),   # Halfwidth Katakana
+    (0x3040, 0x309F),
+    (0x30A0, 0x30FF),
+    (0x31F0, 0x31FF),
+    (0xFF66, 0xFF9D),
 )
 
+# vi-변별 결합부호(NFD 분해 후): horn·hook-above·dot-below. 라틴 문자 중
+# 베트남어 전용이라, 범-라틴 부호(circumflex·acute·grave·tilde·움라우트·
+# cedilla)와 달리 fr/pt/de/es/tr 를 false-accept 하지 않는다.
+_VI_COMBINING = frozenset({
+    '\N{COMBINING HORN}',        # U+031B (ơ ư)
+    '\N{COMBINING HOOK ABOVE}',  # U+0309 (ả ẻ ỉ …)
+    '\N{COMBINING DOT BELOW}',   # U+0323 (ạ ẹ ị …)
+})
+# vi-변별 단독 문자: đ Đ — NFD 로 분해되지 않는 독립 자모
+_VI_LETTERS = frozenset({'đ', 'Đ'})
 
-def _has_kana(text: str) -> bool:
-    """텍스트에 가나(히라가나·가타카나) 문자가 하나라도 있는지."""
+
+def has_kana(text: str) -> bool:
+    """텍스트에 가나(히라가나·가타카나)가 하나라도 있는지."""
     for ch in text:
         cp = ord(ch)
         for lo, hi in _KANA_RANGES:
@@ -29,6 +52,36 @@ def _has_kana(text: str) -> bool:
     return False
 
 
-def detect_lang(text: str, default: str = 'vi') -> str:
-    """텍스트의 언어를 추정한다 — 가나 존재 시 `ja`, 아니면 `default`."""
-    return 'ja' if _has_kana(text) else default
+def has_vi_mark(text: str) -> bool:
+    """vi-변별 코드포인트(horn·hook·dot 결합부호 또는 đ)가 있는지.
+
+    NFD 로 정규화해 결합부호를 분리한 뒤 검사하므로 사전조합(ạ)·분해조합
+    (a+◌̣) 입력을 모두 동일하게 잡는다. 범-라틴 부호만 가진 텍스트
+    (fr/pt/de/es/tr)는 걸리지 않는다.
+    """
+    nfd = unicodedata.normalize('NFD', text)
+    for ch in nfd:
+        if ch in _VI_COMBINING or ch in _VI_LETTERS:
+            return True
+    return False
+
+
+# 언어 감지기 레지스트리 — (신호 함수, 언어 코드). 위에서부터 처음 맞은
+# 언어로 확정한다. 가나는 결정적이라 vi 보다 우선(ja·vi 코드 스위칭 시 ja).
+DETECTORS: List[Tuple[Callable[[str], bool], str]] = [
+    (has_kana, 'ja'),
+    (has_vi_mark, 'vi'),
+]
+
+
+def detect_lang(text: str) -> str:
+    """텍스트 언어를 양성 감지한다 — `ja`·`vi` 또는 `unsupported`.
+
+    `DETECTORS` 를 순서대로 적용해 처음 맞은 언어를 반환하고, 어느 신호도
+    없으면 `unsupported`. 미지원을 `en` 등으로 단정하지 않는다 —
+    스크립트만으로는 ja·vi 신호의 *부재*만 알 수 있다.
+    """
+    for signal, lang in DETECTORS:
+        if signal(text):
+            return lang
+    return UNSUPPORTED

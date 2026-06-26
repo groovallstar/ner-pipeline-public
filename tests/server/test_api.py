@@ -69,7 +69,7 @@ def test_lang_autodetect_echoed():
     """lang 생략 시 텍스트별 감지 결과를 응답에 에코."""
     r = _client().post('/v1/ner', json={'text': 'これは テスト'})
     assert r.json()['lang'] == 'ja'
-    r2 = _client().post('/v1/ner', json={'text': 'Xin chào'})
+    r2 = _client().post('/v1/ner', json={'text': 'Hà Nội là thủ đô'})
     assert r2.json()['lang'] == 'vi'
 
 
@@ -84,6 +84,45 @@ def test_batch_per_text_detection():
     r = _client().post('/v1/ner', json={'texts': ['テスト x', 'Hà Nội y']})
     langs = [it['lang'] for it in r.json()['results']]
     assert langs == ['ja', 'vi']
+
+
+def test_unsupported_autodetect_single():
+    """자동감지 미지원 → 200 + {lang:'unsupported', entities:[]} (에러 아님)."""
+    r = _client().post('/v1/ner', json={'text': 'Bonjour à tous'})
+    assert r.status_code == 200
+    assert r.json() == {'lang': 'unsupported', 'entities': []}
+
+
+def test_unsupported_bypasses_model_predict():
+    """미지원 입력은 predict 를 호출하지 않는다(predict 가 터져도 200)."""
+    class _Raising(StubRegistry):
+        def predict(self, text, lang, abstain=True):
+            raise AssertionError('predict called for unsupported input')
+
+    r = _client(registry=_Raising()).post(
+        '/v1/ner', json={'text': 'hello world'})
+    assert r.status_code == 200
+    assert r.json() == {'lang': 'unsupported', 'entities': []}
+
+
+def test_batch_per_item_partial_unsupported():
+    """배치 부분 성공 — 미지원 항목은 빈 결과, 순서·lang 1:1 보존."""
+    r = _client().post('/v1/ner', json={'texts': [
+        'テスト x',     # ja
+        'hello world',  # unsupported
+        'Hà Nội y',     # vi (dot-below ộ)
+    ]})
+    results = r.json()['results']
+    assert [it['lang'] for it in results] == ['ja', 'unsupported', 'vi']
+    assert results[1]['entities'] == []
+    assert results[0]['entities'][0]['text'] == 'テスト'
+    assert results[2]['entities'][0]['text'] == 'Hà'
+
+
+def test_explicit_unsupported_lang_still_400():
+    """명시 lang 이 미지원(ko)이면 자동감지와 달리 400(클라이언트 계약)."""
+    r = _client().post('/v1/ner', json={'text': 'Hà Nội', 'lang': 'ko'})
+    assert r.status_code == 400
 
 
 def test_abstain_query_passthrough():
