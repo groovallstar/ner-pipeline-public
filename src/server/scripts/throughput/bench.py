@@ -6,7 +6,8 @@ tokenize→forward→decode→threshold(abstain) 까지 end-to-end 다. 입력�
 test set(`/data/ner/{lang}/data/test.jsonl`) 의 고정 분포를 쓴다 — parity
 측정과 동일 입력이라 처리량·정밀도를 같은 기준으로 비교할 수 있다.
 
-배치 모드(언어별 forward 묶음)는 inference 의 배치 경로가 생긴 뒤 연결한다.
+`--mode` 로 seq(텍스트별 단건 predict)·batch(predict_many cross-text 묶음)를
+고른다 — bf16 은 배치(B>1)에서만 켜진다.
 """
 
 import argparse

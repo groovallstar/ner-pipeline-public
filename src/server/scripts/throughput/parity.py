@@ -6,8 +6,9 @@ fp32(레퍼런스) vs bf16(autocast) 의 `predict(abstain=True)` 출력 span 집
 bf16 run-to-run 재현성(>=3 run 대칭차 worst-case)도 측정한다. micro-F1 델타는
 진단용(게이트 아님)이다.
 
-측정 지점은 단건 순차(현행 경로) — 배치 forward 가 생기면 bf16+배치 축을
-추가해 fp32순차→bf16순차→bf16배치 3지점으로 완성한다.
+측정 경로는 출시 구성 — ref=fp32 순차, cmp=bf16 배치(predict_many 경로). 단건은
+fp32, bf16 은 배치(B>1) forward 에만 적용되므로 게이트는 fp32순차 대 bf16배치
+2지점이다(축 라벨 `fp32_seq -> bf16_batch`).
 """
 
 import argparse

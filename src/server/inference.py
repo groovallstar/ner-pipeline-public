@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 # 정밀도 → autocast dtype. fp32 는 autocast off, bf16 은 배치(B>1) forward 만
 # autocast 로 묶어 matmul 을 bf16 으로 돌린다(softmax 등은 fp32 승격). 단건
-# (B=1)은 작은 [1,L] 행렬이라 autocast 오버헤드가 tensor-core 이득을 넘어
-# 오히려 느려져 fp32 로 둔다(분기는 _infer_chunks).
+# (B=1)은 fp32 로 둬 단건 지연을 baseline 과 동일하게 유지한다 — bf16 의
+# 처리량 이득은 큰 행렬(배치)에서만 나타난다(분기는 _infer_chunks).
 _AUTOCAST_DTYPE: Dict[str, Optional[torch.dtype]] = {
     'fp32': None,
     'bf16': torch.bfloat16,
