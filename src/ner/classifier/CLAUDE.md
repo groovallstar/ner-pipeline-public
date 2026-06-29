@@ -16,7 +16,7 @@ span F1 을 측정한다.
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) 3-way tokenizer 분기 정렬 / BIO ↔ char-span 변환 (`decode_bio_to_spans(confs=...)` 시 span 에 conf_mean `score` 부착) |
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
-| `abstention.py` | per-class 신뢰도 기권 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
+| `confidence_threshold.py` | per-class 신뢰도 임계값(confidence threshold) 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
 | `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 원문(`orig`) 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만). CLI: `python -m ner.classifier.kfold_pool` |
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko}` |
@@ -54,25 +54,25 @@ done
 python -m ner.classifier.kfold_pool \
     --fold-dirs results/classifier/ja_sweep/<실험명>/fold{0..9}
 
-# abstention 운영점: valid 에서 per-class 신뢰도 임계값 fit → test 적용·저장
-python -m ner.classifier --lang ja --fit-abstain
+# 신뢰도 임계값 운영점: valid 에서 per-class 신뢰도 임계값 fit → test 적용·저장
+python -m ner.classifier --lang ja --fit-threshold
 # 저장된 thresholds.json 을 다른 run 에 적용
-python -m ner.classifier --lang ja --abstain-thresholds path/to/thresholds.json
+python -m ner.classifier --lang ja --confidence-thresholds path/to/thresholds.json
 ```
 
-### abstention 운영점 (per-class 신뢰도 기권)
+### 신뢰도 임계값 운영점 (per-class confidence threshold)
 
-`--fit-abstain` 은 모델 학습 후 valid split 에서 NER 4종(ORG/LOC/EVT/PROD)
-클래스별 신뢰도 임계값을 greedy(overall P·R≥`--abstain-target`, 기본 0.93)로
-찾아 `thresholds.json` 에 저장하고, test 에 적용한 운영점을 `metrics.json` 의
-`abstention` 블록에 기록한다. **opt-in·default OFF** — 플래그 미지정 시 기존
-동작과 완전 동일(BC), `overall`/`overall_strict` 는 항상 임계값 미적용
-baseline 으로 보존된다.
+`--fit-threshold` 는 모델 학습 후 valid split 에서 NER 4종(ORG/LOC/EVT/PROD)
+클래스별 신뢰도 임계값을 greedy(overall P·R≥`--threshold-target`, 기본
+0.93)로 찾아 `thresholds.json` 에 저장하고, test 에 적용한 운영점을
+`metrics.json` 의 `confidence_threshold` 블록에 기록한다. **opt-in·default
+OFF** — 플래그 미지정 시 기존 동작과 완전 동일(BC), `overall`/`overall_strict`
+는 항상 임계값 미적용 baseline 으로 보존된다.
 
 - 신뢰도 = span 토큰 max-softmax 의 평균(conf_mean). 저신뢰 예측이 FP 에
   편중돼 있어, 임계값으로 그 꼬리를 잘라 리콜 여유를 정밀도로 바꾼다.
 - **모델 개선이 아니라 운영점** — baseline F1 천장은 불변. 임계값은 모델
-  종속이라 재학습 시 반드시 재-fit(`--fit-abstain`). 하드코딩 금지.
+  종속이라 재학습 시 반드시 재-fit(`--fit-threshold`). 하드코딩 금지.
 - micro overall R≥0.93 은 포화 PII 가 떠받치는 값 — NER-4 자체 recall 은
   희생된다(per-class). 0.93-동시충족은 **pooled(다중 fold)** 에서 안정적.
 
@@ -87,6 +87,8 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 - `--lang ko`: 모델 `kakaobank/kf-deberta-base`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). DeBERTa 계열이라 `--precision bf16` 권장
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
+- 재현성 (`--train-seed`·`--deterministic`): `--train-seed` 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·셔플을 고정해 재현 가능한 run 이 되고, `--deterministic`(train-seed 필수)은 cuDNN·CUBLAS 까지 결정화해 바이트 단위 재현(느림). `metrics.json` 에 `train_seed`·`deterministic`·`precision` 기록.
+- fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — canonical 측정은 `--train-seed`+`--deterministic` 로 안정·재현 확보(권장), 또는 F1≈0 fold 만 `--train-seed` 바꿔 재실행. 상세: `docs/reports/korean-bert-classifier-fold-collapse.md`.
 - **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
 ### 누출-free 분할 (`--group-key`)
@@ -169,19 +171,20 @@ B-CREDIT_CARD, I-CREDIT_CARD
 results/classifier/{ja,vi,ko}/
 ├── best/                       # best 체크포인트 (HF model dir)
 ├── checkpoint-*/               # 중간 체크포인트 (save_total_limit=1 로 정리)
-├── metrics.json                # 학습 설정 + overall/per-entity strict·relaxed F1 (+--fit-abstain 시 abstention 블록)
-└── thresholds.json             # --fit-abstain 시: per-class 임계값 + meta (conf_key/target/fit_set)
+├── metrics.json                # 학습 설정 + overall/per-entity strict·relaxed F1 (+--fit-threshold 시 confidence_threshold 블록)
+└── thresholds.json             # --fit-threshold 시: per-class 임계값 + meta (conf_key/target/fit_set)
 
 docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)
 docs/reports/japanese-bert-classifier-history.md         # JA 히스토리 1편 (Phase 0~8, 동결)
 docs/reports/japanese-bert-classifier-per-entity-diagnosis.md  # JA 엔티티별 성능 진단 (1편 후속, 층화 K-fold)
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
+docs/reports/korean-bert-classifier-fold-collapse.md     # KO fold 붕괴 조사 (재현성·안정성)
 ```
 
 ## 출하·배포 (JA deploy)
 
 JA 출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·`docs/`)에
-둔다 — 학습은 CLI(`python -m ner.classifier`, `--fit-abstain` 포함)에
+둔다 — 학습은 CLI(`python -m ner.classifier`, `--fit-threshold` 포함)에
 흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음).
 
 | 아티팩트 | 위치 | 역할 |
@@ -203,7 +206,7 @@ python -m pytest tests/ner/classifier/ -q
 - `test_encode.py` — 실제 토크나이저(JA·VI·DeBERTa-V3·PhoBERT)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
 - `test_kfold_pool.py` — pooled F1 손계산 일치 / 원문(`orig`) 단위 cross-fold 누출 검출(`ValueError`)·`--allow-cross-fold-leak` 카운트 / 레거시 text 중복 fallback / 비고유 id 허용
-- `test_abstention.py` — scored decode(conf_mean)·apply·fit(greedy P·R≥target)·save/load 라운드트립
+- `test_confidence_threshold.py` — scored decode(conf_mean)·apply·fit(greedy P·R≥target)·save/load 라운드트립
 
 ## 주의
 

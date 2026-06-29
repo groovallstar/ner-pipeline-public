@@ -24,8 +24,8 @@ cross-package 기능 스크립트**를 둔다. 한 패키지에 속하는 도구
 
 | 파일 | 역할 |
 |------|------|
-| `eval_ja_ner_test.py` | 배포된 JA NER 모델 test 추론 — `ner.classifier`(abstention·data_utils·train_eval) + `ner.metrics` 를 가로질러 임계값 적용 후 P/R/F1·단계별 타이밍 출력(절대경로만 허용) |
+| `eval_ja_ner_test.py` | 배포된 JA NER 모델 test 추론 — `ner.classifier`(confidence_threshold·data_utils·train_eval) + `ner.metrics` 를 가로질러 임계값 적용 후 P/R/F1·단계별 타이밍 출력(절대경로만 허용) |
 | `eval_ja_ner_test.sh` | 위 `.py`를 `uv run`으로 감싸 프로젝트 `.venv`에서 실행하는 래퍼(shell 래퍼 규약의 표준 예시) |
-| `build_vi_ner_prod.py` | VI NER 배포 패키지 빌드 — test 100문장을 누출-free(orig 그룹)로 홀드아웃 + 나머지 train/valid 8:2 로 phobert 단일 학습, `data/stockmark/*_ner_prod_seed*` 포맷(`model/`+`data/`+`metrics.json`+`MODEL_CARD.md`)으로 저장(VI 는 abstention 미적용) |
-| `eval_vi_ner_test.py` | 배포된 VI NER 모델 test 추론 — `ner.classifier`(data_utils·train_eval) + `ner.metrics` 를 가로질러 raw 출력 P/R/F1(strict)·단계별 타이밍 출력(임계값 없음, 절대경로만 허용) |
+| `build_vi_ner_prod.py` | VI NER 배포 패키지 빌드 — test 100문장을 누출-free(orig 그룹)로 홀드아웃 + 나머지 train/valid 8:2 로 phobert 단일 학습, `data/stockmark/*_ner_prod_seed*` 포맷(`model/`+`data/`+`metrics.json`+`MODEL_CARD.md`)으로 저장(VI 는 신뢰도 임계 미적용) |
+| `eval_vi_ner_test.py` | 배포된 VI NER 모델 test 추론 — `ner.classifier`(confidence_threshold·data_utils·train_eval) + `ner.metrics` 를 가로질러 임계값 적용 후 P/R/F1(strict)·단계별 타이밍 출력(thresholds.json 없으면 raw 폴백, 절대경로만 허용). 앞 100문장만 평가(`N_TEST=100`) — 배포 test 는 orig 그룹 단위 홀드아웃이라 ≥100(현재 101)이라 오버슈트분을 잘라 100에 맞춘다 |
 | `eval_vi_ner_test.sh` | 위 `.py`를 `uv run`으로 감싸 실행하는 래퍼 |

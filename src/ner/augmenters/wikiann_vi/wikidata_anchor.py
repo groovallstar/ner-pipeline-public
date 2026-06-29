@@ -378,7 +378,7 @@ def _iter_entities(records: List[dict], span_key: str):
 
 def run_anchor(
     records: List[dict],
-    span_key: str = 'gold_spans_8type',
+    span_key: str = 'gold_spans_relabel',
     cache_path: Optional[Path] = None,
 ) -> Dict:
     """재라벨 JSONL에 대한 Wikidata 앵커 검증 전체 파이프라인.
@@ -504,7 +504,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument('--input', required=True, help='Relabel JSONL path')
     p.add_argument(
-        '--span-key', default='gold_spans_8type',
+        '--span-key', default='gold_spans_relabel',
         help='Field holding 5-type spans',
     )
     p.add_argument(

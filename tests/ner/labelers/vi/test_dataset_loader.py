@@ -159,7 +159,7 @@ class TestLoadLocal:
 
 
 class TestLoadCanonicalDump:
-    """canonical WikiANN-vi 덤프(`gold_spans_8type_merged`) 로딩."""
+    """canonical WikiANN-vi 덤프(`gold_spans_relabel_merged`) 로딩."""
 
     def _write(self, path: Path, span_key: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -176,7 +176,7 @@ class TestLoadCanonicalDump:
 
     def test_load_with_default_span_key(self, tmp_path: Path) -> None:
         path = tmp_path / 'dump.jsonl'
-        self._write(path, span_key='gold_spans_8type_merged')
+        self._write(path, span_key='gold_spans_relabel_merged')
         records = VietnameseDatasetLoader().load(path=path)
         assert len(records) == 2
         assert records[0]['gold_spans'][0]['type'] == 'LOC'

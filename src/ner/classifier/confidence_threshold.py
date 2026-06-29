@@ -1,4 +1,4 @@
-"""per-class 신뢰도 기권(abstention) 운영점: 임계값 fit·apply·저장.
+"""per-class 신뢰도 임계값(confidence threshold) 운영점: fit·apply·저장.
 
 span score(conf_mean, decode_bio_to_spans 가 부착) 기준으로 클래스별 임계값
 미만 예측을 걸러 정밀도를 높이는 운영점이다. 임계값은 검증(valid) 세트에서
@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 # 임계값 대상 = precision 헤드룸이 있는 NER 4종 (PII·PER 은 포화라 제외)
-DEFAULT_ABSTAIN_TYPES: Tuple[str, ...] = ('ORG', 'LOC', 'EVT', 'PROD')
+DEFAULT_THRESHOLD_TYPES: Tuple[str, ...] = ('ORG', 'LOC', 'EVT', 'PROD')
 
 
 def apply_thresholds(pred_spans_list: List[List[dict]],
@@ -81,7 +81,7 @@ def _overall(preds, gold_tot: Dict[str, int],
 def fit_thresholds(gold_spans_list: List[List[dict]],
                    pred_spans_list: List[List[dict]],
                    *,
-                   types: Tuple[str, ...] = DEFAULT_ABSTAIN_TYPES,
+                   types: Tuple[str, ...] = DEFAULT_THRESHOLD_TYPES,
                    target_p: float = 0.93,
                    target_r: float = 0.93,
                    n_candidates: int = 120) -> Dict[str, float]:

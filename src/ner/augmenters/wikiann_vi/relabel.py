@@ -1,9 +1,7 @@
 """WikiANN-vi 문장을 canonical 5종 스키마로 재라벨하는 async 클라이언트.
 
 vLLM OpenAI 호환 엔드포인트로 SINGLE 프롬프트를 호출해 5종 엔티티를 추출하고,
-원본 텍스트에서 문자 오프셋을 매칭해 `gold_spans_8type` 필드로 반환한다.
-파일·필드명의 `8type` 리터럴은 데이터 호환성을 위해 유지한다
-(의미는 canonical 5종 PER·LOC·ORG·PROD·EVT).
+원본 텍스트에서 문자 오프셋을 매칭해 `gold_spans_relabel` 필드로 반환한다.
 
 주요 구성:
 - `parse_spans`: LLM 원문 출력에서 JSON span 리스트 추출 (think 제거·정규식 폴백).
@@ -212,7 +210,7 @@ class Relabeler:
         if not text.strip():
             return {
                 **record,
-                'gold_spans_8type': [],
+                'gold_spans_relabel': [],
                 'relabel_model': self.model,
             }
         prompt = self._build_single(text)
@@ -224,7 +222,7 @@ class Relabeler:
             )
             return {
                 **record,
-                'gold_spans_8type': [],
+                'gold_spans_relabel': [],
                 'relabel_model': self.model,
                 'relabel_error': str(exc),
             }
@@ -232,7 +230,7 @@ class Relabeler:
         offset_spans = match_offsets(text, parsed)
         return {
             **record,
-            'gold_spans_8type': offset_spans,
+            'gold_spans_relabel': offset_spans,
             'relabel_model': self.model,
         }
 
@@ -246,7 +244,7 @@ class Relabeler:
         ]
         if not non_empty:
             return [
-                {**r, 'gold_spans_8type': [], 'relabel_model': self.model}
+                {**r, 'gold_spans_relabel': [], 'relabel_model': self.model}
                 for r in batch
             ]
 
@@ -274,7 +272,7 @@ class Relabeler:
             offset_spans = match_offsets(rec['text'], spans)
             results[orig_i] = {
                 **rec,
-                'gold_spans_8type': offset_spans,
+                'gold_spans_relabel': offset_spans,
                 'relabel_model': self.model,
             }
         # 빈 텍스트 레코드 채우기
@@ -282,7 +280,7 @@ class Relabeler:
             if results[i] is None:
                 results[i] = {
                     **rec,
-                    'gold_spans_8type': [],
+                    'gold_spans_relabel': [],
                     'relabel_model': self.model,
                 }
         return results

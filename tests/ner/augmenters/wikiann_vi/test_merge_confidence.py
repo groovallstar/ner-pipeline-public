@@ -260,7 +260,7 @@ class TestMergeRecords:
     def _record(self, rid, spans):
         return {
             'id': rid, 'text': 't',
-            'gold_spans_8type': spans,
+            'gold_spans_relabel': spans,
             'relabel_model': 'test-model',
         }
 
@@ -270,14 +270,14 @@ class TestMergeRecords:
         out = merge_records(gemma, qwen, policy='recall')
         assert len(out) == 1
         assert out[0]['merge_policy'] == 'recall'
-        assert out[0]['gold_spans_8type_merged'][0]['confidence'] == 'high'
-        assert 'gold_spans_8type' not in out[0]
+        assert out[0]['gold_spans_relabel_merged'][0]['confidence'] == 'high'
+        assert 'gold_spans_relabel' not in out[0]
 
     def test_policy_recall_drops_conflict(self):
         gemma = [self._record('0', [_span('X', 'ORG', 0, 1)])]
         qwen = [self._record('0', [_span('X', 'LOC', 0, 1)])]
         out = merge_records(gemma, qwen, policy='recall')
-        assert out[0]['gold_spans_8type_merged'] == []
+        assert out[0]['gold_spans_relabel_merged'] == []
 
     def test_disjoint_ids_drop(self):
         gemma = [self._record('0', [_span('X', 'PER', 0, 1)])]

@@ -61,6 +61,7 @@ VIETNAMESE_CITIES = [
 
 
 def generate_name(rng: random.Random | None = None) -> str:
+    """베트남식 성+중간이름+이름 (공백 구분, diacritic 변형 포함)."""
     r = rng or random
     if r.random() < 0.4:
         family = r.choice(VIETNAMESE_FAMILY_NAMES_DIA)
@@ -74,6 +75,7 @@ def generate_name(rng: random.Random | None = None) -> str:
 
 
 def generate_phone(rng: random.Random | None = None) -> str:
+    """베트남식 전화번호 (통신사 prefix + 국제표기/구분자 변형)."""
     r = rng or random
     prefix = r.choice(['09', '03', '07', '08', '05'])
     rest = random_digits(8, r)
@@ -94,6 +96,7 @@ def generate_phone(rng: random.Random | None = None) -> str:
 
 
 def generate_address(rng: random.Random | None = None) -> str:
+    """베트남식 주소 (번지+거리+군구+도시, 표기 변형 포함)."""
     r = rng or random
     num = r.randint(1, 200)
     street = r.choice(VIETNAMESE_STREETS)
@@ -127,6 +130,7 @@ def generate_dat(rng: random.Random | None = None) -> str:
 
 
 def generate_id_number(rng: random.Random | None = None) -> str:
+    """베트남 시민식별번호(CCCD) 12자리 (구분자 변형 포함)."""
     r = rng or random
     base = random_digits(12, r)
     pattern = r.choice([

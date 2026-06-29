@@ -9,10 +9,7 @@
         --output data/wikiann_vi/gemma_test.jsonl
 
 JSONL 출력 스키마(레코드별):
-    {id, text, gold_spans, gold_spans_8type, relabel_model}
-
-파일·필드의 ``8type`` 리터럴은 데이터 호환성을 위해 유지한다
-(의미는 canonical 5종: PER·LOC·ORG·PROD·EVT).
+    {id, text, gold_spans, gold_spans_relabel, relabel_model}
 """
 import argparse
 import json
@@ -24,7 +21,7 @@ from time import perf_counter
 
 from datasets import ClassLabel, load_dataset
 
-from ner.augmenters.wikiann_vi.relabel_8type import Relabeler
+from ner.augmenters.wikiann_vi.relabel import Relabeler
 from ner.labelers.vi.dataset_loader import bio_to_offset_spans
 
 
@@ -135,11 +132,11 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
 
 def _summarize(records: list[dict]) -> None:
     total = len(records)
-    empty = sum(1 for r in records if not r.get('gold_spans_8type'))
+    empty = sum(1 for r in records if not r.get('gold_spans_relabel'))
     error = sum(1 for r in records if r.get('relabel_error'))
     type_counter: Counter[str] = Counter()
     for rec in records:
-        for span in rec.get('gold_spans_8type', []):
+        for span in rec.get('gold_spans_relabel', []):
             type_counter[span.get('type', '')] += 1
 
     print('=== Relabel Summary ===')

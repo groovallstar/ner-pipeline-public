@@ -18,7 +18,10 @@ import time
 
 from transformers import AutoTokenizer
 
-from ner.classifier.abstention import apply_thresholds, load_thresholds
+from ner.classifier.confidence_threshold import (
+    apply_thresholds,
+    load_thresholds,
+)
 from ner.classifier.data_utils import (
     build_label_maps,
     encode_dataset,
@@ -58,8 +61,8 @@ def main():
     p = argparse.ArgumentParser(
         description='Evaluate the deployed JA NER model on a fixed test '
                     'set: show per-sentence tagging, then print Precision / '
-                    'Recall / F1-Score at the abstention operating point. '
-                    'Paths must be absolute.')
+                    'Recall / F1-Score at the confidence-threshold '
+                    'operating point. Paths must be absolute.')
     p.add_argument('--model-dir', default=DEFAULT_MODEL_DIR,
                    help='Absolute model dir (with tokenizer)')
     p.add_argument('--test', default=DEFAULT_TEST,

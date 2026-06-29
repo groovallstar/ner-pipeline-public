@@ -17,7 +17,7 @@ import time
 
 from tqdm import tqdm
 
-from ner.labelers.ja.span_matcher import match_spans
+from ner.labelers.span_matcher import match_spans
 
 
 def _load_env() -> None:

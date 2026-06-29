@@ -70,7 +70,7 @@ class BenchmarkRunner:
         self, name: str, backend: str, labeler: Any
     ) -> BenchmarkResult:
         """sample 단위 concurrency로 병렬 라벨링한다."""
-        from ner.labelers.ja.span_matcher import match_spans
+        from ner.labelers.span_matcher import match_spans
 
         sem = asyncio.Semaphore(self.sample_concurrency)
 

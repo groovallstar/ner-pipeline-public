@@ -1,4 +1,4 @@
-"""classifier CLI: JA·VI canonical 10종 평면 BERT fine-tune.
+"""classifier CLI: JA·VI·KO canonical 10종 평면 BERT fine-tune.
 
 augmenters 가 produce 한 PII 주입 JSONL 을 입력으로, BIO 21-class token classifier
 를 학습하고 char-offset span F1 을 측정한다.
@@ -25,8 +25,8 @@ from ner.classifier.data_utils import (
     split_kfold_stratified,
     split_train_valid_test,
 )
-from ner.classifier.abstention import (
-    DEFAULT_ABSTAIN_TYPES,
+from ner.classifier.confidence_threshold import (
+    DEFAULT_THRESHOLD_TYPES,
     apply_thresholds,
     fit_thresholds,
     load_thresholds,
@@ -83,7 +83,25 @@ def main():
              'rows sharing the value go to the same fold, preventing '
              'cross-fold original-text leakage. Default: row-level split.',
     )
+    parser.add_argument(
+        '--no-stratify', action='store_true',
+        help='Disable PROD/EVT stratification: split becomes label-invariant '
+             '(seeded shuffle only), so fold membership stays identical before '
+             'and after a gold relabel. Use for controlled before/after '
+             'comparison on unchanged-gold types.',
+    )
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument(
+        '--train-seed', type=int, default=None,
+        help='Training seed (head init, dropout, shuffle), decoupled from '
+             '--seed (data split). Default None keeps the legacy unseeded '
+             'head init (existing behavior); set it for a reproducible run.',
+    )
+    parser.add_argument(
+        '--deterministic', action='store_true',
+        help='Enable full determinism (cuDNN/CUBLAS) for byte-reproducible '
+             'runs (slower). Requires --train-seed.',
+    )
     parser.add_argument('--output-dir', help='Override output dir')
     parser.add_argument(
         '--smoke', action='store_true',
@@ -128,21 +146,22 @@ def main():
              'where leak-free evaluation is required.',
     )
     parser.add_argument(
-        '--fit-abstain', action='store_true',
+        '--fit-threshold', action='store_true',
         help='Fit per-class confidence thresholds on the VALID split '
              '(greedy, overall P/R >= target) and save thresholds.json, '
-             'then report the abstention operating point on test. '
-             'NER-4 types only (ORG/LOC/EVT/PROD).',
+             'then report the confidence-threshold operating point on '
+             'test. NER-4 types only (ORG/LOC/EVT/PROD).',
     )
     parser.add_argument(
-        '--abstain-thresholds', default=None,
-        help='Path to a thresholds.json (from --fit-abstain) to apply at '
-             'test eval. Mutually informative with --fit-abstain; if both '
-             'given, --fit-abstain wins (re-fits on this run model).',
+        '--confidence-thresholds', default=None,
+        help='Path to a thresholds.json (from --fit-threshold) to apply '
+             'at test eval. Mutually informative with --fit-threshold; if '
+             'both given, --fit-threshold wins (re-fits on this run '
+             'model).',
     )
     parser.add_argument(
-        '--abstain-target', type=float, default=0.93,
-        help='Target for both P and R when fitting abstention thresholds '
+        '--threshold-target', type=float, default=0.93,
+        help='Target for both P and R when fitting confidence thresholds '
              '(default 0.93).',
     )
     args = parser.parse_args()
@@ -151,6 +170,8 @@ def main():
         parser.error('--fold-index is required when --kfold is set')
     if args.kfold is not None and args.kfold < 3:
         parser.error('--kfold must be >= 3 (train needs at least one fold)')
+    if args.deterministic and args.train_seed is None:
+        parser.error('--deterministic requires --train-seed')
 
     data_path = args.data or DEFAULT_DATA[args.lang]
     model_name = args.model_name or DEFAULT_MODEL[args.lang]
@@ -162,15 +183,17 @@ def main():
     logger.info('Loading data: %s', data_path)
     rows = load_jsonl(data_path)
     if args.kfold is not None:
+        strat_labels = () if args.no_stratify else ('PROD', 'EVT')
         train_rows, valid_rows, test_rows = split_kfold_stratified(
             rows, args.kfold, args.fold_index, args.seed,
-            group_key=args.group_key,
+            strat_labels=strat_labels, group_key=args.group_key,
         )
         logger.info(
-            'Stratified K-fold: kfold=%d, fold_index=%d (test fold), '
-            'valid fold=%d, group_key=%s',
+            'K-fold: kfold=%d, fold_index=%d (test fold), valid fold=%d, '
+            'group_key=%s, stratify=%s',
             args.kfold, args.fold_index,
             (args.fold_index + 1) % args.kfold, args.group_key,
+            not args.no_stratify,
         )
     else:
         train_rows, valid_rows, test_rows = split_train_valid_test(
@@ -257,6 +280,8 @@ def main():
             lr=args.lr,
             class_weights=cw,
             precision=args.precision,
+            train_seed=args.train_seed,
+            deterministic=args.deterministic,
         )
         logger.info('Stage 1 time: %.1fs (best at %s)', s1_elapsed, s1_best)
 
@@ -277,6 +302,8 @@ def main():
             class_weights=cw,
             init_model_path=s1_best,
             precision=args.precision,
+            train_seed=args.train_seed,
+            deterministic=args.deterministic,
         )
         elapsed = s1_elapsed + s2_elapsed
         logger.info('Curriculum total time: %.1fs (stage1=%.1f + stage2=%.1f)',
@@ -295,18 +322,21 @@ def main():
             lr=args.lr,
             class_weights=cw,
             precision=args.precision,
+            train_seed=args.train_seed,
+            deterministic=args.deterministic,
         )
         logger.info('Train time: %.1fs', elapsed)
 
     is_kfold = args.kfold is not None
 
-    # abstention 운영점: valid 에서 per-class 임계값 fit(저장) 또는 외부 load.
-    # 임계값은 모델 종속 — 이 run 모델의 valid 신뢰도로 fit 해야 정합적이라
-    # --fit-abstain 이 --abstain-thresholds 보다 우선한다.
-    abstain_thr = None
-    abstain_meta = None
-    if args.fit_abstain:
-        logger.info('Fitting abstention thresholds on VALID split...')
+    # 신뢰도 임계값(confidence threshold) 운영점: valid 에서 per-class
+    # 임계값 fit(저장) 또는 외부 load. 임계값은 모델 종속 — 이 run 모델의
+    # valid 신뢰도로 fit 해야 정합적이라 --fit-threshold 가
+    # --confidence-thresholds 보다 우선한다.
+    conf_thr = None
+    conf_meta = None
+    if args.fit_threshold:
+        logger.info('Fitting confidence thresholds on VALID split...')
         valid_scored = evaluate_model(
             model_path=best_dir,
             eval_features=valid_features,
@@ -316,36 +346,38 @@ def main():
             return_spans=True,
             capture_scores=True,
         )
-        abstain_thr = fit_thresholds(
+        conf_thr = fit_thresholds(
             valid_scored['gold_spans_list'],
             valid_scored['pred_spans_list'],
-            target_p=args.abstain_target, target_r=args.abstain_target,
+            target_p=args.threshold_target,
+            target_r=args.threshold_target,
         )
-        abstain_meta = {
+        conf_meta = {
             'conf_key': 'conf_mean', 'fit_set': 'valid',
-            'target_p': args.abstain_target, 'target_r': args.abstain_target,
-            'types': list(DEFAULT_ABSTAIN_TYPES),
+            'target_p': args.threshold_target,
+            'target_r': args.threshold_target,
+            'types': list(DEFAULT_THRESHOLD_TYPES),
         }
         thr_path = os.path.join(output_dir, 'thresholds.json')
-        save_thresholds(thr_path, abstain_thr, meta=abstain_meta)
-        logger.info('Saved abstention thresholds: %s %s',
-                    thr_path, abstain_thr)
-    elif args.abstain_thresholds:
-        abstain_thr = load_thresholds(args.abstain_thresholds)
-        abstain_meta = {'source': args.abstain_thresholds}
-        logger.info('Loaded abstention thresholds: %s %s',
-                    args.abstain_thresholds, abstain_thr)
+        save_thresholds(thr_path, conf_thr, meta=conf_meta)
+        logger.info('Saved confidence thresholds: %s %s',
+                    thr_path, conf_thr)
+    elif args.confidence_thresholds:
+        conf_thr = load_thresholds(args.confidence_thresholds)
+        conf_meta = {'source': args.confidence_thresholds}
+        logger.info('Loaded confidence thresholds: %s %s',
+                    args.confidence_thresholds, conf_thr)
 
     logger.info('Evaluating on test split...')
-    abstain_active = abstain_thr is not None
+    conf_active = conf_thr is not None
     metrics = evaluate_model(
         model_path=best_dir,
         eval_features=test_features,
         eval_offsets=test_offsets,
         eval_rows=test_rows,
         id2label=id2label,
-        return_spans=is_kfold or abstain_active,
-        capture_scores=abstain_active,
+        return_spans=is_kfold or conf_active,
+        capture_scores=conf_active,
     )
 
     if is_kfold:
@@ -374,21 +406,22 @@ def main():
     strict_m = metrics['strict']
     relaxed_m = metrics['relaxed']
 
-    # abstention 운영점 메트릭: 임계값 적용 결과. raw strict 는 baseline 으로
-    # 보존(아래 'overall' 키)하고, 운영점은 별도 'abstention' 블록에 둔다.
-    abstention_block = None
-    if abstain_active:
-        filtered = apply_thresholds(metrics['pred_spans_list'], abstain_thr)
+    # 신뢰도 임계값 운영점 메트릭: 임계값 적용 결과. raw strict 는 baseline
+    # 으로 보존(아래 'overall' 키)하고, 운영점은 별도 'confidence_threshold'
+    # 블록에 둔다.
+    conf_block = None
+    if conf_active:
+        filtered = apply_thresholds(metrics['pred_spans_list'], conf_thr)
         op = compute_offset_span_f1(metrics['gold_spans_list'], filtered)
-        abstention_block = {
-            'thresholds': abstain_thr,
-            'meta': abstain_meta,
+        conf_block = {
+            'thresholds': conf_thr,
+            'meta': conf_meta,
             'overall_baseline': strict_m['overall'],
             'overall_operating': op['overall'],
             'per_entity_operating': op['per_entity'],
         }
         logger.info(
-            'Abstention operating point: P=%.4f R=%.4f F1=%.4f '
+            'Confidence-threshold operating point: P=%.4f R=%.4f F1=%.4f '
             '(baseline F1=%.4f)',
             op['overall']['precision'], op['overall']['recall'],
             op['overall']['f1'], strict_m['overall']['f1'],
@@ -412,6 +445,9 @@ def main():
         'fold_index': args.fold_index if is_kfold else None,
         'group_key': args.group_key if is_kfold else None,
         'seed': args.seed,
+        'train_seed': args.train_seed,
+        'deterministic': args.deterministic,
+        'precision': args.precision,
         'offset_trim': trim_offsets,
         'metric_for_best': 'eval_loss',
         'curriculum': args.curriculum,
@@ -426,8 +462,8 @@ def main():
         'overall_relaxed': relaxed_m['overall'],
         'per_entity_relaxed': relaxed_m['per_entity'],
     }
-    if abstention_block:
-        summary['abstention'] = abstention_block
+    if conf_block:
+        summary['confidence_threshold'] = conf_block
 
     metrics_path = os.path.join(output_dir, 'metrics.json')
     with open(metrics_path, 'w', encoding='utf-8') as f:
@@ -446,11 +482,11 @@ def main():
         _print_metrics_block('strict', strict_m)
     if show_relaxed:
         _print_metrics_block("relaxed (SemEval'13 Partial)", relaxed_m)
-    if abstention_block:
-        op = abstention_block['overall_operating']
-        bl = abstention_block['overall_baseline']
-        print(f"\n  [abstention operating point] thresholds="
-              f"{abstain_thr}")
+    if conf_block:
+        op = conf_block['overall_operating']
+        bl = conf_block['overall_baseline']
+        print(f"\n  [confidence-threshold operating point] thresholds="
+              f"{conf_thr}")
         print(f"  P={op['precision']:.4f}  R={op['recall']:.4f}  "
               f"F1={op['f1']:.4f}   (baseline F1={bl['f1']:.4f}, "
               f"ΔF1={op['f1'] - bl['f1']:+.4f})")

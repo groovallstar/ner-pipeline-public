@@ -18,7 +18,7 @@ def _write_jsonl(path: Path, records):
 
 def test_extract_silver_spans_filters_non_3type():
     rec = {
-        'gold_spans_8type': [
+        'gold_spans_relabel': [
             {'type': 'PER', 'start': 0, 'end': 3, 'text': 'abc'},
             {'type': 'PROD', 'start': 5, 'end': 8, 'text': 'xyz'},
             {'type': 'ORG', 'start': 10, 'end': 12, 'text': 'oo'},
@@ -31,8 +31,8 @@ def test_extract_silver_spans_filters_non_3type():
 
 def test_extract_silver_spans_prefers_merged_key():
     rec = {
-        'gold_spans_8type': [{'type': 'PER', 'start': 0, 'end': 1, 'text': 'a'}],
-        'gold_spans_8type_merged': [
+        'gold_spans_relabel': [{'type': 'PER', 'start': 0, 'end': 1, 'text': 'a'}],
+        'gold_spans_relabel_merged': [
             {'type': 'LOC', 'start': 5, 'end': 6, 'text': 'b'},
         ],
     }
@@ -45,14 +45,14 @@ def test_evaluate_split_perfect_match(tmp_path, monkeypatch):
     silver = [
         {
             'id': '0', 'text': 'A B C',
-            'gold_spans_8type': [
+            'gold_spans_relabel': [
                 {'type': 'PER', 'start': 0, 'end': 1, 'text': 'A'},
                 {'type': 'LOC', 'start': 4, 'end': 5, 'text': 'C'},
             ],
         },
         {
             'id': '1', 'text': 'D E',
-            'gold_spans_8type': [
+            'gold_spans_relabel': [
                 {'type': 'ORG', 'start': 0, 'end': 1, 'text': 'D'},
             ],
         },
@@ -87,7 +87,7 @@ def test_evaluate_split_partial_match(tmp_path, monkeypatch):
     silver = [
         {
             'id': '0', 'text': 'A B C',
-            'gold_spans_8type': [
+            'gold_spans_relabel': [
                 # PER 맞춤, LOC 빠짐, 가짜 ORG 추가
                 {'type': 'PER', 'start': 0, 'end': 1, 'text': 'A'},
                 {'type': 'ORG', 'start': 2, 'end': 3, 'text': 'B'},
@@ -122,7 +122,7 @@ def test_evaluate_silver_set_skips_missing(tmp_path, monkeypatch, caplog):
     silver_path = tmp_path / 'gemma_test.jsonl'
     _write_jsonl(silver_path, [
         {'id': '0', 'text': 'a',
-         'gold_spans_8type': [{'type': 'PER', 'start': 0, 'end': 1, 'text': 'a'}]},
+         'gold_spans_relabel': [{'type': 'PER', 'start': 0, 'end': 1, 'text': 'a'}]},
     ])
     monkeypatch.setattr(
         vi_silver_quality, 'load_wikiann_vi_gold',

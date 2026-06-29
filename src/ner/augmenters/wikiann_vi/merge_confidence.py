@@ -239,7 +239,7 @@ def merge_records(
 ) -> List[dict]:
     """두 JSONL 레코드 리스트를 id 기준으로 매칭해 단일 레코드 리스트 반환.
 
-    출력 스키마: 기존 필드 + `gold_spans_8type_merged` + `merge_policy`.
+    출력 스키마: 기존 필드 + `gold_spans_relabel_merged` + `merge_policy`.
     Gemma 레코드를 기준으로 순회하며, Qwen에만 있는 id는 드물지만 안전망으로
     후단에 추가한다.
     """
@@ -252,15 +252,15 @@ def merge_records(
         ga = a_by_id[rid]
         gb = b_by_id[rid]
         all_merged = categorize_spans(
-            ga.get('gold_spans_8type', []),
-            gb.get('gold_spans_8type', []),
+            ga.get('gold_spans_relabel', []),
+            gb.get('gold_spans_relabel', []),
         )
         filtered = _filter_by_policy(all_merged, policy)
         rec = {
             k: v for k, v in ga.items()
-            if k not in ('gold_spans_8type',)
+            if k not in ('gold_spans_relabel',)
         }
-        rec['gold_spans_8type_merged'] = filtered
+        rec['gold_spans_relabel_merged'] = filtered
         rec['merge_policy'] = policy
         rec['merge_sources'] = {
             'a': ga.get('relabel_model', 'gemma'),
@@ -285,13 +285,13 @@ def _write_jsonl(path: Path, records: List[dict]) -> None:
 def _summarize(records: List[dict]) -> None:
     total = len(records)
     total_spans = sum(
-        len(r.get('gold_spans_8type_merged', [])) for r in records
+        len(r.get('gold_spans_relabel_merged', [])) for r in records
     )
     from collections import Counter
     conf_counter: Counter = Counter()
     type_counter: Counter = Counter()
     for r in records:
-        for s in r.get('gold_spans_8type_merged', []):
+        for s in r.get('gold_spans_relabel_merged', []):
             conf_counter[s.get('confidence', '?')] += 1
             type_counter[s.get('type', '?')] += 1
     print('=== Merge Summary ===')

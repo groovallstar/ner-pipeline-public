@@ -107,7 +107,8 @@ class ReportGenerator:
 
     def _print_offset_span_table(self) -> None:
         """일본어 방식의 문자 오프셋 span F1 테이블을 출력한다."""
-        title = "JAPANESE NER" if self.lang == "ja" else "NER"
+        titles = {"ja": "JAPANESE NER", "vi": "VIETNAMESE NER"}
+        title = titles.get(self.lang, "NER")
         print("\n" + "=" * 70)
         print(f"  {title} — SPAN-LEVEL EVALUATION (Character Offset)")
         print("=" * 70)

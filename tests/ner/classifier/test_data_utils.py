@@ -199,6 +199,45 @@ def test_kfold_deterministic():
         assert [r['id'] for r in left] == [r['id'] for r in right]
 
 
+def _before_after_relabel():
+    """id·text 동일, PROD 라벨만 절반에 주입한 (before, after) 쌍."""
+    before = [{'text': f't{i}', 'entities': [], 'id': str(i)}
+              for i in range(100)]
+    after = []
+    for i in range(100):
+        ents = ([{'label': 'PROD', 'start_char': 0, 'end_char': 1,
+                  'text': 'x'}] if i % 2 == 0 else [])
+        after.append({'text': f't{i}', 'entities': ents, 'id': str(i)})
+    return before, after
+
+
+def test_kfold_no_stratify_label_invariant():
+    """strat_labels=() 면 fold 멤버십이 PROD/EVT 라벨과 무관 — relabel 전후
+    test fold 의 id 집합이 동일하다(이슈 #140 고정 split 계약)."""
+    before, after = _before_after_relabel()
+    for fi in range(5):
+        _, _, tb = split_kfold_stratified(
+            before, n_folds=5, fold_index=fi, seed=42, strat_labels=())
+        _, _, ta = split_kfold_stratified(
+            after, n_folds=5, fold_index=fi, seed=42, strat_labels=())
+        assert {r['id'] for r in tb} == {r['id'] for r in ta}
+
+
+def test_kfold_default_stratify_shifts_on_relabel():
+    """대조: 기본 PROD/EVT 층화는 라벨이 바뀌면 fold 멤버십이 흔들린다 —
+    #140 이 고정 split(strat_labels=())을 쓰는 이유."""
+    before, after = _before_after_relabel()
+    shifted = False
+    for fi in range(5):
+        _, _, tb = split_kfold_stratified(
+            before, n_folds=5, fold_index=fi, seed=42)
+        _, _, ta = split_kfold_stratified(
+            after, n_folds=5, fold_index=fi, seed=42)
+        if {r['id'] for r in tb} != {r['id'] for r in ta}:
+            shifted = True
+    assert shifted
+
+
 def test_kfold_invalid_fold_index():
     """범위 밖 fold_index 에 ValueError."""
     rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(10)]

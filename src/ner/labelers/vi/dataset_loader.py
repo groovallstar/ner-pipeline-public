@@ -7,7 +7,7 @@ start, end}]}` 스키마로 반환한다(폴백 없음):
   재라벨 + PII 주입을 거쳐 materialize 된 최종 덤프. `entities` 스키마
   (`{label, start_char, end_char, text}`). `load(split=...)`(명시 path·
   span_key 없이)는 이 파일을 `load_local` 경로로 읽는다.
-- **recall-merge 중간 덤프** (임의 경로): `gold_spans_8type_merged` 등
+- **recall-merge 중간 덤프** (임의 경로): `gold_spans_relabel_merged` 등
   span_key 필드를 가진 merge_confidence 산출물. `load(path=..., span_key=...)`
   로 명시 지정해 읽는다.
 
@@ -31,7 +31,7 @@ class VietnameseDatasetLoader:
     }
     # 명시적 path·span_key 로 recall-merge 중간 덤프를 읽을 때의 기본 필드명.
     # 기본 split 파일(entities 스키마)에는 적용되지 않는다.
-    SPAN_KEY = 'gold_spans_8type_merged'
+    SPAN_KEY = 'gold_spans_relabel_merged'
 
     def load(
         self,
@@ -47,7 +47,7 @@ class VietnameseDatasetLoader:
             max_samples: 반환할 레코드 수 상한.
             path: 임의 JSONL 경로. split 대신 사용(recall-merge 중간 덤프).
             span_key: recall-merge 덤프에서 gold로 쓸 span 필드. 기본값
-                `gold_spans_8type_merged`. WikiANN 원본 3종은 `'gold_spans'`.
+                `gold_spans_relabel_merged`. WikiANN 원본 3종은 `'gold_spans'`.
 
         읽기 경로 분기:
         - 명시 `path` 또는 `span_key` → recall-merge 덤프 reader
@@ -87,7 +87,7 @@ class VietnameseDatasetLoader:
     ) -> List[dict]:
         """임의 JSONL을 labelers/vi 스키마로 읽는다.
 
-        입력이 재라벨 덤프(`gold_spans_8type_merged` 계열)가 아니라 PII
+        입력이 재라벨 덤프(`gold_spans_relabel_merged` 계열)가 아니라 PII
         증강 산출물(`entities` 스키마)인 경우를 처리한다.
         """
         records: List[dict] = []
@@ -129,7 +129,7 @@ def _read_records(
     """WikiANN-vi 덤프 JSONL을 gold_spans 레코드로 반환한다.
 
     재라벨 산출물은 레코드 최상위에 `gold_spans`(WikiANN 3종),
-    `gold_spans_8type` 또는 `gold_spans_8type_merged`(canonical 5종)를
+    `gold_spans_relabel` 또는 `gold_spans_relabel_merged`(canonical 5종)를
     담고 있다. `span_key`로 어느 필드를 gold로 삼을지 선택한다.
     """
     records: List[dict] = []

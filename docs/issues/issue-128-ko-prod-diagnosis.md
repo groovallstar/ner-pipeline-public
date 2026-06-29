@@ -63,6 +63,45 @@ koelectra-base-v3 의 PROD F1 0.690(NER-5 2nd 최저) 정체를 FP+FN 전수 진
   control `base_on_cleantest`(0.696). error_analysis distinct 189→149.
 - refuter: 측정 무결성(리포트 ↔ metrics.json·error_analysis) 독립 재계산 PASS.
 
+## Phase 2 — PROD F1 0.85 게이트 (도달가능 천장 보고)
+
+재오픈 게이트 PROD F1 ≥ 0.85. **미달** — 도달가능 천장 ≈ **0.724**(best
+`koelectra_prod_clean`)로 확정하고 이유를 보고한다(이슈 본문 "미달 시 도달가능
+최대치+이유" 조항).
+
+### FN/FP 천장 분해 (best, strict, cleaned test, gold PROD sup 317)
+
+TP 230 / **FN 87 / FP 88 ≈ 1:1**. P 0.723 / R 0.726.
+
+| 채널 | FN | FP | 정체 |
+|---|---|---|---|
+| TYPE_MISMATCH | 24 | 31 | eponymy(작품명↔인명: 중경삼림·미이라·드라큐라·동주, 세월호↔EVT) — 구조적 |
+| MISS | 37 | — | hapax 작품명 recall(친니친니·뭔러너 ~1회 등장) |
+| HALLUCINATION | — | 31 | ~절반 gold 누락(어성초·SM5·에이리언1 실재인데 gold ∅) + ~절반 PII 교란 subword |
+| BOUNDARY | 26 | 26 | 다어절 경계(칼라시니코프 소총·S-300 …) — 1오류 FN+FP 양측 |
+
+- eponymy(TYPE_MISMATCH FN24+FP31=55) + boundary(FN26+FP26=52) = 오류
+  175측면(FN87+FP88)의 ~61%, data 해소 불가.
+- HALLUCINATION 절반이 gold 누락 → 실측 0.724는 "진짜" 천장(~0.75-0.77)보다도
+  저평가. 측정 precision 이 불완전 gold 로 깔린다.
+
+### 죽인 레버 (반복 금지)
+
+- recall 재라벨(동일 labeler): 신규 제품 0.
+- 큰 backbone(klue/roberta-large): PROD −0.027, EVT −0.138(저support 악화).
+- **under-tag PROD 회수**(일관 PROD 표면형의 O 등장을 gemma 문맥판정 후
+  O→PROD): +36 span(3099→3135) 재학습 → 0.724→0.712(−0.012). PROD train-seed
+  노이즈(m100_ts 0.641–0.707, ~0.066 스윙) **안쪽**이라 무신호. 모호 표면형
+  prior 강화로 precision −0.055(over-firing). 실험 폐기.
+
+### 결론
+
+PROD 천장은 eponymy(구조적) + hapax recall + 불완전 gold(precision 저평가)의
+합. 게이트 규모(0.85)는 support ~2배(외부 PROD 데이터) 없이는 불가 —
+±0.03-0.06 train-seed 노이즈가 남은 소형 레버(boundary·신뢰도 임계값)의 기대
+이득을 덮는다. **0.724를 도달가능 천장으로 종결**, 외부 데이터 확보는 별도
+이슈 소관.
+
 ## 관련 커밋
 
 - `5139be7`: feat(scripts) entity_revalidate + docs PROD 오류 진단·정리

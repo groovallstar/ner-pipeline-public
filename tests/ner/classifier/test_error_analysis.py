@@ -1,10 +1,13 @@
 """classify_span_errors / aggregate_errors / sample_for_review 단위 테스트.
 
 추론·모델 로딩 경로는 별도 (느린) 통합 테스트로 분리. 본 파일은 순수 함수만.
+run_inference 의 tokenizer 선택 분기(use_fast fallback, VI/PhoBERT 경로)는
+실모델 없이 mock 으로 결정 로직만 검증한다.
 """
 
 import json
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -318,3 +321,225 @@ def test_run_pooled_error_analysis_aggregate(tmp_path):
     assert os.path.exists(os.path.join(out, 'confusion_matrix_pooled.md'))
     assert os.path.exists(os.path.join(out, 'fp_top_ORG_pooled.md'))
     assert os.path.exists(os.path.join(out, 'fn_top_LOC_pooled.md'))
+
+
+# ---------------------------------------------------------------------------
+# run_inference tokenizer 선택 분기 (VI/PhoBERT + use_fast fallback)
+# 실모델·네트워크 없이 분기 결정 로직만 mock 으로 검증.
+# ---------------------------------------------------------------------------
+
+def _make_fast_tokenizer(name_or_path='some/fast-model'):
+    """is_fast=True 를 가진 가짜 fast tokenizer."""
+    tok = MagicMock()
+    tok.is_fast = True
+    tok.name_or_path = name_or_path
+    return tok
+
+
+def _make_slow_tokenizer(name_or_path='some/slow-model'):
+    """is_fast=False, name 에 'phobert' 없는 가짜 slow tokenizer."""
+    tok = MagicMock()
+    tok.is_fast = False
+    tok.name_or_path = name_or_path
+    return tok
+
+
+def _make_phobert_tokenizer():
+    """name_or_path 에 'phobert' 를 포함하는 가짜 PhoBERT tokenizer."""
+    tok = MagicMock()
+    tok.is_fast = False
+    tok.name_or_path = 'vinai/phobert-base'
+    return tok
+
+
+def _patch_data_loading(rows=None):
+    """load_jsonl + split_train_valid_test 를 가짜로 대체하는 컨텍스트 매니저.
+
+    run_inference 는 tokenizer 선택 전에 데이터 로딩을 수행하므로,
+    분기 테스트에서도 파일 I/O 없이 진행하도록 두 함수를 함께 mock 한다.
+    """
+    if rows is None:
+        rows = []
+    return patch.multiple(
+        'ner.classifier.data_utils',
+        load_jsonl=MagicMock(return_value=rows),
+        split_train_valid_test=MagicMock(return_value=(rows, rows, rows)),
+    )
+
+
+def test_run_inference_use_fast_fallback():
+    """use_fast=True 가 OSError 를 일으킬 때 use_fast=False 로 fallback 한다."""
+    slow_tok = _make_slow_tokenizer()
+    call_log = []
+
+    def fake_from_pretrained(name, use_fast):
+        call_log.append(use_fast)
+        if use_fast:
+            raise OSError('fast tokenizer not available')
+        return slow_tok
+
+    # AutoTokenizer 는 run_inference 내부에서 from transformers import 로 로컬 바인딩
+    # → transformers.AutoTokenizer 를 패치해야 한다
+    # encode_dataset 에서 중단해 torch/모델 로딩까지 진입하지 않는다
+    with _patch_data_loading(), \
+         patch('transformers.AutoTokenizer.from_pretrained',
+               side_effect=fake_from_pretrained), \
+         patch('ner.classifier.data_utils.encode_dataset',
+               side_effect=RuntimeError('stop early')):
+        from ner.classifier.error_analysis import run_inference
+        with pytest.raises(RuntimeError, match='stop early'):
+            run_inference(
+                lang='vi',
+                model_path='/fake/model',
+                data_path='/fake/data.jsonl',
+                tokenizer_name='some/tokenizer',
+                split='test',
+            )
+
+    # use_fast=True 먼저 시도, 실패 후 use_fast=False 로 재시도
+    assert call_log == [True, False], (
+        f'expected [True, False] but got {call_log}'
+    )
+
+
+def test_run_inference_use_fast_success():
+    """use_fast=True 가 성공하면 fallback(use_fast=False)은 호출되지 않는다."""
+    fast_tok = _make_fast_tokenizer()
+    call_log = []
+
+    def fake_from_pretrained(name, use_fast):
+        call_log.append(use_fast)
+        return fast_tok
+
+    with _patch_data_loading(), \
+         patch('transformers.AutoTokenizer.from_pretrained',
+               side_effect=fake_from_pretrained), \
+         patch('ner.classifier.data_utils.encode_dataset',
+               side_effect=RuntimeError('stop early')):
+        from ner.classifier.error_analysis import run_inference
+        with pytest.raises(RuntimeError, match='stop early'):
+            run_inference(
+                lang='vi',
+                model_path='/fake/model',
+                data_path='/fake/data.jsonl',
+                tokenizer_name='some/tokenizer',
+                split='test',
+            )
+
+    # fallback 없이 use_fast=True 단 1회만 호출
+    assert call_log == [True], f'expected [True] but got {call_log}'
+
+
+def test_run_inference_tokenizer_none_raises():
+    """tokenizer_name=None 이면 ValueError 를 즉시 발생시킨다."""
+    # tokenizer_name=None 검사는 데이터 로딩 이후에 있으므로 I/O 를 mock 한다
+    with _patch_data_loading():
+        from ner.classifier.error_analysis import run_inference
+        with pytest.raises(ValueError, match='tokenizer_name is required'):
+            run_inference(
+                lang='vi',
+                model_path='/fake/model',
+                data_path='/fake/data.jsonl',
+                tokenizer_name=None,
+                split='test',
+            )
+
+
+# ---------------------------------------------------------------------------
+# _is_phobert 판별 로직 (data_utils — 네트워크 불필요 순수 함수)
+# ---------------------------------------------------------------------------
+
+def test_is_phobert_detects_phobert_in_name_or_path():
+    """name_or_path 에 'phobert' 가 포함되면 True."""
+    from ner.classifier.data_utils import _is_phobert
+    tok = _make_phobert_tokenizer()
+    assert _is_phobert(tok) is True
+
+
+def test_is_phobert_false_for_fast_tokenizer():
+    """fast tokenizer 는 name 에 'phobert' 없으면 False."""
+    from ner.classifier.data_utils import _is_phobert
+    tok = _make_fast_tokenizer('xlm-roberta-base')
+    assert _is_phobert(tok) is False
+
+
+def test_is_phobert_detects_phobert_class_name():
+    """클래스 이름에 'phobert' 가 포함되면 True (name_or_path 무관)."""
+    from ner.classifier.data_utils import _is_phobert
+
+    class PhobertTokenizer:
+        is_fast = False
+        name_or_path = 'some/other-model'
+
+    assert _is_phobert(PhobertTokenizer()) is True
+
+
+# ---------------------------------------------------------------------------
+# encode_row 분기 선택 (data_utils — mock 으로 실제 인코딩 생략)
+# ---------------------------------------------------------------------------
+
+def _dummy_enc_result():
+    """(enc, offsets) 가짜 반환값."""
+    enc = {'input_ids': [0], 'attention_mask': [1]}
+    offs = [(0, 0)]
+    return enc, offs
+
+
+def test_encode_row_routes_fast_tokenizer_to_encode_vi():
+    """is_fast=True 이면 _encode_vi 경로를 탄다."""
+    from ner.classifier import data_utils
+    tok = _make_fast_tokenizer()
+    row = {'text': 'Hà Nội', 'entities': []}
+
+    with patch.object(data_utils, '_encode_vi',
+                      return_value=_dummy_enc_result()) as mock_vi, \
+         patch.object(data_utils, '_encode_phobert',
+                      return_value=_dummy_enc_result()) as mock_ph, \
+         patch.object(data_utils, '_encode_ja',
+                      return_value=_dummy_enc_result()) as mock_ja:
+        label2id = {'O': 0}
+        data_utils.encode_row(row, tok, label2id, lang='vi')
+
+    mock_vi.assert_called_once()
+    mock_ph.assert_not_called()
+    mock_ja.assert_not_called()
+
+
+def test_encode_row_routes_phobert_to_encode_phobert():
+    """is_fast=False + _is_phobert=True 이면 _encode_phobert 경로를 탄다."""
+    from ner.classifier import data_utils
+    tok = _make_phobert_tokenizer()
+    row = {'text': 'Hà Nội', 'entities': []}
+
+    with patch.object(data_utils, '_encode_vi',
+                      return_value=_dummy_enc_result()) as mock_vi, \
+         patch.object(data_utils, '_encode_phobert',
+                      return_value=_dummy_enc_result()) as mock_ph, \
+         patch.object(data_utils, '_encode_ja',
+                      return_value=_dummy_enc_result()) as mock_ja:
+        label2id = {'O': 0}
+        data_utils.encode_row(row, tok, label2id, lang='vi')
+
+    mock_ph.assert_called_once()
+    mock_vi.assert_not_called()
+    mock_ja.assert_not_called()
+
+
+def test_encode_row_routes_slow_non_phobert_to_encode_ja():
+    """is_fast=False + _is_phobert=False 이면 _encode_ja 경로(JA slow)를 탄다."""
+    from ner.classifier import data_utils
+    tok = _make_slow_tokenizer('tohoku-nlp/bert-base-japanese-v3')
+    row = {'text': '東京', 'entities': []}
+
+    with patch.object(data_utils, '_encode_vi',
+                      return_value=_dummy_enc_result()) as mock_vi, \
+         patch.object(data_utils, '_encode_phobert',
+                      return_value=_dummy_enc_result()) as mock_ph, \
+         patch.object(data_utils, '_encode_ja',
+                      return_value=_dummy_enc_result()) as mock_ja:
+        label2id = {'O': 0}
+        data_utils.encode_row(row, tok, label2id, lang='ja')
+
+    mock_ja.assert_called_once()
+    mock_vi.assert_not_called()
+    mock_ph.assert_not_called()
