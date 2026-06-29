@@ -32,6 +32,10 @@ class StubRegistry:
             'score': 1.0 if abstain else 0.0,
         }]
 
+    def predict_batch(self, texts, langs, abstain=True):
+        return [self.predict(t, lang, abstain)
+                for t, lang in zip(texts, langs)]
+
     def health(self):
         return {'status': 'ok',
                 'langs': {lang: {'loaded': True, 'thresholds': False}

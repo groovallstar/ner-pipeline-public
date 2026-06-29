@@ -128,13 +128,12 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=413,
                 detail=(f'batch total chars {total_chars} exceeds '
                         f'max_total_chars ({config.max_total_chars})'))
-        results = []
         for text in req.texts:
             _check_text(text)
-            lang = _resolve_lang(text, req.lang)
-            results.append(
-                {'lang': lang,
-                 'entities': registry.predict(text, lang, abstain)})
+        langs = [_resolve_lang(text, req.lang) for text in req.texts]
+        entities_list = registry.predict_batch(req.texts, langs, abstain)
+        results = [{'lang': lang, 'entities': ents}
+                   for lang, ents in zip(langs, entities_list)]
         return {'results': results}
 
     @app.get('/health')
