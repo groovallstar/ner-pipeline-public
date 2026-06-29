@@ -24,6 +24,9 @@ class ServerConfig:
     max_chars: int = 20000         # 요청 1건 텍스트 char 상한
     max_batch: int = 64            # 배치 텍스트 개수 상한
     max_total_chars: int = 100000  # 배치 전체 char 합산 상한(작업량 가드)
+    max_concurrency: int = 8       # 동시 추론 상한(전역 세마포어)
+    max_queue: int = 32            # 대기 큐 깊이 상한(초과 시 429)
+    acquire_timeout_s: float = 10.0  # 세마포어 대기 타임아웃(초과 429)
     api_key: Optional[str] = None  # None 이면 인증 비활성
     host: str = '0.0.0.0'
     port: int = 8000
@@ -35,6 +38,10 @@ class ServerConfig:
             raw = os.environ.get(name)
             return int(raw) if raw else default
 
+        def _float(name: str, default: float) -> float:
+            raw = os.environ.get(name)
+            return float(raw) if raw else default
+
         return cls(
             model_root=os.environ.get(
                 'NER_SERVER_MODEL_ROOT', DEFAULT_MODEL_ROOT),
@@ -43,6 +50,9 @@ class ServerConfig:
             max_chars=_int('NER_SERVER_MAX_CHARS', 20000),
             max_batch=_int('NER_SERVER_MAX_BATCH', 64),
             max_total_chars=_int('NER_SERVER_MAX_TOTAL_CHARS', 100000),
+            max_concurrency=_int('NER_SERVER_MAX_CONCURRENCY', 8),
+            max_queue=_int('NER_SERVER_MAX_QUEUE', 32),
+            acquire_timeout_s=_float('NER_SERVER_ACQUIRE_TIMEOUT_S', 10.0),
             api_key=os.environ.get('NER_SERVER_API_KEY') or None,
             host=os.environ.get('NER_SERVER_HOST', '0.0.0.0'),
             port=_int('NER_SERVER_PORT', 8000),
