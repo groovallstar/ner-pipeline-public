@@ -158,7 +158,7 @@ HALLUCINATION 의 절반(~26)은 실제 제품(SM5·사드·윈도10·리그오�
 silver 가 누락 → 측정 precision(0.66) 저평가. garbage(~28)는 다수가 주입
 PII 인접 토큰 부산물. PROD↔PER(20%)은 작품명=인명/배역 동형이라 구조적.
 
-**2) gold 재검증** (gemma 전체 3253 PROD span, `entity_revalidate.py`):
+**2) gold 재검증** (gemma 전체 3253 PROD span, LLM 재검증 1회 패스):
 
 canonical rubric(`ner_prompts.py`)으로 span 별 keep/drop/retype 판정.
 **kept 3099 / dropped 123(junk 3.8%) / retyped 31(ORG11·EVT10·PER7·LOC3)**
@@ -182,7 +182,7 @@ canonical rubric(`ner_prompts.py`)으로 span 별 keep/drop/retype 판정.
 — 정리 시 precision 0.66→0.72(HALLUCINATION 절반↓). 단 F1 +0.028 은 PROD
 단일런 노이즈(~±0.03) 수준이라 modest, **channel −21% 가 더 robust 한 근거**.
 잔여 천장: **PROD↔PER eponymy(35, 구조적·data 불응)** + 실작품 recall
-miss(37) + 경계(26). 재현: `entity_revalidate.py --label PROD` → 재학습.
+miss(37) + 경계(26).
 
 ### §3.4 코퍼스 재생성 무회귀 (#140, koelectra-base-v3, 10-fold pooled)
 
