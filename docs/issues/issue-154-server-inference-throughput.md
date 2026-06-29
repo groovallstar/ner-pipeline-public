@@ -1,7 +1,7 @@
 # issue-154: 서버 추론 처리량 향상(bf16+배치) + 동시성 과부하 제어
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/154
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner_pipeline/pull/156
 - 브랜치: `feat/issue-154-server-inference-throughput`
 - 승인일: 2026-06-29
 
