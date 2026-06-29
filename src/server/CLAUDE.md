@@ -13,8 +13,9 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 ```
 
 설정은 `NER_SERVER_*` 환경변수: `MODEL_ROOT`(기본 `/data/ner`)·`MAX_LENGTH`
-(256)·`MAX_CHARS`(20000)·`MAX_BATCH`(64)·`API_KEY`(미설정 시 인증 off)·
-`HOST`·`PORT`.
+(256)·`MAX_CHARS`(20000, 텍스트 1건)·`MAX_BATCH`(64, 배치 개수)·
+`MAX_TOTAL_CHARS`(100000, 배치 char 합산 — 요청당 작업량 가드)·`API_KEY`
+(미설정 시 인증 off)·`HOST`·`PORT`.
 
 ## API
 
@@ -26,7 +27,9 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 응답 span 은 canonical `{label, start_char, end_char, text, score}`
 (`.jsonl` 데이터 관례와 일치). 단일 → `{lang, entities}`, 배치 →
 `{results:[{lang, entities}, ...]}`(입력 순서 1:1). 에러는 구조화 `{error:
-{status, message}}` — 잘못된 lang→400, 모델 미로드→503, API-key 불일치→401.
+{status, message}}` — 잘못된 요청(lang·text/texts 택일)→400, 크기 한도
+(max_chars·max_batch·max_total_chars) 초과→413, 모델 미로드→503, API-key
+불일치→401.
 
 ## 사용 예시 (curl)
 
@@ -68,8 +71,11 @@ curl -s localhost:8000/health   # {"status":"ok","langs":{...}}
 ## 추론 경로
 
 `encode_row`(data_utils, 토크나이저 capability 분기) → model logits →
-softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → 긴 입력은
-chunk 별 추론 후 글로벌 offset 병합 → canonical 변환 → graceful abstention.
+softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
+변환 → graceful abstention. 긴 입력은 chunk 분할 후 모든 chunk 를 `[K,
+max_length]` 한 배치 forward 로 추론하고(chunk 1개면 배치 차원 1 = 단건과
+동일) 글로벌 offset 으로 병합 — GPU 가 chunk 들을 병렬 처리해 장문/배치
+요청에서 순차 대비 가속된다.
 
 ## 테스트·검증
 

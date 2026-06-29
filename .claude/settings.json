@@ -1,43 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(source /root/.bashrc)",
-      "Bash(export PATH=\"/usr/local/nvm/versions/node/v24.14.1/bin:$PATH\")",
-      "Read(//tmp/**)",
       "Bash(uv lock:*)",
       "Bash(nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader)",
-      "Bash(python3 /tmp/ner_benchmark.py)",
-      "Bash(kill 895261 895259)",
-      "Bash(wait)",
       "Bash(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader)",
-      "Bash(pkill -f curl.*ollama)",
-      "Read(//work/git/ner_pipeline/**)",
-      "Bash(xargs kill:*)",
-      "Bash(ollama pull:*)",
-      "Bash(env)",
-      "Bash(PYTHONPATH=/work/git/ner_pipeline/src python3 -m collectors.pipeline --urls \"https://n.news.naver.com/article/087/0001182940\" --output /tmp/ner_test.jsonl --model qwen3.5:9b)",
-      "Bash(ssh root@localhost -p 11111 -o StrictHostKeyChecking=no \"ollama list\")",
-      "Bash(python -m evaluators --ollama-models qwen3.5:9b --no-hf --max-samples 10 --output /tmp/eval_test.json)",
-      "Bash(top -bn1)",
-      "Bash(python -m evaluators --ollama-models qwen3-coder:30b --no-hf --max-samples 1 --output /tmp/eval_test.json)",
-      "Bash(python -c \"import vllm; print\\(vllm.__version__\\)\")",
-      "Bash(find /data/.ollama/models -name *.gguf)",
-      "Read(//home/**)",
-      "Bash(python -c \":*)",
-      "Bash(python test_ner_news.py)",
-      "Bash(ohmyclaude --help)",
-      "Bash(npm list:*)",
-      "Bash(omc --help)",
-      "Read(//usr/lib/**)",
       "Bash(nvcc --version)",
-      "Bash(echo \"CUDA: $\\(nvcc --version)"
-    ],
-    "additionalDirectories": [
-      "/root/.nvm",
-      "/root",
-      "/tmp",
-      "/work/git/ner_pipeline/.claude/skills/omc-reference",
-      "/root/.claude/plugins/marketplaces/omc/skills/omc-reference"
+      "Bash(python -c \"import vllm; print\\(vllm.__version__\\)\")"
     ]
   },
   "hooks": {
@@ -53,8 +21,5 @@
         ]
       }
     ]
-  },
-  "enabledPlugins": {
-    "oh-my-claudecode@omc": true
   }
 }

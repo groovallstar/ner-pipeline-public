@@ -92,7 +92,7 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     def _check_text(text: str) -> None:
         if len(text) > config.max_chars:
             raise HTTPException(
-                status_code=400,
+                status_code=413,
                 detail=f'text exceeds max_chars ({config.max_chars})')
 
     def _resolve_lang(text: str, given: Optional[str]) -> str:
@@ -117,10 +117,17 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
             entities = registry.predict(req.text, lang, abstain)
             return {'lang': lang, 'entities': entities}
 
+        assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
         if len(req.texts) > config.max_batch:
             raise HTTPException(
-                status_code=400,
+                status_code=413,
                 detail=f'batch exceeds max_batch ({config.max_batch})')
+        total_chars = sum(len(t) for t in req.texts)
+        if total_chars > config.max_total_chars:
+            raise HTTPException(
+                status_code=413,
+                detail=(f'batch total chars {total_chars} exceeds '
+                        f'max_total_chars ({config.max_total_chars})'))
         results = []
         for text in req.texts:
             _check_text(text)

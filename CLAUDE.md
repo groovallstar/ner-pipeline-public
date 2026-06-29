@@ -22,7 +22,7 @@
 
 ```
 src/ner/
-├── labelers/          # NER 라벨링 모듈 (상세: src/ner/labelers/AGENTS.md)
+├── labelers/          # NER 라벨링 모듈 (상세: src/ner/labelers/CLAUDE.md)
 │   ├── ko/            # 한국어 (vllm, openai)
 │   ├── ja/            # 일본어 (vllm, openai)
 │   ├── vi/            # 베트남어 (vllm, openai)
@@ -30,7 +30,7 @@ src/ner/
 │   ├── labeler_base.py
 │   ├── tag_aligner.py     # BIO 태그 정렬/정규화/span 추출
 │   └── hf_ner_labeler.py  # HuggingFace BERT NER 라벨러
-├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/ner/llm_eval/AGENTS.md)
+├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/ner/llm_eval/CLAUDE.md)
 │   ├── __main__.py          # CLI (python -m ner.llm_eval --lang ko|ja|vi ...)
 │   ├── benchmark_runner.py  # BenchmarkRunner (한국어 BIO / JA·VI offset-span 공용 러너)
 │   ├── report.py            # ReportGenerator (span-match, seqeval, per-entity 테이블)
@@ -39,10 +39,10 @@ src/ner/
 ├── metrics/           # span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유)
 │   ├── bio_metrics.py       # seqeval 기반 BIO 레벨 메트릭
 │   └── span_metrics.py      # compute_offset_span_f1 등 span 레벨 메트릭
-├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/AGENTS.md)
+├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/CLAUDE.md)
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
 │   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
-├── classifier/        # JA·VI·KO canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/AGENTS.md)
+├── classifier/        # JA·VI·KO canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/CLAUDE.md)
 │   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi|ko ...)
 │   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
@@ -75,7 +75,7 @@ docs/                  # 문서
 - `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
 - `python -m server` — ja·vi NER REST API 서버 (uvicorn; 상세: `src/server/CLAUDE.md`)
 
-상세 옵션은 각 모듈의 `--help` 또는 `src/**/AGENTS.md` 참조.
+상세 옵션은 각 모듈의 `--help` 또는 `src/**/CLAUDE.md` 참조.
 
 ## 개발 3원칙
 
@@ -116,6 +116,7 @@ docs/                  # 문서
 
 - `docs/wiki/` 운영 규칙은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임.
 - 코드 변경 후 `docs/manual/`(구현 맵)과 `docs/manual/data/`(데이터 스키마) 최신화 확인.
+- 보고·이슈 문서는 빽빽한 평평한 불릿 한 덩어리 대신 같은 문서의 형제 섹션 구조를 따르고, 압축된 논리는 인과(A라서 B)로 풀어쓴다 — 가독성 우선이며 분량 증가가 목적이 아니다(무엇을 남길지는 축약형 유지).
 
 ## 이슈 관리
 

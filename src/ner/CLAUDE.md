@@ -6,7 +6,7 @@
 
 ### labelers/
 
-언어별 LLM NER 라벨러 + 공용 유틸. 상세: `src/ner/labelers/AGENTS.md`.
+언어별 LLM NER 라벨러 + 공용 유틸. 상세: `src/ner/labelers/CLAUDE.md`.
 
 | 파일/서브모듈 | 역할 |
 |---------|------|
@@ -20,7 +20,7 @@
 
 ### llm_eval/
 
-벤치마크 오케스트레이션 + 메트릭 + 리포트. 상세: `src/ner/llm_eval/AGENTS.md`.
+벤치마크 오케스트레이션 + 메트릭 + 리포트. 상세: `src/ner/llm_eval/CLAUDE.md`.
 
 | 파일 | 역할 |
 |------|------|
@@ -34,7 +34,7 @@
 
 ### augmenters/
 
-학습 데이터 증강 모듈. 상세: `src/ner/augmenters/AGENTS.md`.
+학습 데이터 증강 모듈. 상세: `src/ner/augmenters/CLAUDE.md`.
 
 | 서브모듈 | 역할 |
 |---------|------|
@@ -43,7 +43,7 @@
 
 ### classifier/
 
-JA·VI·KO canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/AGENTS.md`.
+JA·VI·KO canonical 10종 평면 BERT 토큰 분류 파인튜닝. 상세: `src/ner/classifier/CLAUDE.md`.
 
 | 파일 | 역할 |
 |------|------|

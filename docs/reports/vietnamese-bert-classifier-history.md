@@ -76,7 +76,7 @@
 
 ### 본 단계에서 시도
 - **§3 기준 gold 감사**(fold0, gemma-4-31B 판정, 272건): 불일치를 silver오류/
-  모델오류/schema-갭 3분류 + IAA(temp0 vs temp0.7).
+  모델오류/schema-갭 3분류 + IAA(Inter-Annotator Agreement (주석자 간 일치도))(temp0 vs temp0.7).
 - **VI 프롬프트 §3 정렬**: 서비스(`dịch vụ`) 제거·법령/다년 process=비-entity·
   창작물 positive few-shot — 재라벨·LLM 라벨러 4사이트.
 - **격리 re-silver**(`augmenters/wikiann_vi/resilver_vi_isolated.py`): 원문 NER만 2모델
@@ -249,23 +249,42 @@ n_sentences=37,706 · 10 folds · 전수 1회 pooled micro. PII 5종 0.997~1.000
 
 ### 잔여 한계
 - gold=LLM+Wikidata 추정(사람 전수 아님). 미회복 헤드룸 ~35%는 모델 recall
-  하드 플로어 + Wikidata 미해석 창작물 보수 drop.
+  하드 플로어(gold를 고쳐도 모델이 구조적으로 못 잡는 PROD) + Wikidata 미해석(Wikidata에서 QID가 안 나와 진짜 PROD여도 gold에 미포함 된) 창작물 보수 drop.
 
 ## Phase 5 — EVT 천장 재감사 + gold-fix + 재학습 (evtfix) (#133)
 
-- **직전상태**: prodrecover EVT 0.8020(P 0.752 약축 / R 0.859, support 559
-  최저). #131이 측정한 EVT per-fold std 0.054(10종 최고 분산).
-- **시도**: #131 동형 leak-free 전수 audit(gemma §3) → 보정 천장·헤드룸·축분해.
-  std-상대 게이트(go ⟺ 헤드룸 ≥ 1 std). gold-fix 후 재학습으로 실측 검증.
-- **결과**: 보정 천장 **0.8574**, 헤드룸 **5.54pp ≈ 1.02 std**(턱걸이) — 헤드룸
-  100%가 precision silver-갭(recall 헤드룸 0). gemma-검증 안전 additive 39건
-  (O→EVT, 칸영화제·Euro 2008·투어 등 #112 drop long-tail)만 gold-fix →
-  `pii_all.jsonl` EVT 559→598, 비-EVT 9종 0 변동. 보정 gold 로 phobert 10-fold
-  재학습: **EVT 0.8020→0.8249 · PROD 0.7913→0.7992 · overall 0.9459→0.9474**,
-  회귀 없음 → evtfix 승격. 상세·검증: `docs/issues/issue-133-vi-evt-headroom-
-  gated-lift.md`. **위 grouped 수치는 #133 승격런 기록**(디스크 아티팩트 소실)
-  — 현 출하 실측은 동일설정 재측정인 `vietnamese-bert-classifier-spec.md`
-  (overall 0.9478≈0.9474, EVT 0.8159 · PROD 0.8070; GPU 비결정성 노이즈 내).
-- **잔여 한계**: EVT +2.29pp = **0.38 std = 노이즈 내** → 검증가능한 lift 아님
-  (헤드룸≈1 std 예측을 실측 확인). 0.8020→0.8249 델타는 gold 변경 + 재학습
-  혼재. 모델-FP 100·모델-FN 79는 가용 레버 없음.
+### 직전 상태
+- prodrecover 후 EVT 0.8020(P 0.752 약축 / R 0.859)가 10종 최저. support 559
+  로 가장 작아 per-fold std 0.054 — 분산도 10종 최고(재학습마다 출렁임이 큼).
+
+### 본 단계에서 시도
+- **핵심 판정 — std-상대 게이트**: EVT 는 노이즈(per-fold 흔들림)가 커서,
+  "올릴 여지(헤드룸)가 그 노이즈보다 작으면 천장을 다 회복해도 lift 가 재학습
+  흔들림에 묻혀 보이지 않는다". 그래서 처방 조건을 **go ⟺ 헤드룸 ≥ 1 std** 로
+  둔다. 측정은 #131 동형 leak-free 전수 audit(gemma §3)로 보정 천장·헤드룸·
+  precision/recall 축분해.
+- **헤드룸 = 턱걸이**: 보정 천장 **0.8574**, 헤드룸 **5.54pp ≈ 1.02 std** —
+  임계와 거의 같다. 게다가 헤드룸 100%가 precision silver-갭이고 recall 헤드룸
+  은 0(채울 레버가 gold-fix 하나뿐). #131 PROD(헤드룸 14pp = 2.6 std, 명확히
+  보임)와 정반대 → **"올려도 노이즈에 묻힐 것"으로 예측**됨.
+- **그럼에도 진행한 이유**: (1) 빠진 legit event 가 gold 에 실재(품질 문제는
+  사실), (2) 그 예측을 재학습으로 실측 검증하려고. gemma-검증 안전 additive
+  39건(O→EVT — 칸영화제·Euro 2008·투어 등 #112 가 보수적으로 drop 한 long-
+  tail)만 gold-fix → `pii_all.jsonl` EVT 559→598, 비-EVT 9종 0 변동(구판
+  `pii_all_pre_evtfix.jsonl`).
+
+### 결과 (phobert 10-fold grouped, evtfix 승격)
+- 보정 gold 로 재학습: **EVT 0.8020→0.8249 · PROD 0.7913→0.7992 · overall
+  0.9459→0.9474**, 회귀 없음 → evtfix 승격.
+- **그러나 EVT +2.29pp = 0.38 std = 노이즈 내** → 예측대로 흔들림에 묻혔다.
+  "EVT 가 좋아졌다"고 통계적으로 주장 불가 — 헤드룸≈1 std 예측을 실측이 확인
+  (이론→경험). 즉 산출물은 점수 향상이 아니라 **(a) 정직한 천장 0.8574,
+  (b) gold +39 event, (c) 회귀-free 모델**. 상세·검증:
+  `docs/issues/issue-133-vi-evt-headroom-gated-lift.md`.
+- **표 grouped 수치는 #133 승격런 기록**(디스크 아티팩트 소실) — 현 출하 실측은
+  동일설정 재측정인 `vietnamese-bert-classifier-spec.md`(overall 0.9478≈
+  0.9474, EVT 0.8159 · PROD 0.8070; GPU 비결정성 노이즈 내).
+
+### 잔여 한계
+- 0.8020→0.8249 델타는 gold 변경 + 재학습 효과가 혼재돼 깔끔히 귀속 불가.
+- 모델-FP 100·모델-FN 79 는 gold-fix 로 못 줄이는 모델 측 한계(가용 레버 없음).

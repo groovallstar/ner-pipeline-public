@@ -12,7 +12,7 @@ score}` — `.jsonl` 데이터 관례와 일치해 API 결과를 파이프라인
 
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from transformers import (
@@ -89,47 +89,62 @@ class LangModel:
                            if os.path.exists(thresholds_path) else {})
         self.has_thresholds = bool(self.thresholds)
 
-    def _infer_spans(self, text: str) -> List[dict]:
-        """길이 한도 내 텍스트 → 내부 {type,start,end,score} span."""
-        row = {'text': text, 'entities': []}
-        feat, offs = encode_row(
-            row, self.tokenizer, self.label2id, self.lang, self.max_length)
+    def _infer_chunks(self, chunks: List[Tuple[str, int]]) -> List[dict]:
+        """여러 (substring, base_offset) chunk 를 한 forward 로 묶어 추론하고
+        글로벌 offset 내부 span({type,start,end,score})으로 병합한다.
+
+        각 chunk 는 encode_row 에서 max_length 로 패딩되므로 [K, max_length]
+        한 배치로 쌓아 1회 forward 한다 — chunk 1개면 배치 차원 1 로 단건
+        추론과 동일한 결과를 내고(behavior-invariant), 장문에서만 GPU 가
+        chunk 들을 병렬 처리해 가속된다.
+        """
+        feats, offs_list, bases = [], [], []
+        for sub, base in chunks:
+            row = {'text': sub, 'entities': []}
+            feat, offs = encode_row(
+                row, self.tokenizer, self.label2id, self.lang, self.max_length)
+            feats.append(feat)
+            offs_list.append(offs)
+            bases.append(base)
         input_ids = torch.tensor(
-            [feat['input_ids']], dtype=torch.long).to(self.device)
+            [f['input_ids'] for f in feats], dtype=torch.long).to(self.device)
         attention_mask = torch.tensor(
-            [feat['attention_mask']], dtype=torch.long).to(self.device)
+            [f['attention_mask'] for f in feats],
+            dtype=torch.long).to(self.device)
         with torch.no_grad():
             logits = self.model(
                 input_ids=input_ids, attention_mask=attention_mask).logits
         probs = torch.softmax(logits, dim=-1)
         conf_t, pred_t = probs.max(dim=-1)
-        n = len(offs)
-        pred_ids = [int(x) for x in pred_t[0].cpu().numpy()[:n]]
-        confs = [float(x) for x in conf_t[0].cpu().numpy()[:n]]
-        return decode_bio_to_spans(pred_ids, offs, self.id2label, confs=confs)
-
-    def predict(self, text: str, abstain: bool = True) -> List[dict]:
-        """텍스트 → canonical span 리스트.
-
-        긴 입력은 chunk 후 각 span 을 원문 글로벌 offset 으로 병합한다.
-        abstain=True 면 로드된 임계값을 적용(없으면 raw).
-        """
         spans: List[dict] = []
-        for sub, base in split_for_length(
-                text, self.tokenizer, self.max_length):
-            for sp in self._infer_spans(sub):
+        for i, (offs, base) in enumerate(zip(offs_list, bases)):
+            n = len(offs)
+            pred_ids = [int(x) for x in pred_t[i].cpu().numpy()[:n]]
+            confs = [float(x) for x in conf_t[i].cpu().numpy()[:n]]
+            for sp in decode_bio_to_spans(
+                    pred_ids, offs, self.id2label, confs=confs):
                 shifted = dict(sp)
                 shifted['start'] = sp['start'] + base
                 shifted['end'] = sp['end'] + base
                 spans.append(shifted)
+        return spans
+
+    def predict(self, text: str, abstain: bool = True) -> List[dict]:
+        """텍스트 → canonical span 리스트.
+
+        긴 입력은 chunk 분할 후 모든 chunk 를 한 배치 forward 로 추론하고 각
+        span 을 원문 글로벌 offset 으로 병합한다. abstain=True 면 로드된
+        임계값을 적용(없으면 raw).
+        """
+        chunks = split_for_length(text, self.tokenizer, self.max_length)
+        spans = self._infer_chunks(chunks)
         # 임계값은 canonical 변환 전 내부 span({type,...})에 적용한다 —
         # confidence_threshold.apply_thresholds 가 type 필드로 필터하며,
         # 이는 학습-시점 eval 경로와 동일하다(parity 보장). decode 가 동일
         # (type,start,end)를 이미 병합해 중복이 없다.
         if abstain and self.thresholds:
             spans = apply_thresholds([spans], self.thresholds)[0]
-        canonical = [_to_canonical(s, text) for s in spans]
-        return canonical
+        return [_to_canonical(s, text) for s in spans]
 
 
 class ModelRegistry:

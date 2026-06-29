@@ -12,21 +12,93 @@ import pytest
 
 from ner.classifier.data_utils import load_jsonl
 from ner.metrics.span_metrics import compute_offset_span_f1
+from server.chunking import split_for_length
 from server.config import ServerConfig
-from server.inference import LangModel
+from server.inference import LangModel, _load_tokenizer
 
 _CONFIG = ServerConfig()
 _JA_DIR = _CONFIG.model_dir('ja')
 _VI_DIR = _CONFIG.model_dir('vi')
 _JA_TEST = os.path.join(_CONFIG.model_root, 'ja', 'data', 'test.jsonl')
+_VI_TEST = os.path.join(_CONFIG.model_root, 'vi', 'data', 'test.jsonl')
 _JA_METRICS = os.path.join(_CONFIG.model_root, 'ja', 'metrics.json')
 _JA_PARITY_READY = (os.path.isdir(_JA_DIR) and os.path.isfile(_JA_TEST)
                     and os.path.isfile(_JA_METRICS))
+_JA_CHUNK_READY = os.path.isdir(_JA_DIR) and os.path.isfile(_JA_TEST)
+_VI_CHUNK_READY = os.path.isdir(_VI_DIR) and os.path.isfile(_VI_TEST)
 
 
 def _assert_offsets_consistent(model, text):
     for ent in model.predict(text):
         assert text[ent['start_char']:ent['end_char']] == ent['text']
+
+
+def _build_long_doc(rows):
+    """gold row 들을 이어붙여 장문 + 글로벌 offset gold 엔티티를 구성.
+
+    row 사이에 개행을 넣어 문장 경계를 보존하고, 각 엔티티 offset 은 누적
+    길이(base)로 원문 글로벌 위치로 보정한다.
+    """
+    text = ''
+    ents = []
+    for row in rows:
+        base = len(text)
+        for e in row['entities']:
+            ents.append({'label': e['label'],
+                         'start': base + e['start_char'],
+                         'end': base + e['end_char']})
+        text += row['text'] + '\n'
+    return text, ents
+
+
+def _chunk_spans(text, tok, max_length):
+    """(start, end) 청크 구간 리스트 — 엔티티 포함 판정용."""
+    return [(base, base + len(sub))
+            for sub, base in split_for_length(text, tok, max_length)]
+
+
+def _assert_latter_half_recall(model, text):
+    """예측 엔티티가 후반 50% 영역에도 존재하고 offset 이 원문과 일치.
+
+    장문이 청크로 쪼개진 뒤 후반 청크의 엔티티가 누락되지 않았다는 증거 —
+    offset 정합성만으로는 잡지 못하는 recall 측면을 검증한다.
+    """
+    ents = model.predict(text)
+    assert ents
+    latter = [e for e in ents if e['start_char'] > len(text) * 0.5]
+    assert latter, 'no entity recovered in the latter half (late-chunk drop?)'
+    for ent in ents:
+        assert text[ent['start_char']:ent['end_char']] == ent['text']
+
+
+def _assert_batched_matches_per_chunk(model, text):
+    """배치 forward(predict)가 chunk별 단건 forward 와 동일한 span 을 낸다.
+
+    이 커밋에서 순차 chunk 경로가 배치 경로로 대체됐으므로, 그 parity 를
+    회귀로 고정한다. 같은 장문을 (i) `predict` 한 번(모든 chunk 를
+    `[K, max_length]` 배치로 1 forward) (ii) chunk 별 단건 `predict`(각
+    substring 은 1 chunk → 단건 forward) 후 글로벌 offset shift 로 각각
+    구해 비교한다. label·offset·표면형은 정확히, score 는 배치/단건 matmul
+    의 GPU 커널 비결정성 대비 1e-5 허용. abstain=False 로 임계값 경로를
+    배제해 배치화 자체의 등가성만 본다.
+    """
+    chunks = split_for_length(text, model.tokenizer, model.max_length)
+    assert len(chunks) > 1  # 강제 분할 — 배치 경로가 실제로 작동
+    batched = model.predict(text, abstain=False)
+    per_chunk = []
+    for sub, base in chunks:
+        for e in model.predict(sub, abstain=False):
+            per_chunk.append({'label': e['label'],
+                              'start_char': e['start_char'] + base,
+                              'end_char': e['end_char'] + base,
+                              'text': e['text'],
+                              'score': e['score']})
+    assert batched  # 엔티티가 있어야 비교가 공허하지 않음
+    assert len(batched) == len(per_chunk)
+    for b, r in zip(batched, per_chunk):
+        assert (b['label'], b['start_char'], b['end_char'], b['text']) == \
+               (r['label'], r['start_char'], r['end_char'], r['text'])
+        assert b['score'] == pytest.approx(r['score'], abs=1e-5)
 
 
 @pytest.mark.skipif(not os.path.isdir(_JA_DIR),
@@ -59,21 +131,85 @@ def test_vi_graceful_raw_when_no_thresholds():
 @pytest.mark.skipif(not os.path.isdir(_JA_DIR),
                     reason=f'ja model dir not present: {_JA_DIR}')
 def test_ja_long_input_chunk_offsets():
-    """max_length 초과 입력: chunk 분할 후에도 span offset 이 원문과 일치.
+    """max_length 초과 입력: chunk 분할 후에도 span offset·recall 보존.
 
-    chunk 가 실제로 쪼개지는지 확인한 뒤(>1), 병합된 모든 span 의 글로벌
-    offset 정합성(`text[s:e]==surface`)을 검증한다 — auto-chunk offset 보정.
+    chunk 가 실제로 쪼개지는지 확인한 뒤(>1), 후반 50% 영역에도 엔티티가
+    회수되고(late-chunk 누락 없음) 모든 span 의 글로벌 offset 이 원문과
+    일치하는지 검증한다 — auto-chunk offset 보정 + recall.
     """
-    from server.chunking import split_for_length
     model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
                       _CONFIG.max_length)
     text = '東京都に住む織田信長は安土城を築いた。' * 40
     chunks = split_for_length(text, model.tokenizer, model.max_length)
     assert len(chunks) > 1
-    ents = model.predict(text)
-    assert ents  # 후반 청크에서도 엔티티가 잡혀야 함
-    for ent in ents:
-        assert text[ent['start_char']:ent['end_char']] == ent['text']
+    _assert_latter_half_recall(model, text)
+
+
+@pytest.mark.skipif(not _VI_CHUNK_READY,
+                    reason='vi model/test not present')
+def test_vi_long_input_chunk_offsets():
+    """vi(PhoBERT): max_length 초과 입력도 후반 청크 엔티티를 회수하고
+    글로벌 offset 이 원문과 일치(auto-chunk offset 보정 + recall)."""
+    model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_VI_TEST) if r['entities']][:30]
+    text, _ = _build_long_doc(rows)
+    chunks = split_for_length(text, model.tokenizer, model.max_length)
+    assert len(chunks) > 1
+    _assert_latter_half_recall(model, text)
+
+
+@pytest.mark.skipif(not _JA_CHUNK_READY,
+                    reason='ja model/test not present')
+def test_ja_batched_chunks_match_per_chunk():
+    """ja: multi-chunk 배치 predict 가 chunk별 단건 forward 와 동일(parity)."""
+    model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_JA_TEST) if r['entities']][:30]
+    text, _ = _build_long_doc(rows)
+    _assert_batched_matches_per_chunk(model, text)
+
+
+@pytest.mark.skipif(not _VI_CHUNK_READY,
+                    reason='vi model/test not present')
+def test_vi_batched_chunks_match_per_chunk():
+    """vi: multi-chunk 배치 predict 가 chunk별 단건 forward 와 동일(parity)."""
+    model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_VI_TEST) if r['entities']][:30]
+    text, _ = _build_long_doc(rows)
+    _assert_batched_matches_per_chunk(model, text)
+
+
+@pytest.mark.skipif(not _JA_CHUNK_READY,
+                    reason='ja model/test not present')
+def test_ja_gold_entities_never_straddle_chunk_boundary():
+    """ja: 실 test gold 엔티티 전수가 청크 경계를 가로지르지 않는다.
+
+    전 row 를 한 장문으로 이어 강제 분할(>1 청크)한 뒤, 각 gold 엔티티가
+    정확히 한 청크에 온전히 들어감을 확인한다 — 엔티티가 경계를 넘으면
+    모델에 잘려 보여 recall 이 떨어지므로, 이 불변식이 recall 보존을 보장한다.
+    """
+    tok = _load_tokenizer(_JA_DIR, 'ja')
+    text, ents = _build_long_doc(load_jsonl(_JA_TEST))
+    spans = _chunk_spans(text, tok, _CONFIG.max_length)
+    assert len(spans) > 1 and ents  # 강제 분할·엔티티 존재 — 테스트 비공허
+    for e in ents:
+        assert any(cs <= e['start'] and e['end'] <= ce for cs, ce in spans), \
+            f"ja entity {text[e['start']:e['end']]!r} straddles a boundary"
+
+
+@pytest.mark.skipif(not _VI_CHUNK_READY,
+                    reason='vi model/test not present')
+def test_vi_gold_entities_never_straddle_chunk_boundary():
+    """vi: 실 test gold 엔티티 전수가 청크 경계를 가로지르지 않는다(recall 보존)."""
+    tok = _load_tokenizer(_VI_DIR, 'vi')
+    text, ents = _build_long_doc(load_jsonl(_VI_TEST))
+    spans = _chunk_spans(text, tok, _CONFIG.max_length)
+    assert len(spans) > 1 and ents
+    for e in ents:
+        assert any(cs <= e['start'] and e['end'] <= ce for cs, ce in spans), \
+            f"vi entity {text[e['start']:e['end']]!r} straddles a boundary"
 
 
 def _ja_overall_f1(model, rows, abstain):
