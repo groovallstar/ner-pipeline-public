@@ -87,6 +87,8 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 - `--lang ko`: 모델 `kakaobank/kf-deberta-base`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). DeBERTa 계열이라 `--precision bf16` 권장
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
+- 재현성 (`--train-seed`·`--deterministic`): `--train-seed` 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·셔플을 고정해 재현 가능한 run 이 되고, `--deterministic`(train-seed 필수)은 cuDNN·CUBLAS 까지 결정화해 바이트 단위 재현(느림). `metrics.json` 에 `train_seed`·`deterministic`·`precision` 기록.
+- fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — canonical 측정은 `--train-seed`+`--deterministic` 로 안정·재현 확보(권장), 또는 F1≈0 fold 만 `--train-seed` 바꿔 재실행. 상세: `docs/reports/korean-bert-classifier-fold-collapse.md`.
 - **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
 ### 누출-free 분할 (`--group-key`)
@@ -176,6 +178,7 @@ docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태�
 docs/reports/japanese-bert-classifier-history.md         # JA 히스토리 1편 (Phase 0~8, 동결)
 docs/reports/japanese-bert-classifier-per-entity-diagnosis.md  # JA 엔티티별 성능 진단 (1편 후속, 층화 K-fold)
 docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
+docs/reports/korean-bert-classifier-fold-collapse.md     # KO fold 붕괴 조사 (재현성·안정성)
 ```
 
 ## 출하·배포 (JA deploy)
