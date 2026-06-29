@@ -212,6 +212,71 @@ fold 1개가 학습 붕괴(loss 정체·F1 0)해 **동일 seed 재학습으로 �
 비결정성). 재현: `cmp_{baseline,boundary}_koel` 10-fold + `kfold_pool
 --allow-cross-fold-leak`. 상세: issue-140.
 
+### ORG — gold 일관성 레버 (ORG↔LOC 국가 비일관, #153)
+
+ORG 는 support 대비 저성능 outlier(클래스별 Pearson(log-support, F1)=0.986
+에서 ORG 만 이탈) — 대support(10,416)면 LOC/PER 급(0.85~0.93) 기대지만 F1
+0.8167. 10-fold pooled(`pii_all`, split seed 42) baseline: ORG **P0.817 /
+R0.816 / F1 0.8167**, fold std 0.012(#128 single-split 0.816 과 정합).
+
+**1) FP+FN 4버킷 MECE** (pooled distinct 3,207):
+
+| 버킷 | n | % | 지배 표면형 |
+|---|---:|---:|---|
+| ORG↔LOC 경계 | 851 | 26.5 | 북한·한국·일본·미국 (양방향) |
+| HALLUCINATION | 773 | 24.1 | 경찰·정부·법원·검찰·국회 |
+| MISS | 710 | 22.1 | 북·남·한·미 (단일글자) |
+| BOUNDARY | 609 | 19.0 | span extent |
+| ORG↔기타 | 264 | 8.2 | PER/PROD/EVT |
+
+**2) 표면형 집중도 → 원인은 gold-side**: ORG↔LOC 의 ~40% 가 국가명인데 *같은*
+표면형이 ORG·LOC 양쪽(북한 ORG37/LOC54)이라 gold 비일관. HALL 은 경찰·정부 등
+canonical 기관(`korean-ner` "일반명사도 기관맥락이면 ORG")을 gold 가 누락한 것
+(모델 맞음). MISS 단일글자는 남북·한미 복합어 조각(복합묶기 위반 junk).
+
+**3) zero-retrain rescore 가 "천장" 가설을 반증**: 교정 규칙을 test gold 에
+적용해 모델 고정 재채점 — B 기관추가 +0.009·C 조각제거 +0.007 은 gold 누락/junk
+확정(모델이 맞음). 그러나 **A 국가→LOC 는 −0.012**: 모델이 국가를 ORG 로
+*과예측*(비일관 gold 로 학습)해 gold 만 고치면 그 예측이 FP 로 전환된다. 즉
+ORG↔LOC 는 JA #71 류 gold-천장이 아니라 **재학습으로 고칠 model 오류**다.
+
+**4) gold 일관성 확보** (dual-LLM gemma-4-31B + Qwen3.6-35B 이중 독립판정):
+ORG/LOC split 166 표면형 → ① 룰(국가→LOC 580·기관→ORG 20·단일조각 제거 247)
+→ ② dual-LLM 판정(기타 104, 합의 79%, 합의분만 적용) → ③ 행정복합·polysemy
+유지 = **split 17**(전부 적법 문맥의존: 서울시 행정/지방정부·바르셀로나 도시/
+클럽·배트맨 캐릭터/작품). cross-type minority 162 도 per-instance dual-LLM 으로
+clear 오류 33 만 정리(120 은 적법 polysemy 보존). PER/PROD/EVT 불변.
+
+**5) 레버 측정** (교정 gold 10-fold pooled, strict P/R/F1 — baseline vs
+consist, 전수):
+
+| Entity | baseline P / R / F1 | consist P / R / F1 | sup b→c |
+|---|---|---|---|
+| **overall** | .9004 / .9118 / **.9061** | .9061 / .9207 / **.9133** | 85155→84908 |
+| PER | .9175 / .9183 / .9179 | .9201 / .9185 / .9193 | 18147→18131 |
+| LOC | .8285 / .8279 / **.8282** | .8733 / .8656 / **.8694** | 7913→8446 |
+| ORG | .8171 / .8164 / **.8167** | .8207 / .8542 / **.8371** | 10416→9638 |
+| PROD | .7063 / .7225 / .7143 | .6913 / .7544 / .7215 | 3542→3554 |
+| EVT | .5609 / .7143 / .6284 | .5795 / .6981 / .6333 | 1386→1388 |
+| DAT | .8177 / .8671 / .8417 | .8276 / .8635 / .8452 | 9934 |
+| EMAIL | .9988 / .9994 / .9991 | .9995 / .9998 / .9996 | 8322 |
+| PHONE | .9973 / .9995 / .9984 | .9927 / .9968 / .9947 | 8448 |
+| ID_NUM | .9978 / .9961 / .9969 | .9967 / .9969 / .9968 | 8467 |
+| CREDIT_CARD | .9980 / .9984 / .9982 | .9983 / .9984 / .9983 | 8580 |
+
+ORG·LOC 동반 상승(국가 재분류로 ORG sup 10416→9638·LOC 7913→8446 이동),
+PER/PROD/EVT/PII 불변(±fold noise; PHONE −0.004 도 noise). **F1 델타는 gold
+정의 변경 포함이라 *보고만* — 순환성 가드.** clean 비순환 측정은 아래. **비순환 측정**(구·신 모델을
+*동일* 교정-test 로 채점): ORG **0.8093 → 0.8371 = +0.0278**(> 2σ 0.018).
+ORG↔LOC confusion **851 → 385 (−55%)** — 일관 학습이 국가→ORG 과예측을 제거.
+fold std 0.012→0.009.
+
+**결론**: ORG 천장은 gold-천장이 아니라 **gold 일관성 레버**였다 — 국가명
+ORG↔LOC 양분이 model 오류를 학습시킨 것. 일관화+재학습으로 ORG +0.028(clean)·
+LOC +0.041(보고만), confusion −55%. 잔여 split 17 은 적법 문맥의존(축소 불가). 규칙
+(국가=LOC·기관=ORG)은 canonical §2 에 명문화. 교정 gold 가 신 production
+(`pii_all.jsonl`·`origin.boundary.eponymy.jsonl`).
+
 ## 다음 (후속 이슈 후보)
 
 - EVT gold 증강 — KLUE 미검출 이벤트 문장 추가 relabel로 절벽에서 끌어올리기.
