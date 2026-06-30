@@ -19,6 +19,9 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 `MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
 초)·`API_KEY`(미설정 시 인증 off)·`HOST`·`PORT`.
 
+컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
+라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
+
 ## API
 
 | 엔드포인트 | 설명 |
@@ -55,6 +58,15 @@ curl -s -X POST localhost:8000/v1/ner \
 # 임계값 무시(raw)
 curl -s -X POST 'localhost:8000/v1/ner?abstain=false' \
   -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
+
+# 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
+curl -s -X POST localhost:8000/v1/ner \
+  -H 'Content-Type: application/json' -d '{"text":"plain English"}'
+# → {"lang":"unsupported","entities":[]}
+
+# 계약 에러: 택일 위반 → 400 / 텍스트 크기 초과 → 413 (status 코드만 확인)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/v1/ner \
+  -H 'Content-Type: application/json' -d '{}'
 
 # 헬스 / OpenAPI UI
 curl -s localhost:8000/health   # {"status":"ok","langs":{...}}
@@ -94,6 +106,10 @@ bf16 autocast 는 배치(B>1)에만 켠다(단건은 autocast 오버헤드로 fp
   uvicorn 을 기동한 뒤 curl 로 `/health`·`/v1/ner`·에러 응답을 검증하고
   PASS/FAIL 종료코드를 낸다. in-process TestClient 가 못 보는 실제 포트
   바인딩·네트워크 경로를 확인하는 용도.
+- **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
+  --base-url http://localhost:8000` — 내부 소비자가 서버를 호출하는 최소
+  레퍼런스(`NERClient`). 단일·배치·미지원·계약 에러(400·413·429)를 실서버
+  대상으로 호출·검증하고 PASS/FAIL 종료코드를 낸다.
 - **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
   서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
   skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
