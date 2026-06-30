@@ -106,21 +106,10 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     def _resolve_lang(text: str, given: Optional[str]) -> str:
         return given if given else detect_lang(text)
 
-    def _infer_one(text: str, given: Optional[str],
-                   abstain: bool) -> dict:
-        """텍스트 1건 추론 — 미지원이면 모델 호출 없이 빈 결과 반환.
-
-        자동 감지가 `unsupported`(ja·vi 신호 부재)면 200 으로 `{lang:
-        'unsupported', entities: []}` 를 돌려준다(에러 아님). 배치에서
-        항목별로 호출돼 부분 성공·응답 순서 1:1 을 보장한다. 명시 `lang`
-        은 상위에서 SUPPORTED_LANGS 로 검증돼 unsupported 가 될 수 없다.
-        """
+    def _resolve_one(text: str, given: Optional[str]) -> str:
+        """텍스트 1건 크기 검증 + lang 결정(미지원 포함)."""
         _check_text(text)
-        lang = _resolve_lang(text, given)
-        if lang == UNSUPPORTED:
-            return {'lang': lang, 'entities': []}
-        return {'lang': lang,
-                'entities': registry.predict(text, lang, abstain)}
+        return _resolve_lang(text, given)
 
     @app.post('/v1/ner',
               response_model=Union[SingleResponse, BatchResponse],
@@ -128,9 +117,12 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     async def ner(req: NERRequest, abstain: bool = Query(default=True)):
         """단일(`text`) 또는 배치(`texts`) NER 추론.
 
-        추론은 전역 guard 안에서 run_in_threadpool 로 실행한다 — 동시
-        in-flight 를 max_concurrency 로 묶고 과부하(큐/타임아웃 초과)는 429.
-        검증·언어감지는 추론이 아니라 guard 밖에서 빠르게 처리한다.
+        추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
+        max_concurrency 로 묶고 과부하(큐/타임아웃 초과)는 429 로 거절한다.
+        검증·언어감지는 guard 밖에서 빠르게 처리하고, 자동감지 `unsupported`
+        (ja·vi 신호 부재)는 모델을 호출하지 않고 200 으로 빈 결과를 준다.
+        배치는 지원 언어 항목만 언어별 forward 로 묶고(predict_batch) 미지원은
+        빈 결과로 둬 입력 순서·lang 1:1 을 보존한다(부분 성공).
         """
         if (req.text is None) == (req.texts is None):
             raise HTTPException(
@@ -141,7 +133,13 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=400, detail=f"unsupported lang '{req.lang}'")
 
         if req.text is not None:
-            return _infer_one(req.text, req.lang, abstain)
+            lang = _resolve_one(req.text, req.lang)
+            if lang == UNSUPPORTED:
+                return {'lang': lang, 'entities': []}
+            async with guard:
+                entities = await run_in_threadpool(
+                    registry.predict, req.text, lang, abstain)
+            return {'lang': lang, 'entities': entities}
 
         assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
         if len(req.texts) > config.max_batch:
@@ -154,7 +152,19 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=413,
                 detail=(f'batch total chars {total_chars} exceeds '
                         f'max_total_chars ({config.max_total_chars})'))
-        results = [_infer_one(t, req.lang, abstain) for t in req.texts]
+        langs = [_resolve_one(t, req.lang) for t in req.texts]
+        results = [{'lang': lang, 'entities': []} for lang in langs]
+        # 지원 언어 항목만 언어별 배치 forward, 미지원은 빈 결과로 둔다.
+        sup = [(i, req.texts[i], lang) for i, lang in enumerate(langs)
+               if lang != UNSUPPORTED]
+        if sup:
+            sup_texts = [t for _, t, _ in sup]
+            sup_langs = [lang for _, _, lang in sup]
+            async with guard:
+                ents = await run_in_threadpool(
+                    registry.predict_batch, sup_texts, sup_langs, abstain)
+            for (i, _, lang), e in zip(sup, ents):
+                results[i] = {'lang': lang, 'entities': e}
         return {'results': results}
 
     @app.get('/health')

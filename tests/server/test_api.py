@@ -69,6 +69,23 @@ def test_batch_order_one_to_one():
         'aaa', 'bbbbb', 'cc']
 
 
+def test_batch_routes_through_predict_batch():
+    """배치는 predict_batch(언어별 묶음)로 가야 한다 — 항목별 predict 회귀 가드.
+
+    predict_batch 만 'B' 마커를 내므로, 배치가 항목별 단건 predict 로 돌면
+    (회귀) 첫 단어 'x'/'y' 가 나와 깨진다 — app↔배치 forward 연결을 고정한다.
+    """
+    class _BatchMarker(StubRegistry):
+        def predict_batch(self, texts, langs, abstain=True):
+            return [[{'label': 'PER', 'start_char': 0, 'end_char': 1,
+                      'text': 'B', 'score': 1.0}] for _ in texts]
+
+    r = _client(registry=_BatchMarker()).post(
+        '/v1/ner', json={'texts': ['x', 'y'], 'lang': 'vi'})
+    assert [it['entities'][0]['text']
+            for it in r.json()['results']] == ['B', 'B']
+
+
 def test_lang_autodetect_echoed():
     """lang 생략 시 텍스트별 감지 결과를 응답에 에코."""
     r = _client().post('/v1/ner', json={'text': 'これは テスト'})
