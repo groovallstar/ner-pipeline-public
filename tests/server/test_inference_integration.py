@@ -14,7 +14,7 @@ from ner.classifier.data_utils import load_jsonl
 from ner.metrics.span_metrics import compute_offset_span_f1
 from server.chunking import split_for_length
 from server.config import ServerConfig
-from server.inference import LangModel, _load_tokenizer
+from server.inference import LangModel, ModelRegistry, _load_tokenizer
 
 _CONFIG = ServerConfig()
 _JA_DIR = _CONFIG.model_dir('ja')
@@ -74,14 +74,18 @@ def _assert_latter_half_recall(model, text):
 def _assert_batched_matches_per_chunk(model, text):
     """배치 forward(predict)가 chunk별 단건 forward 와 동일한 span 을 낸다.
 
-    이 커밋에서 순차 chunk 경로가 배치 경로로 대체됐으므로, 그 parity 를
-    회귀로 고정한다. 같은 장문을 (i) `predict` 한 번(모든 chunk 를
-    `[K, max_length]` 배치로 1 forward) (ii) chunk 별 단건 `predict`(각
-    substring 은 1 chunk → 단건 forward) 후 글로벌 offset shift 로 각각
-    구해 비교한다. label·offset·표면형은 정확히, score 는 배치/단건 matmul
-    의 GPU 커널 비결정성 대비 1e-5 허용. abstain=False 로 임계값 경로를
-    배제해 배치화 자체의 등가성만 본다.
+    순차 chunk 경로가 배치 경로로 대체됐으므로 그 parity 를 회귀로 고정한다.
+    같은 장문을 (i) `predict` 한 번(모든 chunk 를 `[K, max_length]` 배치로 1
+    forward) (ii) chunk 별 단건 `predict`(각 substring 은 1 chunk → 단건
+    forward) 후 글로벌 offset shift 로 각각 구해 비교한다. label·offset·
+    표면형은 정확히, score 는 GPU 커널 비결정성 대비 1e-5 허용.
+
+    정밀도를 fp32 로 고정(autocast off)해 배치(B>1)·단건(B=1)이 같은 커널
+    정밀도를 쓰게 한다 — 배치화 자체(pad/stack/순서·offset 복원)의 등가만
+    보기 위함이다. bf16 배치의 정밀도 parity 는 별도 측정(parity 스크립트)이
+    담당한다. abstain=False 로 임계값 경로도 배제한다.
     """
+    model.autocast_dtype = None
     chunks = split_for_length(text, model.tokenizer, model.max_length)
     assert len(chunks) > 1  # 강제 분할 — 배치 경로가 실제로 작동
     batched = model.predict(text, abstain=False)
@@ -260,3 +264,87 @@ def test_ja_parity_baseline_raw():
         'abstention']['overall_baseline']
     got = _ja_overall_f1(model, rows, abstain=False)
     assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
+
+
+def _mixed_length_texts(rows):
+    """짧은 단건 + 장문(multi-chunk)을 섞은 텍스트 리스트(B≥2)."""
+    short = [r['text'] for r in rows[:4]]
+    long_doc, _ = _build_long_doc(rows)
+    return short + [long_doc]
+
+
+def _assert_spans_equal(got, exp):
+    """label·offset·표면형은 정확히, score 는 1e-5 허용(배치 커널 드리프트).
+
+    같은 fp32 라도 GPU matmul 은 배치 크기에 따라 커널이 달라 score 가
+    1e-7 수준으로 흔들린다 — 결정(label·offset)은 불변이어야 한다.
+    """
+    assert len(got) == len(exp)
+    for g, e in zip(got, exp):
+        assert (g['label'], g['start_char'], g['end_char'], g['text']) == \
+               (e['label'], e['start_char'], e['end_char'], e['text'])
+        assert g['score'] == pytest.approx(e['score'], abs=1e-5)
+
+
+def _assert_predict_many_matches_single(model, texts):
+    """predict_many(배치)가 텍스트별 단건 predict 와 동일 — 배치화 등가.
+
+    정밀도를 fp32 로 고정해 배치(B>1)·단건(B=1)이 같은 정밀도를 쓰게 하고,
+    cross-text 묶음→복원(입력 순서·글로벌 offset)이 단건 순차와 동일함을
+    검증한다(label·offset 정확, score 는 커널 드리프트 1e-5 허용). bf16
+    배치의 정밀도 parity 는 parity 스크립트가 따로 본다.
+    """
+    model.autocast_dtype = None
+    batched = model.predict_many(texts, abstain=False)
+    single = [model.predict(t, abstain=False) for t in texts]
+    assert len(batched) == len(texts)
+    for b, s in zip(batched, single):
+        _assert_spans_equal(b, s)
+
+
+@pytest.mark.skipif(not _JA_CHUNK_READY, reason='ja model/test not present')
+def test_ja_predict_many_matches_single():
+    """ja: cross-text 배치(혼합 길이)가 단건 순차와 동일(배치화 등가)."""
+    model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_JA_TEST) if r['entities']][:30]
+    _assert_predict_many_matches_single(model, _mixed_length_texts(rows))
+
+
+@pytest.mark.skipif(not _VI_CHUNK_READY, reason='vi model/test not present')
+def test_vi_predict_many_matches_single():
+    """vi: cross-text 배치(혼합 길이)가 단건 순차와 동일(배치화 등가)."""
+    model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_VI_TEST) if r['entities']][:30]
+    _assert_predict_many_matches_single(model, _mixed_length_texts(rows))
+
+
+@pytest.mark.skipif(not (_JA_CHUNK_READY and _VI_CHUNK_READY),
+                    reason='ja+vi models/test not both present')
+def test_predict_batch_mixed_lang_matches_single():
+    """이질 배치(ja·vi 혼합·인터리브)가 순서·lang·offset 1:1로 단건과 동일.
+
+    registry.predict_batch 가 언어별로 묶어 forward 한 뒤 입력 순서로 복원
+    하므로, 정밀도를 fp32 로 통제하면 각 항목이 단건 predict 와 정확히
+    일치해야 한다 — 묶음/복원에서 순서·언어가 섞이면 깨진다.
+    """
+    ja_model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
+                         _CONFIG.max_length)
+    vi_model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
+                         _CONFIG.max_length)
+    ja_model.autocast_dtype = None
+    vi_model.autocast_dtype = None
+    registry = ModelRegistry({'ja': ja_model, 'vi': vi_model})
+    ja_rows = [r for r in load_jsonl(_JA_TEST) if r['entities']][:3]
+    vi_rows = [r for r in load_jsonl(_VI_TEST) if r['entities']][:3]
+    texts, langs = [], []
+    for jr, vr in zip(ja_rows, vi_rows):  # ja·vi 인터리브
+        texts.append(jr['text'])
+        langs.append('ja')
+        texts.append(vr['text'])
+        langs.append('vi')
+    out = registry.predict_batch(texts, langs, abstain=False)
+    assert len(out) == len(texts)
+    for i, (t, lang) in enumerate(zip(texts, langs)):
+        _assert_spans_equal(out[i], registry.predict(t, lang, abstain=False))

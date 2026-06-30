@@ -12,9 +12,11 @@ from typing import List, Optional, Union
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
+from server.concurrency import ConcurrencyGuard, Overloaded
 from server.config import SUPPORTED_LANGS, ServerConfig
-from server.detect import detect_lang
+from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,8 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     """
     config = config or ServerConfig()
     app = FastAPI(title='NER API', version='1')
+    guard = ConcurrencyGuard(config.max_concurrency, config.max_queue,
+                             config.acquire_timeout_s)
 
     def require_key(x_api_key: Optional[str] = Header(default=None)) -> None:
         """env API-key 가 설정된 경우에만 헤더를 검증한다(미설정 시 오픈)."""
@@ -89,6 +93,10 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     async def _model_unavail(request: Request, exc: ModelUnavailable):
         return _error(503, str(exc))
 
+    @app.exception_handler(Overloaded)
+    async def _overloaded(request: Request, exc: Overloaded):
+        return _error(429, str(exc))
+
     def _check_text(text: str) -> None:
         if len(text) > config.max_chars:
             raise HTTPException(
@@ -98,11 +106,24 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     def _resolve_lang(text: str, given: Optional[str]) -> str:
         return given if given else detect_lang(text)
 
+    def _resolve_one(text: str, given: Optional[str]) -> str:
+        """텍스트 1건 크기 검증 + lang 결정(미지원 포함)."""
+        _check_text(text)
+        return _resolve_lang(text, given)
+
     @app.post('/v1/ner',
               response_model=Union[SingleResponse, BatchResponse],
               dependencies=[Depends(require_key)])
-    def ner(req: NERRequest, abstain: bool = Query(default=True)):
-        """단일(`text`) 또는 배치(`texts`) NER 추론."""
+    async def ner(req: NERRequest, abstain: bool = Query(default=True)):
+        """단일(`text`) 또는 배치(`texts`) NER 추론.
+
+        추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
+        max_concurrency 로 묶고 과부하(큐/타임아웃 초과)는 429 로 거절한다.
+        검증·언어감지는 guard 밖에서 빠르게 처리하고, 자동감지 `unsupported`
+        (ja·vi 신호 부재)는 모델을 호출하지 않고 200 으로 빈 결과를 준다.
+        배치는 지원 언어 항목만 언어별 forward 로 묶고(predict_batch) 미지원은
+        빈 결과로 둬 입력 순서·lang 1:1 을 보존한다(부분 성공).
+        """
         if (req.text is None) == (req.texts is None):
             raise HTTPException(
                 status_code=400,
@@ -112,9 +133,12 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=400, detail=f"unsupported lang '{req.lang}'")
 
         if req.text is not None:
-            _check_text(req.text)
-            lang = _resolve_lang(req.text, req.lang)
-            entities = registry.predict(req.text, lang, abstain)
+            lang = _resolve_one(req.text, req.lang)
+            if lang == UNSUPPORTED:
+                return {'lang': lang, 'entities': []}
+            async with guard:
+                entities = await run_in_threadpool(
+                    registry.predict, req.text, lang, abstain)
             return {'lang': lang, 'entities': entities}
 
         assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
@@ -128,13 +152,19 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 status_code=413,
                 detail=(f'batch total chars {total_chars} exceeds '
                         f'max_total_chars ({config.max_total_chars})'))
-        results = []
-        for text in req.texts:
-            _check_text(text)
-            lang = _resolve_lang(text, req.lang)
-            results.append(
-                {'lang': lang,
-                 'entities': registry.predict(text, lang, abstain)})
+        langs = [_resolve_one(t, req.lang) for t in req.texts]
+        results = [{'lang': lang, 'entities': []} for lang in langs]
+        # 지원 언어 항목만 언어별 배치 forward, 미지원은 빈 결과로 둔다.
+        sup = [(i, req.texts[i], lang) for i, lang in enumerate(langs)
+               if lang != UNSUPPORTED]
+        if sup:
+            sup_texts = [t for _, t, _ in sup]
+            sup_langs = [lang for _, _, lang in sup]
+            async with guard:
+                ents = await run_in_threadpool(
+                    registry.predict_batch, sup_texts, sup_langs, abstain)
+            for (i, _, lang), e in zip(sup, ents):
+                results[i] = {'lang': lang, 'entities': e}
         return {'results': results}
 
     @app.get('/health')

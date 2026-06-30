@@ -15,7 +15,6 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from transformers.trainer_utils import enable_full_determinism
 
 from ner.classifier.data_utils import decode_bio_to_spans
 from ner.metrics.span_metrics import (
@@ -78,8 +77,7 @@ def fine_tune(*, model_name: str,
               class_weights: Optional[torch.Tensor] = None,
               init_model_path: Optional[str] = None,
               precision: str = 'fp16',
-              train_seed: Optional[int] = None,
-              deterministic: bool = False) -> Tuple[float, str]:
+              train_seed: Optional[int] = None) -> Tuple[float, str]:
     """HF Trainer 로 fine-tune. best 모델을 output_dir/best 에 저장.
 
     best 모델 선택은 valid eval_loss 기준 (낮을수록 좋음).
@@ -91,8 +89,6 @@ def fine_tune(*, model_name: str,
             모델 생성 전 시드를 건너뛰어 기존 비시드 헤드 init 동작을
             유지한다(BC). 값을 주면 그 seed 로 헤드 init·dropout·셔플을
             고정해 재현 가능한 run 을 만든다.
-        deterministic: True 면 cuDNN·CUBLAS 까지 결정화(full_determinism)해
-            바이트 단위 재현을 보장한다(느림). train_seed 가 설정돼야 한다.
 
     Returns:
         (학습 시간 sec, best 모델 디렉토리 경로)
@@ -102,10 +98,7 @@ def fine_tune(*, model_name: str,
     # 일어나, 여기서 시드해야 train_seed 가 헤드 init 까지 제어한다.
     # train_seed=None(기본)이면 시드를 건너뛰어 기존 비시드 동작을 유지한다(BC).
     if train_seed is not None:
-        if deterministic:
-            enable_full_determinism(train_seed)
-        else:
-            set_seed(train_seed)
+        set_seed(train_seed)
 
     init_path = init_model_path if init_model_path is not None else model_name
     model = AutoModelForTokenClassification.from_pretrained(
@@ -133,7 +126,6 @@ def fine_tune(*, model_name: str,
         fp16=(torch.cuda.is_available() and precision == 'fp16'),
         bf16=(torch.cuda.is_available() and precision == 'bf16'),
         seed=train_seed if train_seed is not None else 42,
-        full_determinism=deterministic,
     )
 
     trainer = WeightedTrainer(

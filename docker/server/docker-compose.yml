@@ -1,0 +1,50 @@
+# ja·vi NER REST API 추론 서버 — 단일 GPU, 호스트 /data 모델 마운트.
+# 라이프사이클은 start.sh/stop.sh/logs.sh, 설정 표면은 .env.example 참조.
+# compose 는 같은 디렉토리의 .env 를 자동 로드한다.
+services:
+  ner-server:
+    image: ${NER_SERVER_IMAGE:-ner-server:0.1.0}
+    container_name: ${NER_SERVER_CONTAINER:-ner-server}
+    build:
+      context: ../../
+      dockerfile: ./docker/server/Dockerfile
+    environment:
+      - NER_SERVER_MODEL_ROOT=${NER_SERVER_MODEL_ROOT:-/data/ner}
+      - NER_SERVER_PRECISION=${NER_SERVER_PRECISION:-bf16}
+      - NER_SERVER_MAX_LENGTH=${NER_SERVER_MAX_LENGTH:-256}
+      - NER_SERVER_MAX_CHARS=${NER_SERVER_MAX_CHARS:-20000}
+      - NER_SERVER_MAX_BATCH=${NER_SERVER_MAX_BATCH:-64}
+      - NER_SERVER_MAX_TOTAL_CHARS=${NER_SERVER_MAX_TOTAL_CHARS:-100000}
+      - NER_SERVER_MAX_CONCURRENCY=${NER_SERVER_MAX_CONCURRENCY:-8}
+      - NER_SERVER_MAX_QUEUE=${NER_SERVER_MAX_QUEUE:-32}
+      - NER_SERVER_ACQUIRE_TIMEOUT_S=${NER_SERVER_ACQUIRE_TIMEOUT_S:-10}
+      - NER_SERVER_API_KEY=${NER_SERVER_API_KEY:-}
+      - NER_SERVER_HOST=0.0.0.0
+      - NER_SERVER_PORT=${NER_SERVER_PORT:-8000}
+      - HF_HOME=${HF_HOME:-/data/ner/_hf_cache}
+    volumes:
+      - ${NER_SERVER_DATA_DIR:-/data}:/data
+    ports:
+      - '${NER_SERVER_PORT:-8000}:${NER_SERVER_PORT:-8000}'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # GPU 1장만 컨테이너에 노출(서비스 GPU 고정). 기본 0, 다른 GPU 는
+            # NER_SERVER_GPU 로 교체. device_ids 라 컨테이너 안에선 cuda:0.
+            - driver: nvidia
+              device_ids: ['${NER_SERVER_GPU:-0}']
+              capabilities: [gpu]
+    # 준비성: 전 언어 로드 완료(status:"ok")만 healthy. start_period 동안은
+    # starting 으로 트래픽을 받지 않는다(모델 로드 중 차단). 미로드→degraded.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS http://localhost:${NER_SERVER_PORT:-8000}/health
+          | grep -qE '"status": ?"ok"' || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    restart: unless-stopped

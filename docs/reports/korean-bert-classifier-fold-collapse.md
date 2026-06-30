@@ -64,16 +64,19 @@ warmup만 바꿔 비교했다.
 
 완화는 운영으로 푼다.
 
-- canonical 측정은 `--train-seed`와 `--deterministic`로 재현성과 안정성을
-  확보한다(속도 ~1.7배 희생).
-- 또는 어느 fold가 F1≈0으로 무너지면 `--train-seed`만 바꿔 그 fold를 다시
+- 어느 fold가 F1≈0으로 무너지면 `--train-seed`만 바꿔 그 fold를 다시
   돌린다. 정상 분포가 0.84±0.003으로 좁고 붕괴는 F1≈0의 명확한 outlier라,
   파국만 골라 재실행하는 것은 선택 편향이 아니다.
+- full-determinism(`--deterministic`)은 도입 후 제거했다 — 측정 결과 학습
+  루프 ~1.9배(wall ~1.7배) 비용에 비해 붕괴를 막지 못하고(재현만 한다)
+  byte-exact 재현은 본 프로젝트에 불필요했다. 재현성은 `--train-seed` 로
+  충분하다(seed-내 잔여 비결정성은 loss ~1e-4 로 무시 가능).
 
 ## 코드에 남긴 것
 
-- `--train-seed`(기본 None=무시드, 현행 동작 유지), `--deterministic`(재현성),
-  학습 설정(precision·train_seed·deterministic)을 `metrics.json`에 기록.
+- `--train-seed`(기본 None=무시드, 현행 동작 유지) + 학습 설정
+  (precision·train_seed)을 `metrics.json`에 기록. (`--deterministic` 은
+  측정상 무용·비용 과다로 후속 제거 — 위 "완화" 참조.)
 - warmup·진단용 레거시 플래그는 폐기(반증·스캐폴딩).
 - 기본 학습 동작은 손대지 않았다. 기존 KO baseline은 그대로 유효하고
   재측정도 필요 없다.
