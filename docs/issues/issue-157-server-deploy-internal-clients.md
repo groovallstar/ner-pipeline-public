@@ -48,6 +48,9 @@ ja·vi NER REST API 서버를 **내부망 별도 프로세스**가 HTTP 로 소�
   포함) 기준으로 브랜치 재설정 — #154 코드(동시성·양성감지·bf16) 위 배포 보장.
 - 2026-06-30: healthcheck grep 을 `'"status": ?"ok"'` 정규식으로(직렬화 공백
   유무 무관) 견고화 — Starlette 직렬화 변동 시 영구 unhealthy 방지.
+- 2026-06-30: 서비스 GPU 1장 고정(compose `device_ids`·로컬 `CUDA_VISIBLE_
+  DEVICES`, 기본 0) + 로컬 실행 경로(`run_local.sh`) 추가 — 컨테이너·로컬
+  둘 다 GPU 0(uuid `72704dbf`) 단독 점유 실증.
 
 ## 변경 요약
 

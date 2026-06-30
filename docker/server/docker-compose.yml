@@ -22,7 +22,6 @@ services:
       - NER_SERVER_HOST=0.0.0.0
       - NER_SERVER_PORT=${NER_SERVER_PORT:-8000}
       - HF_HOME=${HF_HOME:-/data/ner/_hf_cache}
-      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
     volumes:
       - ${NER_SERVER_DATA_DIR:-/data}:/data
     ports:
@@ -31,7 +30,11 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            # GPU 1장만 컨테이너에 노출(서비스 GPU 고정). 기본 0, 다른 GPU 는
+            # NER_SERVER_GPU 로 교체. device_ids 라 컨테이너 안에선 cuda:0.
+            - driver: nvidia
+              device_ids: ['${NER_SERVER_GPU:-0}']
+              capabilities: [gpu]
     # 준비성: 전 언어 로드 완료(status:"ok")만 healthy. start_period 동안은
     # starting 으로 트래픽을 받지 않는다(모델 로드 중 차단). 미로드→degraded.
     healthcheck:

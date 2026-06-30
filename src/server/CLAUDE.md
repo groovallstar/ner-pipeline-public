@@ -10,6 +10,7 @@ import 하지 않는다.
 ```bash
 python -m server                 # 0.0.0.0:8000, /data/ner 로드
 python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
+bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
 
 설정은 `NER_SERVER_*` 환경변수: `MODEL_ROOT`(기본 `/data/ner`)·`MAX_LENGTH`

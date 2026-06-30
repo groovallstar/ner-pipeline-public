@@ -16,7 +16,9 @@ curl -s localhost:8000/health
 bash stop.sh               # 중지·제거
 ```
 
-GPU 지정은 `.env` 또는 셸의 `CUDA_VISIBLE_DEVICES`(미설정=전체 노출).
+GPU 는 1장만 컨테이너에 노출돼 고정된다(`device_ids`; 기본 0, `NER_SERVER_GPU`
+로 교체). 컨테이너 없이 호스트에서 바로 띄우는 로컬 기동은
+`bash src/server/scripts/run_local.sh [--port P]`(GPU 0 고정).
 
 ## 파일
 
@@ -24,7 +26,7 @@ GPU 지정은 `.env` 또는 셸의 `CUDA_VISIBLE_DEVICES`(미설정=전체 노�
 |------|------|
 | `Dockerfile` | dev 와 동일 CUDA 베이스 + uv sync(`ner`·`server` 설치). `curl`(healthcheck)·build-essential(토크나이저 빌드) 포함. ENTRYPOINT=`uv run python -m server` |
 | `docker-compose.yml` | `ner-server` 서비스 — `NER_SERVER_*` env, `/data` 마운트, GPU reservation, 포트 publish, 준비성 healthcheck, restart unless-stopped |
-| `start.sh` | 빌드 + 기동(`-d --build`). 기존 컨테이너 정리 후 올림 |
+| `start.sh` | 빌드 + 기동. 기존 컨테이너 정리 후 올림. `--no-build` 로 기존 이미지 빠른 기동(코드 변경 없을 때 `uv sync` 레이어 재실행 회피) |
 | `stop.sh` | 컨테이너 중지·제거 |
 | `logs.sh` | 컨테이너 로그 tail |
 | `.env.example` | 설정 표면 전체(토폴로지 + `NER_SERVER_*`). `.env` 로 복사해 사용 |
