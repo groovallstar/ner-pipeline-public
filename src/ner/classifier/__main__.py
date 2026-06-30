@@ -91,6 +91,12 @@ def main():
              'comparison on unchanged-gold types.',
     )
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument(
+        '--train-seed', type=int, default=None,
+        help='Training seed (head init, dropout, shuffle), decoupled from '
+             '--seed (data split). Default None keeps the legacy unseeded '
+             'head init (existing behavior); set it for a reproducible run.',
+    )
     parser.add_argument('--output-dir', help='Override output dir')
     parser.add_argument(
         '--smoke', action='store_true',
@@ -267,6 +273,7 @@ def main():
             lr=args.lr,
             class_weights=cw,
             precision=args.precision,
+            train_seed=args.train_seed,
         )
         logger.info('Stage 1 time: %.1fs (best at %s)', s1_elapsed, s1_best)
 
@@ -287,6 +294,7 @@ def main():
             class_weights=cw,
             init_model_path=s1_best,
             precision=args.precision,
+            train_seed=args.train_seed,
         )
         elapsed = s1_elapsed + s2_elapsed
         logger.info('Curriculum total time: %.1fs (stage1=%.1f + stage2=%.1f)',
@@ -305,6 +313,7 @@ def main():
             lr=args.lr,
             class_weights=cw,
             precision=args.precision,
+            train_seed=args.train_seed,
         )
         logger.info('Train time: %.1fs', elapsed)
 
@@ -426,6 +435,8 @@ def main():
         'fold_index': args.fold_index if is_kfold else None,
         'group_key': args.group_key if is_kfold else None,
         'seed': args.seed,
+        'train_seed': args.train_seed,
+        'precision': args.precision,
         'offset_trim': trim_offsets,
         'metric_for_best': 'eval_loss',
         'curriculum': args.curriculum,

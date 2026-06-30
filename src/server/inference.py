@@ -34,6 +34,15 @@ from server.config import ServerConfig
 
 logger = logging.getLogger(__name__)
 
+# 정밀도 → autocast dtype. fp32 는 autocast off, bf16 은 배치(B>1) forward 만
+# autocast 로 묶어 matmul 을 bf16 으로 돌린다(softmax 등은 fp32 승격). 단건
+# (B=1)은 fp32 로 둬 단건 지연을 baseline 과 동일하게 유지한다 — bf16 의
+# 처리량 이득은 큰 행렬(배치)에서만 나타난다(분기는 _infer_chunks).
+_AUTOCAST_DTYPE: Dict[str, Optional[torch.dtype]] = {
+    'fp32': None,
+    'bf16': torch.bfloat16,
+}
+
 
 class ModelUnavailable(Exception):
     """요청한 언어 모델이 로드되지 않았을 때 — API 는 503 으로 매핑."""
@@ -73,10 +82,12 @@ class LangModel:
     """
 
     def __init__(self, lang: str, model_dir: str, thresholds_path: str,
-                 max_length: int = 256,
+                 max_length: int = 256, precision: str = 'bf16',
                  device: Optional[torch.device] = None):
         self.lang = lang
         self.max_length = max_length
+        self.precision = precision
+        self.autocast_dtype = _AUTOCAST_DTYPE[precision]
         self.device = device or torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = _load_tokenizer(model_dir, lang)
@@ -89,45 +100,102 @@ class LangModel:
                            if os.path.exists(thresholds_path) else {})
         self.has_thresholds = bool(self.thresholds)
 
-    def _infer_chunks(self, chunks: List[Tuple[str, int]]) -> List[dict]:
-        """여러 (substring, base_offset) chunk 를 한 forward 로 묶어 추론하고
-        글로벌 offset 내부 span({type,start,end,score})으로 병합한다.
-
-        각 chunk 는 encode_row 에서 max_length 로 패딩되므로 [K, max_length]
-        한 배치로 쌓아 1회 forward 한다 — chunk 1개면 배치 차원 1 로 단건
-        추론과 동일한 결과를 내고(behavior-invariant), 장문에서만 GPU 가
-        chunk 들을 병렬 처리해 가속된다.
-        """
+    def _encode_chunks(self, chunks: List[Tuple[str, int]]):
+        """chunks → (feats, offs_list, bases) — 토큰 인코딩(CPU)."""
         feats, offs_list, bases = [], [], []
         for sub, base in chunks:
-            row = {'text': sub, 'entities': []}
             feat, offs = encode_row(
-                row, self.tokenizer, self.label2id, self.lang, self.max_length)
+                {'text': sub, 'entities': []}, self.tokenizer,
+                self.label2id, self.lang, self.max_length)
             feats.append(feat)
             offs_list.append(offs)
             bases.append(base)
+        return feats, offs_list, bases
+
+    def _forward_feats(self, feats: List[dict]):
+        """feats(list) → (pred_ids, confs) numpy [N, max_length].
+
+        각 feat 는 encode_row 에서 max_length 패딩되므로 [N, max_length] 한
+        배치로 쌓아 1 forward 한다. bf16 은 배치(B>1)에서만 이득이라 단건
+        (B=1)은 fp32 로 둔다(autocast off).
+        """
         input_ids = torch.tensor(
             [f['input_ids'] for f in feats], dtype=torch.long).to(self.device)
         attention_mask = torch.tensor(
             [f['attention_mask'] for f in feats],
             dtype=torch.long).to(self.device)
-        with torch.no_grad():
+        use_autocast = (self.autocast_dtype is not None
+                        and input_ids.shape[0] > 1)
+        with torch.no_grad(), torch.autocast(
+                self.device.type, dtype=self.autocast_dtype,
+                enabled=use_autocast):
             logits = self.model(
                 input_ids=input_ids, attention_mask=attention_mask).logits
-        probs = torch.softmax(logits, dim=-1)
-        conf_t, pred_t = probs.max(dim=-1)
+            probs = torch.softmax(logits, dim=-1)
+            conf_t, pred_t = probs.max(dim=-1)
+        return pred_t.cpu().numpy(), conf_t.cpu().numpy()
+
+    def _decode_chunk(self, pred_row, conf_row, offs, base) -> List[dict]:
+        """한 chunk 의 (pred,conf) row → 글로벌 offset 내부 span 리스트."""
+        n = len(offs)
+        pred_ids = [int(x) for x in pred_row[:n]]
+        confs = [float(x) for x in conf_row[:n]]
+        spans = []
+        for sp in decode_bio_to_spans(
+                pred_ids, offs, self.id2label, confs=confs):
+            shifted = dict(sp)
+            shifted['start'] = sp['start'] + base
+            shifted['end'] = sp['end'] + base
+            spans.append(shifted)
+        return spans
+
+    def _infer_chunks(self, chunks: List[Tuple[str, int]]) -> List[dict]:
+        """여러 (substring, base_offset) chunk 를 한 forward 로 묶어 추론하고
+        글로벌 offset 내부 span({type,start,end,score})으로 병합한다.
+
+        chunk 1개면 배치 차원 1 로 단건 추론과 동일한 결과를 내고
+        (behavior-invariant), 장문에서만 GPU 가 chunk 들을 병렬 처리한다.
+        """
+        feats, offs_list, bases = self._encode_chunks(chunks)
+        pred_np, conf_np = self._forward_feats(feats)
         spans: List[dict] = []
         for i, (offs, base) in enumerate(zip(offs_list, bases)):
-            n = len(offs)
-            pred_ids = [int(x) for x in pred_t[i].cpu().numpy()[:n]]
-            confs = [float(x) for x in conf_t[i].cpu().numpy()[:n]]
-            for sp in decode_bio_to_spans(
-                    pred_ids, offs, self.id2label, confs=confs):
-                shifted = dict(sp)
-                shifted['start'] = sp['start'] + base
-                shifted['end'] = sp['end'] + base
-                spans.append(shifted)
+            spans.extend(
+                self._decode_chunk(pred_np[i], conf_np[i], offs, base))
         return spans
+
+    def predict_many(self, texts: List[str],
+                     abstain: bool = True) -> List[List[dict]]:
+        """여러 텍스트를 언어 공통 배치 forward 로 추론(입력 순서 보존).
+
+        각 텍스트를 chunk 분할한 뒤 전 텍스트의 chunk 를 [TotalChunks,
+        max_length] 한 배치로 묶어 1 forward 한다(B>1 → bf16). chunk 를 원
+        텍스트로 되돌려 글로벌 offset·임계값을 적용하고 텍스트별 canonical
+        span 리스트를 돌려준다 — 텍스트별 단건 predict 순차 호출과 span 이
+        동일하다(배치 등가).
+        """
+        feats, offs_list, bases, owners = [], [], [], []
+        for ti, text in enumerate(texts):
+            chunks = split_for_length(text, self.tokenizer, self.max_length)
+            f, o, b = self._encode_chunks(chunks)
+            feats.extend(f)
+            offs_list.extend(o)
+            bases.extend(b)
+            owners.extend([ti] * len(f))
+        per_text: List[List[dict]] = [[] for _ in texts]
+        if feats:
+            pred_np, conf_np = self._forward_feats(feats)
+            for i, (offs, base, ti) in enumerate(
+                    zip(offs_list, bases, owners)):
+                per_text[ti].extend(
+                    self._decode_chunk(pred_np[i], conf_np[i], offs, base))
+        out: List[List[dict]] = []
+        for ti, text in enumerate(texts):
+            spans = per_text[ti]
+            if abstain and self.thresholds:
+                spans = apply_thresholds([spans], self.thresholds)[0]
+            out.append([_to_canonical(s, text) for s in spans])
+        return out
 
     def predict(self, text: str, abstain: bool = True) -> List[dict]:
         """텍스트 → canonical span 리스트.
@@ -167,6 +235,7 @@ class ModelRegistry:
                     model_dir=config.model_dir(lang),
                     thresholds_path=config.thresholds_path(lang),
                     max_length=config.max_length,
+                    precision=config.precision,
                 )
                 logger.info('Loaded %s model (thresholds=%s)',
                             lang, models[lang].has_thresholds)
@@ -181,6 +250,28 @@ class ModelRegistry:
         if model is None:
             raise ModelUnavailable(f'model for lang {lang!r} is not loaded')
         return model.predict(text, abstain=abstain)
+
+    def predict_batch(self, texts: List[str], langs: List[str],
+                      abstain: bool = True) -> List[List[dict]]:
+        """(text, lang) 배치를 언어별로 묶어 추론하고 입력 순서로 복원한다.
+
+        같은 언어의 텍스트들을 한 forward 배치(predict_many)로 묶어 GPU
+        활용도를 높인다. 미로드 언어가 하나라도 있으면 ModelUnavailable.
+        """
+        groups: Dict[str, List[int]] = {}
+        for idx, lang in enumerate(langs):
+            groups.setdefault(lang, []).append(idx)
+        results: List[Optional[List[dict]]] = [None] * len(texts)
+        for lang, idxs in groups.items():
+            model = self._models.get(lang)
+            if model is None:
+                raise ModelUnavailable(
+                    f'model for lang {lang!r} is not loaded')
+            sub_out = model.predict_many(
+                [texts[i] for i in idxs], abstain=abstain)
+            for i, spans in zip(idxs, sub_out):
+                results[i] = spans
+        return results
 
     def health(self) -> dict:
         """언어별 로드 상태·임계값 존재 여부 보고(미로드 언어 포함)."""
