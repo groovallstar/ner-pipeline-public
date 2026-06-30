@@ -13,9 +13,11 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 ```
 
 설정은 `NER_SERVER_*` 환경변수: `MODEL_ROOT`(기본 `/data/ner`)·`MAX_LENGTH`
-(256)·`MAX_CHARS`(20000, 텍스트 1건)·`MAX_BATCH`(64, 배치 개수)·
-`MAX_TOTAL_CHARS`(100000, 배치 char 합산 — 요청당 작업량 가드)·`API_KEY`
-(미설정 시 인증 off)·`HOST`·`PORT`.
+(256)·`PRECISION`(bf16|fp32, 기본 bf16 — 배치 forward 에만 적용)·`MAX_CHARS`
+(20000, 텍스트 1건)·`MAX_BATCH`(64, 배치 개수)·`MAX_TOTAL_CHARS`(100000,
+배치 char 합산 — 요청당 작업량 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
+`MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
+초)·`API_KEY`(미설정 시 인증 off)·`HOST`·`PORT`.
 
 ## API
 
@@ -28,8 +30,8 @@ python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 (`.jsonl` 데이터 관례와 일치). 단일 → `{lang, entities}`, 배치 →
 `{results:[{lang, entities}, ...]}`(입력 순서 1:1). 에러는 구조화 `{error:
 {status, message}}` — 잘못된 요청(lang·text/texts 택일)→400, 크기 한도
-(max_chars·max_batch·max_total_chars) 초과→413, 모델 미로드→503, API-key
-불일치→401.
+(max_chars·max_batch·max_total_chars) 초과→413, 동시성 과부하(큐/타임아웃
+초과)→429, 모델 미로드→503, API-key 불일치→401.
 
 ## 사용 예시 (curl)
 
@@ -64,18 +66,21 @@ curl -s localhost:8000/health   # {"status":"ok","langs":{...}}
 | `config.py` | `ServerConfig` — env 설정·언어별 경로(`model_dir`/`thresholds_path`) |
 | `detect.py` | `detect_lang` — 가나(히라가나·가타카나)→ja, 그 외→vi. vi 코퍼스의 한자 혼입은 가나가 없어 vi 로 분류 |
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
-| `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용, char-offset span 추론)·`ModelRegistry`(언어별 보관, 미로드 언어→`ModelUnavailable`→503). 임계값은 `confidence_threshold.{load,apply}_thresholds` 사용 — graceful 로딩(파일 없으면 raw)은 서버에서 존재 확인, 적용은 canonical 변환 전 내부 span 에 |
-| `app.py` | `create_app(registry, config)` — FastAPI 라우트·Pydantic 모델·인증·에러 핸들러. registry 는 `predict`/`health` 를 가진 객체면 됨(실모델 또는 테스트 stub) |
+| `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). bf16 autocast 는 배치(B>1) forward 에만(단건 B=1 은 fp32). 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
+| `concurrency.py` | `ConcurrencyGuard`(async) — 전역 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429 |
+| `app.py` | `create_app(registry, config)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub) |
 | `__main__.py` | uvicorn 기동 진입점 |
 
 ## 추론 경로
 
 `encode_row`(data_utils, 토크나이저 capability 분기) → model logits →
 softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
-변환 → graceful abstention. 긴 입력은 chunk 분할 후 모든 chunk 를 `[K,
-max_length]` 한 배치 forward 로 추론하고(chunk 1개면 배치 차원 1 = 단건과
-동일) 글로벌 offset 으로 병합 — GPU 가 chunk 들을 병렬 처리해 장문/배치
-요청에서 순차 대비 가속된다.
+변환 → graceful abstention. 긴 입력은 chunk 분할, 배치 요청(`texts`)은
+언어별로 묶어 전 chunk 를 `[N, max_length]` 한 forward 로 추론하고(B=1 이면
+단건과 동일) 글로벌 offset 으로 병합 — GPU 병렬로 장문/배치에서 가속된다.
+bf16 autocast 는 배치(B>1)에만 켠다(단건은 autocast 오버헤드로 fp32 가 빠름).
+추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량·
+정밀도 측정·동결은 `scripts/throughput/`·`docs/reports/server-inference-throughput.md`.
 
 ## 테스트·검증
 
