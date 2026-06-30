@@ -1,0 +1,20 @@
+# Docker 빌드 컨텍스트 제외 — .venv(수 GB)·git·산출물·캐시 유입 방지.
+# server 이미지는 pyproject/uv.lock/.python-version/README + src/ 만 COPY 한다.
+.git
+.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+results
+docs
+tests
+.omc
+.claude
+.github
+node_modules
+docker/dev
+docker/vllm
