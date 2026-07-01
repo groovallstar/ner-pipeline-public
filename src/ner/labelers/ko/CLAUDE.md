@@ -11,12 +11,14 @@ Korean NER labelers aligned to the canonical schema with the NER 5 types (PER=pe
 | `ner_prompts.py` | Korean NER prompt templates (6 types: PER/LOC/ORG/DAT/PROD/EVT) with few-shot examples and entity type definitions — Korean-specific rules (particle exclusion, compound place names) plus PROD/EVT canonical gray-zone rules |
 | `vllm_ner_labeler.py` | `VllmNERLabeler` — async with configurable concurrency (default 32) via AsyncOpenAI against vLLM API |
 | `openai_ner_labeler.py` | `OpenAINERLabeler` — token-budget-based batching (max_tokens_per_batch=1000) with chat format |
+| `klue_to_canonical_gold.py` | KLUE BIO → canonical char-span gold JSONL conversion (CLI) |
+| `ko_prod_evt_relabel.py` | PROD/EVT LLM relabel incremental pipeline (CLI: relabel\|merge) |
 
 ## For AI Agents
 
 ### Working In This Directory
 - Prompt engineering is the primary quality lever — `ner_prompts.py` contains highly tuned Korean linguistic rules. Do not simplify
-- `_spans_to_bio()` uses 2-pass matching: exact token match first, then substring containment (handles Korean particles like "서울에서" matching "서울")
+- `spans_to_bio()` (public, defined in `llm_helpers.py` — shared across ko/ja/vi, not ko-local) uses 2-pass matching: exact token match first, then substring containment (handles Korean particles like "서울에서" matching "서울")
 - `split_sentences()` splits on `.!?` followed by whitespace, minimum 10-char buffer — defined once in `llm_helpers.py`, called via the shared base classes
 - vLLM sends all sentences concurrently; OpenAI uses token-budget batching
 

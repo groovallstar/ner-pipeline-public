@@ -19,6 +19,8 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 | `hf_ner_labeler.py` | `HFNERLabeler` — HuggingFace pipeline 기반 BERT NER 베이스라인 |
 | `llm_helpers.py` | 공용 LLM 유틸 |
 | `run_labeling.py` | 일괄 라벨링 실행 스크립트 |
+| `bio_dataset.py` | `TokenUnit`·`DatasetSpec`·`REGISTRY`·`extract_spans`·`load` 등 BIO 데이터셋 로딩/스팬 추출 (`llm_eval/span_evaluator.py` 소비) |
+| `span_matcher.py` | `match_spans()` 공용 스팬 매칭 (ja·vi·ko·llm_eval 공유) |
 
 ## Subdirectories
 
@@ -53,6 +55,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 
 ### Internal
 - leaf 패키지 (라벨링 전용); `tag_aligner.py`는 `llm_eval/`이 벤치마크 평가에 소비
+- `bio_dataset.py`·`span_matcher.py`도 `llm_eval/`이 소비 (`span_evaluator.py` 등)
 
 ### External
 - `openai`, `datasets`, `transformers`, `torch`

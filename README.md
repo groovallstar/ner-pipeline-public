@@ -28,9 +28,10 @@ src/ner/
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
 └── scripts/               # 보조 스크립트
-docker/{dev,vllm}/         # 개발 컨테이너 + vLLM 서비스
+src/server/                # ja·vi NER REST API 서비스 (FastAPI)
+docker/{dev,server,vllm}/  # 개발 컨테이너 + REST API 배포 + vLLM
 results/                   # 벤치마크 산출 (gitignored)
-tests/ner/                 # pytest 테스트
+tests/{ner,server}/        # pytest 테스트
 docs/                      # manual·reports·issues·wiki·specs
 ```
 
@@ -62,6 +63,19 @@ python -m ner.augmenters.wikiann_vi   # WikiANN-vi 재라벨
 ```
 
 각 CLI 의 전체 옵션은 `--help` 참조.
+
+## REST API 서비스
+
+ja·vi NER 추론을 FastAPI 로 서빙한다 (`POST /v1/ner` 단일·배치,
+`GET /health`). 언어 자동감지(가나→ja, vi 전용 결합부호→vi, 그 외
+unsupported), 동시성 세마포어(과부하 429), bf16 배치 추론을 지원한다.
+
+```bash
+python -m server   # uvicorn 기동
+```
+
+컨테이너 배포는 `docker/server/`, 상세는
+[`src/server/CLAUDE.md`](src/server/CLAUDE.md) 참조.
 
 ## 테스트
 

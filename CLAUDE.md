@@ -12,7 +12,7 @@
 
 ## 개발 환경
 
-- **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스 전용 — 개발 컨테이너에 진입하지 않는다)
+- **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스·server 배포 전용 — 개발 컨테이너에 진입하지 않는다)
 - 패키지 관리자: **UV** (`uv sync` 또는 `uv pip install -e .` 으로 editable install)
 - `PYTHONPATH` **설정·주입 금지** — uv editable install이 `.pth`로 `src/`를 `sys.path`에 자동 등록한다
 - import 형태(모두 src 접두어 없이): 라이브러리는 `from ner.<모듈>.xxx import Xxx`(labelers·classifier·llm_eval·augmenters·metrics), REST API 서비스는 `from server.xxx import Xxx` (`ner` 와 분리된 top-level 패키지)
@@ -51,13 +51,17 @@ src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소�
 ├── __main__.py        # CLI (python -m server) — uvicorn 기동
 ├── app.py             # FastAPI /v1/ner(단일·배치)·/health
 ├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
-├── detect.py          # 언어 자동감지 (가나→ja, 그 외→vi)
-└── chunking.py        # 긴 입력 문장분할 + offset 보존
+├── config.py          # ServerConfig (환경변수 로드)
+├── concurrency.py     # ConcurrencyGuard (동시성 세마포어·과부하 429)
+├── detect.py          # 언어 자동감지 (가나→ja, vi 전용 결합부호→vi, 그 외→unsupported)
+├── chunking.py        # 긴 입력 문장분할 + offset 보존
+└── scripts/           # 로컬 실행·스모크·처리량·언어감지 벤치 스크립트
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
+├── server/            # ja·vi NER REST API 배포 (상세: docker/server/CLAUDE.md)
 └── vllm/              # vLLM 서비스
 results/               # 벤치마크 결과 JSON + 리포트
-tests/                 # 테스트 (상세: tests/ner/CLAUDE.md)
+tests/                 # 테스트 (ner: tests/ner/CLAUDE.md · server: tests/server/)
 docs/                  # 문서
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
 │   ├── specs/         # 개발 규약 (코딩 컨벤션)

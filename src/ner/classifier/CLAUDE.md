@@ -58,6 +58,18 @@ python -m ner.classifier.kfold_pool \
 python -m ner.classifier --lang ja --fit-threshold
 # 저장된 thresholds.json 을 다른 run 에 적용
 python -m ner.classifier --lang ja --confidence-thresholds path/to/thresholds.json
+
+# stratification 비활성화 (PROD/EVT 유무와 무관한 fold 구성 — before/after 통제 비교용)
+python -m ner.classifier --lang ja --no-stratify
+
+# 2단계 NER 커리큘럼 warmup (stage1: PII 를 O 로 마스킹 후 워밍업, stage2: 21-class 본학습)
+python -m ner.classifier --lang ja --curriculum --curriculum-stage1-epochs 3
+
+# 콘솔 출력 span-F1 모드 선택 (strict|relaxed|both, 기본 both; metrics.json 은 항상 둘 다 저장)
+python -m ner.classifier --lang ja --metric-mode strict
+
+# B-/I- 토큰 per-token loss 가중 (경계 인식 강화, 기본 1.0 = 미적용)
+python -m ner.classifier --lang ja --boundary-b-weight 2.0 --boundary-i-weight 1.5
 ```
 
 ### 신뢰도 임계값 운영점 (per-class confidence threshold)

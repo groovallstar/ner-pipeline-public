@@ -34,6 +34,9 @@ tests/ner/
                        # wikiann_vi_gold 테스트
 ```
 
+`tests/server/`는 별도 패키지(server 계약·통합·live 테스트)로, 본 문서는
+`tests/ner/`만 다룬다. 상세 전략: `src/server/CLAUDE.md`.
+
 ## 테스트 전략
 
 - 단위 테스트: 개별 labeler·span_matcher·metrics 함수 (LLM API 호출은 mock)

@@ -68,7 +68,7 @@ bash docker/vllm/logs.sh
 ## 의존성·운영 주의
 
 - 의존성: Docker Engine + Compose v2, NVIDIA Container Toolkit
-- GPU 배정: dev 컨테이너는 전체 GPU 예약; vLLM 은 gemma(labeler)=GPU1, qwen(verifier)=GPU2 각 tensor-parallel=1
+- GPU 배정: dev 컨테이너는 전체 GPU 예약; vLLM 은 gemma(labeler)=GPU1, qwen(verifier)=GPU2 각 tensor-parallel=1; ner-server 는 1장 고정(기본 GPU0, NER_SERVER_GPU 로 교체)
 - 호스트 경로 `/work`·`/data` 가 존재해야 한다
-- 컨테이너명: `ner_pipeline_dev`(dev); `vllm-gemma`+`vllm-qwen`(운영, 각자 `-p <name>` compose 프로젝트)
+- 컨테이너명: `ner_pipeline_dev`(dev); `vllm-gemma`+`vllm-qwen`(운영, 각자 `-p <name>` compose 프로젝트); `ner-server`(server)
 - 모든 라이프사이클 스크립트는 `cd "$(dirname "$0")"` 를 쓰므로 각 하위 디렉토리에서 실행한다

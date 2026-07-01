@@ -24,7 +24,7 @@
 - `match_spans()` handles overlapping entities via consumed-range tracking — longest match wins
 - `_strip_particles()` fallback strips trailing Japanese particles/honorific suffixes — can incorrectly strip legitimate entity characters
 - `JapaneseDatasetLoader` loads pre-dumped canonical JSONL. Deterministic train/test split (seed=42, test_size=0.2) is baked into the dump at generation time — consumers should not re-split
-- `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "PROD", "EVT", "EMAIL", "PHONE", "DAT", "ID_NUM", "CREDIT_CARD"]` — canonical 10종 평면 목록. 상세: `docs/manual/data/canonical-entity-schema.md`
+- `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "PROD", "EVT", "DAT", "EMAIL", "PHONE", "ID_NUM", "CREDIT_CARD"]` — canonical 10종 평면 목록. 상세: `docs/manual/data/canonical-entity-schema.md`
 - canonical 5종 Stockmark 덤프는 augmenters 마이그레이션에서 HF 원본 일본어 8종 → 영문 5종으로 변환·저장된 결과이며, 로더는 그 결과만 읽는다(변환 책임 없음)
 
 ### Testing Requirements
