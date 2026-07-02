@@ -16,6 +16,16 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 
 ## 변경 이력
 
+- **2026-06-29 (이슈 #153)**: KO **ORG↔LOC gold 일관성 강제** — 기존 룰
+  (국가명=LOC·일반명사 기관=ORG)에서 drift 한 gold 교정. split 표면형
+  166→17(국가 ORG↔LOC 양분이 최대 — 북한 ORG37/LOC54 등). dual-LLM
+  (gemma-4-31B + Qwen3.6-35B) 이중 독립판정 + 룰. **이번엔 F1 레버였다**
+  (위 2026-06-22 PROD 와 대비): 비일관 gold 가 model 의 국가→ORG 과예측을
+  학습시킨 거라, 일관화+재학습으로 ORG +0.028(clean 동일-test)·LOC +0.041
+  (보고만), ORG↔LOC confusion −55%. 잔여 split 17 은 적법 문맥의존(서울시 행정/지방
+  정부·바르셀로나 도시/클럽·배트맨 캐릭터/작품 — 축소 불가). production gold
+  (`pii_all.jsonl`·`origin.boundary.eponymy.jsonl`) 소급 적용. 상세:
+  `docs/reports/korean-bert-classifier-per-entity-diagnosis.md` §ORG.
 - **2026-06-22**: KO PROD 경계 회색지대 명문화 — KLUE 유래 KO gold PROD
   측정 천장 FP+FN 전수 진단에서 §3.1~§3.3(JA 이식분: 운영리그·법령·시대
   구분)으로 안 가려지던 **KO 고유 모호 4류** 규정: eponymy(작품명↔인물·
