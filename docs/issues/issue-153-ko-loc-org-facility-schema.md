@@ -29,35 +29,35 @@ LOC/ORG/시설 경계의 일관·well-posedness** 로 전환한다. 인간 감�
 ## 결과 요약
 
 narrow-ORG 는 **인간 감사로 검증**됐고(ORG precision 0.50→1.00), 전수 재라벨
-후 **불변 타입 무회귀**(최대 하락 DAT −0.0041, fold σ 내)로 재학습됐다.
-ORG span 은 9,638→2,537(−74%)로 급감했으나 신-스키마 ORG F1 0.830 을
-유지 — narrow-ORG 가 더 학습 가능·well-posed 함을 시사한다. LOC/ORG 는
-스키마가 바뀌어 old baseline 과 직접 비교 불가(신 성능 기록만).
++ 정부기관 공통명사 gold 완성(lever ②) 후 재학습됐다. **불변 타입 무회귀**
+(최대 하락 DAT −0.0058, fold σ 내), **ORG F1 0.830→0.849**(공통명사 완성으로
++0.019·8/10 fold 일관). ORG span 9,638→2,797. 좁고 일관된 정의 + gold
+완성이 학습에 유리함을 보인다.
 
-## 결과: pooled strict P/R/F1 (baseline → retrain)
+## 결과: pooled strict P/R/F1 (최종)
 
-10-fold pooled(전 코퍼스 각 문장 1회 test), strict span match. ¹=변경 타입
-(narrow-ORG 신-스키마 — old 와 정의·support 달라 직접 비교 불가). overall
-support 는 하드 LOC/ORG 제거로 84,908→76,860 이라 overall 은 비교 부적절 —
-무회귀 판정은 **불변 타입**(동일 라벨·동일 fold·동일 config) 기준.
+10-fold pooled(전 코퍼스 각 문장 1회 test), strict span match. narrow-ORG
+재정의 + 정부기관 공통명사 gold 완성(lever ②) 반영 후 최종 상태.
 
-| 타입 | base P | R | F1 | new P | R | F1 | sup(b→n) |
-|---|---|---|---|---|---|---|---|
-| **overall** | 0.904 | 0.921 | 0.912 | 0.909 | 0.931 | 0.920 | 84908→76860 |
-| PER | 0.919 | 0.921 | 0.920 | 0.919 | 0.921 | 0.920 | 18131 |
-| DAT | 0.831 | 0.865 | 0.847 | 0.821 | 0.867 | 0.843 | 9934 |
-| PROD | 0.678 | 0.750 | 0.712 | 0.694 | 0.725 | 0.709 | 3554 |
-| EVT | 0.561 | 0.681 | 0.615 | 0.581 | 0.705 | 0.637 | 1388 |
-| EMAIL | 0.998 | 1.000 | 0.999 | 1.000 | 1.000 | 1.000 | 8322 |
-| PHONE | 0.997 | 0.999 | 0.998 | 0.997 | 0.999 | 0.998 | 8448 |
-| ID_NUM | 0.997 | 0.996 | 0.997 | 0.998 | 0.998 | 0.998 | 8467 |
-| CREDIT_CARD | 0.998 | 0.999 | 0.999 | 0.999 | 0.999 | 0.999 | 8580 |
-| LOC ¹ | 0.868 | 0.864 | 0.866 | 0.838 | 0.889 | 0.862 | 8446→7499 |
-| ORG ¹ | 0.815 | 0.853 | 0.833 | 0.777 | 0.891 | 0.830 | 9638→2537 |
+| 타입 | P | R | F1 | support |
+|---|---|---|---|---|
+| **overall** | 0.907 | 0.931 | 0.918 | 77120 |
+| PER | 0.916 | 0.919 | 0.917 | 18131 |
+| LOC | 0.834 | 0.892 | 0.862 | 7499 |
+| ORG | 0.811 | 0.891 | 0.849 | 2797 |
+| DAT | 0.819 | 0.866 | 0.842 | 9934 |
+| PROD | 0.691 | 0.732 | 0.711 | 3554 |
+| EVT | 0.566 | 0.714 | 0.631 | 1388 |
+| EMAIL | 0.993 | 0.995 | 0.994 | 8322 |
+| PHONE | 0.997 | 0.999 | 0.998 | 8448 |
+| ID_NUM | 0.998 | 0.997 | 0.997 | 8467 |
+| CREDIT_CARD | 0.999 | 0.998 | 0.999 | 8580 |
 
-불변 타입은 P/R/F1 모두 baseline 근접(최대 F1 하락 DAT −0.0041, fold σ 내).
-변경 타입 ORG 는 sup 74% 감소·narrow 재정의로 recall 0.853→0.891 상승(정의가
-균질해짐)·precision 0.815→0.777, F1 0.833→0.830 유지.
+불변 타입(PER/PROD/EVT/DAT/PII)은 원 baseline 대비 무회귀(최대 하락 DAT
+−0.0058·fold σ 내; EMAIL −0.005 는 fold9 단일 이상치=노이즈). ORG 는
+narrow-ORG 0.830 → 공통명사 완성 0.849(+0.019·8/10 fold 일관, precision
+0.777→0.811·recall 0.891 유지). LOC/ORG 는 스키마가 바뀌어 old broad
+baseline 과 직접 비교 불가(신 성능 기록).
 
 ## 수락 기준 결과 (검증 가능 항목)
 
@@ -83,9 +83,13 @@ support 는 하드 LOC/ORG 제거로 84,908→76,860 이라 overall 은 비교 �
   0.9124→0.9198, **최대 하락 DAT −0.0041(fold σ 0.0136 내)**, PROD
   −0.0028·EVT +0.0215·PII 안정. 회귀 없음. leak-free(dups=0).
   (`kfold_pool/pooled.json`)
-- [x] **신-스키마 LOC/ORG**: LOC 0.8624(sup 7,499)·ORG 0.8300(sup 2,537).
-  fold collapse 없음.
-- [ ] 결과-시점 refuter PASS · PR(closes #153).
+- [x] **신-스키마 LOC/ORG**(narrow 재학습): LOC 0.862·ORG 0.830. fold
+  collapse 없음.
+- [x] **정부기관 공통명사 gold 완성(lever ②)**: error_analysis 로 ORG 오류
+  지배 채널=정부·국회·국정원 등 공통명사 gold 비일관 규명(FP 90% 가 gold
+  누락). 무표시 등장 292건 dual-LLM 판정 → ORG 260 추가 → 재학습 **ORG F1
+  0.830→0.849**(+0.019·8/10 fold). (`kfold_pool_gov/pooled.json`)
+- [x] 결과-시점 refuter PASS(최종 diff 96f77c9, 순환/게이밍 반증) · PR #160.
 
 ## 구현 (분해)
 
@@ -105,6 +109,10 @@ support 는 하드 LOC/ORG 제거로 84,908→76,860 이라 overall 은 비교 �
    `pii_all.final.jsonl`(행·id·text 보존 assert).
 5. **재학습**: 10-fold, baseline 동일 config, GPU 격리(vLLM 무중단).
    pooling → `pooled.json`.
+6. **정부기관 공통명사 완성(lever ②)**: error_analysis 로 ORG 오류 지배
+   채널이 정부·국회·국정원 등 공통명사 gold 비일관임을 규명 → 전 문장
+   standalone 등장을 dual-LLM 판정 → ORG 260 추가
+   (`pii_all.govcomplete.jsonl`) → 재학습(`kfold_pool_gov`). production 승격.
 
 ## 방법론 노트
 
@@ -122,20 +130,19 @@ support 는 하드 LOC/ORG 제거로 84,908→76,860 이라 overall 은 비교 �
   train·eval 양쪽에서 제거(틀린 라벨 주입 대신 불확실분 배제). 복합
   HOLD 도 동일 — 임의 분절보다 제거가 well-posed.
 
-## 미결 / 후속 (사용자 결정)
+## 후속 / 한계
 
-- **프로덕션 프롬프트 롤아웃**: `ner_prompts.py` 와 KO 규칙문서가 아직
-  broad-ORG(삼성전자·KBS·대법원=ORG)로, narrow-ORG 학습 gold 와 불일치.
-  프로덕션 라벨러를 narrow-ORG 로 바꾸면 회사·방송·법원을 더 이상 추출하지
-  않는 급격한 변경이라 별도 확인 필요.
-- **이슈 구조**: 본 재정의는 #153(1단계 진단) 아래 진행됐으나 별도 스코프.
-  #153 재범위 vs 신규 이슈 분리는 PR 시 결정.
-- **재학습 σ**: 단일 seed(42). 다-seed 분산 미측정 — fold σ 로 무회귀
-  마진만 근사.
+- **프로덕션 반영 완료**: `ner_prompts.py`·KO 규칙문서 narrow-ORG 반영,
+  재라벨 gold(정부기관 공통명사 완성본) production 승격
+  (`data/klue/pii_all.jsonl`). #153 재범위(제목 갱신).
+- **재학습 σ**: 단일 seed(42). 다-seed 분산 미측정 — fold σ 로 무회귀 마진·
+  ORG 이득(+0.019, fold-σ 0.013)만 근사. EMAIL fold9 이상치가 보이듯 단일
+  seed fold 불안정 존재 — 정밀화 시 ≥3 seed 권장.
 
 ## 결론
 
 ORG 천장 확정 후 목표를 well-posedness 로 전환, 인간 감사로 사용자 실제
-ORG 외연(정부·정치)을 확정하고 전수 재라벨했다. 불변 타입은 무회귀,
-narrow-ORG 는 sup 74% 감소에도 F1 유지 — 좁고 일관된 정의가 학습에
-유리함을 보인다. 프로덕션 롤아웃은 라벨 의미의 급변이라 사용자 확인 후 별도.
+ORG 외연(정부·정치)을 확정하고 전수 재라벨했다. 이어 error_analysis 로 ORG
+오류 지배 채널(정부기관 공통명사 gold 비일관)을 규명, 공통명사 완성으로 ORG
+F1 0.830→0.849(+0.019)를 실현했다(불변 타입 무회귀). 좁고 일관된 정의 +
+gold 완성이 학습에 유리함을 보인다.
