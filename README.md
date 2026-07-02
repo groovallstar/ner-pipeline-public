@@ -14,6 +14,19 @@
 
 라벨 정의·매핑·경계 규칙: [`docs/manual/data/canonical-entity-schema.md`](docs/manual/data/canonical-entity-schema.md)
 
+## 파이프라인
+
+원천 데이터가 네 단계를 거쳐 학습된 BERT 분류기가 된다.
+
+```mermaid
+flowchart LR
+    L["1 · 라벨링<br/>LLM으로 엔티티를 뽑아 정답과 비교·채점"] --> A["2 · 증강<br/>PII를 문맥에 자연 주입<br/>(VI는 3종→5종 재라벨도)"]
+    A --> V["3 · 검증<br/>silver 품질·원문 누출·PII 교차검증"]
+    V --> C["4 · 분류<br/>BERT 파인튜닝 + span F1 채점"]
+```
+
+단계별 상세: [`docs/manual/pipeline/`](docs/manual/pipeline/)
+
 ## 백엔드
 
 vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
