@@ -16,6 +16,18 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 
 ## 변경 이력
 
+- **2026-07-01 (이슈 #153 재정의)**: KO **LOC/ORG/시설 외연 narrow-ORG
+  재정의** — ORG F1 천장(+0.006, 2σ 내) 확정 후 목표를 well-posedness 로
+  전환. ORG=**정부·행정·공공·정치 기관만**(회사·방송·군·법원·시설=DROP),
+  복합 span 분할("미국 백악관"→미국 LOC+백악관 ORG). dual-LLM 전수
+  재판정(18,084건, 합의 93.4%) + 인간 감사 게이트(**ORG precision
+  0.50→1.00**, 허위 ORG 소멸). 재라벨 gold 10-fold 재학습: **불변 타입
+  무회귀**(최대 −0.0041 DAT·fold σ 내; overall 은 하드 LOC/ORG gold
+  제거로 분모가 줄어 비교 부적절), 신-스키마 LOC
+  0.862·ORG 0.830(sup ORG 9,638→2,537, old 와 비교불가). KO LOC/ORG 규칙
+  단일출처는 `korean-entity-labeling-rules.md`. 상세:
+  `docs/issues/issue-153-ko-loc-org-facility-schema.md`. **프로덕션 프롬프트
+  (`ner_prompts.py`) narrow-ORG 롤아웃은 라벨 의미 급변이라 사용자 확인 대기.**
 - **2026-06-29 (이슈 #153)**: KO **ORG↔LOC gold 일관성 강제** — 기존 룰
   (국가명=LOC·일반명사 기관=ORG)에서 drift 한 gold 교정. split 표면형
   166→17(국가 ORG↔LOC 양분이 최대 — 북한 ORG37/LOC54 등). dual-LLM
