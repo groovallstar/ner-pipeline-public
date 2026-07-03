@@ -72,6 +72,12 @@ def _pooled_per_entity(pooled: dict, matching: str) -> Dict[str, float]:
     return {e: v["f1"] for e, v in per.items()}
 
 
+def _pooled_overall(pooled: dict, matching: str) -> Optional[float]:
+    """pooled_metrics.json 에서 overall F1 을 추출한다."""
+    ov = pooled.get(matching, {}).get("overall")
+    return ov["f1"] if ov else None
+
+
 def fold_std(run_dir: Path, matching: str = "strict") -> Dict[str, dict]:
     """per-entity·overall F1 의 fold 간 평균·표준편차(σ_fold)를 계산한다.
 
@@ -103,6 +109,71 @@ def fold_std(run_dir: Path, matching: str = "strict") -> Dict[str, dict]:
             "values": vals,
         }
     return out
+
+
+def repro_std(run_dirs: List[Path],
+              matching: str = "strict") -> Dict[str, dict]:
+    """시드-반복 CV run 들의 pooled 헤드라인 F1 재현 분산(σ_repro)을 계산한다.
+
+    각 run_dir 는 서로 다른 train seed 로 돌린 완전한 K-fold CV 결과
+    (pooled_metrics.json)여야 한다. per-entity·overall pooled F1 이 시드에
+    따라 얼마나 재현되는지의 표준편차를 반환한다 — σ_fold(fold 간 편차)와
+    달리, 게이팅에 실제로 쓰는 헤드라인 그 자체의 흔들림이다.
+
+    Args:
+        run_dirs: 시드만 다른 완전한 CV run 디렉토리 목록(>=2).
+        matching: 'strict' 또는 'relaxed'.
+
+    Returns:
+        {entity: {"mean", "std", "n", "values"}} — 'overall' 키 포함.
+    """
+    run_dirs = list(run_dirs)
+    if len(run_dirs) < 2:
+        raise ValueError(
+            "repro_std needs >= 2 seed-repeat runs to estimate sigma_repro")
+    series: Dict[str, List[float]] = {}
+    for run_dir in run_dirs:
+        pooled = load_pooled_metrics(run_dir)
+        for entity, f1 in _pooled_per_entity(pooled, matching).items():
+            series.setdefault(entity, []).append(f1)
+        overall = _pooled_overall(pooled, matching)
+        if overall is not None:
+            series.setdefault("overall", []).append(overall)
+    out: Dict[str, dict] = {}
+    for entity, vals in series.items():
+        out[entity] = {
+            "mean": statistics.mean(vals),
+            "std": statistics.stdev(vals) if len(vals) >= 2 else None,
+            "n": len(vals),
+            "values": vals,
+        }
+    return out
+
+
+def write_sigma_repro(run_dirs: List[Path], out_path: Path,
+                      matching: str = "strict") -> dict:
+    """σ_repro 를 계산해 캐시 JSON 으로 저장한다.
+
+    σ_repro 는 (데이터×아키텍처×학습설정) setup 의 성질이라 setup 당 한 번만
+    재서 이후 실험에 재사용한다. 저장 형식:
+    {"matching", "n_runs", "run_dirs", "sigma": {entity: std}}.
+    """
+    run_dirs = list(run_dirs)
+    repro = repro_std(run_dirs, matching)
+    payload = {
+        "matching": matching,
+        "n_runs": len(run_dirs),
+        "run_dirs": [str(d) for d in run_dirs],
+        "sigma": {e: v["std"] for e, v in repro.items()},
+    }
+    Path(out_path).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
+
+
+def load_sigma_map(path: Path) -> Dict[str, Optional[float]]:
+    """캐시된 σ_repro JSON 에서 {entity: std} 밴드 맵을 읽는다."""
+    return _load_json(Path(path)).get("sigma", {})
 
 
 def run_config(run_dir: Path) -> dict:
@@ -152,12 +223,20 @@ def leakage_dups(run_dir: Path) -> int:
 
 
 def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
-            matching: str = "strict", band_k: float = 2.0) -> dict:
+            matching: str = "strict", band_k: float = 2.0,
+            sigma_override: Optional[Dict[str, Optional[float]]] = None
+            ) -> dict:
     """candidate 가 baseline 대비 타깃 엔티티를 노이즈 밴드 밖에서 개선했는지,
     다른 엔티티를 회귀시키지 않았는지 판정한다.
 
-    Δ 는 pooled per-entity F1(candidate - baseline)이고, 밴드는 baseline 의
-    σ_fold × band_k 다. σ_fold 는 재현 분산(σ_repro)의 프록시임에 유의한다.
+    Δ 는 pooled per-entity F1(candidate - baseline)이고, 밴드는 σ × band_k 다.
+    엔티티마다 sigma_override(σ_repro 캐시)에 값이 있으면 그것을, 없으면
+    baseline 의 σ_fold 를 밴드로 쓰고, 어느 쪽을 썼는지 band_source 로 남긴다.
+    σ_fold 는 재현 분산(σ_repro)의 더 거친·대체로 넓은 프록시다.
+
+    Args:
+        sigma_override: {entity: std} — σ_repro 등 측정된 밴드. None 이면
+            전부 σ_fold 로 폴백한다.
 
     Returns:
         최상위 "verdict" 가 PASS|FAIL|INVALID|INCONCLUSIVE 인 판정 dict.
@@ -169,12 +248,17 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
 
     base_f1 = _pooled_per_entity(load_pooled_metrics(baseline_dir), matching)
     cand_f1 = _pooled_per_entity(load_pooled_metrics(candidate_dir), matching)
-    sigma = fold_std(baseline_dir, matching)
+    sigma_fold = fold_std(baseline_dir, matching)
+    override = sigma_override or {}
 
     all_deltas: Dict[str, dict] = {}
     for entity in sorted(set(base_f1) & set(cand_f1)):
         delta = cand_f1[entity] - base_f1[entity]
-        std = sigma.get(entity, {}).get("std")
+        if override.get(entity) is not None:
+            std, band_source = override[entity], "sigma_repro"
+        else:
+            std = sigma_fold.get(entity, {}).get("std")
+            band_source = "sigma_fold"
         band = None if std is None else band_k * std
         if band is None:
             status = "unknown_sigma"
@@ -185,8 +269,8 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
         else:
             status = "within_noise"
         all_deltas[entity] = {
-            "delta": delta, "sigma_fold": std, "band": band,
-            "status": status,
+            "delta": delta, "sigma": std, "band": band,
+            "band_source": band_source, "status": status,
         }
 
     target = None
@@ -231,15 +315,17 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
         "regressions": regressions,
         "all_deltas": all_deltas,
         "notes": [
-            "sigma_fold is fold-to-fold std, a proxy for reproducibility "
-            "sigma (sigma_repro); measure sigma_repro via seed repeats for "
-            "a stricter gate.",
+            "band_source per entity: sigma_repro (seed-repeat "
+            "reproducibility via sigma_override) when available, else "
+            "sigma_fold (fold-to-fold std) — a rougher, typically wider "
+            "proxy. Measure sigma_repro only when an INCONCLUSIVE verdict "
+            "blocks a decision you will adopt.",
         ],
     }
 
 
 def _build_parser():
-    """CLI 파서를 구성한다 (std / compare 서브커맨드)."""
+    """CLI 파서를 구성한다 (std / repro / compare 서브커맨드)."""
     import argparse
     parser = argparse.ArgumentParser(
         description="K-fold variance and comparison-validity gate.")
@@ -250,6 +336,15 @@ def _build_parser():
     p_std.add_argument("--matching", default="strict",
                        choices=["strict", "relaxed"])
 
+    p_repro = sub.add_parser(
+        "repro", help="seed-repeat reproducibility sigma (sigma_repro)")
+    p_repro.add_argument("--runs", required=True, nargs="+",
+                         help="seed-repeat CV run dirs (>=2)")
+    p_repro.add_argument("--matching", default="strict",
+                         choices=["strict", "relaxed"])
+    p_repro.add_argument("--out", default=None,
+                         help="write sigma_repro cache JSON here")
+
     p_cmp = sub.add_parser("compare", help="gate candidate vs baseline")
     p_cmp.add_argument("--baseline", required=True, help="baseline run dir")
     p_cmp.add_argument("--candidate", required=True, help="candidate run dir")
@@ -257,19 +352,28 @@ def _build_parser():
     p_cmp.add_argument("--matching", default="strict",
                        choices=["strict", "relaxed"])
     p_cmp.add_argument("--band-k", type=float, default=2.0,
-                       help="noise band width in sigma_fold units")
+                       help="noise band width in sigma units")
+    p_cmp.add_argument("--sigma-repro", default=None,
+                       help="cached sigma_repro JSON to use as band")
     p_cmp.add_argument("--out", default=None, help="write verdict JSON here")
     return parser
 
 
 def main(argv=None) -> int:
-    """CLI 진입점. std 또는 compare 결과를 JSON 으로 출력한다."""
+    """CLI 진입점. std / repro / compare 결과를 JSON 으로 출력한다."""
     args = _build_parser().parse_args(argv)
     if args.cmd == "std":
         result = fold_std(args.run, args.matching)
+    elif args.cmd == "repro":
+        if args.out:
+            result = write_sigma_repro(args.runs, args.out, args.matching)
+        else:
+            result = repro_std(args.runs, args.matching)
     else:
+        override = (load_sigma_map(args.sigma_repro)
+                    if args.sigma_repro else None)
         result = compare(args.baseline, args.candidate, args.target,
-                         args.matching, args.band_k)
+                         args.matching, args.band_k, override)
         if args.out:
             with open(args.out, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)

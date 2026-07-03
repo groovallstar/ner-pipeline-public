@@ -1,5 +1,6 @@
 """Tests for ner.metrics.variance — fold std and comparison-validity gate."""
 import json
+import statistics
 
 import pytest
 
@@ -8,6 +9,9 @@ from ner.metrics.variance import (
     compare,
     fold_std,
     leakage_dups,
+    load_sigma_map,
+    repro_std,
+    write_sigma_repro,
 )
 
 
@@ -167,7 +171,24 @@ class TestCompare:
                        [{"ORG": 0.90}, {"ORG": 0.92}], {"ORG": 0.91})
         v = compare(a, b, "ORG")
         assert set(v["all_deltas"]["ORG"]) == {
-            "delta", "sigma_fold", "band", "status"}
+            "delta", "sigma", "band", "band_source", "status"}
+        assert v["all_deltas"]["ORG"]["band_source"] == "sigma_fold"
+
+    def test_sigma_repro_override_tightens_band(self, tmp_path):
+        """σ_fold 밴드로는 within_noise 인 Δ 가 더 좁은 σ_repro 로는 진짜 상승."""
+        a = _write_run(tmp_path, "a", _CFG,
+                       [{"ORG": 0.80}, {"ORG": 0.90}], {"ORG": 0.85})
+        b = _write_run(tmp_path, "b", _CFG,
+                       [{"ORG": 0.85}, {"ORG": 0.95}], {"ORG": 0.90})
+        # σ_fold=0.0707 → band 0.1414 → Δ 0.05 는 노이즈 안
+        v_fold = compare(a, b, "ORG")
+        assert v_fold["target"]["status"] == "within_noise"
+        assert v_fold["target"]["band_source"] == "sigma_fold"
+        # σ_repro=0.01 → band 0.02 → Δ 0.05 는 진짜 상승
+        v_repro = compare(a, b, "ORG", sigma_override={"ORG": 0.01})
+        assert v_repro["target"]["status"] == "real_gain"
+        assert v_repro["target"]["band_source"] == "sigma_repro"
+        assert v_repro["verdict"] == "PASS"
 
 
 class TestLeakageDups:
@@ -205,3 +226,35 @@ class TestFailLoud:
         b = dict(_CFG, group_key=None)
         ok, issues = check_comparable(a, b)
         assert ok and issues == []
+
+
+class TestReproStd:
+    def _seed_runs(self, tmp_path, pooled_f1s):
+        """pooled ORG F1 이 서로 다른 시드-반복 CV run 들을 만든다."""
+        return [
+            _write_run(tmp_path, f"seed{i}", _CFG,
+                       [{"ORG": f1}, {"ORG": f1}], {"ORG": f1})
+            for i, f1 in enumerate(pooled_f1s)
+        ]
+
+    def test_matches_hand_value(self, tmp_path):
+        runs = self._seed_runs(tmp_path, [0.80, 0.82, 0.84])
+        r = repro_std(runs)
+        assert r["ORG"]["n"] == 3
+        assert abs(r["ORG"]["mean"] - 0.82) < 1e-9
+        assert abs(r["ORG"]["std"]
+                   - statistics.stdev([0.80, 0.82, 0.84])) < 1e-9
+
+    def test_needs_two_runs(self, tmp_path):
+        runs = self._seed_runs(tmp_path, [0.80])
+        with pytest.raises(ValueError, match="seed-repeat"):
+            repro_std(runs)
+
+    def test_write_and_load_sigma_map(self, tmp_path):
+        runs = self._seed_runs(tmp_path, [0.80, 0.82, 0.84])
+        out = tmp_path / "sigma_repro.json"
+        payload = write_sigma_repro(runs, out)
+        assert payload["n_runs"] == 3
+        smap = load_sigma_map(out)
+        assert abs(smap["ORG"]
+                   - statistics.stdev([0.80, 0.82, 0.84])) < 1e-9

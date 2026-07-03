@@ -256,6 +256,13 @@ flowchart TD
   data_path·kfold)이 다른 두 run은 비교 거부(같은 자만 비교), pooled의
   `cross_fold_orig_dups != 0`이면 누출 FAIL, 타깃이 올라도 다른 엔티티가
   밴드 밖 회귀면 FAIL. 재학습 없이 기존 `fold*/metrics.json`만 읽는다.
+- 기본 밴드 σ_fold 는 재현 분산 σ_repro(시드-반복 pooled 헤드라인의 흔들림)의
+  더 거친·넓은 프록시다. σ_repro 는 **수요기반**으로만 측정한다 — 판정이
+  `INCONCLUSIVE`(Δ 가 σ_fold 밴드 안)이고 그 후보를 **실제로 채택**할 때에만
+  GPU 를 쓴다. cheap-first: 전체 M×K 재실행 대신 대표 fold 하나를 시드 M회
+  (`--train-seed`) 재학습해 학습 노이즈부터 잡고, 부족할 때만 전체로 올린다.
+  측정한 σ_repro 는 `variance repro --out` 로 setup 당 한 번 캐시하고, 이후
+  `compare --sigma-repro <cache>` 로 밴드를 좁혀 재사용한다.
 
 ### decode_bio_to_spans
 

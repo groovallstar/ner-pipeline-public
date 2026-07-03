@@ -62,7 +62,7 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 |------|------|
 | `bio_metrics.py` | seqeval 기반 BIO 레벨 메트릭 |
 | `span_metrics.py` | `compute_offset_span_f1` 등 span 레벨 메트릭 |
-| `variance.py` | K-fold 결과의 fold 간 σ 계산 + 비교 유효성 게이트 (같은 자·누출·회귀 판정, 재학습 0회) |
+| `variance.py` | K-fold 결과의 fold 간 σ 계산 + 비교 유효성 게이트 (같은 자·누출·회귀 판정, 재학습 0회) + 시드-반복 σ_repro 밴드(수요기반 캐시·재사용) |
 
 ### scripts/
 
