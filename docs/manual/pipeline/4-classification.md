@@ -251,6 +251,11 @@ flowchart TD
 - per-entity: 10종 각각 micro-F1·precision·recall·support.
 - `return_spans=True`면 `gold_spans_list`/`pred_spans_list` 추가(kfold
   pooled 평가용), `capture_timing=True`면 load/infer 초.
+- 실험 간 per-entity F1 변화가 노이즈인지 실측인지는 `metrics.variance`로
+  판정한다 — fold 간 σ(σ_fold) 밴드 밖이면 실측, split 구성(group_key·
+  data_path·kfold)이 다른 두 run은 비교 거부(같은 자만 비교), pooled의
+  `cross_fold_orig_dups != 0`이면 누출 FAIL, 타깃이 올라도 다른 엔티티가
+  밴드 밖 회귀면 FAIL. 재학습 없이 기존 `fold*/metrics.json`만 읽는다.
 
 ### decode_bio_to_spans
 
