@@ -257,8 +257,8 @@ flowchart TD
     VAL -->|통과| LANG{"언어 결정<br/>지정 or 자동감지"}
     LANG -->|unsupported| EMPTY["200 · 빈 결과<br/>모델 미호출"]
     LANG -->|ja/vi| GUARD["동시성 guard 진입<br/>큐/타임아웃 초과 → 429"]
-    GUARD --> INFER["추론: 긴 입력 분할 →<br/>배치 forward → BIO 디코드"]
-    INFER --> CANON["원문 offset 복원 +<br/>임계값 자동 적용 → canonical span"]
+    GUARD --> INFER["추론: 긴 입력 분할 →<br/>배치 forward → BIO<br/>디코드"]
+    INFER --> CANON["원문 offset 복원 +<br/>임계값 자동 적용 →<br/>canonical span"]
     CANON --> OK["200 · entities/results"]
 ```
 

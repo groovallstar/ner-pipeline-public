@@ -105,7 +105,7 @@ docs/                  # 문서
 
 ```mermaid
 flowchart TD
-    Req["기능·수정 요청"] --> Reflex{"착수 반사<br/>정답·채점규칙·분할을 건드리나?"}
+    Req["기능·수정 요청"] --> Reflex{"착수 반사<br/>정답·채점규칙·분할을<br/>건드리나?"}
     Reflex -->|"건드림 · spine"| Freeze["멈춤 → 좌표계 먼저 동결<br/>버전된 사건으로 기록"]
     Reflex -->|"안 건드림 · feature"| Lane{"이슈화 결정<br/>type + path"}
     Freeze --> Lane
@@ -118,7 +118,7 @@ flowchart TD
     DefGate --> Build["구현 + 원자 커밋 refs #N"]
     Build --> ResGate{{"결과-시점 반박자<br/>diff↔기준 · 숫자↔JSON"}}
     ResGate -->|"FAIL"| Build
-    ResGate -->|"PASS"| Merge["이슈 md 커밋 → PR closes #N → 머지"]
+    ResGate -->|"PASS"| Merge["이슈 md 커밋 → PR<br/>closes #N → 머지"]
 
     DL --> MGate{{"메트릭 신규·변경?<br/>commit 전 반박자"}}
     MGate --> DC["develop 직접 커밋"]

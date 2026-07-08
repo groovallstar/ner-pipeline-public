@@ -144,16 +144,16 @@ WikiANN-vi 원본은 NER **3종(PER/LOC/ORG)** 자동 silver다. canonical 5종�
 
 ```mermaid
 flowchart TD
-    HF["WikiANN 원본 (베트남어)<br/>PER·LOC·ORG 3종 · 단어 BIO"]
-    HF --> LOAD["원본을 읽어 엔티티 위치를 문자 오프셋으로 변환<br/>(단어 BIO → 시작·끝 위치)"]
+    HF["WikiANN 원본 (베트남어)<br/>PER·LOC·ORG 3종 · 단어<br/>BIO"]
+    HF --> LOAD["원본을 읽어 엔티티<br/>위치를 문자 오프셋으로<br/>변환<br/>(단어 BIO → 시작·끝<br/>위치)"]
     LOAD --> G3["3종 위치 코퍼스<br/>문장 + PER·LOC·ORG 위치"]
-    G3 --> REL["두 LLM(Gemma·Qwen)이 문장을 다시 읽어<br/>5종으로 재라벨 (PROD·EVT 추가)<br/>두 모델이 서로 독립적으로 수행"]
-    REL --> MERGE["두 모델 결과를 대조해 병합<br/>둘이 합의하면 채택, 한쪽만·불일치면 정책대로 취사"]
+    G3 --> REL["두 LLM(Gemma·Qwen)이<br/>문장을 다시 읽어<br/>5종으로 재라벨 (PROD·<br/>EVT 추가)<br/>두 모델이 서로<br/>독립적으로 수행"]
+    REL --> MERGE["두 모델 결과를 대조해<br/>병합<br/>둘이 합의하면 채택,<br/>한쪽만·불일치면<br/>정책대로 취사"]
     MERGE --> M5["병합된 5종 silver"]
-    M5 --> GAP["누락으로 판정된 엔티티를 되살려 채워넣고<br/>저장 형식으로 정리 (주입 전 원문도 함께 보관)"]
-    GAP --> C5["canonical 5종 silver 코퍼스"]
-    C5 --> PII["합성 PII 5종을 문맥에 자연스럽게 주입 (§2A)"]
-    PII --> C10["canonical 10종 평면 코퍼스<br/>(단계 4 학습 입력)"]
+    M5 --> GAP["누락으로 판정된<br/>엔티티를 되살려 채워넣고<br/>저장 형식으로 정리<br/>(주입 전 원문도 함께<br/>보관)"]
+    GAP --> C5["canonical 5종 silver<br/>코퍼스"]
+    C5 --> PII["합성 PII 5종을 문맥에<br/>자연스럽게 주입 (§2A)"]
+    PII --> C10["canonical 10종 평면<br/>코퍼스<br/>(단계 4 학습 입력)"]
 ```
 
 각 단계의 실제 함수·파일명은 아래 소섹션(재라벨·병합·gold-fix)이 상술한다.
