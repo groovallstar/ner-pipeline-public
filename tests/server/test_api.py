@@ -1,7 +1,7 @@
 """API 계약·전송 테스트 — stub 추론기로 모델 없이 CI 가능.
 
 실모델을 로드하지 않고 registry stub 을 주입해 엔드포인트 계약(스키마·순서·
-lang 에코·감지·에러·인증·헬스·abstain 분기)만 검증한다.
+lang 에코·감지·에러·인증·헬스)만 검증한다.
 """
 
 from fastapi.testclient import TestClient
@@ -12,7 +12,7 @@ from server.inference import ModelUnavailable
 
 
 class StubRegistry:
-    """결정적 stub — 첫 단어를 PER span 으로 반환(순서·offset·abstain 검증)."""
+    """결정적 stub — 첫 단어를 PER span 으로 반환(순서·offset 검증)."""
 
     def __init__(self, langs=('ja', 'vi'), unavailable=()):
         self._langs = langs
@@ -29,7 +29,7 @@ class StubRegistry:
             'start_char': 0,
             'end_char': len(first),
             'text': first,
-            'score': 1.0 if abstain else 0.0,
+            'score': 1.0,
         }]
 
     def predict_batch(self, texts, langs, abstain=True):
@@ -56,7 +56,7 @@ def test_single_schema():
     assert body['lang'] == 'vi'
     assert body['entities'] == [{
         'label': 'PER', 'start_char': 0, 'end_char': 5,
-        'text': 'Alice', 'score': 1.0}]
+        'text': 'Alice'}]
 
 
 def test_batch_order_one_to_one():
@@ -144,15 +144,6 @@ def test_explicit_unsupported_lang_still_400():
     """명시 lang 이 미지원(ko)이면 자동감지와 달리 400(클라이언트 계약)."""
     r = _client().post('/v1/ner', json={'text': 'Hà Nội', 'lang': 'ko'})
     assert r.status_code == 400
-
-
-def test_abstain_query_passthrough():
-    """?abstain=false 가 predict 까지 전달(stub score 로 확인)."""
-    on = _client().post('/v1/ner', json={'text': 'A b', 'lang': 'vi'})
-    assert on.json()['entities'][0]['score'] == 1.0
-    off = _client().post('/v1/ner?abstain=false',
-                         json={'text': 'A b', 'lang': 'vi'})
-    assert off.json()['entities'][0]['score'] == 0.0
 
 
 def test_neither_text_nor_texts_400():

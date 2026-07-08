@@ -9,7 +9,7 @@ canonical 형식. 핸들러는 무상태 — 모든 가변 상태는 주입된 r
 import logging
 from typing import List, Optional, Union
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -37,7 +37,6 @@ class Span(BaseModel):
     start_char: int
     end_char: int
     text: str
-    score: Optional[float] = None
 
 
 class SingleResponse(BaseModel):
@@ -68,19 +67,70 @@ def _error(status: int, message: str) -> JSONResponse:
     )
 
 
+# OpenAPI/Swagger 노출용 — 외부 소비자를 위한 사용법만 담는다. 구현 세부는
+# 핸들러 docstring 에 두고, Swagger 에는 아래 요약·설명만 노출한다.
+_NER_SUMMARY = '텍스트에서 개체명 추출 (일본어·베트남어)'
+
+_NER_DESCRIPTION = (
+    '일본어(`ja`)·베트남어(`vi`) 텍스트에서 개체명(인물·장소·조직 등)과 '
+    '그 위치를 추출합니다.\n\n'
+    '**요청** — `text`(단일 문장) 또는 `texts`(여러 문장 배치) 중 하나를 '
+    '보냅니다. 둘 다 넣거나 둘 다 비우면 400 입니다. `lang` 은 선택이며, '
+    '생략하면 자동 감지합니다(`ja`·`vi` 외 값은 400).\n\n'
+    '**응답** — 개체마다 `label`(종류), `start_char`·`end_char`(원문 글자 '
+    '위치, 시작 포함·끝 제외), `text`(해당 글자)를 돌려줍니다. 배치 응답 '
+    '`results` 는 입력 순서와 1:1 입니다.\n\n'
+    '**참고** — 일본어·베트남어가 아닌 텍스트는 에러가 아니라 '
+    '`{"lang":"unsupported","entities":[]}` (200) 로 응답합니다. 여러 줄 '
+    '텍스트는 문자열을 직접 잇지 말고 JSON 인코더로 보내세요(개행을 escape '
+    '하지 않으면 400/422).'
+)
+
+# Swagger "Try it out" 용 실행 가능한 예제 — 각 항목은 text/texts 택일을
+# 지켜 그대로 Execute 하면 200 이 나온다(Swagger 에 예제 dropdown 으로 노출).
+_NER_BODY_EXAMPLES = {
+    'single': {
+        'summary': '단일 텍스트 — 언어 자동 감지(일본어)',
+        'value': {'text': '織田信長は東京都千代田区に住んでいた。'},
+    },
+    'batch': {
+        'summary': '배치 — 혼합 언어(텍스트별 감지)',
+        'value': {
+            'texts': ['トヨタは日本の会社です。', 'Hà Nội là thủ đô.'],
+        },
+    },
+    'lang_specified': {
+        'summary': '언어 명시(자동 감지 대신 직접 지정)',
+        'value': {
+            'text': 'アップルは2007年にiPhoneを発売した。',
+            'lang': 'ja',
+        },
+    },
+}
+
+
 def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     """registry(추론기)와 config 로 FastAPI 앱을 구성한다.
 
-    registry 는 `predict(text, lang, abstain)` / `health()` 를 제공하는
+    registry 는 `predict(text, lang)` / `health()` 를 제공하는
     객체면 된다(실모델 또는 테스트 stub). config 미지정 시 기본값.
     """
     config = config or ServerConfig()
-    app = FastAPI(title='NER API', version='1')
+    # defaultModelsExpandDepth=-1 → Swagger UI 하단 Schemas(모델 목록) 섹션을
+    # 숨긴다(연동 노이즈 제거). 스키마는 openapi.json·엔드포인트엔 그대로 남는다.
+    app = FastAPI(
+        title='NER API', version='1',
+        swagger_ui_parameters={'defaultModelsExpandDepth': -1})
     guard = ConcurrencyGuard(config.max_concurrency, config.max_queue,
                              config.acquire_timeout_s)
 
-    def require_key(x_api_key: Optional[str] = Header(default=None)) -> None:
-        """env API-key 가 설정된 경우에만 헤더를 검증한다(미설정 시 오픈)."""
+    def require_key(x_api_key: Optional[str] = Header(
+            default=None, include_in_schema=False)) -> None:
+        """env API-key 가 설정된 경우에만 헤더를 검증한다(미설정 시 오픈).
+
+        인증 off 가 기본이라 `x-api-key` 헤더는 Swagger/OpenAPI 파라미터에
+        노출하지 않는다(검증 로직 자체는 키 설정 시 그대로 동작).
+        """
         if config.api_key and x_api_key != config.api_key:
             raise HTTPException(
                 status_code=401, detail='invalid or missing API key')
@@ -112,9 +162,11 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
         return _resolve_lang(text, given)
 
     @app.post('/v1/ner',
+              summary=_NER_SUMMARY,
+              description=_NER_DESCRIPTION,
               response_model=Union[SingleResponse, BatchResponse],
               dependencies=[Depends(require_key)])
-    async def ner(req: NERRequest, abstain: bool = Query(default=True)):
+    async def ner(req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
         """단일(`text`) 또는 배치(`texts`) NER 추론.
 
         추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
@@ -123,6 +175,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
         (ja·vi 신호 부재)는 모델을 호출하지 않고 200 으로 빈 결과를 준다.
         배치는 지원 언어 항목만 언어별 forward 로 묶고(predict_batch) 미지원은
         빈 결과로 둬 입력 순서·lang 1:1 을 보존한다(부분 성공).
+
+        신뢰도 임계값은 모델이 임계값 파일을 로드한 경우 자동 적용된다
+        (요청 파라미터 없음 — 서빙은 모델의 운영점을 그대로 낸다).
         """
         if (req.text is None) == (req.texts is None):
             raise HTTPException(
@@ -138,7 +193,7 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 return {'lang': lang, 'entities': []}
             async with guard:
                 entities = await run_in_threadpool(
-                    registry.predict, req.text, lang, abstain)
+                    registry.predict, req.text, lang)
             return {'lang': lang, 'entities': entities}
 
         assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
@@ -162,14 +217,18 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
             sup_langs = [lang for _, _, lang in sup]
             async with guard:
                 ents = await run_in_threadpool(
-                    registry.predict_batch, sup_texts, sup_langs, abstain)
+                    registry.predict_batch, sup_texts, sup_langs)
             for (i, _, lang), e in zip(sup, ents):
                 results[i] = {'lang': lang, 'entities': e}
         return {'results': results}
 
-    @app.get('/health')
+    @app.get('/health', include_in_schema=False)
     def health():
-        """언어별 모델 로드 상태·임계값 존재 보고(인증 없음)."""
+        """언어별 모델 로드 상태·임계값 존재 보고(인증 없음).
+
+        운영·오케스트레이터 헬스체크 전용이라 OpenAPI/Swagger 에는 노출하지
+        않는다(엔드포인트 자체는 정상 동작).
+        """
         return registry.health()
 
     return app
