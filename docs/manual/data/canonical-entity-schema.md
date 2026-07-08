@@ -16,6 +16,29 @@ NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약�
 
 ## 변경 이력
 
+- **2026-07-01 (이슈 #153 재정의)**: KO **LOC/ORG/시설 외연 narrow-ORG
+  재정의** — ORG F1 천장(+0.006, 2σ 내) 확정 후 목표를 well-posedness 로
+  전환. ORG=**정부·행정·공공·정치 기관만**(회사·방송·군·법원·시설=DROP),
+  복합 span 분할("미국 백악관"→미국 LOC+백악관 ORG). dual-LLM 전수
+  재판정(18,084건, 합의 93.4%) + 인간 감사 게이트(**ORG precision
+  0.50→1.00**, 허위 ORG 소멸). 이어 error_analysis 로 ORG 오류 지배 채널
+  (정부기관 공통명사 gold 비일관)을 규명 — 정부·국회·국정원 등 무표시 등장을
+  dual-LLM 판정해 ORG 260 추가(공통명사 완성). 최종 10-fold 재학습: **불변
+  타입 무회귀**(최대 −0.0058 DAT·fold σ 내), **ORG F1 0.830→0.849**(공통명사
+  완성으로 +0.019·8/10 fold), LOC 0.862. narrow-ORG + 공통명사 완성본을
+  production gold(`data/klue/pii_all.jsonl`) 승격, 프로덕션 프롬프트
+  (`ner_prompts.py`)·규칙 단일출처(`korean-entity-labeling-rules.md`)
+  narrow-ORG 반영. 상세: `docs/issues/issue-153-ko-loc-org-facility-schema.md`.
+- **2026-06-29 (이슈 #153)**: KO **ORG↔LOC gold 일관성 강제** — 기존 룰
+  (국가명=LOC·일반명사 기관=ORG)에서 drift 한 gold 교정. split 표면형
+  166→17(국가 ORG↔LOC 양분이 최대 — 북한 ORG37/LOC54 등). dual-LLM
+  (gemma-4-31B + Qwen3.6-35B) 이중 독립판정 + 룰. **이번엔 F1 레버였다**
+  (위 2026-06-22 PROD 와 대비): 비일관 gold 가 model 의 국가→ORG 과예측을
+  학습시킨 거라, 일관화+재학습으로 ORG +0.028(clean 동일-test)·LOC +0.041
+  (보고만), ORG↔LOC confusion −55%. 잔여 split 17 은 적법 문맥의존(서울시 행정/지방
+  정부·바르셀로나 도시/클럽·배트맨 캐릭터/작품 — 축소 불가). production gold
+  (`pii_all.jsonl`·`origin.boundary.eponymy.jsonl`) 소급 적용. 상세:
+  `docs/reports/korean-bert-classifier-per-entity-diagnosis.md` §ORG.
 - **2026-06-22**: KO PROD 경계 회색지대 명문화 — KLUE 유래 KO gold PROD
   측정 천장 FP+FN 전수 진단에서 §3.1~§3.3(JA 이식분: 운영리그·법령·시대
   구분)으로 안 가려지던 **KO 고유 모호 4류** 규정: eponymy(작품명↔인물·

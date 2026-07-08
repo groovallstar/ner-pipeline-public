@@ -14,6 +14,19 @@
 
 라벨 정의·매핑·경계 규칙: [`docs/manual/data/canonical-entity-schema.md`](docs/manual/data/canonical-entity-schema.md)
 
+## 파이프라인
+
+원천 데이터가 네 단계를 거쳐 학습된 BERT 분류기가 된다.
+
+```mermaid
+flowchart LR
+    L["1 · 라벨링<br/>LLM으로 엔티티를 뽑아 정답과 비교·채점"] --> A["2 · 증강<br/>PII를 문맥에 자연 주입<br/>(VI는 3종→5종 재라벨도)"]
+    A --> V["3 · 검증<br/>silver 품질·원문 누출·PII 교차검증"]
+    V --> C["4 · 분류<br/>BERT 파인튜닝 + span F1 채점"]
+```
+
+단계별 상세: [`docs/manual/pipeline/`](docs/manual/pipeline/)
+
 ## 백엔드
 
 vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
@@ -28,9 +41,10 @@ src/ner/
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
 └── scripts/               # 보조 스크립트
-docker/{dev,vllm}/         # 개발 컨테이너 + vLLM 서비스
+src/server/                # ja·vi NER REST API 서비스 (FastAPI)
+docker/{dev,server,vllm}/  # 개발 컨테이너 + REST API 배포 + vLLM
 results/                   # 벤치마크 산출 (gitignored)
-tests/ner/                 # pytest 테스트
+tests/{ner,server}/        # pytest 테스트
 docs/                      # manual·reports·issues·wiki·specs
 ```
 
@@ -62,6 +76,19 @@ python -m ner.augmenters.wikiann_vi   # WikiANN-vi 재라벨
 ```
 
 각 CLI 의 전체 옵션은 `--help` 참조.
+
+## REST API 서비스
+
+ja·vi NER 추론을 FastAPI 로 서빙한다 (`POST /v1/ner` 단일·배치,
+`GET /health`). 언어 자동감지(가나→ja, vi 전용 결합부호→vi, 그 외
+unsupported), 동시성 세마포어(과부하 429), bf16 배치 추론을 지원한다.
+
+```bash
+python -m server   # uvicorn 기동
+```
+
+컨테이너 배포는 `docker/server/`, 상세는
+[`src/server/CLAUDE.md`](src/server/CLAUDE.md) 참조.
 
 ## 테스트
 

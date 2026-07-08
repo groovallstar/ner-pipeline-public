@@ -58,6 +58,18 @@ python -m ner.classifier.kfold_pool \
 python -m ner.classifier --lang ja --fit-threshold
 # 저장된 thresholds.json 을 다른 run 에 적용
 python -m ner.classifier --lang ja --confidence-thresholds path/to/thresholds.json
+
+# stratification 비활성화 (PROD/EVT 유무와 무관한 fold 구성 — before/after 통제 비교용)
+python -m ner.classifier --lang ja --no-stratify
+
+# 2단계 NER 커리큘럼 warmup (stage1: PII 를 O 로 마스킹 후 워밍업, stage2: 21-class 본학습)
+python -m ner.classifier --lang ja --curriculum --curriculum-stage1-epochs 3
+
+# 콘솔 출력 span-F1 모드 선택 (strict|relaxed|both, 기본 both; metrics.json 은 항상 둘 다 저장)
+python -m ner.classifier --lang ja --metric-mode strict
+
+# B-/I- 토큰 per-token loss 가중 (경계 인식 강화, 기본 1.0 = 미적용)
+python -m ner.classifier --lang ja --boundary-b-weight 2.0 --boundary-i-weight 1.5
 ```
 
 ### 신뢰도 임계값 운영점 (per-class confidence threshold)
@@ -111,7 +123,7 @@ PII). 행 단위 분할은 이 파생 행들이 train·test 로 갈려 **cross-f
 - `orig` 가 없는 레거시 코퍼스는 `text` 전체 문장 중복으로 fallback 검증.
   `id` 는 비고유(한 원문 파생 다행 공유)라 검증 기준으로 쓰지 않는다.
 - 발견·진단·정량 방법론(왜 dedup 으로 못 막았나, 측정 설계, 인플레 수치):
-  `docs/manual/data/vi-bert-crossfold-leak.md`
+  `docs/manual/pipeline/3-verification.md` §3B
 
 ## JSONL contract (입력 계약)
 

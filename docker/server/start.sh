@@ -21,4 +21,4 @@ docker compose -p "$PROJECT" -f docker-compose.yml down 2>/dev/null || true
 echo "기동 (project=$PROJECT${BUILD:+, build})..."
 docker compose -p "$PROJECT" -f docker-compose.yml up -d $BUILD
 
-echo "로그: bash logs.sh   |   헬스: curl -s localhost:${NER_SERVER_PORT:-8000}/health"
+echo "로그: bash logs.sh   |   헬스: curl -s localhost:${NER_SERVER_PORT:-8005}/health"

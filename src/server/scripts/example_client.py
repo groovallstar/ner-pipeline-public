@@ -8,7 +8,7 @@
 
 사용:
     python -m server.scripts.example_client \\
-        --base-url http://localhost:8000 [--api-key KEY]
+        --base-url http://localhost:8005 [--api-key KEY]
 """
 
 import argparse
@@ -27,7 +27,7 @@ class NERClient:
     해, 413·429 같은 계약 에러를 삼키지 않는다.
     """
 
-    def __init__(self, base_url: str = 'http://localhost:8000',
+    def __init__(self, base_url: str = 'http://localhost:8005',
                  api_key: Optional[str] = None, timeout: float = 30.0):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
@@ -41,28 +41,26 @@ class NERClient:
         r.raise_for_status()
         return r.json()
 
-    def ner_single(self, text: str, lang: Optional[str] = None,
-                   abstain: bool = True) -> requests.Response:
+    def ner_single(self, text: str,
+                   lang: Optional[str] = None) -> requests.Response:
         """단일 텍스트 NER. `lang` 생략 시 서버가 자동감지한다."""
         body: dict = {'text': text}
         if lang:
             body['lang'] = lang
-        return self._post(body, abstain)
+        return self._post(body)
 
-    def ner_batch(self, texts: List[str], lang: Optional[str] = None,
-                  abstain: bool = True) -> requests.Response:
+    def ner_batch(self, texts: List[str],
+                  lang: Optional[str] = None) -> requests.Response:
         """배치 텍스트 NER. 응답 `results` 는 입력 순서와 1:1."""
         body: dict = {'texts': texts}
         if lang:
             body['lang'] = lang
-        return self._post(body, abstain)
+        return self._post(body)
 
-    def _post(self, body: dict, abstain: bool) -> requests.Response:
-        """`/v1/ner` POST. abstain=False 면 임계값을 무시(raw)."""
-        params = None if abstain else {'abstain': 'false'}
+    def _post(self, body: dict) -> requests.Response:
+        """`/v1/ner` POST. 신뢰도 임계값은 서버가 자동 적용(요청 옵션 없음)."""
         return requests.post(f'{self.base_url}/v1/ner', json=body,
-                             params=params, headers=self._headers,
-                             timeout=self.timeout)
+                             headers=self._headers, timeout=self.timeout)
 
 
 def _check(desc: str, ok: bool, detail: str = '') -> bool:
@@ -100,7 +98,7 @@ def run_demo(client: NERClient, max_chars: int = 20000) -> int:
         and body['entities'] == [], str(body))
 
     # 에러 400: text·texts 동시 누락(택일 위반)
-    r = client._post({}, abstain=True)
+    r = client._post({})
     ok &= _check('oneof violation -> 400', r.status_code == 400,
                  str(r.status_code))
 
@@ -131,7 +129,7 @@ def run_demo(client: NERClient, max_chars: int = 20000) -> int:
 def main() -> None:
     p = argparse.ArgumentParser(
         description='Example NER API client + live self-check.')
-    p.add_argument('--base-url', default='http://localhost:8000',
+    p.add_argument('--base-url', default='http://localhost:8005',
                    help='Server base URL')
     p.add_argument('--api-key', default=None,
                    help='x-api-key header (if server auth is enabled)')

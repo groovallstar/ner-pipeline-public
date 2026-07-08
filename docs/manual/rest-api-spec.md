@@ -1,0 +1,328 @@
+# NER REST API 명세서
+
+> **이 문서가 하는 일**: `src/server/`가 제공하는 ja·vi NER 추론 REST API의
+> 계약(엔드포인트·요청/응답 스키마·상태 코드·에러·설정)을 한 곳에 고정한다.
+> **대상 코드**: `src/server/` (`app.py`·`config.py`·`inference.py`·
+> `detect.py`·`concurrency.py`·`chunking.py`)
+> **소비자**: 내부망 별도 프로세스 클라이언트(레퍼런스: `server.scripts.
+> example_client`). 배포는 `docker/server/`.
+
+FastAPI가 런타임에 자동 생성하는 OpenAPI 문서(`GET /docs`·`GET
+/openapi.json`)가 기계 계약의 단일 출처이고, 이 문서는 그 계약을 사람이 읽는
+명세로 풀어 쓴 것이다. 스키마가 어긋나면 코드(`app.py`의 Pydantic 모델)가
+정답이다.
+
+## 목차
+
+1. [개요·책임 경계](#1-개요책임-경계)
+2. [기동·설정](#2-기동설정)
+3. [엔드포인트 목록](#3-엔드포인트-목록)
+4. [`POST /v1/ner` — 추론](#4-post-v1ner--추론)
+5. [`GET /health` — 상태](#5-get-health--상태)
+6. [에러 규격](#6-에러-규격)
+7. [인증](#7-인증)
+8. [동시성·크기 한도](#8-동시성크기-한도)
+9. [엔티티 라벨 셋](#9-엔티티-라벨-셋)
+10. [요청 처리 흐름](#10-요청-처리-흐름)
+11. [사용 예시](#11-사용-예시)
+12. [검증·테스트](#12-검증테스트)
+
+## 1. 개요·책임 경계
+
+학습된 BERT 토큰 분류기(`{model_root}/{lang}/model/`)를 감싸 HTTP로 NER
+추론을 제공한다. 입력은 원문 텍스트(단일 또는 배치), 출력은 프로젝트
+canonical span(`{label, start_char, end_char, text}`)으로 `.jsonl`
+데이터 관례와 1:1이라 API 결과를 파이프라인에 그대로 되먹일 수 있다.
+
+- **지원 언어**: `ja`(일본어)·`vi`(베트남어) 2종. `lang` 생략 시 텍스트별
+  자동 감지, 어느 신호도 없으면 `unsupported`(에러 아님, §4 참조).
+- **핸들러 무상태**: 모든 가변 상태는 부팅 때 로드한 모델 registry 안에
+  있고 요청은 그것을 읽기만 한다.
+- **포함**: 요청 검증 / 언어 감지 / 긴 입력 분할 / 배치 forward / BIO
+  디코드 / canonical 변환 / 신뢰도 임계값 적용 / 동시성 제어.
+- **제외**: 학습·평가(`src/ner/classifier/`), 라벨링(`src/ner/labelers/`),
+  모델 업로드. 서버는 `ner.classifier`의 인코딩·디코드·임계값 함수만
+  import하고 학습·평가 모듈은 건드리지 않는다.
+
+## 2. 기동·설정
+
+```bash
+python -m server                                   # 0.0.0.0:8005, /data/ner 로드
+python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
+bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
+```
+
+부팅 시 지원 언어 모델을 모두 로드한다. 일부 언어 로드에 실패해도 서버는
+떠서 해당 언어 요청에만 503을 돌려준다(graceful — `/health`가 `degraded`로
+보고).
+
+런타임 동작은 `NER_SERVER_*` 환경변수로 조정한다(미설정 시 기본값). CLI는
+`--host`·`--port`·`--model-root`만 덮어쓴다.
+
+| 환경변수 | 기본값 | 의미 |
+|---|---|---|
+| `NER_SERVER_MODEL_ROOT` | `/data/ner` | 모델 루트. `{root}/{lang}/model`·`{root}/{lang}/thresholds.json` 레이아웃 |
+| `NER_SERVER_PRECISION` | `bf16` | 추론 정밀도(`bf16`\|`fp32`). bf16 autocast는 **배치(B>1) forward에만** — 단건은 fp32 |
+| `NER_SERVER_MAX_LENGTH` | `256` | 모델 토큰 한도. 초과 입력은 문장 단위로 분할(offset 보존) |
+| `NER_SERVER_MAX_CHARS` | `20000` | 텍스트 1건 char 상한(초과 → 413) |
+| `NER_SERVER_MAX_BATCH` | `64` | 배치 텍스트 개수 상한(초과 → 413) |
+| `NER_SERVER_MAX_TOTAL_CHARS` | `100000` | 배치 전체 char 합산 상한 — 요청당 작업량 가드(초과 → 413) |
+| `NER_SERVER_MAX_CONCURRENCY` | `8` | 동시 추론 상한(전역 세마포어) |
+| `NER_SERVER_MAX_QUEUE` | `32` | 대기 큐 깊이 상한(초과 → 429) |
+| `NER_SERVER_ACQUIRE_TIMEOUT_S` | `10.0` | 세마포어 대기 타임아웃 초(초과 → 429) |
+| `NER_SERVER_API_KEY` | (없음) | 설정 시 `X-API-Key` 헤더 검증. 미설정이면 인증 off |
+| `NER_SERVER_HOST` | `0.0.0.0` | 바인드 호스트 |
+| `NER_SERVER_PORT` | `8005` | 바인드 포트 |
+
+## 3. 엔드포인트 목록
+
+| 메서드·경로 | 인증 | 설명 |
+|---|---|---|
+| `POST /v1/ner` | API-key(설정 시) | 단일 또는 배치 NER 추론 |
+| `GET /health` | 없음 | 언어별 모델 로드 상태·임계값 존재. **OpenAPI/Swagger 미노출**(운영 헬스체크 전용) |
+| `GET /docs` | 없음 | Swagger UI(FastAPI 자동) |
+| `GET /openapi.json` | 없음 | OpenAPI 스키마(FastAPI 자동) |
+
+## 4. `POST /v1/ner` — 추론
+
+### 요청
+
+`Content-Type: application/json`. 본문은 단일과 배치를 겸한다 — `text`와
+`texts` 중 **정확히 하나**를 넣는다(둘 다 또는 둘 다 아님 → 400).
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `text` | string | 택일 | 단일 텍스트. `texts`와 상호배타 |
+| `texts` | string[] | 택일 | 배치 텍스트. `text`와 상호배타 |
+| `lang` | string | 선택 | `ja`\|`vi`. 생략 시 텍스트별 자동 감지. 지원 외 값 → 400 |
+
+신뢰도 임계값은 모델이 임계값 파일을 로드한 경우 **자동 적용**된다(요청
+파라미터 없음). 임계값 파일이 없는 배포·언어는 raw span을 그대로 반환한다.
+
+### 응답 — 단일(`text`)
+
+`200 OK`. `lang`은 지정값 또는 감지 결과를 에코한다.
+
+```jsonc
+{
+  "lang": "ja",
+  "entities": [
+    {"label": "PER", "start_char": 0, "end_char": 4,
+     "text": "織田信長"}
+  ]
+}
+```
+
+### 응답 — 배치(`texts`)
+
+`200 OK`. `results`는 **입력 순서와 1:1**이며 각 항목은 단일 응답과 같은
+`{lang, entities}` 구조다.
+
+```jsonc
+{
+  "results": [
+    {"lang": "ja", "entities": [/* ... */]},
+    {"lang": "vi", "entities": [/* ... */]}
+  ]
+}
+```
+
+### `Span` 스키마
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `label` | string | canonical 엔티티 타입(§9의 10종 중 하나) |
+| `start_char` | int | 원문 시작 char offset(포함) |
+| `end_char` | int | 원문 끝 char offset(제외) — `text[start_char:end_char]` |
+| `text` | string | 원문에서 잘라낸 표면형 |
+
+`start_char`/`end_char`는 **원문 char 기준**이라 긴 입력이 내부적으로 분할돼
+추론되더라도 글로벌 offset으로 복원돼 반환된다.
+
+### 언어 처리 규칙
+
+`lang`을 어떻게 주느냐에 따라 미지원 입력의 처리가 갈린다 — 자동 감지의
+미지원은 정상 응답, 명시한 미지원은 계약 위반이다.
+
+| 상황 | 결과 |
+|---|---|
+| `lang` 명시 = `ja`\|`vi` | 감지 없이 해당 모델로 추론 |
+| `lang` 명시 = 그 외 | **400** `unsupported lang '{lang}'` (클라이언트 계약 위반) |
+| `lang` 생략, 감지 = `ja`\|`vi` | 감지 언어로 추론, 응답에 에코 |
+| `lang` 생략, 감지 = `unsupported` | **200** `{lang:"unsupported", entities:[]}` — 모델 미호출 |
+
+배치에서 자동 감지 `unsupported` 항목은 빈 결과로 두고 지원 언어 항목만
+추론한다(**부분 성공** — 입력 순서·`lang` 1:1 보존).
+
+**자동 감지 규칙**(`detect.py`): 가나(히라가나·가타카나) → `ja`,
+vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` → `vi`, 그 외 →
+`unsupported`. 부호를 뗀 베트남어(không dấu)는 변별 신호가 없어
+`unsupported`로 떨어지는 수용된 한계다. 근거: `docs/reports/
+language-detection-benchmark.md`.
+
+## 5. `GET /health` — 상태
+
+인증 없이 언어별 모델 로드 상태와 임계값 파일 존재 여부를 보고한다. 운영·
+오케스트레이터 헬스체크 전용이라 **OpenAPI/Swagger 에는 노출하지 않는다**
+(`include_in_schema=False` — 엔드포인트 자체는 정상 동작).
+
+```jsonc
+{
+  "status": "ok",           // 요청된 모든 언어가 loaded면 "ok", 아니면 "degraded"
+  "langs": {
+    "ja": {"loaded": true,  "thresholds": true},
+    "vi": {"loaded": true,  "thresholds": false}
+  }
+}
+```
+
+- `loaded`: 해당 언어 모델이 부팅 때 로드됐는지. 미로드 언어도 `false`로
+  보고한다(요청 목록 기준).
+- `thresholds`: `thresholds.json`이 존재해 임계값이 적용되는지(없으면 raw).
+- `status`: 요청된 모든 언어가 `loaded`면 `ok`, 하나라도 미로드면
+  `degraded`(로드된 언어가 하나도 없어도 `degraded`).
+
+## 6. 에러 규격
+
+모든 에러는 구조화된 형태로 반환된다:
+
+```jsonc
+{"error": {"status": 400, "message": "provide exactly one of 'text' or 'texts'"}}
+```
+
+| 상태 | 트리거 | `message` 예시 |
+|---|---|---|
+| **400** | `text`·`texts` 택일 위반 | `provide exactly one of 'text' or 'texts'` |
+| **400** | 명시 `lang`이 지원 외 | `unsupported lang 'en'` |
+| **401** | API-key 설정됐는데 헤더 불일치/누락 | `invalid or missing API key` |
+| **413** | 텍스트 1건이 `max_chars` 초과 | `text exceeds max_chars (20000)` |
+| **413** | 배치 개수가 `max_batch` 초과 | `batch exceeds max_batch (64)` |
+| **413** | 배치 char 합이 `max_total_chars` 초과 | `batch total chars N exceeds max_total_chars (100000)` |
+| **429** | 대기 큐 초과 또는 세마포어 타임아웃 | `queue full (>= 32 waiting)` / `acquire timed out (10.0s)` |
+| **503** | 요청 언어 모델이 미로드 | `model for lang 'vi' is not loaded` |
+
+`unsupported` 입력(자동 감지)은 에러가 아니라 **200 + 빈 결과**임에 유의
+(위 §4). 요청 본문이 Pydantic 스키마 자체를 위반하면(예: `texts`에 문자열이
+아닌 값) FastAPI가 표준 `422`를 반환한다.
+
+## 7. 인증
+
+`NER_SERVER_API_KEY`가 설정된 경우에만 `POST /v1/ner`가 `X-API-Key` 헤더를
+검증한다(미설정이면 인증 off — 내부망 신뢰 전제 배포용). 헤더가 없거나
+불일치면 **401**. `GET /health`·`GET /docs`·`GET /openapi.json`은 항상 인증
+없이 접근 가능하다.
+
+```bash
+curl -H 'X-API-Key: <secret>' -X POST localhost:8005/v1/ner -d '{"text":"..."}'
+```
+
+## 8. 동시성·크기 한도
+
+단일 GPU 추론은 직렬에 가까워, 무제한 동시 요청은 지연 절벽·OOM을 부른다.
+전역 `ConcurrencyGuard`가 이를 bound한다:
+
+- **동시 in-flight ≤ `max_concurrency`**(전역 세마포어). 초과 요청은 대기.
+- **대기 큐 ≤ `max_queue`**. 슬롯이 없어 대기해야 하는데 큐가 가득이면
+  즉시 **429** `queue full`. (빈 슬롯이 있으면 큐 상한과 무관하게 즉시 진입 —
+  `max_queue=0`은 "대기 불허"이지 "처리 불허"가 아니다.)
+- **대기 타임아웃 `acquire_timeout_s`**. 시간 내 슬롯을 못 얻으면 **429**
+  `acquire timed out`.
+
+검증·언어 감지는 guard 밖에서 빠르게 처리하고, 무거운 추론만 guard 안
+`run_in_threadpool`로 실행한다. 크기 한도(`max_chars`·`max_batch`·
+`max_total_chars`)는 요청당 작업량을 미리 잘라 과부하를 예방한다(§6의 413).
+
+## 9. 엔티티 라벨 셋
+
+`label`은 ja·vi 공통 canonical **10종 평면** 중 하나다.
+
+| 구분 | 라벨 |
+|---|---|
+| NER 5종 | `PER` · `LOC` · `ORG` · `PROD` · `EVT` |
+| PII 5종 | `DAT` · `EMAIL` · `PHONE` · `ID_NUM` · `CREDIT_CARD` |
+
+정의·경계 규칙은 단일 출처 `docs/manual/data/canonical-entity-schema.md`
+참조.
+
+## 10. 요청 처리 흐름
+
+요청이 검증·감지를 거쳐 모델 추론으로, 응답이 canonical span으로 나오기까지.
+
+```mermaid
+flowchart TD
+    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> AUTH{"API-key<br/>검증"}
+    AUTH -->|불일치| E401["401"]
+    AUTH -->|통과/off| VAL{"본문 검증<br/>택일·lang·크기"}
+    VAL -->|위반| ERR["400 / 413"]
+    VAL -->|통과| LANG{"언어 결정<br/>지정 or 자동감지"}
+    LANG -->|unsupported| EMPTY["200 · 빈 결과<br/>모델 미호출"]
+    LANG -->|ja/vi| GUARD["동시성 guard 진입<br/>큐/타임아웃 초과 → 429"]
+    GUARD --> INFER["추론: 긴 입력 분할 →<br/>배치 forward → BIO 디코드"]
+    INFER --> CANON["원문 offset 복원 +<br/>임계값 자동 적용 → canonical span"]
+    CANON --> OK["200 · entities/results"]
+```
+
+**추론 내부**(`inference.py`): 입력을 토큰 한도에 맞게 문장 단위로 분할하고,
+전 chunk를 `[N, max_length]` 한 배치로 묶어 1 forward → softmax·argmax로
+토큰별 예측·confidence → BIO 디코드로 span 추출 → chunk base offset을 더해
+원문 글로벌 offset 복원 → 임계값 로드 시 자동 적용 → canonical
+변환. 배치 요청은 같은 언어끼리 묶어 한 forward로 추론한다(chunk 1개면
+단건과 결과 동일 — behavior-invariant). bf16 autocast는 배치(B>1)에만 켠다.
+
+## 11. 사용 예시
+
+```bash
+# 단일(자동 감지) — ja
+curl -s -X POST localhost:8005/v1/ner \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"織田信長は東京都千代田区に住んでいた。"}'
+# → {"lang":"ja","entities":[
+#      {"label":"PER","start_char":0,"end_char":4,"text":"織田信長"},
+#      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区"}]}
+
+# 배치(혼합 언어, 텍스트별 감지)
+curl -s -X POST localhost:8005/v1/ner \
+  -H 'Content-Type: application/json' \
+  -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
+# → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
+
+# 언어 명시(자동 감지 대신 직접 지정)
+curl -s -X POST 'localhost:8005/v1/ner' \
+  -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
+
+# 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
+curl -s -X POST localhost:8005/v1/ner \
+  -H 'Content-Type: application/json' -d '{"text":"plain English"}'
+# → {"lang":"unsupported","entities":[]}
+
+# 계약 에러: 택일 위반 → 400 (status 코드만 확인)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8005/v1/ner \
+  -H 'Content-Type: application/json' -d '{}'
+
+# 헬스 / OpenAPI UI
+curl -s localhost:8005/health   # {"status":"ok","langs":{...}}
+# 브라우저: GET /docs
+```
+
+내부 소비자용 최소 파이썬 클라이언트는 `server.scripts.example_client`
+(`NERClient`)를 레퍼런스로 삼는다.
+
+## 12. 검증·테스트
+
+- **계약·전송 pytest**: `uv run pytest tests/server/` — stub registry로 모델
+  없이 CI 가능. 모델 통합(offset 정합·ja parity)은 `/data` 있을 때만 실행
+  (`pytest.skip` 가드).
+- **실서버 스모크(셸)**: `bash src/server/scripts/smoke_test.sh [PORT]` —
+  uvicorn 기동 후 curl로 `/health`·`/v1/ner`·에러 응답 검증.
+- **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
+  --base-url http://localhost:8005` — 단일·배치·미지원·계약 에러
+  (400·413·429)를 실서버 대상으로 검증.
+- **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
+  서브프로세스로 띄워 httpx로 검증(`uv run pytest -m live`).
+
+---
+
+**관련 문서**: 모듈 오리엔테이션 `src/server/CLAUDE.md` · 엔티티 스키마
+`docs/manual/data/canonical-entity-schema.md` · 언어 감지 벤치
+`docs/reports/language-detection-benchmark.md` · 처리량 측정
+`docs/reports/server-inference-throughput.md` · 배포 `docker/server/CLAUDE.md`.

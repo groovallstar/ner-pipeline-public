@@ -12,7 +12,7 @@
 
 ## 개발 환경
 
-- **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스 전용 — 개발 컨테이너에 진입하지 않는다)
+- **호스트에서 직접 개발** (Docker는 vLLM 등 외부 서비스·server 배포 전용 — 개발 컨테이너에 진입하지 않는다)
 - 패키지 관리자: **UV** (`uv sync` 또는 `uv pip install -e .` 으로 editable install)
 - `PYTHONPATH` **설정·주입 금지** — uv editable install이 `.pth`로 `src/`를 `sys.path`에 자동 등록한다
 - import 형태(모두 src 접두어 없이): 라이브러리는 `from ner.<모듈>.xxx import Xxx`(labelers·classifier·llm_eval·augmenters·metrics), REST API 서비스는 `from server.xxx import Xxx` (`ner` 와 분리된 top-level 패키지)
@@ -51,13 +51,17 @@ src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소�
 ├── __main__.py        # CLI (python -m server) — uvicorn 기동
 ├── app.py             # FastAPI /v1/ner(단일·배치)·/health
 ├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
-├── detect.py          # 언어 자동감지 (가나→ja, 그 외→vi)
-└── chunking.py        # 긴 입력 문장분할 + offset 보존
+├── config.py          # ServerConfig (환경변수 로드)
+├── concurrency.py     # ConcurrencyGuard (동시성 세마포어·과부하 429)
+├── detect.py          # 언어 자동감지 (가나→ja, vi 전용 결합부호→vi, 그 외→unsupported)
+├── chunking.py        # 긴 입력 문장분할 + offset 보존
+└── scripts/           # 로컬 실행·스모크·처리량·언어감지 벤치 스크립트
 docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
+├── server/            # ja·vi NER REST API 배포 (상세: docker/server/CLAUDE.md)
 └── vllm/              # vLLM 서비스
 results/               # 벤치마크 결과 JSON + 리포트
-tests/                 # 테스트 (상세: tests/ner/CLAUDE.md)
+tests/                 # 테스트 (ner: tests/ner/CLAUDE.md · server: tests/server/)
 docs/                  # 문서
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
 │   ├── specs/         # 개발 규약 (코딩 컨벤션)
@@ -82,6 +86,45 @@ docs/                  # 문서
 - **원자 단위**: 한 번의 요청은 검증 가능한 최소 기능 단위로 처리한다.
 - **검증 의무**: 테스트 통과 + `docs/` 반영 전까지 '완료'로 간주하지 않는다.
 - **분해는 사람 주도**: 단일 단계로 검증이 어려우면 작업자에게 먼저 분해 방식을 묻는다.
+
+## 기능 착수 반사 — 정답·채점규칙·분할
+
+기능을 만들기 전 한 번 묻는다: **"이 결정이 정답·채점규칙·분할을 건드리나, 아니면 그 위에서 값만 바꾸나?"** 셋은 실험을 비교하려면 고정돼야 하는 좌표계다.
+
+- **정답(gold)**: 무엇이 '맞음'인가 — 라벨 인벤토리·경계 정의·gold 생성/판정 규칙. 판별: *같은 문장의 정답이 달라지나?*
+- **채점규칙(metric)**: 정답과 예측을 어떻게 비교해 점수 매기나 — 매치 기준(strict span)·집계(pooled micro-avg)·분산 게이트. 판별: *예측을 안 바꾸고 이것만 바꿔도 숫자가 움직이나?*
+- **분할(split)**: 누가 train/test이고 경계가 새지 않나 — 파티션·group-key·누출 여부. 판별: *test 문장이 train으로 가거나 정보가 새나?*
+- **건드리면 spine**: 멈추고 좌표계를 먼저 동결한다. 결과 없이 못 정하면(경계 정의 등) 최소 probe로 decidable하게 만든 뒤 동결 — 좌표계 변경은 canonical 변경이력·수락 기준에 남는 버전된 사건이다.
+- **안 건드리면 feature**: (모델·하이퍼파라미터·증강 등) 스스로 판단해 누적하고, 기존 불변식(refuter·variance·leak-free split)에 게이트한다.
+
+좌표계를 실험 도중 건드리면 모든 측정값이 해석 불능이 되고, 숫자를 예쁘게 만들려 좌표계를 튜닝하는 순간 non-gameable이 깨진다.
+
+## 작업 흐름 (하네스 파이프라인)
+
+**이 파이프라인은 하네스다** — 절차를 떠먹이는 대신 성공 기준을 못 박고 그 위에서 자율 실행·검증하게 붙드는 골격. 갈림(◇)은 *사람이 소유한 판별*(좌표계를 건드리나 · 어느 lane인가)이고, 관문(⬡)은 *격리 컨텍스트의 반증* — 승인이 아니라 반증이며 통과는 모델 말이 아닌 verdict JSON으로 판정해 non-gameable하다. 좌표계 변경은 멈춰 동결하고, 그 위 feature는 에이전트가 자율 누적해 게이트에 건다.
+
+```mermaid
+flowchart TD
+    Req["기능·수정 요청"] --> Reflex{"착수 반사<br/>정답·채점규칙·분할을 건드리나?"}
+    Reflex -->|"건드림 · spine"| Freeze["멈춤 → 좌표계 먼저 동결<br/>버전된 사건으로 기록"]
+    Reflex -->|"안 건드림 · feature"| Lane{"이슈화 결정<br/>type + path"}
+    Freeze --> Lane
+
+    Lane -->|"feat·fix ∧ src 런타임"| AC["수락 기준 3~6개 확정<br/>이슈 + 브랜치"]
+    Lane -->|"docs·chore·refactor"| DL["develop 직접"]
+    Lane -->|"불일치·모호"| Esc["사람에게 에스컬레이션"]
+
+    AC --> DefGate{{"정의-시점 반박자<br/>누출-free·non-gameable?"}}
+    DefGate --> Build["구현 + 원자 커밋 refs #N"]
+    Build --> ResGate{{"결과-시점 반박자<br/>diff↔기준 · 숫자↔JSON"}}
+    ResGate -->|"FAIL"| Build
+    ResGate -->|"PASS"| Merge["이슈 md 커밋 → PR closes #N → 머지"]
+
+    DL --> MGate{{"메트릭 신규·변경?<br/>commit 전 반박자"}}
+    MGate --> DC["develop 직접 커밋"]
+```
+
+각 노드의 상세 규칙은 아래 섹션에 둔다 — 착수 반사→"기능 착수 반사" · 이슈화 lane·측정-숫자 게이트→"이슈 관리" · 수락 기준·5단계→"이슈 진행 절차" · 정의/결과-시점 반박자→"반박자 검증 게이트".
 
 ## 코딩 컨벤션 (주석/문서 언어)
 
@@ -117,6 +160,8 @@ docs/                  # 문서
 - `docs/wiki/` 운영 규칙은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임.
 - 코드 변경 후 `docs/manual/`(구현 맵)과 `docs/manual/data/`(데이터 스키마) 최신화 확인.
 - 보고·이슈 문서는 빽빽한 평평한 불릿 한 덩어리 대신 같은 문서의 형제 섹션 구조를 따르고, 압축된 논리는 인과(A라서 B)로 풀어쓴다 — 가독성 우선이며 분량 증가가 목적이 아니다(무엇을 남길지는 축약형 유지).
+- **그림은 mermaid로 그린다.** 흐름·구조·관계를 보여줄 땐 `│ ▼ ├─` 같은 글자 그림 대신 mermaid `flowchart`를 쓴다 — GitHub·VSCode에서 바로 그림으로 보인다. 칸 안의 글자는 큰따옴표로 감싼다(괄호·기호가 깨지지 않게). 다만 단순 비교나 표로 될 것(결정표·목록·폴더 구조)까지 굳이 그림으로 바꾸지 않는다.
+- **흐름도 칸에는 함수 이름 말고 '무슨 일을 하는지'를 쓴다.** 칸마다 함수·파일 이름을 늘어놓으면 전체 흐름이 안 보인다. 그 단계가 실제로 하는 일을 쉬운 말로 풀어 쓰고, 함수·파일 이름은 그림 아래 설명이나 표에 적는다. BIO·span·silver·재라벨처럼 이 분야에서 늘 쓰는 말은 그대로 둔다. 얼마나 쉽게 쓸지 기준은 — 그 코드를 직접 짜지 않은 사람이 함수 속을 열어보지 않고도, 각 칸만 읽고 무슨 일이 일어나는지 그려지면 충분하다.
 
 ## 이슈 관리
 
@@ -148,11 +193,9 @@ docs/issues/
 
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
-3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `results/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 확정 직후 *정의-시점* 반박자**(`refuter`)로 eval 설계가 구조적으로 누출-free·non-gameable한지 검증한 뒤 승인받는다 — 구현 전에 형식 오류를 잡는다(상세: "반박자 검증 게이트" 섹션).
+3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `results/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 승인 전 *정의-시점* 반박자**(그림 정의-시점 관문; 상세: "반박자 검증 게이트").
 4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조. 구현을 ralph 등 자율 루프로 돌리는 것은 3단계 기준이 기계검증 가능·신뢰되고 작업이 다회차/반복-shape일 때만 — 단발은 "분해는 내가 → 한 스텝만 위임 → 내가 기준으로 검증"이 기본.
-5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **산출물 확인**: `refuter` 스킬로 현재 diff를 이 이슈의 성공 기준에 대해 반증(PASS면 진행, FAIL이면 4단계로 회귀) → `docs/issues/issue-{N}-{slug}.md`에 설계 + 구현 결과·검증 작성 → 계획~구현 문서 정합성 확인 후 이슈 md **최초 커밋** → PR 생성(제목 또는 본문에 `closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
-
-> **산출물 확인(반박자)**: 5단계 *결과 시점* 반박자 — 현재 diff를 수락 기준에 대해 반증, PASS면 종료·FAIL이면 4단계 회귀. 정의·결과 2시점 정의는 아래 "반박자 검증 게이트" 섹션.
+5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **결과-시점 반박자**(그림 결과-시점 관문; PASS만 진행, FAIL이면 4단계 회귀) → `docs/issues/issue-{N}-{slug}.md`에 설계 + 구현 결과·검증 작성·**최초 커밋** → PR 생성(`closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
 
 ## 반박자 검증 게이트 (격리 컨텍스트, 정의·결과 2시점)
 
