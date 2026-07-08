@@ -12,7 +12,7 @@
 cp .env.example .env       # 포트·GPU·정밀도 등 조정(선택)
 bash start.sh              # 빌드 + 기동 (-d --build)
 bash logs.sh               # 로그 tail
-curl -s localhost:8000/health
+curl -s localhost:8005/health
 bash stop.sh               # 중지·제거
 ```
 

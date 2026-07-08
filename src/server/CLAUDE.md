@@ -8,7 +8,7 @@ import 하지 않는다.
 ## 기동
 
 ```bash
-python -m server                 # 0.0.0.0:8000, /data/ner 로드
+python -m server                 # 0.0.0.0:8005, /data/ner 로드
 python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
@@ -27,10 +27,10 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 
 | 엔드포인트 | 설명 |
 |---|---|
-| `POST /v1/ner` | 단일 `{text, lang?}` 또는 배치 `{texts:[...], lang?}`. `?abstain=false` 로 임계값 무시. `lang` 생략 시 텍스트별 자동감지 |
+| `POST /v1/ner` | 단일 `{text, lang?}` 또는 배치 `{texts:[...], lang?}`. `lang` 생략 시 텍스트별 자동감지. 신뢰도 임계값은 모델 로드 시 자동 적용 |
 | `GET /health` | 언어별 모델 로드 상태 + thresholds 존재 여부(인증 없음) |
 
-응답 span 은 canonical `{label, start_char, end_char, text, score}`
+응답 span 은 canonical `{label, start_char, end_char, text}`
 (`.jsonl` 데이터 관례와 일치). 단일 → `{lang, entities}`, 배치 →
 `{results:[{lang, entities}, ...]}`(입력 순서 1:1). `lang` 생략 시 자동감지가
 ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에러
@@ -43,34 +43,34 @@ ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에
 
 ```bash
 # 단일(자동감지) — ja
-curl -s -X POST localhost:8000/v1/ner \
+curl -s -X POST localhost:8005/v1/ner \
   -H 'Content-Type: application/json' \
   -d '{"text":"織田信長は東京都千代田区に住んでいた。"}'
 # → {"lang":"ja","entities":[
-#      {"label":"PER","start_char":0,"end_char":4,"text":"織田信長","score":0.99},
-#      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区","score":0.99}]}
+#      {"label":"PER","start_char":0,"end_char":4,"text":"織田信長"},
+#      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区"}]}
 
 # 배치(혼합 언어, 텍스트별 감지)
-curl -s -X POST localhost:8000/v1/ner \
+curl -s -X POST localhost:8005/v1/ner \
   -H 'Content-Type: application/json' \
   -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
 # → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
 
-# 임계값 무시(raw)
-curl -s -X POST 'localhost:8000/v1/ner?abstain=false' \
+# 언어 명시(자동 감지 대신 직접 지정)
+curl -s -X POST 'localhost:8005/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
 
 # 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
-curl -s -X POST localhost:8000/v1/ner \
+curl -s -X POST localhost:8005/v1/ner \
   -H 'Content-Type: application/json' -d '{"text":"plain English"}'
 # → {"lang":"unsupported","entities":[]}
 
 # 계약 에러: 택일 위반 → 400 / 텍스트 크기 초과 → 413 (status 코드만 확인)
-curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/v1/ner \
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8005/v1/ner \
   -H 'Content-Type: application/json' -d '{}'
 
 # 헬스 / OpenAPI UI
-curl -s localhost:8000/health   # {"status":"ok","langs":{...}}
+curl -s localhost:8005/health   # {"status":"ok","langs":{...}}
 # 브라우저: GET /docs
 ```
 
@@ -90,7 +90,7 @@ curl -s localhost:8000/health   # {"status":"ok","langs":{...}}
 
 `encode_row`(data_utils, 토크나이저 capability 분기) → model logits →
 softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
-변환 → graceful abstention. 긴 입력은 chunk 분할, 배치 요청(`texts`)은
+변환 → 임계값 로드 시 자동 적용(graceful — 파일 없으면 raw). 긴 입력은 chunk 분할, 배치 요청(`texts`)은
 언어별로 묶어 전 chunk 를 `[N, max_length]` 한 forward 로 추론하고(B=1 이면
 단건과 동일) 글로벌 offset 으로 병합 — GPU 병렬로 장문/배치에서 가속된다.
 bf16 autocast 는 배치(B>1)에만 켠다(단건은 autocast 오버헤드로 fp32 가 빠름).
@@ -108,7 +108,7 @@ bf16 autocast 는 배치(B>1)에만 켠다(단건은 autocast 오버헤드로 fp
   PASS/FAIL 종료코드를 낸다. in-process TestClient 가 못 보는 실제 포트
   바인딩·네트워크 경로를 확인하는 용도.
 - **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
-  --base-url http://localhost:8000` — 내부 소비자가 서버를 호출하는 최소
+  --base-url http://localhost:8005` — 내부 소비자가 서버를 호출하는 최소
   레퍼런스(`NERClient`). 단일·배치·미지원·계약 에러(400·413·429)를 실서버
   대상으로 호출·검증하고 PASS/FAIL 종료코드를 낸다.
 - **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를

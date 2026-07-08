@@ -8,7 +8,7 @@ GPU 개발 컨테이너(`dev/`)·vLLM 추론 서버(`vllm/`)·ja·vi NER REST AP
 |------|------|
 | `dev/` | 개발 컨테이너 — PyTorch+CUDA·UV·Claude Code (상세: `dev/CLAUDE.md`) |
 | `vllm/` | NER 라벨링용 vLLM 추론 서버 — 2모델·포트 8081/8082 (상세: `vllm/CLAUDE.md`) |
-| `server/` | ja·vi NER REST API 추론 서버 — `/data` 모델 마운트·포트 8000 (상세: `server/CLAUDE.md`) |
+| `server/` | ja·vi NER REST API 추론 서버 — `/data` 모델 마운트·포트 8005 (상세: `server/CLAUDE.md`) |
 
 ## 개발 컨테이너 (docker/dev/)
 
