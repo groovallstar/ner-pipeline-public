@@ -42,7 +42,7 @@ _VI_COMBINING = frozenset({
 _VI_LETTERS = frozenset({'đ', 'Đ'})
 
 
-def has_kana(text: str) -> bool:
+def _has_kana(text: str) -> bool:
     """텍스트에 가나(히라가나·가타카나)가 하나라도 있는지."""
     for ch in text:
         cp = ord(ch)
@@ -69,7 +69,7 @@ def has_vi_mark(text: str) -> bool:
 # 언어 감지기 레지스트리 — (신호 함수, 언어 코드). 위에서부터 처음 맞은
 # 언어로 확정한다. 가나는 결정적이라 vi 보다 우선(ja·vi 코드 스위칭 시 ja).
 DETECTORS: List[Tuple[Callable[[str], bool], str]] = [
-    (has_kana, 'ja'),
+    (_has_kana, 'ja'),
     (has_vi_mark, 'vi'),
 ]
 

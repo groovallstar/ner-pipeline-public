@@ -47,7 +47,7 @@ canonical span(`{label, start_char, end_char, text}`)으로 `.jsonl`
 ## 2. 기동·설정
 
 ```bash
-python -m server                                   # 0.0.0.0:8005, /data/ner 로드
+python -m server                                   # 0.0.0.0:8008, /data/ner 로드
 python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
@@ -72,7 +72,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | `NER_SERVER_ACQUIRE_TIMEOUT_S` | `10.0` | 세마포어 대기 타임아웃 초(초과 → 429) |
 | `NER_SERVER_API_KEY` | (없음) | 설정 시 `X-API-Key` 헤더 검증. 미설정이면 인증 off |
 | `NER_SERVER_HOST` | `0.0.0.0` | 바인드 호스트 |
-| `NER_SERVER_PORT` | `8005` | 바인드 포트 |
+| `NER_SERVER_PORT` | `8008` | 바인드 포트 |
 
 ## 3. 엔드포인트 목록
 
@@ -213,7 +213,7 @@ language-detection-benchmark.md`.
 없이 접근 가능하다.
 
 ```bash
-curl -H 'X-API-Key: <secret>' -X POST localhost:8005/v1/ner -d '{"text":"..."}'
+curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 ```
 
 ## 8. 동시성·크기 한도
@@ -273,7 +273,7 @@ flowchart TD
 
 ```bash
 # 단일(자동 감지) — ja
-curl -s -X POST localhost:8005/v1/ner \
+curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
   -d '{"text":"織田信長は東京都千代田区に住んでいた。"}'
 # → {"lang":"ja","entities":[
@@ -281,26 +281,26 @@ curl -s -X POST localhost:8005/v1/ner \
 #      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区"}]}
 
 # 배치(혼합 언어, 텍스트별 감지)
-curl -s -X POST localhost:8005/v1/ner \
+curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
   -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
 # → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
 
 # 언어 명시(자동 감지 대신 직접 지정)
-curl -s -X POST 'localhost:8005/v1/ner' \
+curl -s -X POST 'localhost:8008/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
 
 # 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
-curl -s -X POST localhost:8005/v1/ner \
+curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' -d '{"text":"plain English"}'
 # → {"lang":"unsupported","entities":[]}
 
 # 계약 에러: 택일 위반 → 400 (status 코드만 확인)
-curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8005/v1/ner \
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' -d '{}'
 
 # 헬스 / OpenAPI UI
-curl -s localhost:8005/health   # {"status":"ok","langs":{...}}
+curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 # 브라우저: GET /docs
 ```
 
@@ -312,10 +312,8 @@ curl -s localhost:8005/health   # {"status":"ok","langs":{...}}
 - **계약·전송 pytest**: `uv run pytest tests/server/` — stub registry로 모델
   없이 CI 가능. 모델 통합(offset 정합·ja parity)은 `/data` 있을 때만 실행
   (`pytest.skip` 가드).
-- **실서버 스모크(셸)**: `bash src/server/scripts/smoke_test.sh [PORT]` —
-  uvicorn 기동 후 curl로 `/health`·`/v1/ner`·에러 응답 검증.
 - **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
-  --base-url http://localhost:8005` — 단일·배치·미지원·계약 에러
+  --base-url http://localhost:8008` — 단일·배치·미지원·계약 에러
   (400·413·429)를 실서버 대상으로 검증.
 - **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
   서브프로세스로 띄워 httpx로 검증(`uv run pytest -m live`).

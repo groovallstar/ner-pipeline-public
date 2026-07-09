@@ -8,7 +8,7 @@ import 하지 않는다.
 ## 기동
 
 ```bash
-python -m server                 # 0.0.0.0:8005, /data/ner 로드
+python -m server                 # 0.0.0.0:8008, /data/ner 로드
 python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
@@ -43,7 +43,7 @@ ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에
 
 ```bash
 # 단일(자동감지) — ja
-curl -s -X POST localhost:8005/v1/ner \
+curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
   -d '{"text":"織田信長は東京都千代田区に住んでいた。"}'
 # → {"lang":"ja","entities":[
@@ -51,26 +51,26 @@ curl -s -X POST localhost:8005/v1/ner \
 #      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区"}]}
 
 # 배치(혼합 언어, 텍스트별 감지)
-curl -s -X POST localhost:8005/v1/ner \
+curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
   -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
 # → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
 
 # 언어 명시(자동 감지 대신 직접 지정)
-curl -s -X POST 'localhost:8005/v1/ner' \
+curl -s -X POST 'localhost:8008/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
 
 # 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
-curl -s -X POST localhost:8005/v1/ner \
+curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' -d '{"text":"plain English"}'
 # → {"lang":"unsupported","entities":[]}
 
 # 계약 에러: 택일 위반 → 400 / 텍스트 크기 초과 → 413 (status 코드만 확인)
-curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8005/v1/ner \
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' -d '{}'
 
 # 헬스 / OpenAPI UI
-curl -s localhost:8005/health   # {"status":"ok","langs":{...}}
+curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 # 브라우저: GET /docs
 ```
 
@@ -103,18 +103,10 @@ bf16 autocast 는 배치(B>1)에만 켠다(단건은 autocast 오버헤드로 fp
   모델 없이 CI 가능, 모델 통합(offset 정합성·ja parity)은 `/data` 있을 때만
   (`pytest.skip` 가드). ja parity 는 `eval_*` 스크립트를 import 하지 않고
   `/data/ner/ja/metrics.json` 운영점과 대조한다.
-- **실서버 스모크(셸)**: `bash src/server/scripts/smoke_test.sh [PORT]` —
-  uvicorn 을 기동한 뒤 curl 로 `/health`·`/v1/ner`·에러 응답을 검증하고
-  PASS/FAIL 종료코드를 낸다. in-process TestClient 가 못 보는 실제 포트
-  바인딩·네트워크 경로를 확인하는 용도.
 - **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
-  --base-url http://localhost:8005` — 내부 소비자가 서버를 호출하는 최소
+  --base-url http://localhost:8008` — 내부 소비자가 서버를 호출하는 최소
   레퍼런스(`NERClient`). 단일·배치·미지원·계약 에러(400·413·429)를 실서버
   대상으로 호출·검증하고 PASS/FAIL 종료코드를 낸다.
 - **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
   서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
   skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
-- **언어감지 벤치**: `server.scripts.lang_detect` — gold 다국어 평가셋
-  (FLORES-200+파생) + 혼동행렬로 감지 후보를 비교한다. gold·매니페스트는
-  패키지 동봉(커밋), 손규칙 후보는 프로덕션 `detect_lang` 을 그대로 시험.
-  재현·결과는 `docs/reports/language-detection-benchmark.md`.

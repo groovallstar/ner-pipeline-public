@@ -39,9 +39,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # 추론 기본값(런타임은 NER_SERVER_* env 로 덮어쓴다)
 ENV NER_SERVER_MODEL_ROOT=/data/ner \
     NER_SERVER_HOST=0.0.0.0 \
-    NER_SERVER_PORT=8005
+    NER_SERVER_PORT=8008
 
-EXPOSE 8005
+EXPOSE 8008
 
 # uv run 으로 .venv 활성화 + 서버 기동. host/port 는 env(from_env)로 결정.
 ENTRYPOINT ["uv", "run", "--frozen", "python", "-m", "server"]
