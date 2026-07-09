@@ -105,7 +105,7 @@ docs/                  # 문서
 
 ```mermaid
 flowchart TD
-    Req["기능·수정 요청"] --> Reflex{"착수 반사<br/>정답·채점규칙·분할을 건드리나?"}
+    Req["기능·수정 요청"] --> Reflex{"착수 반사<br/>정답·채점규칙·분할을<br/>건드리나?"}
     Reflex -->|"건드림 · spine"| Freeze["멈춤 → 좌표계 먼저 동결<br/>버전된 사건으로 기록"]
     Reflex -->|"안 건드림 · feature"| Lane{"이슈화 결정<br/>type + path"}
     Freeze --> Lane
@@ -118,7 +118,7 @@ flowchart TD
     DefGate --> Build["구현 + 원자 커밋 refs #N"]
     Build --> ResGate{{"결과-시점 반박자<br/>diff↔기준 · 숫자↔JSON"}}
     ResGate -->|"FAIL"| Build
-    ResGate -->|"PASS"| Merge["이슈 md 커밋 → PR closes #N → 머지"]
+    ResGate -->|"PASS"| Merge["이슈 md 커밋 → PR<br/>closes #N → 머지"]
 
     DL --> MGate{{"메트릭 신규·변경?<br/>commit 전 반박자"}}
     MGate --> DC["develop 직접 커밋"]
@@ -172,7 +172,7 @@ flowchart TD
   - **type↔path 불일치**(예: `feat`인데 src 런타임 미변경, `chore`인데 src 런타임 변경) **또는 추적가치 모호** → 사람에게 에스컬레이션. 과소추적(조용한·비싼 실패) > 과다추적(시끄러운·싼 실패)이므로 모호하면 이슈 쪽으로 기운다.
 - **측정-숫자 게이트(lane 무관).** `docs/reports/`·`docs/issues/`에 메트릭(수치)이 **신규·변경**되는 커밋은 직접 lane이라도 **commit 전 refuter 먼저** 실행한다 — 리퓨터 1번 축이 "리포트·docs 숫자 ↔ `results/*.json` 정합"이라, 숫자가 영구 기록에 진입하는 순간이 게이트 대상이다(트리거는 *재량*이 아니라 *사건*에 묶는다). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
 - 마일스톤은 사용하지 않는다. 영역은 라벨로 구분한다 (`area:labelers`, `area:classifier`, `area:augmenters`, `area:llm-eval`, `area:infra`, `docs` 등).
-- 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>` (`.github/ISSUE_TEMPLATE/` 템플릿 사용 권장)
+- 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>`
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
 - 커밋 메시지: 기존 컨벤션(한국어 제목 + `type(스코프):` 접두사) 유지, 본문 끝에 `refs #12` 참조. 최종 PR 또는 마지막 커밋에는 `closes #12`로 이슈 종결.
 - **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도. 이슈와 무관한 자유 형식 벤치마크·실험 리포트는 `docs/reports/`에 둔다.

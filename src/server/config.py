@@ -29,7 +29,7 @@ class ServerConfig:
     acquire_timeout_s: float = 10.0  # 세마포어 대기 타임아웃(초과 429)
     api_key: Optional[str] = None  # None 이면 인증 비활성
     host: str = '0.0.0.0'
-    port: int = 8005
+    port: int = 8008
 
     @classmethod
     def from_env(cls) -> 'ServerConfig':
@@ -55,7 +55,7 @@ class ServerConfig:
             acquire_timeout_s=_float('NER_SERVER_ACQUIRE_TIMEOUT_S', 10.0),
             api_key=os.environ.get('NER_SERVER_API_KEY') or None,
             host=os.environ.get('NER_SERVER_HOST', '0.0.0.0'),
-            port=_int('NER_SERVER_PORT', 8005),
+            port=_int('NER_SERVER_PORT', 8008),
         )
 
     def model_dir(self, lang: str) -> str:

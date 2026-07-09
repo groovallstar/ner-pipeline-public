@@ -23,9 +23,9 @@
 ```mermaid
 flowchart LR
     IN["입력 데이터<br/>JSONL 10종 (§1)"] --> TOK["토큰화 + BIO 라벨 정렬<br/>모델별 3갈래 (§2)"]
-    TOK --> SPLIT["데이터 나누기<br/>3분할 / K-fold / 원문 그룹 (§3)"]
+    TOK --> SPLIT["데이터 나누기<br/>3분할 / K-fold / 원문<br/>그룹 (§3)"]
     SPLIT --> TRAIN["모델 학습 (§4)"]
-    TRAIN --> EVAL["평가 · span F1로 채점 (§5)"]
+    TRAIN --> EVAL["평가 · span F1로 채점<br/>(§5)"]
     EVAL --> THR["신뢰도 임계값 조정 (§6)"]
     THR --> OUT["결과물 저장·배포 (§8)"]
 ```
@@ -233,12 +233,12 @@ strict + relaxed span F1.
 
 ```mermaid
 flowchart TD
-    M["가장 좋은 모델을 불러온다<br/>(float32로 — 반정밀도의 수치 오류를 피하려고)"]
-    M --> FW["문장을 모델에 넣어 토큰마다 라벨을 예측한다"]
-    FW --> DEC["토큰 라벨(BIO)을 이어붙여<br/>엔티티 span으로 되돌린다 (문자 위치 포함)"]
-    DEC --> P["예측 span<br/>(종류 · 시작 · 끝 · 신뢰도)"]
+    M["가장 좋은 모델을<br/>불러온다<br/>(float32로 — 반정밀도의<br/>수치 오류를 피하려고)"]
+    M --> FW["문장을 모델에 넣어<br/>토큰마다 라벨을 예측한다"]
+    FW --> DEC["토큰 라벨(BIO)을<br/>이어붙여<br/>엔티티 span으로<br/>되돌린다 (문자 위치<br/>포함)"]
+    DEC --> P["예측 span<br/>(종류 · 시작 · 끝 ·<br/>신뢰도)"]
     G["정답 span<br/>(종류 · 시작 · 끝)"] --> CMP
-    P --> CMP["예측과 정답 span을 맞춰 F1 계산<br/>strict(정확 일치) · relaxed(부분 겹침) 두 방식"]
+    P --> CMP["예측과 정답 span을 맞춰<br/>F1 계산<br/>strict(정확 일치) ·<br/>relaxed(부분 겹침) 두<br/>방식"]
 ```
 
 | 메트릭 | 매칭 | 비고 |

@@ -22,13 +22,13 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    SRC["원천 데이터<br/>JA: Stockmark 위키백과 (사람이 만든 정답, 5종)<br/>VI: WikiANN-vi (자동 생성 silver, 3종)"]
-    SRC --> S1["1 · 라벨링<br/>LLM으로 엔티티를 뽑고 정답과 비교해 채점<br/>JA는 정답 직접 평가 · VI는 재라벨 입력으로도 쓰임"]
-    S1 --> S2["2 · 증강<br/>VI: 3종을 5종으로 재라벨 + 두 모델 결과 병합<br/>공통: 합성 PII 5종을 문맥에 자연스럽게 주입"]
+    SRC["원천 데이터<br/>JA: Stockmark 위키백과<br/>(사람이 만든 정답, 5종)<br/>VI: WikiANN-vi (자동<br/>생성 silver, 3종)"]
+    SRC --> S1["1 · 라벨링<br/>LLM으로 엔티티를 뽑고<br/>정답과 비교해 채점<br/>JA는 정답 직접 평가 ·<br/>VI는 재라벨 입력으로도<br/>쓰임"]
+    S1 --> S2["2 · 증강<br/>VI: 3종을 5종으로<br/>재라벨 + 두 모델 결과<br/>병합<br/>공통: 합성 PII 5종을<br/>문맥에 자연스럽게 주입"]
     S2 --> DATA["학습용 데이터 완성<br/>canonical 10종 평면"]
-    DATA --> S3["3 · 검증<br/>VI silver 품질(모델 합의·바깥 지식·원본 비교)<br/>분류 평가의 원문 누출 차단 · PII 교차검증"]
-    S3 --> S4["4 · 분류<br/>10종 평면으로 BERT를 파인튜닝하고 span F1로 채점<br/>JA: 일본어 BERT · VI: XLM-R / PhoBERT"]
-    S4 --> OUT["최종 결과물<br/>가장 좋은 모델 + 점수·임계값 파일"]
+    DATA --> S3["3 · 검증<br/>VI silver 품질(모델<br/>합의·바깥 지식·원본<br/>비교)<br/>분류 평가의 원문 누출<br/>차단 · PII 교차검증"]
+    S3 --> S4["4 · 분류<br/>10종 평면으로 BERT를<br/>파인튜닝하고 span F1로<br/>채점<br/>JA: 일본어 BERT · VI:<br/>XLM-R / PhoBERT"]
+    S4 --> OUT["최종 결과물<br/>가장 좋은 모델 + 점수·<br/>임계값 파일"]
 ```
 
 핵심 관통 원리 — **char-offset span 이 단계 간 공통 통화(currency)**다.

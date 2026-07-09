@@ -4,17 +4,13 @@
 - 대상: `server.detect` 감지기 후보 2종 — 손규칙(codepoint) vs
   fastText-LID(`lid.176.ftz`)
 - gold 평가셋: FLORES-200 dev 샘플(자연어 10종) + 파생 4종, 1,398문장
-- 재현:
-  ```bash
-  # gold 재생성(파생 romaji 에 pykakasi 필요)
-  uv run --with pykakasi python -m server.scripts.lang_detect.gold \
-      --flores-dir <extracted>/flores200_dataset/dev --n 100 --seed 42
-  # 벤치(fasttext 는 numpy<2 필요 — PyPI fasttext 0.9.2 의 numpy-2 비호환)
-  uv run --with fasttext --with 'numpy<2' \
-      python -m server.scripts.lang_detect.bench --lid-model <path>/lid.176.ftz
-  ```
-- 원시 결과: `results/lang_detect_bench.json`(gitignore). gold·매니페스트는
-  `src/server/scripts/lang_detect/gold.jsonl`·`gold_manifest.json`.
+- 재현: 측정에 쓴 하네스(`server.scripts.lang_detect` — gold 빌더·후보·
+  혼동행렬·벤치)는 손규칙 채택이 확정된 뒤 폐기했다. 재실행 트리거가 없는
+  1회성 도구이고, 결론은 `server.detect` 의 손규칙 구현과 이 리포트에
+  남는다. 다시 필요하면 git 히스토리에서 되살린다 — gold 는 공개 데이터
+  (FLORES-200 dev)에서 seed 42·언어당 100문장으로 결정적으로 생성됐고,
+  파생 4종(한자only-ja·무부호-vi·romaji-ja·vi+ja)은 그 샘플의 결정적 함수다.
+- 원시 결과: `results/lang_detect_bench.json`(gitignore).
 
 ## 요약
 

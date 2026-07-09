@@ -32,10 +32,10 @@ VI 재라벨 silver(단계 2B)는 **이중 silver**라 절대 F1이 무의미하
 
 ```mermaid
 flowchart TD
-    S["VI 재라벨 silver<br/>(라벨을 두 번 자동으로 붙인 데이터)"]
-    S --> L1["레이어 1 · 두 모델이 얼마나 합의하나<br/>Gemma와 Qwen의 라벨 일치도(kappa)를 잰다"]
-    S --> L2["레이어 2 · 바깥 지식과 대조한다<br/>Wikipedia·Wikidata로 엔티티 종류를 독립 확인"]
-    S --> L3["레이어 3 · 원본 정답과 직접 비교<br/>WikiANN 3종 gold로 span F1을 잰다"]
+    S["VI 재라벨 silver<br/>(라벨을 두 번 자동으로<br/>붙인 데이터)"]
+    S --> L1["레이어 1 · 두 모델이<br/>얼마나 합의하나<br/>Gemma와 Qwen의 라벨<br/>일치도(kappa)를 잰다"]
+    S --> L2["레이어 2 · 바깥 지식과<br/>대조한다<br/>Wikipedia·Wikidata로<br/>엔티티 종류를 독립 확인"]
+    S --> L3["레이어 3 · 원본 정답과<br/>직접 비교<br/>WikiANN 3종 gold로 span<br/>F1을 잰다"]
 ```
 
 ### 레이어 1 — Cross-model agreement (kappa)
@@ -61,11 +61,11 @@ LLM이 붙인 라벨이 외부 지식 베이스(Wikipedia·Wikidata) 기준과 �
 
 ```mermaid
 flowchart TD
-    A["재라벨된 데이터<br/>(LLM이 붙인 엔티티 목록)"] --> B["엔티티 이름만 중복 없이 모은다"]
-    B --> C["1 · 이름으로 Wikipedia 문서를 찾아<br/>Wikidata 항목 번호를 얻는다"]
-    C --> D["2 · 그 항목이 무슨 종류인지 조회한다<br/>(사람·도시·조직 등)"]
-    D --> E["3 · 조회된 종류를 canonical 5종으로 바꾼다"]
-    E --> F["4 · LLM이 붙인 라벨과 맞는지 비교·집계"]
+    A["재라벨된 데이터<br/>(LLM이 붙인 엔티티 목록)"] --> B["엔티티 이름만 중복 없이<br/>모은다"]
+    B --> C["1 · 이름으로 Wikipedia<br/>문서를 찾아<br/>Wikidata 항목 번호를<br/>얻는다"]
+    C --> D["2 · 그 항목이 무슨<br/>종류인지 조회한다<br/>(사람·도시·조직 등)"]
+    D --> E["3 · 조회된 종류를<br/>canonical 5종으로 바꾼다"]
+    E --> F["4 · LLM이 붙인 라벨과<br/>맞는지 비교·집계"]
 ```
 
 | 단계 | 함수 | 엔드포인트/테이블 | 비고 |
@@ -145,10 +145,10 @@ span 단위로 계산한 micro-average.
 
 ```mermaid
 flowchart TD
-    S["원문 S = Hà Nội là thủ đô của Việt Nam.<br/>NER: Hà Nội=LOC, Việt Nam=LOC"]
+    S["원문 S = Hà Nội là thủ<br/>đô của Việt Nam.<br/>NER: Hà Nội=LOC, Việt<br/>Nam=LOC"]
     S --> R1["행1: S + Email: an@x.vn<br/>← 전체 텍스트 유니크"]
-    S --> R2["행2: S + SĐT: 0901 234 567<br/>← 전체 텍스트 유니크"]
-    S --> R3["행3: S + CCCD: 0790 1234 5678<br/>← 전체 텍스트 유니크"]
+    S --> R2["행2: S + SĐT: 0901 234<br/>567<br/>← 전체 텍스트 유니크"]
+    S --> R3["행3: S + CCCD: 0790<br/>1234 5678<br/>← 전체 텍스트 유니크"]
 ```
 
 행 단위 분할이면 행1→train, 행3→test로 흩어져 모델이 train에서 S의 NER
@@ -177,9 +177,9 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["① 나눌 때 막는다 (예방)<br/>같은 원문에서 나온 행들을 한 덩어리로 묶어<br/>한 fold에만 넣는다 → 애초에 누출이 불가능"]
-    A --> B["② 합칠 때 확인한다 (탐지)<br/>fold별 예측을 합치기 전, 같은 원문이<br/>두 fold에 걸치면 오류를 낸다"]
-    B --> C["③ 테스트로 굳힌다 (회귀 방지)<br/>원문 중복이 0인지 자동 테스트로 강제해<br/>데이터를 다시 만들어도 재발하지 않게 한다"]
+    A["① 나눌 때 막는다 (예방)<br/>같은 원문에서 나온<br/>행들을 한 덩어리로 묶어<br/>한 fold에만 넣는다 →<br/>애초에 누출이 불가능"]
+    A --> B["② 합칠 때 확인한다<br/>(탐지)<br/>fold별 예측을 합치기<br/>전, 같은 원문이<br/>두 fold에 걸치면 오류를<br/>낸다"]
+    B --> C["③ 테스트로 굳힌다 (회귀<br/>방지)<br/>원문 중복이 0인지 자동<br/>테스트로 강제해<br/>데이터를 다시 만들어도<br/>재발하지 않게 한다"]
 ```
 
 - **BC**: `group_key=None`(기본)이면 unit=행 1개라 기존 행 단위 분할과

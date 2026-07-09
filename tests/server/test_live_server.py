@@ -79,6 +79,9 @@ def test_ner_single_live(base_url):
     assert r.status_code == 200
     body = r.json()
     assert body['lang'] == 'ja'
+    # 빈 결과를 통과시키지 않는다 — 아래 offset 루프는 entities 가 비면
+    # 0회 돌아 vacuous 하게 참이 된다(모델이 아무것도 못 뽑아도 통과).
+    assert body['entities'], 'expected at least one entity'
     for ent in body['entities']:
         assert text[ent['start_char']:ent['end_char']] == ent['text']
 

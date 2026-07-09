@@ -19,13 +19,13 @@ match로 비교한다. BIO 변환·seqeval·TagAligner를 전부 우회한다.
 flowchart TD
     JA["JA · Stockmark<br/>사람이 만든 정답 5종"]
     VI["VI · WikiANN<br/>재라벨 silver 5종"]
-    JA & VI --> LOAD["데이터를 읽어<br/>문장 + 정답 위치로 만든다"]
-    LOAD --> LLM["문장을 나눠 LLM(vLLM/OpenAI)에<br/>넣고 엔티티를 뽑는다"]
-    LLM --> RAW["LLM이 뽑은 엔티티<br/>(글자·종류만, 위치는 없음)"]
-    RAW --> MATCH["원문에서 그 글자를 찾아<br/>문자 위치(시작·끝)를 채운다"]
+    JA & VI --> LOAD["데이터를 읽어<br/>문장 + 정답 위치로<br/>만든다"]
+    LOAD --> LLM["문장을 나눠 LLM(vLLM/<br/>OpenAI)에<br/>넣고 엔티티를 뽑는다"]
+    LLM --> RAW["LLM이 뽑은 엔티티<br/>(글자·종류만, 위치는<br/>없음)"]
+    RAW --> MATCH["원문에서 그 글자를 찾아<br/>문자 위치(시작·끝)를<br/>채운다"]
     MATCH --> PRED["예측 엔티티<br/>(글자·종류·시작·끝)"]
     LOAD -. 정답 위치 .-> F1
-    PRED --> F1["예측과 정답을 맞춰 span F1을 잰다<br/>(위치·종류가 정확히 같아야 정답)"]
+    PRED --> F1["예측과 정답을 맞춰 span<br/>F1을 잰다<br/>(위치·종류가 정확히<br/>같아야 정답)"]
     F1 --> REP["결과를 표로 출력"]
 ```
 
@@ -59,7 +59,7 @@ ko/ja/vi 라벨러는 백엔드별 추상 베이스 2종을 상속하고 **언�
 
 ```mermaid
 flowchart TD
-    subgraph base["백엔드별 공통 베이스 (2종)"]
+    subgraph base["백엔드별 공통 베이스<br/>(2종)"]
         BV["vLLM 백엔드용 베이스"]
         BO["OpenAI 백엔드용 베이스"]
     end
@@ -67,7 +67,7 @@ flowchart TD
     BV --> VV["VI 라벨러 (vLLM)"]
     BO --> JO["JA 라벨러 (OpenAI)"]
     BO --> VO["VI 라벨러 (OpenAI)"]
-    LP(["언어팩<br/>엔티티 종류 · 프롬프트 · 언어코드"]) -. 주입 .-> JV & VV & JO & VO
+    LP(["언어팩<br/>엔티티 종류 · 프롬프트 ·<br/>언어코드"]) -. 주입 .-> JV & VV & JO & VO
 ```
 
 ### 공개 메서드 (JA·VI가 쓰는 것)
