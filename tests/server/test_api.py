@@ -18,7 +18,7 @@ class StubRegistry:
         self._langs = langs
         self._unavailable = set(unavailable)
 
-    def predict(self, text, lang, abstain=True):
+    def predict(self, text, lang, apply_threshold=True):
         if lang in self._unavailable:
             raise ModelUnavailable(f'model for lang {lang!r} is not loaded')
         first = text.split(' ', 1)[0] if text else ''
@@ -32,8 +32,8 @@ class StubRegistry:
             'score': 1.0,
         }]
 
-    def predict_batch(self, texts, langs, abstain=True):
-        return [self.predict(t, lang, abstain)
+    def predict_batch(self, texts, langs, apply_threshold=True):
+        return [self.predict(t, lang, apply_threshold)
                 for t, lang in zip(texts, langs)]
 
     def health(self):
@@ -76,7 +76,7 @@ def test_batch_routes_through_predict_batch():
     (회귀) 첫 단어 'x'/'y' 가 나와 깨진다 — app↔배치 forward 연결을 고정한다.
     """
     class _BatchMarker(StubRegistry):
-        def predict_batch(self, texts, langs, abstain=True):
+        def predict_batch(self, texts, langs, apply_threshold=True):
             return [[{'label': 'PER', 'start_char': 0, 'end_char': 1,
                       'text': 'B', 'score': 1.0}] for _ in texts]
 
@@ -117,7 +117,7 @@ def test_unsupported_autodetect_single():
 def test_unsupported_bypasses_model_predict():
     """미지원 입력은 predict 를 호출하지 않는다(predict 가 터져도 200)."""
     class _Raising(StubRegistry):
-        def predict(self, text, lang, abstain=True):
+        def predict(self, text, lang, apply_threshold=True):
             raise AssertionError('predict called for unsupported input')
 
     r = _client(registry=_Raising()).post(

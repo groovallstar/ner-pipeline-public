@@ -1,6 +1,6 @@
 """정밀도 parity 측정 — production 경로 결정-불일치 카운트(축 분해).
 
-fp32(레퍼런스) vs bf16(autocast) 의 `predict(abstain=True)` 출력 span 집합을
+fp32(레퍼런스) vs bf16(autocast) 의 `predict(apply_threshold=True)` 출력 span 집합을
 엔티티별로 비교해 등장·소멸·라벨변경된 span 의 절대 개수를 센다. 게이트는
 엔티티별 변경 span ≤ max(2, 0.5%×support) — support 는 fp32 레퍼런스 span 수.
 bf16 run-to-run 재현성(>=3 run 대칭차 worst-case)도 측정한다. micro-F1 델타는
@@ -36,7 +36,7 @@ def load_test_texts(lang: str, model_root: str) -> List[str]:
     return texts
 
 
-def predict_all(lm: LangModel, texts: List[str], abstain: bool,
+def predict_all(lm: LangModel, texts: List[str], apply_threshold: bool,
                 autocast_dtype: Optional[torch.dtype], mode: str = 'seq',
                 batch_size: int = 32) -> List[Set[SpanKey]]:
     """텍스트별 predict 결과를 (label,start,end) 집합 리스트로 반환.
@@ -54,11 +54,12 @@ def predict_all(lm: LangModel, texts: List[str], abstain: bool,
     if mode == 'batch':
         for i in range(0, len(texts), batch_size):
             for spans in lm.predict_many(texts[i:i + batch_size],
-                                         abstain=abstain):
+                                         apply_threshold=apply_threshold):
                 rows.append(to_keys(spans))
     else:
         for t in texts:
-            rows.append(to_keys(lm.predict(t, abstain=abstain)))
+            rows.append(to_keys(
+                lm.predict(t, apply_threshold=apply_threshold)))
     return rows
 
 
@@ -101,14 +102,14 @@ def gate(changed: Dict[str, int], support: Dict[str, int]):
     return ok, rows
 
 
-def reproducibility(lm: LangModel, texts: List[str], abstain: bool,
+def reproducibility(lm: LangModel, texts: List[str], apply_threshold: bool,
                     dtype: torch.dtype, runs: int, mode: str = 'seq',
                     batch_size: int = 32) -> int:
     """run-to-run 대칭차 worst-case(0 이면 결정적). 출시 경로(mode)로 잰다."""
-    base = predict_all(lm, texts, abstain, dtype, mode, batch_size)
+    base = predict_all(lm, texts, apply_threshold, dtype, mode, batch_size)
     worst = 0
     for _ in range(max(0, runs - 1)):
-        nxt = predict_all(lm, texts, abstain, dtype, mode, batch_size)
+        nxt = predict_all(lm, texts, apply_threshold, dtype, mode, batch_size)
         diff = sum(len(a ^ b) for a, b in zip(base, nxt))
         worst = max(worst, diff)
     return worst
@@ -145,8 +146,8 @@ def main() -> None:
 
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
-    ref = predict_all(lm, texts, abstain=True, autocast_dtype=None)
-    bf16 = predict_all(lm, texts, abstain=True,
+    ref = predict_all(lm, texts, apply_threshold=True, autocast_dtype=None)
+    bf16 = predict_all(lm, texts, apply_threshold=True,
                        autocast_dtype=torch.bfloat16, mode='batch',
                        batch_size=args.batch_size)
     changed, support = decision_mismatch(ref, bf16)
@@ -159,7 +160,7 @@ def main() -> None:
         'lang': args.lang,
         'axis': 'fp32_seq -> bf16_batch',
         'config': {
-            'abstain': True,
+            'apply_threshold': True,
             'thresholds_applied': lm.has_thresholds,
             'n_texts': len(texts),
             'batch_size': args.batch_size,

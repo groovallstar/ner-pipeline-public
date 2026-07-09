@@ -165,7 +165,7 @@ class LangModel:
         return spans
 
     def predict_many(self, texts: List[str],
-                     abstain: bool = True) -> List[List[dict]]:
+                     apply_threshold: bool = True) -> List[List[dict]]:
         """여러 텍스트를 언어 공통 배치 forward 로 추론(입력 순서 보존).
 
         각 텍스트를 chunk 분할한 뒤 전 텍스트의 chunk 를 [TotalChunks,
@@ -192,16 +192,16 @@ class LangModel:
         out: List[List[dict]] = []
         for ti, text in enumerate(texts):
             spans = per_text[ti]
-            if abstain and self.thresholds:
+            if apply_threshold and self.thresholds:
                 spans = apply_thresholds([spans], self.thresholds)[0]
             out.append([_to_canonical(s, text) for s in spans])
         return out
 
-    def predict(self, text: str, abstain: bool = True) -> List[dict]:
+    def predict(self, text: str, apply_threshold: bool = True) -> List[dict]:
         """텍스트 → canonical span 리스트.
 
         긴 입력은 chunk 분할 후 모든 chunk 를 한 배치 forward 로 추론하고 각
-        span 을 원문 글로벌 offset 으로 병합한다. abstain=True 면 로드된
+        span 을 원문 글로벌 offset 으로 병합한다. apply_threshold=True 면 로드된
         임계값을 적용(없으면 raw).
         """
         chunks = split_for_length(text, self.tokenizer, self.max_length)
@@ -210,7 +210,7 @@ class LangModel:
         # confidence_threshold.apply_thresholds 가 type 필드로 필터하며,
         # 이는 학습-시점 eval 경로와 동일하다(parity 보장). decode 가 동일
         # (type,start,end)를 이미 병합해 중복이 없다.
-        if abstain and self.thresholds:
+        if apply_threshold and self.thresholds:
             spans = apply_thresholds([spans], self.thresholds)[0]
         return [_to_canonical(s, text) for s in spans]
 
@@ -244,15 +244,15 @@ class ModelRegistry:
         return cls(models, requested=list(config.langs))
 
     def predict(self, text: str, lang: str,
-                abstain: bool = True) -> List[dict]:
+                apply_threshold: bool = True) -> List[dict]:
         """언어 모델로 추론. 미로드 언어면 ModelUnavailable."""
         model = self._models.get(lang)
         if model is None:
             raise ModelUnavailable(f'model for lang {lang!r} is not loaded')
-        return model.predict(text, abstain=abstain)
+        return model.predict(text, apply_threshold=apply_threshold)
 
     def predict_batch(self, texts: List[str], langs: List[str],
-                      abstain: bool = True) -> List[List[dict]]:
+                      apply_threshold: bool = True) -> List[List[dict]]:
         """(text, lang) 배치를 언어별로 묶어 추론하고 입력 순서로 복원한다.
 
         같은 언어의 텍스트들을 한 forward 배치(predict_many)로 묶어 GPU
@@ -268,7 +268,7 @@ class ModelRegistry:
                 raise ModelUnavailable(
                     f'model for lang {lang!r} is not loaded')
             sub_out = model.predict_many(
-                [texts[i] for i in idxs], abstain=abstain)
+                [texts[i] for i in idxs], apply_threshold=apply_threshold)
             for i, spans in zip(idxs, sub_out):
                 results[i] = spans
         return results

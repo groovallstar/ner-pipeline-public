@@ -83,15 +83,15 @@ def _assert_batched_matches_per_chunk(model, text):
     정밀도를 fp32 로 고정(autocast off)해 배치(B>1)·단건(B=1)이 같은 커널
     정밀도를 쓰게 한다 — 배치화 자체(pad/stack/순서·offset 복원)의 등가만
     보기 위함이다. bf16 배치의 정밀도 parity 는 별도 측정(parity 스크립트)이
-    담당한다. abstain=False 로 임계값 경로도 배제한다.
+    담당한다. apply_threshold=False 로 임계값 경로도 배제한다.
     """
     model.autocast_dtype = None
     chunks = split_for_length(text, model.tokenizer, model.max_length)
     assert len(chunks) > 1  # 강제 분할 — 배치 경로가 실제로 작동
-    batched = model.predict(text, abstain=False)
+    batched = model.predict(text, apply_threshold=False)
     per_chunk = []
     for sub, base in chunks:
-        for e in model.predict(sub, abstain=False):
+        for e in model.predict(sub, apply_threshold=False):
             per_chunk.append({'label': e['label'],
                               'start_char': e['start_char'] + base,
                               'end_char': e['end_char'] + base,
@@ -216,7 +216,7 @@ def test_vi_gold_entities_never_straddle_chunk_boundary():
             f"vi entity {text[e['start']:e['end']]!r} straddles a boundary"
 
 
-def _ja_overall_f1(model, rows, abstain):
+def _ja_overall_f1(model, rows, apply_threshold):
     """ja test rows 에 대한 strict overall F1 — 서버 predict 경로로 계산.
 
     gold/pred 를 metrics 모듈이 요구하는 {type,start,end} 형식으로 변환.
@@ -230,7 +230,8 @@ def _ja_overall_f1(model, rows, abstain):
         pred_list.append([
             {'type': s['label'], 'start': s['start_char'],
              'end': s['end_char']}
-            for s in model.predict(row['text'], abstain=abstain)])
+            for s in model.predict(row['text'],
+                                   apply_threshold=apply_threshold)])
     return compute_offset_span_f1(gold_list, pred_list)['overall']
 
 
@@ -247,7 +248,7 @@ def test_ja_parity_operating_point():
     rows = load_jsonl(_JA_TEST)
     expected = json.load(open(_JA_METRICS, encoding='utf-8'))[
         'abstention']['overall_operating']
-    got = _ja_overall_f1(model, rows, abstain=True)
+    got = _ja_overall_f1(model, rows, apply_threshold=True)
     assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
     assert got['precision'] == pytest.approx(expected['precision'], abs=1e-6)
     assert got['recall'] == pytest.approx(expected['recall'], abs=1e-6)
@@ -262,7 +263,7 @@ def test_ja_parity_baseline_raw():
     rows = load_jsonl(_JA_TEST)
     expected = json.load(open(_JA_METRICS, encoding='utf-8'))[
         'abstention']['overall_baseline']
-    got = _ja_overall_f1(model, rows, abstain=False)
+    got = _ja_overall_f1(model, rows, apply_threshold=False)
     assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
 
 
@@ -295,8 +296,8 @@ def _assert_predict_many_matches_single(model, texts):
     배치의 정밀도 parity 는 parity 스크립트가 따로 본다.
     """
     model.autocast_dtype = None
-    batched = model.predict_many(texts, abstain=False)
-    single = [model.predict(t, abstain=False) for t in texts]
+    batched = model.predict_many(texts, apply_threshold=False)
+    single = [model.predict(t, apply_threshold=False) for t in texts]
     assert len(batched) == len(texts)
     for b, s in zip(batched, single):
         _assert_spans_equal(b, s)
@@ -344,7 +345,8 @@ def test_predict_batch_mixed_lang_matches_single():
         langs.append('ja')
         texts.append(vr['text'])
         langs.append('vi')
-    out = registry.predict_batch(texts, langs, abstain=False)
+    out = registry.predict_batch(texts, langs, apply_threshold=False)
     assert len(out) == len(texts)
     for i, (t, lang) in enumerate(zip(texts, langs)):
-        _assert_spans_equal(out[i], registry.predict(t, lang, abstain=False))
+        _assert_spans_equal(
+            out[i], registry.predict(t, lang, apply_threshold=False))

@@ -2,7 +2,7 @@
 
 배치 엔드포인트의 현행 경로(텍스트별 순차 predict)를 baseline 으로 동결하고,
 정밀도(fp32/tf32/bf16)를 바꿔가며 처리량을 비교한다. 측정 경계는
-tokenize→forward→decode→threshold(abstain) 까지 end-to-end 다. 입력은 배포
+tokenize→forward→decode→threshold(apply_threshold) 까지 end-to-end 다. 입력은 배포
 test set(`/data/ner/{lang}/data/test.jsonl`) 의 고정 분포를 쓴다 — parity
 측정과 동일 입력이라 처리량·정밀도를 같은 기준으로 비교할 수 있다.
 
@@ -40,37 +40,40 @@ def _set_tf32(enabled: bool) -> None:
     torch.backends.cudnn.allow_tf32 = enabled
 
 
-def _run_seq(lm: LangModel, texts: List[str], abstain: bool) -> None:
+def _run_seq(lm: LangModel, texts: List[str], apply_threshold: bool) -> None:
     """순차 경로 — 텍스트별 단건 predict(배치 핸들러의 옛 경로 = baseline).
 
     정밀도는 lm.autocast_dtype(predict 내장 autocast)이 결정한다 — 측정과
     출시 런타임이 같은 코드 경로를 타도록 바깥에서 감싸지 않는다.
     """
     for t in texts:
-        lm.predict(t, abstain=abstain)
+        lm.predict(t, apply_threshold=apply_threshold)
 
 
-def _run_batch(lm: LangModel, texts: List[str], abstain: bool,
+def _run_batch(lm: LangModel, texts: List[str], apply_threshold: bool,
                batch_size: int) -> None:
     """배치 경로 — batch_size 씩 묶어 predict_many(cross-text forward)."""
     for i in range(0, len(texts), batch_size):
-        lm.predict_many(texts[i:i + batch_size], abstain=abstain)
+        lm.predict_many(texts[i:i + batch_size],
+                        apply_threshold=apply_threshold)
 
 
-def measure(lm: LangModel, texts: List[str], abstain: bool, warmup: int,
-            reps: int, mode: str, batch_size: int) -> List[float]:
+def measure(lm: LangModel, texts: List[str], apply_threshold: bool,
+            warmup: int, reps: int, mode: str,
+            batch_size: int) -> List[float]:
     """warmup 후 reps 회, 전체 셋 처리시간(ms) 분포를 잰다(seq|batch)."""
     def warm() -> None:
         if mode == 'batch':
-            lm.predict_many(texts[:batch_size], abstain=abstain)
+            lm.predict_many(texts[:batch_size],
+                            apply_threshold=apply_threshold)
         else:
-            lm.predict(texts[0], abstain=abstain)
+            lm.predict(texts[0], apply_threshold=apply_threshold)
 
     def run() -> None:
         if mode == 'batch':
-            _run_batch(lm, texts, abstain, batch_size)
+            _run_batch(lm, texts, apply_threshold, batch_size)
         else:
-            _run_seq(lm, texts, abstain)
+            _run_seq(lm, texts, apply_threshold)
 
     for _ in range(warmup):
         warm()
@@ -114,7 +117,8 @@ def main() -> None:
                     choices=['fp32', 'tf32', 'bf16'])
     ap.add_argument('--mode', default='seq', choices=['seq', 'batch'])
     ap.add_argument('--batch-size', type=int, default=32)
-    ap.add_argument('--abstain', default='true', choices=['true', 'false'])
+    ap.add_argument('--apply-threshold', default='true',
+                    choices=['true', 'false'])
     ap.add_argument('--warmup', type=int, default=5)
     ap.add_argument('--reps', type=int, default=5)
     ap.add_argument('--out', default=None, help='write result JSON to path')
@@ -123,14 +127,14 @@ def main() -> None:
     if not torch.cuda.is_available():
         raise SystemExit('CUDA required for throughput bench')
 
-    abstain = args.abstain == 'true'
+    apply_threshold = args.apply_threshold == 'true'
     cfg = ServerConfig.from_env()
     lm = LangModel(args.lang, cfg.model_dir(args.lang),
                    cfg.thresholds_path(args.lang), cfg.max_length)
     texts = load_test_texts(args.lang, cfg.model_root)
     _resolve_precision(lm, args.precision)
 
-    times = measure(lm, texts, abstain, args.warmup, args.reps,
+    times = measure(lm, texts, apply_threshold, args.warmup, args.reps,
                     args.mode, args.batch_size)
     n = len(texts)
     med = statistics.median(times)
@@ -142,8 +146,8 @@ def main() -> None:
             'tf32': args.precision == 'tf32',
             'mode': args.mode,
             'batch_size': args.batch_size if args.mode == 'batch' else None,
-            'abstain': abstain,
-            'thresholds_applied': lm.has_thresholds and abstain,
+            'apply_threshold': apply_threshold,
+            'thresholds_applied': lm.has_thresholds and apply_threshold,
             'n_texts': n,
             'tokens_total': tokens,
             'max_length': cfg.max_length,

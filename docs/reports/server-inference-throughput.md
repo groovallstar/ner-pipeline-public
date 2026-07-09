@@ -7,7 +7,7 @@ cross-text 배치 forward)와 동시성 과부하 제어 측정. 관련 이슈: 
 
 - HW: RTX A6000 (유휴 GPU 격리 — `CUDA_VISIBLE_DEVICES`).
 - 입력: 배포 test set 전체(ja 100문장 / vi 101문장), 파일 순서 고정.
-- 경로: production end-to-end `predict`/`predict_many`(abstain=True,
+- 경로: production end-to-end `predict`/`predict_many`(apply_threshold=True,
   tokenize→forward→decode→threshold). ja 임계 적용, vi 임계 부재→raw.
 - 프로토콜: warmup 10 + reps 80 median, `torch.cuda.synchronize()`, 배치
   B=32. 스크립트 `src/server/scripts/throughput/{bench,parity}.py`.
@@ -34,7 +34,7 @@ cross-text 배치 forward)와 동시성 과부하 제어 측정. 관련 이슈: 
 
 ## 정밀도 parity — 출시 구성 게이트
 
-production 경로(abstain=True) 결정-불일치 카운트. 게이트: 엔티티별 변경
+production 경로(apply_threshold=True) 결정-불일치 카운트. 게이트: 엔티티별 변경
 span ≤ max(2, 0.5%×support). bf16 run-to-run 결정적(3-run 대칭차 0).
 
 | 축 | vi 변경 | ja 변경 | micro-F1(진단) |

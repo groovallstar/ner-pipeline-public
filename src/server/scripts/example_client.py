@@ -8,7 +8,7 @@
 
 사용:
     python -m server.scripts.example_client \\
-        --base-url http://localhost:8005 [--api-key KEY]
+        --base-url http://localhost:8008 [--api-key KEY]
 """
 
 import argparse
@@ -27,7 +27,7 @@ class NERClient:
     해, 413·429 같은 계약 에러를 삼키지 않는다.
     """
 
-    def __init__(self, base_url: str = 'http://localhost:8005',
+    def __init__(self, base_url: str = 'http://localhost:8008',
                  api_key: Optional[str] = None, timeout: float = 30.0):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
@@ -129,7 +129,7 @@ def run_demo(client: NERClient, max_chars: int = 20000) -> int:
 def main() -> None:
     p = argparse.ArgumentParser(
         description='Example NER API client + live self-check.')
-    p.add_argument('--base-url', default='http://localhost:8005',
+    p.add_argument('--base-url', default='http://localhost:8008',
                    help='Server base URL')
     p.add_argument('--api-key', default=None,
                    help='x-api-key header (if server auth is enabled)')
