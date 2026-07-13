@@ -53,7 +53,7 @@ DEFAULT_DATA = {
 DEFAULT_MODEL = {
     'ja': 'tohoku-nlp/bert-base-japanese-v3',
     'vi': 'xlm-roberta-base',
-    'ko': 'kakaobank/kf-deberta-base',
+    'ko': 'monologg/koelectra-base-v3-discriminator',
 }
 
 

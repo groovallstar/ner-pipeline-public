@@ -392,8 +392,8 @@ results/classifier/{ja,vi,ko}/
 | 누출-free | (원문 중복 적음) | `--group-key orig` 필수(WikiANN 원문 중복) |
 | 출하 | 번들 + `eval_ja_ner_test.py` | `eval_vi_ner_test`(`/data/ner/vi`) |
 
-KO는 `kakaobank/kf-deberta-base`(DeBERTa 계열, `--precision bf16` 권장),
-`data/klue/pii_all.jsonl`.
+KO는 `monologg/koelectra-base-v3-discriminator`(ELECTRA 계열, `--precision fp16`
+기본), `data/klue/pii_all.jsonl`.
 
 ---
 
@@ -403,7 +403,7 @@ KO는 `kakaobank/kf-deberta-base`(DeBERTa 계열, `--precision bf16` 권장),
 # 본 학습
 python -m ner.classifier --lang ja
 python -m ner.classifier --lang vi --epochs 5 --batch-size 16
-python -m ner.classifier --lang ko --precision bf16
+python -m ner.classifier --lang ko
 
 # 스모크 (100/25/50, 1 epoch — CI·dev)
 python -m ner.classifier --lang ja --smoke

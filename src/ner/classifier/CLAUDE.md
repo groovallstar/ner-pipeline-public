@@ -34,9 +34,9 @@ python -m ner.classifier --lang ja --group-key id
 # VI 본 학습 (xlm-roberta-base 기본 모델) — orig 가 원문을 묶는다
 python -m ner.classifier --lang vi --group-key orig --epochs 5 --batch-size 16
 
-# KO 본 학습 (kf-deberta-base 기본 모델, data/klue/pii_all.jsonl)
+# KO 본 학습 (koelectra-base-v3 기본 모델, data/klue/pii_all.jsonl)
 # 원문당 1행이라 형제가 없다 — id 도 none 도 같은 분할이며 둘 다 통과한다
-python -m ner.classifier --lang ko --group-key id --precision bf16
+python -m ner.classifier --lang ko --group-key id
 
 # 스모크 (100 train / 25 valid / 50 test / 1 epoch — CI·dev 검증용)
 python -m ner.classifier --lang ja --group-key id --smoke
@@ -101,7 +101,7 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 기본값:
 - `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/origin.jsonl`
-- `--lang ko`: 모델 `kakaobank/kf-deberta-base`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). DeBERTa 계열이라 `--precision bf16` 권장
+- `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
 - 재현성 (`--train-seed`): 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·dropout·셔플을 고정해 재현 가능한 run 이 된다. GPU FP 비결합에 따른 seed-내 잔여 비결정성(loss ~1e-4)은 effect size 대비 무시 가능 — 비교 측정은 양 팔을 같은 `--train-seed` 로 고정하거나 multi-seed paired 로 본다. `metrics.json` 에 `train_seed`·`precision` 기록.
