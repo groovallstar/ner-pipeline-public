@@ -198,7 +198,7 @@ flowchart TD
 - `text` 전체 문장 중복 fallback은 **신뢰 근거가 아니다.** PII 주입이 문장을
   재작성하는 코퍼스(KO·VI)에서는 형제끼리 글자가 전부 달라 하나도 못 잡는다.
   `pooled_metrics.json`의 `leak_check_basis`가 판정 근거(`group`/`orig`/`text`/
-  `none`)를 남기고, `metrics.variance`는 `text`·`none`을 미검증으로 취급한다.
+  `none`)를 남기고, `validity`는 `text`·`none`을 미검증으로 취급한다.
 
 ### 정량 결과 (영구 인용)
 

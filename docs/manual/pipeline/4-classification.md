@@ -164,7 +164,7 @@ valid=fold (K+1)%N, train=나머지. `fold_index`를 0..N-1로 돌리면 모든 
 `validate_group_key`가 학습 전에 거부한다(더 강하게 묶는 후보 필드 탐지).
 
 `none`이면 누출 카운터는 `0`이 아니라 `null`(미측정)로 기록되고,
-`metrics.variance.compare`는 이를 `INVALID`로 판정한다. 발견·정량·가드
+`validity.compare`는 이를 `INVALID`로 판정한다. 발견·정량·가드
 상세는 [3. 검증 §3B](3-verification.md#3b-측정-무결성--cross-fold-누출-차단).
 
 > **BC**: `group_key=None`(기본)이면 unit=행 1개라 기존 행 단위 분할과
@@ -263,7 +263,7 @@ flowchart TD
 - per-entity: 10종 각각 micro-F1·precision·recall·support.
 - `return_spans=True`면 `gold_spans_list`/`pred_spans_list` 추가(kfold
   pooled 평가용), `capture_timing=True`면 load/infer 초.
-- 실험 간 per-entity F1 변화가 노이즈인지 실측인지는 `metrics.variance`로
+- 실험 간 per-entity F1 변화가 노이즈인지 실측인지는 `validity`로
   판정한다 — 재학습 없이 기존 `fold*/metrics.json`·`pooled_metrics.json`만
   읽는다. 세 축: **같은 자**(비교 가능성)·**누출**·**노이즈 밴드**.
 - **같은 자(비교 가능성)**: `RULER = (lang, data_fingerprint, kfold,

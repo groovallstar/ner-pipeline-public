@@ -62,7 +62,21 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 |------|------|
 | `bio_metrics.py` | seqeval 기반 BIO 레벨 메트릭 |
 | `span_metrics.py` | `compute_offset_span_f1` 등 span 레벨 메트릭 |
-| `variance/` | K-fold 결과의 비교 유효성 게이트 (재학습 0회). 축별 서브모듈로 분리 — `comparability`(같은 자: `RULER=(lang,data_fingerprint,kfold,group_key,seed,stratify)`, 내용 지문이 경로를 대체해 gold 를 고치면 거부), `leakage`(근거 `leak_check_basis` 가 신뢰 가능한 0 만 통과, 관측된 누출은 근거 약해도 FAIL), `noise`(pooled Δ vs σ_repro/σ_fold + fold 방향 일관성 게이트, 조이기 전용·false PASS 불가), `gate.compare`(셋 통합). `_common` 은 fold/pooled IO 공유. `__init__` 이 공개 API re-export — `from ner.metrics.variance import compare`·`python -m ner.metrics.variance` 는 분리 전과 동일 |
+
+### validity/
+
+K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`·`pooled_metrics.json` 만 읽어 두 실험을 비교해도 되는지·개선이 노이즈인지 실측인지 판정한다. `metrics/`(한 run 의 F1 계산)를 한 줄도 import 하지 않는 다른 고도의 관심사라 최상위 패키지로 분리했다. CLI: `python -m ner.validity {std,repro,compare}`.
+
+| 파일 | 역할 |
+|------|------|
+| `comparability.py` | 같은 자(`RULER=lang·data_fingerprint·kfold·group_key·seed·stratify`)로 쟀나 — 내용 지문이 경로를 대체해 gold 를 고치면 비교 거부 |
+| `leakage.py` | pooled cross-fold 누출 카운터 + 근거(`leak_check_basis`) — 신뢰 근거(group·orig)로 센 0 만 통과, 관측된 누출은 근거 약해도 FAIL |
+| `variance.py` | σ_fold·σ_repro·paired Δ·방향 일관성(조이기 전용·false PASS 불가) — 노이즈 밴드 재료 |
+| `gate.py` | `compare` — 세 축 통합 verdict(`PASS/FAIL/INVALID/INCONCLUSIVE`) |
+| `_common.py` | fold/pooled IO 공유 |
+| `__init__.py` | 공개 API re-export (`from ner.validity import compare`) |
+
+세 검증은 각자 독립 함수로 호출 가능하다. 어떤 검증 부분집합을 통과해야 '실험 완료'인지의 조합·우선순위·선언은 채점규칙(자)을 바꾸는 별도 하네스의 몫이며, 그때 정의-시점 반박자를 건다.
 
 ### scripts/
 

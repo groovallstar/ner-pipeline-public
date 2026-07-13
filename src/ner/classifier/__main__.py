@@ -192,7 +192,7 @@ def main():
     # 누출 카운터는 0 을 내므로, 학습을 시작하기 전에 크게 실패해야 한다.
     validate_group_key(rows, group_key)
     n_rows, n_groups = group_stats(rows, group_key)
-    # 지문·stratify 는 비교 유효성 게이트(metrics.variance)의 '자' 를 이룬다 —
+    # 지문·stratify 는 비교 유효성 게이트(validity)의 '자' 를 이룬다 —
     # 지문은 test gold 정체성(내용·순서), stratify 는 fold 멤버십을 결정한다.
     data_fp = dataset_fingerprint(rows)
     stratify = not args.no_stratify

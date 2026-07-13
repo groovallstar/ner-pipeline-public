@@ -1,4 +1,4 @@
-"""판정 축 — 세 축(comparability·leakage·noise)을 통합해 최종 verdict 를 낸다.
+"""판정 축 — 세 축(comparability·leakage·variance)을 통합해 최종 verdict 를 낸다.
 
 compare() 는 비교 가능성·누출·노이즈 밴드·방향 일관성을 한 판정 dict 로 묶는다.
 세 축이 만나는 유일한 통합점이라 축 모듈 위에 얹힌다.
@@ -6,13 +6,13 @@ compare() 는 비교 가능성·누출·노이즈 밴드·방향 일관성을 �
 from pathlib import Path
 from typing import Dict, Optional
 
-from ner.metrics.variance._common import (
+from ner.validity._common import (
     _pooled_per_entity,
     load_pooled_metrics,
 )
-from ner.metrics.variance.comparability import check_comparable, run_config
-from ner.metrics.variance.leakage import TRUSTED_LEAK_BASIS, leakage
-from ner.metrics.variance.noise import (
+from ner.validity.comparability import check_comparable, run_config
+from ner.validity.leakage import TRUSTED_LEAK_BASIS, leakage
+from ner.validity.variance import (
     MIN_CONSISTENCY_FRAC,
     _fold_consistency,
     fold_paired_deltas,

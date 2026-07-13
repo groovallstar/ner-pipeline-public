@@ -2,12 +2,12 @@
 
 RULER_FIELDS 가 자다. data_fingerprint 는 test gold 내용의 지문이라 파일 경로가
 아니라 정답 정체성을 비교하고, seed·stratify 는 fold 멤버십을 결정하므로 paired
-비교(noise 축)의 전제가 된다 — 그래서 noise 는 comparability 에 의존한다.
+비교(variance 축)의 전제가 된다 — 그래서 variance 는 comparability 에 의존한다.
 """
 from pathlib import Path
 from typing import List, Tuple
 
-from ner.metrics.variance._common import _fold_dirs, _load_json
+from ner.validity._common import _fold_dirs, _load_json
 
 # 비교 가능성(같은 자) 판정에 쓰는 필드 — 이 값이 하나라도 다르면 두 실험은
 # 서로 다른 자로 잰 것이라 비교를 거부한다.

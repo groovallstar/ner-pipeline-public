@@ -6,7 +6,7 @@
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ner.metrics.variance._common import load_pooled_metrics
+from ner.validity._common import load_pooled_metrics
 
 #: 누출 카운터를 신뢰할 수 있는 판정 근거. 'text'(문장 전체 비교)는 문장을
 #: 재작성하는 증강 코퍼스에서 형제 행을 못 알아보고, 'none'은 행 단위 분할을

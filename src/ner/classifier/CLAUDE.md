@@ -141,7 +141,7 @@ KO 의 `id` 는 KLUE 원본 인덱스(train 21,008 + dev 5,000), VI 의 `id` 는
 중단된다.
 
 `--group-key none` 은 형제가 없다는 **명시적 선언**이다. 이때 누출 카운터는
-`0` 이 아니라 `null`(미측정)로 기록되며, `metrics.variance.compare` 는 이를
+`0` 이 아니라 `null`(미측정)로 기록되며, `validity.compare` 는 이를
 `INVALID`(누출 미검증)로 판정한다 — 크래시하지 않는다. 정직한 opt-out 이
 벌받고 거짓 0 이 통과하면 규칙이 편법을 보상하게 된다.
 

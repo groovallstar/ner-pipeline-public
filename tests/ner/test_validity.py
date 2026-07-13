@@ -1,10 +1,11 @@
-"""Tests for ner.metrics.variance — fold std and comparison-validity gate."""
+"""Tests for ner.validity — fold std and comparison-validity gate."""
 import json
 import statistics
+from pathlib import Path
 
 import pytest
 
-from ner.metrics.variance import (
+from ner.validity import (
     check_comparable,
     compare,
     fold_std,
@@ -450,3 +451,55 @@ class TestLeakageVerification:
         assert result["leakage_verified"] is False
         assert any("untrustworthy" in i
                    for i in result["comparability_issues"])
+
+
+_GOLDEN_DIR = Path(__file__).parent / "golden" / "validity"
+_GOLDEN_FILES = sorted(_GOLDEN_DIR.glob("*.json"))
+
+
+def _build_run_from_spec(root, name, spec):
+    """golden scenario spec 의 한 run 을 fixture 디렉토리로 실체화한다.
+
+    golden 을 캡처한 스크립트와 동일한 로직이라야 재구성 run 이 같은 산출물을
+    낸다 — spec(cfg·folds·pooled·patch)은 golden JSON 이 유일 출처다.
+    """
+    run = root / name
+    for i, per in enumerate(spec["folds"]):
+        fold_dir = run / f"fold{i}"
+        fold_dir.mkdir(parents=True)
+        overall = sum(per.values()) / len(per)
+        (fold_dir / "metrics.json").write_text(
+            json.dumps(_fold_doc(spec["cfg"], per, overall)), encoding="utf-8")
+    pooled = _pooled_doc(spec["pooled"], spec.get("pooled_overall", 0.9),
+                         spec.get("dups", 0), len(spec["folds"]),
+                         spec.get("basis", "group"))
+    for key, val in spec.get("patch", {}).items():
+        pooled[key] = val
+    (run / "pooled_metrics.json").write_text(
+        json.dumps(pooled), encoding="utf-8")
+    return run
+
+
+class TestGoldenSnapshot:
+    """이동 전 캡처한 compare() 전체 출력과 byte-동일함을 잠근다.
+
+    metrics/variance → validity 이동이 behavior-preserving 임의 증거. 부분키만
+    보던 기존 테스트가 못 잡는 표류(notes 문자열·필드 추가·리스트 순서·미검증
+    verdict 조합)를 전체 dict 동등으로 막는다. 전 verdict 분기 + 반박자가 짚은
+    미검증 조합(누출 observed+미측정→FAIL, 누출 FAIL+타깃 부재→FAIL)을 커버.
+    """
+
+    def test_golden_set_present(self):
+        """골든이 사라지면 parametrize 가 조용히 no-op 이 되므로 존재를 강제한다."""
+        assert _GOLDEN_FILES, "no golden snapshots under tests/ner/golden/validity"
+
+    @pytest.mark.parametrize("golden_path", _GOLDEN_FILES,
+                             ids=[p.stem for p in _GOLDEN_FILES])
+    def test_compare_output_matches_golden(self, golden_path, tmp_path):
+        payload = json.loads(golden_path.read_text(encoding="utf-8"))
+        sc = payload["scenario"]
+        a = _build_run_from_spec(tmp_path, "a", sc["a"])
+        b = _build_run_from_spec(tmp_path, "b", sc["b"])
+        result = compare(a, b, sc["target"],
+                         sigma_override=sc.get("sigma_override"))
+        assert result == payload["expected"]

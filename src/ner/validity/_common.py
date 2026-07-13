@@ -1,4 +1,4 @@
-"""variance 게이트 세 축(comparability·leakage·noise)이 공유하는 IO·추출 헬퍼.
+"""validity 게이트 세 축(comparability·leakage·variance)이 공유하는 IO·추출 헬퍼.
 
 fold*/metrics.json·pooled_metrics.json 을 읽고 per-entity·overall F1 을
 뽑는 순수 함수 모음. 축 모듈이 모두 이 하나를 import 해 중복을 막는다.

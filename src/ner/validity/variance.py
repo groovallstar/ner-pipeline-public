@@ -1,4 +1,4 @@
-"""노이즈 축 — fold 간 분산(σ_fold)·시드 재현 분산(σ_repro)·paired fold Δ·
+"""분산(variance) 축 — fold 간 분산(σ_fold)·시드 재현 분산(σ_repro)·paired fold Δ·
 방향 일관성.
 
 밴드 재료를 계산한다: σ_fold(fold 간 표준편차)는 넓은 기본 프록시, σ_repro
@@ -10,7 +10,7 @@ import statistics
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ner.metrics.variance._common import (
+from ner.validity._common import (
     _fold_overall,
     _fold_per_entity,
     _load_json,

@@ -1,9 +1,9 @@
-"""CLI 진입점 — `python -m ner.metrics.variance {std,repro,compare}`."""
+"""CLI 진입점 — `python -m ner.validity {std,repro,compare}`."""
 import argparse
 import json
 
-from ner.metrics.variance.gate import compare
-from ner.metrics.variance.noise import (
+from ner.validity.gate import compare
+from ner.validity.variance import (
     fold_std,
     load_sigma_map,
     repro_std,
