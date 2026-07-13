@@ -62,7 +62,7 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 |------|------|
 | `bio_metrics.py` | seqeval 기반 BIO 레벨 메트릭 |
 | `span_metrics.py` | `compute_offset_span_f1` 등 span 레벨 메트릭 |
-| `variance.py` | K-fold 결과의 비교 유효성 게이트 (재학습 0회). **같은 자**: `RULER=(lang,data_fingerprint,kfold,group_key,seed,stratify)` — 내용 지문이 경로를 대체해 gold 를 고치면 비교 거부. **누출**: 근거(`leak_check_basis`)가 신뢰 가능한 0 만 통과, 관측된 누출은 근거 약해도 FAIL. **노이즈 밴드**: pooled Δ vs σ_repro/σ_fold + fold 방향 일관성 게이트(조이기 전용, false PASS 불가) |
+| `variance/` | K-fold 결과의 비교 유효성 게이트 (재학습 0회). 축별 서브모듈로 분리 — `comparability`(같은 자: `RULER=(lang,data_fingerprint,kfold,group_key,seed,stratify)`, 내용 지문이 경로를 대체해 gold 를 고치면 거부), `leakage`(근거 `leak_check_basis` 가 신뢰 가능한 0 만 통과, 관측된 누출은 근거 약해도 FAIL), `noise`(pooled Δ vs σ_repro/σ_fold + fold 방향 일관성 게이트, 조이기 전용·false PASS 불가), `gate.compare`(셋 통합). `_common` 은 fold/pooled IO 공유. `__init__` 이 공개 API re-export — `from ner.metrics.variance import compare`·`python -m ner.metrics.variance` 는 분리 전과 동일 |
 
 ### scripts/
 
