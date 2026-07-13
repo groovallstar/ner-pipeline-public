@@ -106,8 +106,15 @@ leaked 는 6,973).
 - **상대 비교·델타는 유효**: phobert≈xlm-r, #108/#112 re-silver 이득(PROD·EVT
   델타)은 같은 누출이 양쪽에 동일하게 실려 보존된다.
 - **PII 5종(0.98~1.00)은 인플레 아님** — 누출 0 확인.
-- 영구 차단: `split_kfold_stratified(group_key='orig')` + 분류기 `--group-key`
-  + `kfold_pool` 원문 단위 가드 + pytest(cross-fold 원문중복 0 강제).
+- 차단: `split_kfold_stratified(group_key='orig')` + 분류기 `--group-key`
+  + `kfold_pool` 그룹 단위 가드 + pytest(cross-fold 원문중복 0 강제).
+  - 최초 차단은 **K-fold 경로만** 덮었다. 기본 3-way 분할
+    (`split_train_valid_test`)에는 `group_key` 인자가 없어, 옵션 없이 학습하면
+    test 3,770행 중 1,133행(30.1%)이 train 과 형제를 공유했다(valid 9.3%).
+    문장 전체 중복은 0% 라 기존 fallback 이 하나도 잡지 못했다. 위 헤드라인
+    수치는 group-kfold 로 낸 것이라 영향받지 않는다.
+  - 현재는 두 분할 경로 모두 `--group-key` 를 요구하며, 고유 필드를 그룹 키로
+    선언하면(no-op 보호 + 거짓 0) 학습 전에 거부된다.
 
 ## 5-fold 결과 (pooled, 중복 제거 후 — NER 5종은 누출 인플레, §원문 누출 정정 참조)
 
