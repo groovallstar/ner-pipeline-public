@@ -264,17 +264,33 @@ flowchart TD
 - `return_spans=True`면 `gold_spans_list`/`pred_spans_list` 추가(kfold
   pooled 평가용), `capture_timing=True`면 load/infer 초.
 - 실험 간 per-entity F1 변화가 노이즈인지 실측인지는 `metrics.variance`로
-  판정한다 — fold 간 σ(σ_fold) 밴드 밖이면 실측, split 구성(group_key·
-  data_path·kfold)이 다른 두 run은 비교 거부(같은 자만 비교), pooled의
-  `cross_fold_orig_dups != 0`이면 누출 FAIL, 타깃이 올라도 다른 엔티티가
-  밴드 밖 회귀면 FAIL. 재학습 없이 기존 `fold*/metrics.json`만 읽는다.
-- 기본 밴드 σ_fold 는 재현 분산 σ_repro(시드-반복 pooled 헤드라인의 흔들림)의
-  더 거친·넓은 프록시다. σ_repro 는 **수요기반**으로만 측정한다 — 판정이
-  `INCONCLUSIVE`(Δ 가 σ_fold 밴드 안)이고 그 후보를 **실제로 채택**할 때에만
-  GPU 를 쓴다. cheap-first: 전체 M×K 재실행 대신 대표 fold 하나를 시드 M회
-  (`--train-seed`) 재학습해 학습 노이즈부터 잡고, 부족할 때만 전체로 올린다.
-  측정한 σ_repro 는 `variance repro --out` 로 setup 당 한 번 캐시하고, 이후
-  `compare --sigma-repro <cache>` 로 밴드를 좁혀 재사용한다.
+  판정한다 — 재학습 없이 기존 `fold*/metrics.json`·`pooled_metrics.json`만
+  읽는다. 세 축: **같은 자**(비교 가능성)·**누출**·**노이즈 밴드**.
+- **같은 자(비교 가능성)**: `RULER = (lang, data_fingerprint, kfold,
+  group_key, seed, stratify)`. `data_fingerprint`는 데이터 내용의 순서 민감
+  해시라 **경로가 아니라 test gold 정체성**을 비교한다 — 경로가 같아도 gold 를
+  고치면 지문이 달라 비교 거부(INVALID), 경로만 rename 하면 통과. 지문 없는 옛
+  산출물은 fail-loud INVALID. gold 를 바꾼 뒤 옛 값과 비교하려면 **옛 모델을
+  새 gold 로 재채점**해 같은 지문의 baseline 을 만든다. seed·stratify 는 fold
+  멤버십을 정하므로 자에 포함(paired 비교의 전제).
+- **누출**: pooled 의 그룹 단위 cross-fold 카운터가 신뢰 근거(`leak_check_basis`
+  ∈ group·orig)로 센 0 일 때만 통과. 미측정·약한 근거는 INVALID, 관측된 누출은
+  근거가 약해도 FAIL(§3B).
+- **노이즈 밴드**: 점추정 = pooled per-entity F1 Δ(리포트 헤드라인과 일치),
+  밴드 = band_k × σ. σ 는 σ_repro override 있으면 그것, 없으면 σ_fold(fold 간
+  표준편차). Δ 가 밴드 밖이면 magnitude gain/regression. 타깃이 올라도 다른
+  엔티티가 밴드 밖 회귀면 FAIL.
+- **방향 일관성 게이트(조이기 전용)**: magnitude gain 이라도 후보가 fold 승률
+  2/3 미만이면 한 fold 가 pooled 를 끌어올린 것으로 보고 INCONCLUSIVE 로 내린다.
+  gain 을 내릴 뿐 절대 올리지 않고 regression 은 안 건드려 false PASS 를 못
+  만든다. paired-SEM 밴드로 좁히지 않는 이유: SEM 은 fold 별 Δ 가 일정하면 0 으로
+  붕괴하고, k-fold Δ 는 iid 가 아니라 분산을 과소추정해 anticonservative 하다 —
+  넓은 σ_fold 는 노이즈 게이트에겐 안전한 방향이다.
+- **σ_repro 는 수요기반**으로만 측정한다 — 판정이 `INCONCLUSIVE`이고 그 후보를
+  **실제로 채택**할 때만 GPU 를 쓴다. cheap-first: 대표 fold 하나를 시드 M회
+  (`--train-seed`) 재학습해 학습 노이즈부터 잡고, 부족할 때 전체로 올린다.
+  측정한 σ_repro 는 `variance repro --out` 로 setup 당 한 번 캐시하고 이후
+  `compare --sigma-repro <cache>` 로 재사용한다.
 
 ### decode_bio_to_spans
 

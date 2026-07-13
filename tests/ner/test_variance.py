@@ -65,8 +65,8 @@ def _write_run(root, name, config, fold_f1_list, pooled_f1,
     return run
 
 
-_CFG = {"lang": "ko", "data_path": "d.jsonl", "kfold": 2,
-        "group_key": "orig"}
+_CFG = {"lang": "ko", "data_path": "d.jsonl", "data_fingerprint": "fp_a",
+        "kfold": 2, "group_key": "orig", "seed": 42, "stratify": True}
 
 
 class TestFoldStd:
@@ -102,11 +102,30 @@ class TestCheckComparable:
         assert not ok
         assert any("group_key" in s for s in issues)
 
-    def test_data_path_mismatch(self):
+    def test_data_path_not_in_ruler(self):
+        """경로만 다르고 내용(지문)이 같으면 비교 가능 — 경로는 자가 아니다."""
         ok, issues = check_comparable(
-            dict(_CFG), dict(_CFG, data_path="other.jsonl"))
+            dict(_CFG), dict(_CFG, data_path="renamed.jsonl"))
+        assert ok and issues == []
+
+    def test_data_fingerprint_mismatch(self):
+        """경로가 같아도 내용이 바뀌면(지문 불일치) 비교 거부."""
+        ok, issues = check_comparable(
+            dict(_CFG), dict(_CFG, data_fingerprint="fp_b"))
         assert not ok
-        assert any("data_path" in s for s in issues)
+        assert any("data_fingerprint" in s for s in issues)
+
+    def test_seed_in_ruler(self):
+        """seed 는 fold 멤버십을 정하므로 다르면 비교 거부."""
+        ok, issues = check_comparable(dict(_CFG), dict(_CFG, seed=7))
+        assert not ok
+        assert any("seed" in s for s in issues)
+
+    def test_stratify_in_ruler(self):
+        """stratify 는 fold 멤버십을 바꾸므로 다르면 비교 거부."""
+        ok, issues = check_comparable(dict(_CFG), dict(_CFG, stratify=False))
+        assert not ok
+        assert any("stratify" in s for s in issues)
 
 
 class TestCompare:
@@ -177,7 +196,9 @@ class TestCompare:
                        [{"ORG": 0.90}, {"ORG": 0.92}], {"ORG": 0.91})
         v = compare(a, b, "ORG")
         assert set(v["all_deltas"]["ORG"]) == {
-            "delta", "sigma", "band", "band_source", "status"}
+            "delta", "sigma", "band", "band_source", "status",
+            "fold_wins", "fold_losses", "fold_n", "consistent",
+            "consistency_downgraded"}
         assert v["all_deltas"]["ORG"]["band_source"] == "sigma_fold"
 
     def test_sigma_repro_override_tightens_band(self, tmp_path):
@@ -195,6 +216,70 @@ class TestCompare:
         assert v_repro["target"]["status"] == "real_gain"
         assert v_repro["target"]["band_source"] == "sigma_repro"
         assert v_repro["verdict"] == "PASS"
+
+
+class TestConsistencyGate:
+    """방향 일관성 게이트 — 조이기 전용. gain 을 내릴 뿐 절대 올리지 않는다."""
+
+    def test_inconsistent_gain_downgraded_to_inconclusive(self, tmp_path):
+        """pooled 는 밴드 밖 상승이지만 한 fold 가 끌어올린 경우 → INCONCLUSIVE.
+
+        fold0 은 +0.30(승), fold1 은 −0.02(패). pooled Δ 는 밴드 밖이라
+        magnitude 는 real_gain 이지만 승률 1/2 < 2/3 → within_noise 로 내려간다.
+        """
+        a = _write_run(tmp_path, "a", _CFG,
+                       [{"ORG": 0.50}, {"ORG": 0.90}], {"ORG": 0.70})
+        b = _write_run(tmp_path, "b", _CFG,
+                       [{"ORG": 0.80}, {"ORG": 0.88}], {"ORG": 0.84})
+        # 밴드를 좁혀(σ_repro) magnitude 를 real_gain 으로 만든 뒤 게이트를 본다.
+        # fold0 Δ=+0.30(승), fold1 Δ=−0.02(패) → 승률 1/2 < 2/3.
+        v = compare(a, b, "ORG", sigma_override={"ORG": 0.01})
+        assert v["target"]["fold_wins"] == 1
+        assert v["target"]["fold_losses"] == 1
+        assert v["target"]["consistent"] is False
+        assert v["target"]["consistency_downgraded"] is True
+        assert v["target"]["status"] == "within_noise"
+        assert v["verdict"] == "INCONCLUSIVE"
+
+    def test_consistent_gain_survives(self, tmp_path):
+        """모든 fold 에서 이기면 게이트를 통과한다."""
+        a = _write_run(tmp_path, "a", _CFG,
+                       [{"ORG": 0.80}, {"ORG": 0.82}], {"ORG": 0.81})
+        b = _write_run(tmp_path, "b", _CFG,
+                       [{"ORG": 0.90}, {"ORG": 0.92}], {"ORG": 0.91})
+        v = compare(a, b, "ORG", sigma_override={"ORG": 0.01})
+        assert v["target"]["consistent"] is True
+        assert v["target"]["consistency_downgraded"] is False
+        assert v["target"]["status"] == "real_gain"
+        assert v["verdict"] == "PASS"
+
+    def test_gate_never_upgrades(self, tmp_path):
+        """일관된 방향이어도 magnitude 가 within_noise 면 gain 으로 안 올린다."""
+        a = _write_run(tmp_path, "a", _CFG,
+                       [{"ORG": 0.80}, {"ORG": 0.81}], {"ORG": 0.805})
+        b = _write_run(tmp_path, "b", _CFG,
+                       [{"ORG": 0.81}, {"ORG": 0.82}], {"ORG": 0.815})
+        # 두 fold 다 +0.01 승(2/2 일관)이지만 pooled Δ=0.01 은 σ_fold 밴드 안
+        v = compare(a, b, "ORG")
+        assert v["target"]["fold_wins"] == 2
+        assert v["target"]["status"] == "within_noise"
+        assert v["verdict"] == "INCONCLUSIVE"
+
+    def test_gate_never_suppresses_regression(self, tmp_path):
+        """회귀는 소수 fold 에서 나타나도 계속 막는다(조이기 전용의 비대칭)."""
+        a = _write_run(tmp_path, "a", _CFG,
+                       [{"ORG": 0.90, "LOC": 0.80},
+                        {"ORG": 0.90, "LOC": 0.80}],
+                       {"ORG": 0.90, "LOC": 0.80})
+        # ORG 일관 상승, LOC 는 fold0 만 큰 회귀(1/2) — 그래도 flag 되어야 한다
+        b = _write_run(tmp_path, "b", _CFG,
+                       [{"ORG": 0.95, "LOC": 0.40},
+                        {"ORG": 0.95, "LOC": 0.81}],
+                       {"ORG": 0.95, "LOC": 0.61})
+        v = compare(a, b, "ORG", sigma_override={"ORG": 0.01, "LOC": 0.01})
+        assert v["target"]["status"] == "real_gain"
+        assert any(r["entity"] == "LOC" for r in v["regressions"])
+        assert v["verdict"] == "FAIL"
 
 
 class TestLeakageDups:
@@ -220,12 +305,15 @@ class TestLeakageDups:
 
 class TestFailLoud:
     def test_missing_ruler_field_not_comparable(self):
-        """RULER 필드 키가 없으면 같은 자로 조용히 통과시키지 않는다."""
-        a = {k: v for k, v in _CFG.items() if k != "data_path"}
-        b = {k: v for k, v in _CFG.items() if k != "data_path"}
+        """RULER 필드 키가 없으면 같은 자로 조용히 통과시키지 않는다.
+
+        지문 없는 옛 산출물은 fail-loud INVALID 여야 한다.
+        """
+        a = {k: v for k, v in _CFG.items() if k != "data_fingerprint"}
+        b = {k: v for k, v in _CFG.items() if k != "data_fingerprint"}
         ok, issues = check_comparable(a, b)
         assert not ok
-        assert any("data_path" in s and "missing" in s for s in issues)
+        assert any("data_fingerprint" in s and "missing" in s for s in issues)
 
     def test_group_key_null_is_valid_value(self):
         """group_key=null 은 유효한 값 — 양쪽 null 이면 같은 자로 본다."""

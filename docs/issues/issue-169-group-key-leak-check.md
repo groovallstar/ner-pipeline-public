@@ -180,14 +180,130 @@ JA: none=거부 | id=통과
   산출물을 `unknown`(불신)으로, `error_analysis` 에 검증 추가. 네 번째(범주 필드
   오탐)는 `_coarsens` 로 닫았다.
 
-## 범위 밖
+## 2차 확장 — compare 게이트를 자 기반으로
 
-- 데이터 지문(해시)으로 `check_comparable` 고치기 — 지금은 파일 경로 문자열을
-  비교해서, 경로가 같으면 내용이 바뀌어도 "같은 자" 로 통과한다
-- `variance.py` 노이즈 밴드 계산 방식(pooled 값을 fold σ 로 재는 단위 불일치,
-  paired 비교 미사용)
-- KO ORG gold 상태
+1차는 **누출**(분할이 새는가)을 닫았다. 2차는 같은 `variance.py` 의 나머지
+두 축, **비교 가능성**(같은 자로 쟀나)과 **노이즈 밴드**(Δ 가 우연인가)를
+고친다. 둘은 독립이 아니다 — paired 비교는 baseline·candidate 의 fold 멤버십이
+같아야 성립하고, 그건 `seed`·`stratify` 가 같아야 하므로, "같은 자" 판정에
+그 필드를 넣는 일(Part A)이 paired 밴드(Part B)의 전제조건이다.
+
+이 둘은 **자(채점규칙)를 바꾸는 일**이다. 지금 확정하는 이유: 유효한 실험
+결과가 하나도 없다(pii_all.jsonl 데이터만 유효, results/ 는 무의미·진행 중).
+소급될 baseline 이 없으므로, 지금 정의를 못 박으면 이후 점수로 자를 고치는
+일이 구조적으로 불가능하다 — 자를 바꾸기에 가장 안전한 시점이다.
+
+### 문제 — `check_comparable` 이 파일 경로 문자열을 비교한다
+
+`RULER_FIELDS = (lang, data_path, kfold, group_key)`. 두 방향으로 틀렸다.
+
+- **경로 같고 내용 다름 → 통과**: `data/klue/pii_all.jsonl` 의 ORG gold 를
+  10,416→2,797 로 바꿔도 경로가 같아 "같은 자" 로 통과한다(실제 이 저장소에서
+  일어난 일). 옛 gold 로 잰 값과 새 gold 로 잰 값이 나란히 놓인다.
+- **`seed` 가 자에 없다**: fold 멤버십을 정하는 게 `seed` 인데 RULER 에 없어,
+  다른 seed 로 자른 두 run 이 "같은 자" 로 통과한다. paired 비교의 전제가 깨진다.
+
+### 문제 — 노이즈 밴드가 틀린 단위이고 unpaired
+
+Δ 는 pooled per-entity F1(fold 10개 예측을 합친 단일 수)인데, 밴드는 개별
+fold F1 의 산포 σ_fold × k 다. pooled 는 개별 fold 보다 안정적이라 밴드가
+과하게 넓어 대부분 INCONCLUSIVE 로 떨어진다. 게다가 baseline·candidate 는
+같은 fold 를 공유하므로 fold 난이도가 상쇄되는데(paired), 지금은 baseline 의
+σ_fold 만 써서 그 검출력을 버린다.
+
+### 설계
+
+**Part A — 내용 지문 + fold 멤버십을 자에 넣는다.**
+- `metrics.json` 에 `data_fingerprint`(데이터 내용의 순서 민감 해시: 행별
+  text + 정렬된 (label,start,end))와 `stratify` 를 기록한다.
+- `RULER_FIELDS = (lang, data_fingerprint, kfold, group_key, seed, stratify)`.
+  `data_path` 는 자에서 빠지고 참고용으로만 남는다. 지문이 없는 옛 산출물은
+  0/동일 가정 없이 fail-loud("missing" → INVALID).
+- 효과: 내용이 바뀌면 지문이 달라 비교 거부, 경로만 바뀌면(rename) 통과.
+  gold 를 고쳐 지문이 달라지면 INVALID — 비교하려면 **옛 모델을 새 gold 로
+  재채점**(clean 동일-test)해 같은 지문의 baseline 을 만들어야 한다. 자를
+  바꾸면 재측정하라는 규율을 코드가 강제한다.
+
+**Part B — paired-fold 방향 일관성 게이트.**
+
+> **정의-시점 반박자가 최초 설계(paired-SEM 밴드)를 부쉈다.** SEM 밴드는
+> std(Δᵢ)→0 일 때 0 으로 붕괴해 +0.001 도 real_gain 으로 통과시키고(σ_fold 는
+> 실데이터에서 0 이 안 돼 이 버그가 없다), band_k=2 는 n=5 fold 에서 t>2 =
+> 단측 5.8%(2.5% 아님)라 anticonservative 하며, k-fold Δᵢ 는 학습셋이 겹쳐
+> iid 가 아니라 SEM 이 분산을 과소추정한다. 셋 다 false PASS 방향. 결정적으로,
+> σ_fold 가 넓은 것은 **노이즈 게이트에겐 안전한 방향**이고 정확히 재려면
+> σ_repro 를 재라는 게 설계된 탈출구다. "paired 가 밴드를 좁힌다"는 틀린
+> 목표였다. paired 의 올바른 쓰임은 밴드를 좁히는 게 아니라 **조이는 것**이다.
+
+- 점추정·밴드는 **그대로 둔다**: Δ = pooled per-entity F1(cand−base), 밴드 =
+  band_k × σ (σ_repro override 있으면 그것, 없으면 σ_fold). `band_source ∈
+  {sigma_repro, sigma_fold}`. 보수적(넓은)이라 안전하며, 리포트 인용값(pooled)과
+  점추정이 일치해 매크로/마이크로 괴리가 없다.
+- **방향 일관성 게이트를 추가한다**: magnitude 가 real_gain 이라도, 후보가
+  양쪽에 엔티티가 있는 fold 중 `min_consistency_frac`(기본 2/3) 미만에서만
+  이기면 INCONCLUSIVE 로 내린다(real_regression 도 대칭). 한 fold 가 pooled 를
+  끌어올린 경우를 거른다.
+- **불변식**: 일관성 게이트는 verdict 를 **조일 뿐 절대 풀지 않는다** —
+  within_noise 를 gain 으로 올리지 않고, gain 을 within_noise/inconclusive 로만
+  내린다. 따라서 false PASS 를 새로 만들 수 없다. paired-SEM·매크로 점추정을
+  아예 안 쓰므로 SEM 붕괴·small-n·점추정 불일치가 전부 소멸한다.
+- fold 별 Δᵢ 는 양쪽 run 이 같은 fold 멤버십일 때만 짝지을 수 있다(=comparable).
+  Part A 가 seed·stratify·지문을 자에 넣어 이를 강제하므로 둘이 서로를 지탱한다.
+  겹치는 fold 가 <2 면 일관성 판정 불가 → 다운그레이드 없이 null 로 보고.
+
+### 수락 기준 (2차)
+
+- [ ] 7. `metrics.json` 이 `data_fingerprint`·`stratify` 를 기록한다. 지문은
+  **전체 --data 파일 내용의 순서 민감 해시**(행별 text + 정렬된 (label,start,end)
+  를 파일 순서대로). `--data-extra-train-jsonl`(train 전용)은 test gold 를 안
+  바꾸므로 지문에서 **제외** — with/without extra-train 두 run 은 같은 지문이라
+  비교 가능해야 한다.
+- [ ] 8. `check_comparable` 이 `RULER = (lang, data_fingerprint, kfold,
+  group_key, seed, stratify)` 로 판정한다. 경로 같고 **내용·순서** 다름 →
+  INVALID, 경로만 rename(내용·순서 동일) → comparable, 지문 없는 옛 산출물 →
+  fail-loud INVALID. `data_path` 는 자에서 제외(참고용).
+- [ ] 9. 점추정 = pooled Δ(변경 없음), 밴드 = σ_repro override 또는 σ_fold
+  (변경 없음). **추가**: paired-fold 방향 일관성 게이트가 magnitude gain/
+  regression 을 fold 승률 <2/3 일 때 INCONCLUSIVE 로 내린다. 게이트는 조이기
+  전용(불변식). compare 는 엔티티별 `fold_wins`·`fold_losses`·`fold_n`·
+  `consistent` 를 보고한다.
+- [ ] 10. 무회귀 + 테스트: 지문 일치→comparable/불일치→INVALID/순서 치환→INVALID,
+  extra-train 제외로 같은 지문, 옛 산출물 fail-loud, **일관성 게이트가 절대
+  upgrade 하지 않음**(within_noise 유지), 한 fold 가 끌어올린 pooled gain 이
+  INCONCLUSIVE 로 내려감, 기존 테스트 갱신·통과.
+
+### 2차 구현·검증
+
+| 파일 | 변경 |
+|---|---|
+| `data_utils.py` | `dataset_fingerprint(rows)` — 내용의 순서 민감 sha256(행별 text + 정렬된 (label,start,end)) |
+| `__main__.py` | `metrics.json` 에 `data_fingerprint`·`stratify` 기록 |
+| `variance.py` | `RULER` 에 지문·seed·stratify(data_path 제외) / `fold_paired_deltas` / 방향 일관성 게이트(조이기 전용) / notes 갱신 |
+
+**수락 기준 (2차)**
+
+| # | 기준 | 결과 |
+|---|---|---|
+| 7 | `metrics.json` 이 지문·stratify 기록 | ✅ (smoke 로그에 지문 확인, 정적 검증) |
+| 8 | 지문·seed·stratify 로 판정, 경로 제외 | ✅ 경로만 다름→comparable, 지문 다름→INVALID, 지문 없음→fail-loud |
+| 9 | pooled Δ 점추정 유지 + 일관성 게이트(조이기 전용) | ✅ |
+| 10 | 무회귀 + 테스트 | ✅ 461 통과, ruff clean |
+
+**실검증**: 현재 `pii_all.jsonl` 지문 `2a5d0f21…`. 정답 1개만 바꿔도 지문
+변화, 경로만 바꾸면 불변, 엔티티 나열 순서는 불변. 학습은 이 환경에서 모델
+다운로드가 막혀 완주 못 했으나 지문이 학습 전 로그에 찍히고 metrics 기록
+경로는 정적 검증(변수 정의 197·198 → summary 449).
+
+**정의-시점 반박자가 최초 Part B 를 부쉈다** — paired-SEM 밴드는 std→0 붕괴·
+small-n anticonservative·점추정 불일치로 false PASS 를 낳는다. 방향을 뒤집어
+**조이기 전용 일관성 게이트**로 재설계했고, 그 결과 지적된 통계 결함이 전부
+소멸했다(paired-SEM·매크로 점추정을 안 쓰므로).
+
+## 범위 밖 (2차 이후에도)
+
+- KO ORG gold 상태 (자를 바꾸는 별건 — 사람 소유)
 - 학습 없이 분할만 검증하는 독립 진입점
+- σ_repro 를 실제 측정해 캐시 (수요기반 — INCONCLUSIVE 가 채택을 막을 때만)
 
 ## 남은 위험
 

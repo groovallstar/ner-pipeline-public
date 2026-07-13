@@ -19,6 +19,7 @@ JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
 - JA (BertJapaneseTokenizer, slow): tokenize() 후 text.find() 로 subword char span 추적
 """
 
+import hashlib
 import json
 import random
 from typing import Dict, List, Optional, Tuple
@@ -88,6 +89,31 @@ def group_stats(rows: List[dict],
     if group_key is None:
         return len(rows), len(rows)
     return len(rows), len({row[group_key] for row in rows})
+
+
+def dataset_fingerprint(rows: List[dict]) -> str:
+    """데이터 내용의 순서 민감 지문(sha256 앞 16자리)을 계산한다.
+
+    각 행을 (text, 정렬된 (label,start_char,end_char) 튜플)로 정규화해 파일
+    순서대로 해시한다. 이 지문이 실험의 '자'(test gold) 를 대표한다 —
+    같은 지문이면 두 실험은 같은 문장·같은 정답을 재고 있다.
+
+    순서에 민감한 이유: 분할이 seed shuffle 이라 행 순서가 fold 멤버십을 바꾼다.
+    행을 재정렬만 해도 test gold 의 fold 분해가 달라지므로 다른 자로 본다.
+
+    지문에서 제외: `--data-extra-train-jsonl`(train 전용 증강)은 별 파일이라
+    이 함수에 넘기는 --data rows 에 애초에 들어오지 않는다 — test gold 를 안
+    바꾸므로 with/without 두 run 이 같은 지문을 갖는 게 옳다.
+    """
+    h = hashlib.sha256()
+    for row in rows:
+        spans = sorted(
+            (e['label'], e['start_char'], e['end_char'])
+            for e in row['entities']
+        )
+        h.update(repr((row['text'], spans)).encode('utf-8'))
+        h.update(b'\x00')  # 행 경계 — 연접 모호성 방지
+    return h.hexdigest()[:16]
 
 
 def _coarsens(rows: List[dict], group_key: Optional[str], field: str) -> bool:

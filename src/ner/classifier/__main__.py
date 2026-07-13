@@ -19,6 +19,7 @@ from transformers import AutoTokenizer
 from ner.classifier.data_utils import (
     build_label_maps,
     boundary_weights_tensor,
+    dataset_fingerprint,
     encode_dataset,
     group_stats,
     load_jsonl,
@@ -191,9 +192,13 @@ def main():
     # 누출 카운터는 0 을 내므로, 학습을 시작하기 전에 크게 실패해야 한다.
     validate_group_key(rows, group_key)
     n_rows, n_groups = group_stats(rows, group_key)
+    # 지문·stratify 는 비교 유효성 게이트(metrics.variance)의 '자' 를 이룬다 —
+    # 지문은 test gold 정체성(내용·순서), stratify 는 fold 멤버십을 결정한다.
+    data_fp = dataset_fingerprint(rows)
+    stratify = not args.no_stratify
     logger.info(
-        'Split units: %d rows -> %d groups (group_key=%s)',
-        n_rows, n_groups, args.group_key,
+        'Split units: %d rows -> %d groups (group_key=%s), fingerprint=%s',
+        n_rows, n_groups, args.group_key, data_fp,
     )
     if args.kfold is not None:
         strat_labels = () if args.no_stratify else ('PROD', 'EVT')
@@ -462,6 +467,9 @@ def main():
         'group_key': args.group_key,
         'n_rows': n_rows,
         'n_groups': n_groups,
+        # 비교 유효성 게이트의 자 — 내용 지문 + fold 멤버십 결정 요소
+        'data_fingerprint': data_fp,
+        'stratify': stratify,
         'seed': args.seed,
         'train_seed': args.train_seed,
         'precision': args.precision,

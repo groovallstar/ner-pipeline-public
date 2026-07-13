@@ -11,6 +11,7 @@ from ner.classifier.data_utils import (
     _bio_labels_from_offsets,
     _context_word_count,
     build_label_maps,
+    dataset_fingerprint,
     decode_bio_to_spans,
     group_stats,
     mask_pii_in_features,
@@ -518,6 +519,36 @@ def _sibling_rows(n_orig: int = 20, per_orig: int = 3) -> List[dict]:
                          'entities': [], 'id': str(rid), 'orig': f'root{g}'})
             rid += 1
     return rows
+
+
+def test_dataset_fingerprint_stable_and_content_sensitive():
+    """같은 내용·순서 → 같은 지문, 정답 하나만 바뀌어도 → 다른 지문."""
+    rows = [{'text': 'a', 'entities': [
+                {'label': 'PER', 'start_char': 0, 'end_char': 1}]},
+            {'text': 'b', 'entities': []}]
+    fp = dataset_fingerprint(rows)
+    assert fp == dataset_fingerprint([dict(r) for r in rows])  # 재현
+    changed = [dict(rows[0]), {'text': 'b', 'entities': [
+                {'label': 'LOC', 'start_char': 0, 'end_char': 1}]}]
+    assert dataset_fingerprint(changed) != fp
+
+
+def test_dataset_fingerprint_order_sensitive():
+    """행을 재정렬만 해도 지문이 달라진다 — 순서가 fold 멤버십을 바꾼다."""
+    rows = [{'text': 'a', 'entities': []},
+            {'text': 'b', 'entities': []}]
+    assert dataset_fingerprint(rows) != dataset_fingerprint(rows[::-1])
+
+
+def test_dataset_fingerprint_entity_order_invariant():
+    """한 행 안의 엔티티 나열 순서는 지문에 영향 없다(정렬 후 해시)."""
+    r1 = [{'text': 'a', 'entities': [
+            {'label': 'PER', 'start_char': 0, 'end_char': 1},
+            {'label': 'LOC', 'start_char': 2, 'end_char': 3}]}]
+    r2 = [{'text': 'a', 'entities': [
+            {'label': 'LOC', 'start_char': 2, 'end_char': 3},
+            {'label': 'PER', 'start_char': 0, 'end_char': 1}]}]
+    assert dataset_fingerprint(r1) == dataset_fingerprint(r2)
 
 
 def test_group_stats_counts_rows_and_groups():

@@ -62,7 +62,7 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 |------|------|
 | `bio_metrics.py` | seqeval 기반 BIO 레벨 메트릭 |
 | `span_metrics.py` | `compute_offset_span_f1` 등 span 레벨 메트릭 |
-| `variance.py` | K-fold 결과의 fold 간 σ 계산 + 비교 유효성 게이트 (같은 자·누출·회귀 판정, 재학습 0회) + 시드-반복 σ_repro 밴드(수요기반 캐시·재사용). 누출은 판정 근거(`leak_check_basis`)가 신뢰 가능할 때만 검증된 것으로 보고, 미측정·약한 근거는 `INVALID` |
+| `variance.py` | K-fold 결과의 비교 유효성 게이트 (재학습 0회). **같은 자**: `RULER=(lang,data_fingerprint,kfold,group_key,seed,stratify)` — 내용 지문이 경로를 대체해 gold 를 고치면 비교 거부. **누출**: 근거(`leak_check_basis`)가 신뢰 가능한 0 만 통과, 관측된 누출은 근거 약해도 FAIL. **노이즈 밴드**: pooled Δ vs σ_repro/σ_fold + fold 방향 일관성 게이트(조이기 전용, false PASS 불가) |
 
 ### scripts/
 
