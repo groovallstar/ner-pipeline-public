@@ -127,16 +127,20 @@ SentencePiece 계열이 char-offset을 어긋나게 하는 두 경우를 교정�
 
 | 함수 | 용도 | 비고 |
 |---|---|---|
-| `split_train_valid_test` | 기본 3-way(80/10/10) | shuffle 후 test/valid/train |
-| `split_kfold_stratified` | 층화 K-fold 교차검증 | PROD/EVT 보유로 층화, `--group-key`로 누출-free |
+| `split_train_valid_test` | 기본 3-way(80/10/10) | unit shuffle 후 test/valid/train |
+| `split_kfold_stratified` | 층화 K-fold 교차검증 | PROD/EVT 보유로 층화 |
 | `split_holdout_deploy` | 배포용 단일 분할 | n_test 홀드아웃 + 적격 필터 |
-| (group_key) | 위 둘의 누출-free 변형 | 같은 원문 파생 행을 한 fold/split에 |
+| `validate_group_key` | 그룹 키 사전 검증 | 고유 키·필드 부재·null 거부 (학습 전) |
+
+셋 다 `group_key`로 형제 행(한 원문 파생 다행)을 한 split에 묶는다.
+`_build_units`가 공용 unit 구성을 담당한다.
 
 ### 3-way 기본 분할
 
-shuffle → 앞 test, 다음 valid, 나머지 train. 같은 seed면 결정적. 기본
+unit shuffle → 앞 test, 다음 valid, 나머지 train. 같은 seed면 결정적. 기본
 `valid_ratio=0.1, test_ratio=0.1, seed=42`. test는 학습/모델선택 어디에도
 노출되지 않고 최종 span F1 측정에만 쓴다(valid는 epoch best 선택용).
+`group_key=None`이면 unit=행 1개라 기존 행 단위 분할과 bit-for-bit 동일.
 
 ### 층화 K-fold (`--kfold N --fold-index K`)
 
@@ -147,13 +151,21 @@ valid=fold (K+1)%N, train=나머지. `fold_index`를 0..N-1로 돌리면 모든 
 층화를 꺼서 label-invariant 분할(층화 효과 before/after 비교용)을 만들 수
 있다.
 
-### 누출-free group K-fold (`--group-key orig`)
+### 누출-free 분할 (`--group-key`, 필수)
 
-합성 PII 주입은 한 원문에서 여러 행을 파생시킨다. 행 단위 분할은 파생 행이
-train·test로 갈려 cross-fold 누출이 생긴다. `--group-key orig`는 같은
-`row['orig']`(주입 전 원문) 행을 한 **unit**으로 묶어 통째로 한 fold에
-배정 → split 단계에서 누출이 구조적으로 불가능. 발견·정량·가드 상세는
-[3. 검증 §3B](3-verification.md#3b-측정-무결성--cross-fold-누출-차단).
+합성 PII 주입과 재라벨은 한 원문에서 여러 행을 파생시킨다(형제 행). 행 단위
+분할은 형제가 train·test로 갈려 누출이 생긴다. `--group-key <필드>`는 같은
+값을 공유하는 행을 한 **unit**으로 묶어 통째로 한 split에 배정 → split
+단계에서 누출이 구조적으로 불가능. **3-way·K-fold 두 경로 모두 적용된다.**
+
+`--group-key`는 필수이며, 형제가 없으면 `none`을 명시한다. 그룹 키의 이름은
+데이터셋마다 다르다(KO `id`·VI `orig`·JA `id`) — 코드가 못 박을 수 없다.
+고유한 필드를 선언하면 그룹 보호가 no-op이 되면서 누출 카운터는 0을 내므로,
+`validate_group_key`가 학습 전에 거부한다(더 강하게 묶는 후보 필드 탐지).
+
+`none`이면 누출 카운터는 `0`이 아니라 `null`(미측정)로 기록되고,
+`metrics.variance.compare`는 이를 `INVALID`로 판정한다. 발견·정량·가드
+상세는 [3. 검증 §3B](3-verification.md#3b-측정-무결성--cross-fold-누출-차단).
 
 > **BC**: `group_key=None`(기본)이면 unit=행 1개라 기존 행 단위 분할과
 > bit-for-bit 동일(같은 seed → 동일 결과).
@@ -252,17 +264,33 @@ flowchart TD
 - `return_spans=True`면 `gold_spans_list`/`pred_spans_list` 추가(kfold
   pooled 평가용), `capture_timing=True`면 load/infer 초.
 - 실험 간 per-entity F1 변화가 노이즈인지 실측인지는 `metrics.variance`로
-  판정한다 — fold 간 σ(σ_fold) 밴드 밖이면 실측, split 구성(group_key·
-  data_path·kfold)이 다른 두 run은 비교 거부(같은 자만 비교), pooled의
-  `cross_fold_orig_dups != 0`이면 누출 FAIL, 타깃이 올라도 다른 엔티티가
-  밴드 밖 회귀면 FAIL. 재학습 없이 기존 `fold*/metrics.json`만 읽는다.
-- 기본 밴드 σ_fold 는 재현 분산 σ_repro(시드-반복 pooled 헤드라인의 흔들림)의
-  더 거친·넓은 프록시다. σ_repro 는 **수요기반**으로만 측정한다 — 판정이
-  `INCONCLUSIVE`(Δ 가 σ_fold 밴드 안)이고 그 후보를 **실제로 채택**할 때에만
-  GPU 를 쓴다. cheap-first: 전체 M×K 재실행 대신 대표 fold 하나를 시드 M회
-  (`--train-seed`) 재학습해 학습 노이즈부터 잡고, 부족할 때만 전체로 올린다.
-  측정한 σ_repro 는 `variance repro --out` 로 setup 당 한 번 캐시하고, 이후
-  `compare --sigma-repro <cache>` 로 밴드를 좁혀 재사용한다.
+  판정한다 — 재학습 없이 기존 `fold*/metrics.json`·`pooled_metrics.json`만
+  읽는다. 세 축: **같은 자**(비교 가능성)·**누출**·**노이즈 밴드**.
+- **같은 자(비교 가능성)**: `RULER = (lang, data_fingerprint, kfold,
+  group_key, seed, stratify)`. `data_fingerprint`는 데이터 내용의 순서 민감
+  해시라 **경로가 아니라 test gold 정체성**을 비교한다 — 경로가 같아도 gold 를
+  고치면 지문이 달라 비교 거부(INVALID), 경로만 rename 하면 통과. 지문 없는 옛
+  산출물은 fail-loud INVALID. gold 를 바꾼 뒤 옛 값과 비교하려면 **옛 모델을
+  새 gold 로 재채점**해 같은 지문의 baseline 을 만든다. seed·stratify 는 fold
+  멤버십을 정하므로 자에 포함(paired 비교의 전제).
+- **누출**: pooled 의 그룹 단위 cross-fold 카운터가 신뢰 근거(`leak_check_basis`
+  ∈ group·orig)로 센 0 일 때만 통과. 미측정·약한 근거는 INVALID, 관측된 누출은
+  근거가 약해도 FAIL(§3B).
+- **노이즈 밴드**: 점추정 = pooled per-entity F1 Δ(리포트 헤드라인과 일치),
+  밴드 = band_k × σ. σ 는 σ_repro override 있으면 그것, 없으면 σ_fold(fold 간
+  표준편차). Δ 가 밴드 밖이면 magnitude gain/regression. 타깃이 올라도 다른
+  엔티티가 밴드 밖 회귀면 FAIL.
+- **방향 일관성 게이트(조이기 전용)**: magnitude gain 이라도 후보가 fold 승률
+  2/3 미만이면 한 fold 가 pooled 를 끌어올린 것으로 보고 INCONCLUSIVE 로 내린다.
+  gain 을 내릴 뿐 절대 올리지 않고 regression 은 안 건드려 false PASS 를 못
+  만든다. paired-SEM 밴드로 좁히지 않는 이유: SEM 은 fold 별 Δ 가 일정하면 0 으로
+  붕괴하고, k-fold Δ 는 iid 가 아니라 분산을 과소추정해 anticonservative 하다 —
+  넓은 σ_fold 는 노이즈 게이트에겐 안전한 방향이다.
+- **σ_repro 는 수요기반**으로만 측정한다 — 판정이 `INCONCLUSIVE`이고 그 후보를
+  **실제로 채택**할 때만 GPU 를 쓴다. cheap-first: 대표 fold 하나를 시드 M회
+  (`--train-seed`) 재학습해 학습 노이즈부터 잡고, 부족할 때 전체로 올린다.
+  측정한 σ_repro 는 `variance repro --out` 로 setup 당 한 번 캐시하고 이후
+  `compare --sigma-repro <cache>` 로 재사용한다.
 
 ### decode_bio_to_spans
 

@@ -5,24 +5,33 @@
 계산하고 두 실험을 비교해도 되는지(같은 자로 잰 값인지)를 판정한다.
 
 핵심 원칙:
-- **같은 자만 비교한다** — split 구성(lang·data_path·kfold·group_key)이
-  다른 두 실험은 비교를 거부한다(INVALID). group_key=null(누출 보호 없음)과
-  group_key=orig 를 섞어 비교하는 것을 구조적으로 막는다.
-- **누출 트립와이어** — pooled 의 cross_fold_orig_dups != 0 이면 FAIL.
-- **타깃 단독 최적화 금지** — 타깃 엔티티가 올라도 다른 엔티티가 노이즈
-  밴드를 넘어 회귀하면 FAIL.
+- **같은 자만 비교한다** — RULER_FIELDS(lang·data_fingerprint·kfold·
+  group_key·seed·stratify)가 다른 두 실험은 비교를 거부한다(INVALID).
+  data_fingerprint 는 test gold 내용의 지문이라 경로가 같아도 gold 를 고치면
+  거부하고, group_key=null 과 orig 를 섞어 비교하는 것도 막는다.
+- **누출 트립와이어** — 신뢰 근거로 센 pooled 누출 카운터가 0 이 아니면 FAIL.
+- **타깃 단독 최적화 금지** — 타깃이 올라도 다른 엔티티가 밴드 밖 회귀면 FAIL.
+- **방향 일관성 게이트** — magnitude gain 이라도 fold 승률이 낮으면 조여서
+  INCONCLUSIVE(조이기 전용, 절대 upgrade 안 함).
 
-σ_fold 는 fold 간 표준편차로, 학습 재현 분산(σ_repro, 시드 반복 필요)의
-프록시다. 더 엄격한 게이트는 시드 반복 측정(별도 증분)이 필요하다.
+점추정은 pooled per-entity F1 Δ(리포트 헤드라인과 일치), 밴드는 σ_repro(측정된
+재현 분산) 또는 σ_fold(fold 간 표준편차, 넓은 프록시). σ_fold 가 넓은 것은
+노이즈 게이트에겐 안전한 방향이라 기본값이며, 정밀은 σ_repro 를 수요기반 측정.
 """
 import json
 import statistics
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-# 비교 가능성(같은 자) 판정에 쓰는 split 구성 필드 — 이 값이 하나라도
-# 다르면 두 실험은 서로 다른 자로 잰 것이라 비교를 거부한다.
-RULER_FIELDS = ("lang", "data_path", "kfold", "group_key")
+# 비교 가능성(같은 자) 판정에 쓰는 필드 — 이 값이 하나라도 다르면 두 실험은
+# 서로 다른 자로 잰 것이라 비교를 거부한다.
+#
+# data_fingerprint 는 test gold 의 정체성(내용·순서)이라 data_path(경로 문자열)
+# 를 대체한다 — 경로가 같아도 내용이 바뀌면 다른 자, 경로만 바뀌어도(rename)
+# 내용이 같으면 같은 자다. seed·stratify 는 fold 멤버십을 결정하므로, paired
+# 비교(fold 별 Δ 짝짓기)가 성립하려면 자에 포함돼야 한다.
+RULER_FIELDS = ("lang", "data_fingerprint", "kfold", "group_key",
+                "seed", "stratify")
 
 
 def _load_json(path: Path) -> dict:
@@ -111,6 +120,29 @@ def fold_std(run_dir: Path, matching: str = "strict") -> Dict[str, dict]:
     return out
 
 
+def fold_paired_deltas(baseline_dir: Path, candidate_dir: Path,
+                       matching: str = "strict") -> Dict[str, List[float]]:
+    """fold 별 per-entity Δᵢ = F1ᵢ(candidate) − F1ᵢ(baseline) 를 모은다.
+
+    두 run 이 같은 fold 멤버십(=comparable: 같은 지문·seed·kfold·group_key·
+    stratify)일 때만 유효하다. fold 는 fold 번호 순으로 정렬돼 인덱스로 짝짓고,
+    각 fold 에서 두 run 모두 엔티티가 존재하는 경우만 Δᵢ 를 낸다.
+
+    Returns:
+        {entity: [Δ_i, ...]} — 엔티티가 양쪽에 있는 fold 만, fold 순서 보존.
+    """
+    base_folds = load_fold_metrics(baseline_dir)
+    cand_folds = load_fold_metrics(candidate_dir)
+    n = min(len(base_folds), len(cand_folds))
+    series: Dict[str, List[float]] = {}
+    for i in range(n):
+        bpe = _fold_per_entity(base_folds[i], matching)
+        cpe = _fold_per_entity(cand_folds[i], matching)
+        for entity in set(bpe) & set(cpe):
+            series.setdefault(entity, []).append(cpe[entity] - bpe[entity])
+    return series
+
+
 def repro_std(run_dirs: List[Path],
               matching: str = "strict") -> Dict[str, dict]:
     """시드-반복 CV run 들의 pooled 헤드라인 F1 재현 분산(σ_repro)을 계산한다.
@@ -179,9 +211,9 @@ def load_sigma_map(path: Path) -> Dict[str, Optional[float]]:
 def run_config(run_dir: Path) -> dict:
     """실험의 split 구성을 첫 fold metrics.json 에서 읽는다.
 
-    fold 마다 동일한 필드(lang·data_path·kfold·group_key 등)를 담고 있어
-    첫 fold 로 대표한다. seed·fold_index·train_seed 는 fold 마다 다를 수
-    있어 비교 가능성 판정에는 쓰지 않는다.
+    RULER_FIELDS(lang·data_fingerprint·kfold·group_key·seed·stratify)는 run
+    전체에서 상수라 첫 fold 로 대표한다 — split seed 는 fold 마다 바뀌지 않는다.
+    fold_index(fold 축)·train_seed(학습 재현 축)만 fold 마다 달라 자에서 제외한다.
     """
     folds = _fold_dirs(Path(run_dir))
     if not folds:
@@ -207,19 +239,61 @@ def check_comparable(cfg_a: dict, cfg_b: dict) -> Tuple[bool, List[str]]:
     return (not issues, issues)
 
 
-def leakage_dups(run_dir: Path) -> int:
-    """pooled_metrics.json 의 cross_fold_orig_dups 를 반환한다(누출 카운터).
+#: 누출 카운터를 신뢰할 수 있는 판정 근거. 'text'(문장 전체 비교)는 문장을
+#: 재작성하는 증강 코퍼스에서 형제 행을 못 알아보고, 'none'은 행 단위 분할을
+#: 명시적으로 택한 경우라 애초에 측정된 적이 없다. 둘 다 0 을 "이상 없음"으로
+#: 읽어선 안 된다.
+TRUSTED_LEAK_BASIS = ("group", "orig")
 
-    키가 없으면 누출을 검증할 수 없으므로 0(이상 없음)을 가정하지 않고
-    예외를 던진다(fail-loud) — 스키마 드리프트가 게이트를 조용히 통과시키는
-    것을 막는다.
+#: 방향 일관성 게이트의 임계 — 후보가 양쪽에 엔티티가 있는 fold 중 이 비율
+#: 이상에서 이겨야 magnitude gain 을 확정한다. 미만이면 한 fold 가 pooled 를
+#: 끌어올린 것으로 보고 INCONCLUSIVE 로 내린다. 게이트는 조이기 전용이다 —
+#: gain 을 within_noise 로만 내리고, 절대 올리지 않으며 regression 은 안 건드린다.
+MIN_CONSISTENCY_FRAC = 2.0 / 3.0
+
+
+def _fold_consistency(deltas: List[float]) -> Tuple[int, int, int, Optional[bool]]:
+    """fold 별 Δᵢ 목록에서 (승, 패, n, 일관적?) 를 낸다.
+
+    승 = Δ>0 fold 수, 패 = Δ<0 fold 수. n<2 면 판정 불가라 일관성은 None.
+    일관적 = 이긴 fold 비율 >= MIN_CONSISTENCY_FRAC. gain 확정용 — regression
+    쪽은 호출자가 이 값으로 다운그레이드하지 않는다(조이기 전용 불변식).
+    """
+    n = len(deltas)
+    wins = sum(1 for d in deltas if d > 0)
+    losses = sum(1 for d in deltas if d < 0)
+    if n < 2:
+        return wins, losses, n, None
+    return wins, losses, n, (wins / n) >= MIN_CONSISTENCY_FRAC
+
+
+def leakage(run_dir: Path) -> Tuple[Optional[int], str]:
+    """pooled_metrics.json 에서 (누출 카운터, 판정 근거)를 읽는다.
+
+    카운터가 None 이면 미측정이다. 근거 키가 없는 옛 산출물은 'unknown' 이다 —
+    그때 무엇으로 셌는지 알 수 없기 때문이다. 'orig' 로 간주하면 실제로는
+    text 기준이던 옛 run 을 신뢰하게 되므로, 모르는 것은 신뢰하지 않는다.
+
+    카운터 키 자체가 없으면 누출을 검증할 수 없으므로 0(이상 없음)을 가정하지
+    않고 예외를 던진다(fail-loud) — 스키마 드리프트가 게이트를 조용히
+    통과시키는 것을 막는다.
     """
     pooled = load_pooled_metrics(run_dir)
-    if "cross_fold_orig_dups" not in pooled:
+    if "cross_fold_group_dups" in pooled:
+        raw = pooled["cross_fold_group_dups"]
+    elif "cross_fold_orig_dups" in pooled:
+        raw = pooled["cross_fold_orig_dups"]
+    else:
         raise ValueError(
-            f"{run_dir}/pooled_metrics.json missing 'cross_fold_orig_dups'; "
-            "cannot verify cross-fold leakage")
-    return int(pooled["cross_fold_orig_dups"])
+            f"{run_dir}/pooled_metrics.json missing leak counter "
+            "('cross_fold_group_dups'); cannot verify cross-fold leakage")
+    basis = pooled.get("leak_check_basis", "unknown")
+    return (None if raw is None else int(raw)), basis
+
+
+def leakage_dups(run_dir: Path) -> Optional[int]:
+    """누출 카운터만 반환한다. None 이면 미측정."""
+    return leakage(run_dir)[0]
 
 
 def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
@@ -243,12 +317,36 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
     """
     comparable, issues = check_comparable(
         run_config(baseline_dir), run_config(candidate_dir))
-    dups_a, dups_b = leakage_dups(baseline_dir), leakage_dups(candidate_dir)
-    leakage_ok = (dups_a == 0 and dups_b == 0)
+    dups_a, basis_a = leakage(baseline_dir)
+    dups_b, basis_b = leakage(candidate_dir)
+    # 누출을 '검증했고 0' 인 경우에만 통과다. 미측정(None)이나 신뢰할 수 없는
+    # 근거(text·none·unknown)의 0 은 검증된 0 이 아니다 — 정직하게 opt-out 한
+    # run 이 크래시하고 거짓 0 을 낸 run 이 통과하면, 규칙이 편법을 보상한다.
+    #
+    # 다만 카운터가 0 보다 크면 근거가 약해도 **본 것**이다. 약한 근거는 누출을
+    # 놓칠 뿐 없는 누출을 만들어내지 않으므로, 이 경우는 확인된 누출(FAIL)이다.
+    verified = []
+    observed_leak = False
+    for name, dups, basis in (("baseline", dups_a, basis_a),
+                              ("candidate", dups_b, basis_b)):
+        if dups is not None and dups > 0:
+            observed_leak = True
+            verified.append(dups)
+        elif dups is None:
+            issues = issues + [f"{name}: leakage unmeasured (basis={basis})"]
+        elif basis not in TRUSTED_LEAK_BASIS:
+            issues = issues + [
+                f"{name}: leakage counter untrustworthy (basis={basis}); "
+                f"0 here means 'not observable', not 'no leak'"]
+        else:
+            verified.append(dups)
+    leakage_verified = observed_leak or len(verified) == 2
+    leakage_ok = leakage_verified and not observed_leak
 
     base_f1 = _pooled_per_entity(load_pooled_metrics(baseline_dir), matching)
     cand_f1 = _pooled_per_entity(load_pooled_metrics(candidate_dir), matching)
     sigma_fold = fold_std(baseline_dir, matching)
+    paired = fold_paired_deltas(baseline_dir, candidate_dir, matching)
     override = sigma_override or {}
 
     all_deltas: Dict[str, dict] = {}
@@ -268,9 +366,21 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
             status = "real_regression"
         else:
             status = "within_noise"
+        # 방향 일관성 게이트 — 조이기 전용. magnitude 가 real_gain 인데 후보가
+        # fold 승률 <2/3 이면 한 fold 가 pooled 를 끌어올린 것으로 보고
+        # within_noise 로 내린다. regression 은 건드리지 않는다(회귀는 소수
+        # fold 에서 나타나도 계속 막는 게 보수적).
+        wins, losses, n_fold, consistent = _fold_consistency(
+            paired.get(entity, []))
+        downgraded = False
+        if status == "real_gain" and consistent is False:
+            status = "within_noise"
+            downgraded = True
         all_deltas[entity] = {
             "delta": delta, "sigma": std, "band": band,
             "band_source": band_source, "status": status,
+            "fold_wins": wins, "fold_losses": losses, "fold_n": n_fold,
+            "consistent": consistent, "consistency_downgraded": downgraded,
         }
 
     target = None
@@ -288,6 +398,9 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
     ]
 
     if not comparable:
+        verdict = "INVALID"
+    elif not leakage_verified:
+        # 검증되지 않은 누출은 FAIL(누출 확인)과 다르다 — 잴 수 없었을 뿐이다.
         verdict = "INVALID"
     elif not leakage_ok:
         verdict = "FAIL"
@@ -308,18 +421,27 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
         "comparable": comparable,
         "comparability_issues": issues,
         "leakage_ok": leakage_ok,
-        "leakage": {"baseline_dups": dups_a, "candidate_dups": dups_b},
+        "leakage_verified": leakage_verified,
+        "leakage": {"baseline_dups": dups_a, "candidate_dups": dups_b,
+                    "baseline_basis": basis_a, "candidate_basis": basis_b},
         "matching": matching,
         "band_k": band_k,
         "target": target,
         "regressions": regressions,
         "all_deltas": all_deltas,
         "notes": [
-            "band_source per entity: sigma_repro (seed-repeat "
-            "reproducibility via sigma_override) when available, else "
-            "sigma_fold (fold-to-fold std) — a rougher, typically wider "
-            "proxy. Measure sigma_repro only when an INCONCLUSIVE verdict "
-            "blocks a decision you will adopt.",
+            "point estimate is pooled per-entity F1 delta (matches the "
+            "reported headline). Band = band_k * sigma: sigma_repro "
+            "(seed-repeat reproducibility via sigma_override) when available, "
+            "else sigma_fold (fold-to-fold std) — a rougher, typically wider "
+            "proxy that is safe because a noise gate should err wide. Measure "
+            "sigma_repro only when an INCONCLUSIVE verdict blocks a decision "
+            "you will adopt.",
+            "consistency gate is tighten-only: a magnitude real_gain is "
+            "downgraded to within_noise (INCONCLUSIVE) when the candidate wins "
+            f"in fewer than {MIN_CONSISTENCY_FRAC:.2f} of the folds where both "
+            "runs have the entity. It never upgrades and never suppresses a "
+            "regression, so it cannot create a false PASS.",
         ],
     }
 
