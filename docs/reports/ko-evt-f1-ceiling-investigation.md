@@ -22,8 +22,8 @@
   generic drop 10 · 타입 재판정(drop 8·add 114) · span 최대화 32. 타입
   일관성(무라벨 0인 표면형) 92%→99%. **미커밋** — 커밋 전 결과-시점 refuter.
   상세: `docs/issues/issue-163-ko-evt-gold-schema-consistency.md`.
-  - 산출물·백업·provenance: `results/classifier/ko/evt_maxspan/`.
-  - 착수점(§3.5 폐기·되돌림) gold: `results/classifier/ko/evt_census/pii_all.evt.jsonl`(1,346).
+  - 재라벨 산출물·provenance·중간 백업·10-fold 체크포인트는 검증 후 제거
+    (`results/` gitignore, 일회성). 최종 gold 만 `data/klue/pii_all.jsonl`.
 - **EVT 라벨 기준은 커밋된 canonical §3·§3.3 그대로**(JA·VI와 동일). 세 축:
   1회성 named 사건 포함(`세월호 참사`·`하이옌`) / 제도화된 복합 행사명사만
   bare EVT(`총선`·`여론조사`, 단 `조사`·`선거` 단독은 아님, §3.3 보조원칙) /
@@ -36,7 +36,7 @@
   span 평균 7.15자→4.63자로 **과제를 쉽게 만들어 F1 을 올리는** 변경이었다.
   아래 0.640 은 최대-span 1,346 gold 기준이므로 그대로 유효하다.
 
-## 오류 구조 (측정 — `results/classifier/ko/evt_census/probe_scripts/evt_error_analysis.py`)
+## 오류 구조 (측정 — 1,346 gold 기준, 산출물 제거됨)
 
 10-fold pooled EVT: P **0.60** / R **0.69**. TP 923 · FP 617 · FN 423.
 
@@ -92,19 +92,18 @@
   처리하면 실패한다(폐기된 `regen_narrow.py` 전례).
 - 결과: EVT F1 0.640(1,346)→**0.664**(1,442). 단 이는 완전성·정합 개선의
   부작용이지 F1 레버가 아니며, gold 정의가 달라 두 값의 직접 비교는 무의미하다.
-- 상세: `docs/issues/issue-163-ko-evt-gold-schema-consistency.md`,
-  provenance `results/classifier/ko/evt_maxspan/`.
+- 상세: `docs/issues/issue-163-ko-evt-gold-schema-consistency.md`
+  (provenance 는 검증 후 제거).
 
 **안 되는 것(재시도 금지)**: gold 경계 재주석(#2), 순 loss 가중, 순 후처리
 gazetteer(①), 커버리지 축소, **gold 협소화로 F1 올리기**(§3.5). 위에서 다 반증됨.
 
-## 산출물 위치 (전부 `results/classifier/ko/evt_census/`, gitignore-but-on-disk)
+## 산출물
 
-- `pii_all.evt.jsonl`(#163 gold 1346) · `pii_all.pre163.jsonl`(백업 1388)
-- `{baseline,new,restricted}_pooled.json`(10-fold 결과)
-- `judged.jsonl`·`audit_{key,human}.jsonl`·`trim_confirm.jsonl`·`evt_metrics.json`
-- `kfold_new_preds/fold{0..9}.json`(error analysis 재현용)
-- `gazetteer{,_clean}.txt`(861/827 entries) · `probe_scripts/*.py`(6 도구)
+천장 조사(1,346 gold)·재라벨(1,442) 산출물·중간 백업·10-fold 체크포인트는
+검증 후 전부 제거됐다(`results/` gitignore, 일회성). 위 수치는 제거 전 pooled
+결과에서 전사한 값이며, 재현은 gold(`data/klue/pii_all.jsonl`)와 아래 재학습
+명령으로 한다.
 
 **재학습 명령**(참고): `CUDA_VISIBLE_DEVICES=0 env -u PYTHONPATH .venv/bin/python
 -m ner.classifier --lang ko --data <gold> --kfold 10 --fold-index <i>
@@ -114,9 +113,8 @@ GPU: 0 여유(1·2는 vLLM gemma/qwen). fold당 ~13분.
 
 ## 미결정 (open)
 
-1. **#163 잔여 작업** — 단일 generic 위반 11건 정리 + 완전성 회수 137건.
-   수락 기준 확정 → 정의-시점 refuter → 구현 → 결과-시점 refuter → 커밋.
-   `docs/issues/issue-163-*.md` 미작성.
+1. **#163 완료** — EVT 1,442 재라벨(generic 정리·타입 재판정·span 최대화),
+   결과-시점 refuter PASS, docs 커밋 완료. 남은 절차는 PR(develop 머지)뿐.
 2. **② feature 통합 착수 여부** — 불확실 payoff(~0.70–0.75) 다주 투자. spine
    변경이면 새 이슈+수락기준+정의-시점 refuter 필요. 사전은 외부 지식만
    (gold 표면형 금지·fold-blind).

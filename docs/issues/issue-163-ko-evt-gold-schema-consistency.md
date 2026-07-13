@@ -28,7 +28,10 @@ F1 이 아니라 **라벨 일관성**이다.
   25,989 문장. 불변 타입 9종 byte-identical(재라벨 착수점 1,346 대비).
 - **타입 일관성**: 무라벨 0인 표면형 92% → **99%**, 무라벨 총 278 → **25건**
   (잔여 25건은 전부 동형이의·다른 개체 이름 일부 — 의도적 제외).
-- 산출물·백업·provenance: `results/classifier/ko/evt_maxspan/`.
+- 재판정 산출물·provenance JSONL·중간 gold 백업·10-fold 체크포인트는 검증
+  (결과-시점 refuter PASS) 후 제거됐다(`results/` gitignore, 일회성). 최종
+  gold 만 `data/klue/pii_all.jsonl` 에 남는다. 아래 표·검증 섹션의 파일명은
+  작업 시점 기록이며, 재현이 필요하면 gold + 재판정 코드로 재생성한다.
 
 ## KO EVT 라벨 기준 (3축 확정)
 
@@ -87,8 +90,8 @@ KO EVT 는 **커밋된 canonical §3·§3.3 그대로**이며 JA·VI 와 동일�
 
 ## 구현 결과
 
-착수점 gold: `results/classifier/ko/evt_census/pii_all.evt.jsonl` (EVT 1,346,
-§3.5 폐기·되돌림 후. #163 1단계 dual-LLM 재판정 1,388→1,346 반영분).
+착수점 gold: EVT 1,346 (§3.5 폐기·되돌림 후. #163 1단계 dual-LLM 재판정
+1,388→1,346 반영분. 산출물은 검증 후 제거).
 
 | 단계 | EVT | 내용 | provenance |
 |---|---|---|---|
@@ -124,7 +127,8 @@ KO EVT 는 **커밋된 canonical §3·§3.3 그대로**이며 JA·VI 와 동일�
 - 타입 일관성: 무라벨 0인 표면형 92%→99%, 무라벨 278→25건.
 - **10종 전체·entity별 메트릭** (1,442 gold, 10-fold pooled, strict/exact-span,
   `--no-stratify` seed 42, kf-deberta-base, `cross_fold_orig_dups: 0` = 원문
-  단위 cross-fold 누출 없음). 출처: `results/classifier/ko/evt_maxspan/kfold/pooled.json`.
+  단위 cross-fold 누출 없음). 학습 산출물(pooled.json·fold 체크포인트)은
+  검증 후 제거 — 아래 표 수치는 그 pooled.json 에서 전사·기계 대조한 값이다.
 
   | entity | P | R | F1 | support |
   |---|---|---|---|---|
