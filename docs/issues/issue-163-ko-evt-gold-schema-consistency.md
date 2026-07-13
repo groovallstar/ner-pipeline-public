@@ -158,3 +158,71 @@ KO EVT 는 **커밋된 canonical §3·§3.3 그대로**이며 JA·VI 와 동일�
 
 - gazetteer feature 통합(외부 지식만·fold-blind) — 별도 이슈. gold 표면형
   금지, 본 재라벨 gold 의 F1 을 gazetteer 투자 판단 근거로 쓰지 않는다.
+  상세 설계·근거는 아래 부록 참조.
+
+## 부록: EVT F1 천장 조사 (1,346 gold 기준)
+
+> 원래 자유형식 리포트(`docs/reports/ko-evt-f1-ceiling-investigation.md`)였으나
+> #163 에 통합. 아래 수치는 **완전성 회수 이전 1,346 gold** 의 10-fold 측정
+> 기록이며, 재현 산출물(probe 스크립트·pooled·fold 예측)은 검증 후 제거됐다.
+> 최종 1,442 gold 의 F1·메트릭은 위 "검증" 섹션 참조. 두 gold 는 정의가 달라
+> 직접 비교하지 않는다.
+
+**요지**: 이 setup(KLUE silver + base 모델)의 EVT F1 은 1,346 기준 **0.640**
+이 견고한 구조적 천장이었다. 값싼 레버 4개가 전부 반증됐고, 남은 정공법은
+gazetteer *feature* 통합(재학습)뿐이다(낙관적 ~0.70–0.75, 0.80 은 aspirational).
+
+### 오류 구조 (1,346 gold, 10-fold pooled)
+
+EVT: P **0.60** / R **0.69**. TP 923 · FP 617 · FN 423.
+
+| precision 손실 (FP 617) | | recall 손실 (FN 423) | |
+|---|---|---|---|
+| gold공백(누락+spurious) | 47% | 경계오류 | 49% |
+| 경계오류(EVT↔EVT) | 39% | 완전누락(anchorless) | 39% |
+| 타입혼동(DAT/LOC/ORG) | 14% | 타입혼동 | 12% |
+
+**경계 오류의 정체**: 240쌍 중 **77% 가 모델 과축소**(gold 보다 짧게) —
+`한국시리즈`→`한국`, `도쿄 올림픽`→`올림픽`. gold 는 대부분 정확(꼬리 2%뿐).
+모델이 hapax 긴 span 을 못 배워 익숙한 조각으로 후퇴한다. (이 진단이 축3
+최대-span 결정의 근거 중 하나 — 트림은 모델 과축소를 gold 로 고착시킨다.)
+
+### 반증된 cheap 레버 4개
+
+| 레버 | 결과 |
+|---|---|
+| 커버리지 축소(anchorless 19% 강등) | 0.640→0.650 (+0.01, −19% 커버리지) |
+| gold 경계 재주석 | refuted — gold 이미 정확, 재주석 무의미 |
+| 경계 loss 가중(`--boundary-b/i-weight`) | i3=0.623↓ / b2i2=0.658 flat |
+| gazetteer 후처리 | 0.640→0.60(fix)/0.57(fix+recall), 클린해도 net-음 |
+
+**재시도 금지**: 위 4개 + **gold 협소화로 F1 올리기**(§3.5, 위 결정 로그).
+
+### 근본 원인 (얽힌 3구조)
+
+1. **세계지식 부재** — `한국시리즈`≠`한국`을 모델·정적사전 둘 다 모름.
+2. **문맥의존 경계** — 같은 이벤트가 문장별 bare(`월드컵`)/수식(`브라질 월드컵`).
+3. **hapax** — 표면형 83% 1회, 일반화 단서 없음(19%는 anchorless=recall≈0).
+
+### 남은 경로 — ② gazetteer feature 통합 (별도 이슈)
+
+후처리(문맥 없는 하드 매칭)와 달리 **모델이 문맥 조건부 사용을 *학습*** 한다.
+- (a) 사전 개선 — Wikidata SPARQL(KO 이벤트 라벨) + 도메인 목록, 최대-span
+  경계로 정규화. (b) 토크나이즈 시 토큰별 사전 B/I/O 매치 feature 계산.
+  (c) 그 feature 임베딩을 BERT 토큰표현에 concat 후 분류 head.
+  (d) 10-fold 재학습.
+- **누출 주의**: 사전은 외부 세계지식만(gold 표면형 금지), fold-blind.
+- 기대: ~0.70–0.75 추정, 0.80 불확실. 다주 프로젝트.
+
+**재학습 명령**(참고): `CUDA_VISIBLE_DEVICES=0 env -u PYTHONPATH .venv/bin/python
+-m ner.classifier --lang ko --data <gold> --kfold 10 --fold-index <i>
+--no-stratify --seed 42 --precision fp16 --output-dir <dir>` × 10 →
+`python -m ner.classifier.kfold_pool --fold-dirs <dirs> --allow-cross-fold-leak`.
+fold당 ~13분.
+
+### 미결정 (open)
+
+- **② feature 통합 착수 여부** — 불확실 payoff(~0.70–0.75) 다주 투자. spine
+  변경이면 새 이슈 + 수락 기준 + 정의-시점 refuter 필요.
+- **0.80 이 사업상 필수인가** — 아니면 0.664 가 정직한 종료점(#163 정합성이
+  실 성과). gold 를 좁혀 0.80 을 만드는 길은 폐기됐다(§3.5).
