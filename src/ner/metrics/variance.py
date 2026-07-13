@@ -207,19 +207,40 @@ def check_comparable(cfg_a: dict, cfg_b: dict) -> Tuple[bool, List[str]]:
     return (not issues, issues)
 
 
-def leakage_dups(run_dir: Path) -> int:
-    """pooled_metrics.json 의 cross_fold_orig_dups 를 반환한다(누출 카운터).
+#: 누출 카운터를 신뢰할 수 있는 판정 근거. 'text'(문장 전체 비교)는 문장을
+#: 재작성하는 증강 코퍼스에서 형제 행을 못 알아보고, 'none'은 행 단위 분할을
+#: 명시적으로 택한 경우라 애초에 측정된 적이 없다. 둘 다 0 을 "이상 없음"으로
+#: 읽어선 안 된다.
+TRUSTED_LEAK_BASIS = ("group", "orig")
 
-    키가 없으면 누출을 검증할 수 없으므로 0(이상 없음)을 가정하지 않고
-    예외를 던진다(fail-loud) — 스키마 드리프트가 게이트를 조용히 통과시키는
-    것을 막는다.
+
+def leakage(run_dir: Path) -> Tuple[Optional[int], str]:
+    """pooled_metrics.json 에서 (누출 카운터, 판정 근거)를 읽는다.
+
+    카운터가 None 이면 미측정이다. 근거 키가 없는 옛 산출물은 'unknown' 이다 —
+    그때 무엇으로 셌는지 알 수 없기 때문이다. 'orig' 로 간주하면 실제로는
+    text 기준이던 옛 run 을 신뢰하게 되므로, 모르는 것은 신뢰하지 않는다.
+
+    카운터 키 자체가 없으면 누출을 검증할 수 없으므로 0(이상 없음)을 가정하지
+    않고 예외를 던진다(fail-loud) — 스키마 드리프트가 게이트를 조용히
+    통과시키는 것을 막는다.
     """
     pooled = load_pooled_metrics(run_dir)
-    if "cross_fold_orig_dups" not in pooled:
+    if "cross_fold_group_dups" in pooled:
+        raw = pooled["cross_fold_group_dups"]
+    elif "cross_fold_orig_dups" in pooled:
+        raw = pooled["cross_fold_orig_dups"]
+    else:
         raise ValueError(
-            f"{run_dir}/pooled_metrics.json missing 'cross_fold_orig_dups'; "
-            "cannot verify cross-fold leakage")
-    return int(pooled["cross_fold_orig_dups"])
+            f"{run_dir}/pooled_metrics.json missing leak counter "
+            "('cross_fold_group_dups'); cannot verify cross-fold leakage")
+    basis = pooled.get("leak_check_basis", "unknown")
+    return (None if raw is None else int(raw)), basis
+
+
+def leakage_dups(run_dir: Path) -> Optional[int]:
+    """누출 카운터만 반환한다. None 이면 미측정."""
+    return leakage(run_dir)[0]
 
 
 def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
@@ -243,8 +264,31 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
     """
     comparable, issues = check_comparable(
         run_config(baseline_dir), run_config(candidate_dir))
-    dups_a, dups_b = leakage_dups(baseline_dir), leakage_dups(candidate_dir)
-    leakage_ok = (dups_a == 0 and dups_b == 0)
+    dups_a, basis_a = leakage(baseline_dir)
+    dups_b, basis_b = leakage(candidate_dir)
+    # 누출을 '검증했고 0' 인 경우에만 통과다. 미측정(None)이나 신뢰할 수 없는
+    # 근거(text·none·unknown)의 0 은 검증된 0 이 아니다 — 정직하게 opt-out 한
+    # run 이 크래시하고 거짓 0 을 낸 run 이 통과하면, 규칙이 편법을 보상한다.
+    #
+    # 다만 카운터가 0 보다 크면 근거가 약해도 **본 것**이다. 약한 근거는 누출을
+    # 놓칠 뿐 없는 누출을 만들어내지 않으므로, 이 경우는 확인된 누출(FAIL)이다.
+    verified = []
+    observed_leak = False
+    for name, dups, basis in (("baseline", dups_a, basis_a),
+                              ("candidate", dups_b, basis_b)):
+        if dups is not None and dups > 0:
+            observed_leak = True
+            verified.append(dups)
+        elif dups is None:
+            issues = issues + [f"{name}: leakage unmeasured (basis={basis})"]
+        elif basis not in TRUSTED_LEAK_BASIS:
+            issues = issues + [
+                f"{name}: leakage counter untrustworthy (basis={basis}); "
+                f"0 here means 'not observable', not 'no leak'"]
+        else:
+            verified.append(dups)
+    leakage_verified = observed_leak or len(verified) == 2
+    leakage_ok = leakage_verified and not observed_leak
 
     base_f1 = _pooled_per_entity(load_pooled_metrics(baseline_dir), matching)
     cand_f1 = _pooled_per_entity(load_pooled_metrics(candidate_dir), matching)
@@ -289,6 +333,9 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
 
     if not comparable:
         verdict = "INVALID"
+    elif not leakage_verified:
+        # 검증되지 않은 누출은 FAIL(누출 확인)과 다르다 — 잴 수 없었을 뿐이다.
+        verdict = "INVALID"
     elif not leakage_ok:
         verdict = "FAIL"
     elif target is None:
@@ -308,7 +355,9 @@ def compare(baseline_dir: Path, candidate_dir: Path, target_entity: str,
         "comparable": comparable,
         "comparability_issues": issues,
         "leakage_ok": leakage_ok,
-        "leakage": {"baseline_dups": dups_a, "candidate_dups": dups_b},
+        "leakage_verified": leakage_verified,
+        "leakage": {"baseline_dups": dups_a, "candidate_dups": dups_b,
+                    "baseline_basis": basis_a, "candidate_basis": basis_b},
         "matching": matching,
         "band_k": band_k,
         "target": target,

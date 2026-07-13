@@ -8,6 +8,7 @@ from ner.metrics.variance import (
     check_comparable,
     compare,
     fold_std,
+    leakage,
     leakage_dups,
     load_sigma_map,
     repro_std,
@@ -31,15 +32,20 @@ def _fold_doc(config, per_entity_f1, overall_f1):
     return doc
 
 
-def _pooled_doc(per_entity_f1, overall_f1, dups, n_folds):
-    """합성 pooled_metrics.json dict 를 만든다."""
+def _pooled_doc(per_entity_f1, overall_f1, dups, n_folds, basis="group"):
+    """합성 pooled_metrics.json dict 를 만든다.
+
+    basis 기본값은 'group' — 그룹 키로 센 신뢰 가능한 근거다. 근거 자체를
+    검증하는 테스트는 이 키를 지우거나 덮어써서 쓴다.
+    """
     per = {e: {"f1": f1, "precision": f1, "recall": f1, "support": 100}
            for e, f1 in per_entity_f1.items()}
     block = {"overall": {"f1": overall_f1, "precision": overall_f1,
                          "recall": overall_f1, "support": 1000},
              "per_entity": per}
     return {"strict": block, "relaxed": block,
-            "n_folds": n_folds, "cross_fold_orig_dups": dups}
+            "n_folds": n_folds, "cross_fold_orig_dups": dups,
+            "cross_fold_group_dups": dups, "leak_check_basis": basis}
 
 
 def _write_run(root, name, config, fold_f1_list, pooled_f1,
@@ -205,9 +211,10 @@ class TestLeakageDups:
         pooled = json.loads(
             (run / "pooled_metrics.json").read_text(encoding="utf-8"))
         del pooled["cross_fold_orig_dups"]
+        del pooled["cross_fold_group_dups"]
         (run / "pooled_metrics.json").write_text(
             json.dumps(pooled), encoding="utf-8")
-        with pytest.raises(ValueError, match="cross_fold_orig_dups"):
+        with pytest.raises(ValueError, match="missing leak counter"):
             leakage_dups(run)
 
 
@@ -258,3 +265,100 @@ class TestReproStd:
         smap = load_sigma_map(out)
         assert abs(smap["ORG"]
                    - statistics.stdev([0.80, 0.82, 0.84])) < 1e-9
+
+
+def _patch_pooled(run, **fields):
+    """pooled_metrics.json 의 필드를 덮어쓴다."""
+    path = run / "pooled_metrics.json"
+    pooled = json.loads(path.read_text(encoding="utf-8"))
+    pooled.update(fields)
+    path.write_text(json.dumps(pooled), encoding="utf-8")
+
+
+class TestLeakageVerification:
+    """미측정·약한 근거는 크래시가 아니라 INVALID 다.
+
+    정직하게 opt-out 한 run 이 죽고 거짓 0 을 낸 run 이 통과하면, 규칙이
+    편법을 보상하게 된다.
+    """
+
+    def _pair(self, tmp_path):
+        base = _write_run(tmp_path, "base", _CFG,
+                          [{"ORG": 0.80}, {"ORG": 0.84}], {"ORG": 0.82})
+        cand = _write_run(tmp_path, "cand", _CFG,
+                          [{"ORG": 0.90}, {"ORG": 0.94}], {"ORG": 0.92})
+        return base, cand
+
+    def test_trusted_basis_zero_dups_passes(self, tmp_path):
+        base, cand = self._pair(tmp_path)
+        for run in (base, cand):
+            _patch_pooled(run, cross_fold_group_dups=0,
+                          leak_check_basis="group")
+        result = compare(base, cand, "ORG")
+        assert result["leakage_verified"] is True
+        assert result["leakage_ok"] is True
+        assert result["verdict"] != "INVALID"
+
+    def test_unmeasured_leakage_is_invalid_not_crash(self, tmp_path):
+        base, cand = self._pair(tmp_path)
+        _patch_pooled(cand, cross_fold_group_dups=None,
+                      leak_check_basis="none")
+        result = compare(base, cand, "ORG")
+        assert result["verdict"] == "INVALID"
+        assert result["leakage_verified"] is False
+        assert any("unmeasured" in i for i in result["comparability_issues"])
+
+    def test_text_basis_zero_is_not_trusted(self, tmp_path):
+        """문장 비교로 센 0 은 '이상 없음'이 아니라 '볼 수 없었음'이다."""
+        base, cand = self._pair(tmp_path)
+        _patch_pooled(cand, cross_fold_group_dups=0,
+                      leak_check_basis="text")
+        result = compare(base, cand, "ORG")
+        assert result["verdict"] == "INVALID"
+        assert result["leakage_verified"] is False
+        assert any("untrustworthy" in i
+                   for i in result["comparability_issues"])
+
+    def test_real_leak_still_fails(self, tmp_path):
+        base, cand = self._pair(tmp_path)
+        for run in (base, cand):
+            _patch_pooled(run, leak_check_basis="group")
+        _patch_pooled(cand, cross_fold_group_dups=3)
+        result = compare(base, cand, "ORG")
+        assert result["verdict"] == "FAIL"
+        assert result["leakage_verified"] is True
+        assert result["leakage_ok"] is False
+
+    def test_observed_leak_fails_even_on_weak_basis(self, tmp_path):
+        """약한 근거는 누출을 놓칠 뿐 만들어내지 않는다 — 본 누출은 FAIL 이다.
+
+        dups>0 이면 근거가 text 여도 실제로 관측된 것이므로, INVALID 로
+        숨기지 않는다.
+        """
+        base, cand = self._pair(tmp_path)
+        _patch_pooled(base, cross_fold_group_dups=0,
+                      leak_check_basis="group")
+        _patch_pooled(cand, cross_fold_group_dups=5,
+                      leak_check_basis="text")
+        result = compare(base, cand, "ORG")
+        assert result["verdict"] == "FAIL"
+        assert result["leakage_ok"] is False
+
+    def test_legacy_pooled_without_basis_is_not_trusted(self, tmp_path):
+        """근거 키가 없는 옛 산출물은 'unknown' — 무엇으로 셌는지 모른다.
+
+        'orig' 로 간주하면 실제로는 text 기준이던 옛 run 을 신뢰하게 된다.
+        """
+        base, cand = self._pair(tmp_path)
+        for run in (base, cand):
+            path = run / "pooled_metrics.json"
+            pooled = json.loads(path.read_text(encoding="utf-8"))
+            del pooled["leak_check_basis"]
+            path.write_text(json.dumps(pooled), encoding="utf-8")
+        dups, basis = leakage(cand)
+        assert dups == 0 and basis == "unknown"
+        result = compare(base, cand, "ORG")
+        assert result["verdict"] == "INVALID"
+        assert result["leakage_verified"] is False
+        assert any("untrustworthy" in i
+                   for i in result["comparability_issues"])

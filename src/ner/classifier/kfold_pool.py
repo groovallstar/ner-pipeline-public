@@ -12,7 +12,7 @@ span 을 합친 뒤 strict + relaxed span F1 을 한 번에 계산한다 (pooled
 import argparse
 import json
 import os
-from typing import List
+from typing import List, Optional, Tuple
 
 from ner.metrics.span_metrics import (
     compute_offset_span_f1,
@@ -20,73 +20,119 @@ from ner.metrics.span_metrics import (
 )
 
 
+def _leak_mode(rec: dict, group_key: Optional[str]) -> str:
+    """이 레코드를 어떤 모드로 볼지 정한다.
+
+    'none' 은 행 단위 분할을 명시적으로 선택했다는 뜻(미측정), 'declared' 는
+    그룹 키가 선언됐다는 뜻, 'legacy' 는 그룹 키를 모르는 옛 예측 파일이다.
+    """
+    if group_key == 'auto':
+        recorded = rec.get('group_key')
+        if recorded is None:
+            return 'legacy'
+        return 'none' if recorded == 'none' else 'declared'
+    return 'none' if group_key is None else 'declared'
+
+
+def _leak_basis(rec: dict, mode: str) -> Tuple[str, object]:
+    """레코드에서 누출 판정에 쓸 (근거, 값) 을 고른다.
+
+    우선순위: group(선언된 그룹 키의 값) > orig(레거시 원문) > text(문장 전체).
+    'text' 는 문장을 재작성하는 증강 코퍼스에서 형제 행을 알아보지 못하므로
+    신뢰 근거가 아니다 — 카운트는 나오지만 0 을 "이상 없음" 으로 읽어선 안 되고,
+    판정 쪽(`metrics.variance`)이 근거를 보고 걸러야 한다.
+
+    mode='none' 이면 근거는 'none' 이고 누출은 미측정이다. 행 단위 분할을
+    명시적으로 선택했다는 뜻이라 0 으로 위장해선 안 된다.
+    """
+    if mode == 'none':
+        return 'none', None
+    if mode == 'declared':
+        value = rec.get('group')
+        if value is not None:
+            return 'group', value
+        # 그룹 키가 선언됐는데 값이 없다 → 옛 예측 파일. 아래로 물러선다.
+    orig = rec.get('orig')
+    if orig is not None:
+        return 'orig', orig
+    text = rec.get('text')
+    if text is not None:
+        return 'text', text
+    return 'none', None
+
+
 def pool_fold_predictions(fold_dirs: List[str],
-                          require_no_leak: bool = True) -> dict:
+                          require_no_leak: bool = True,
+                          group_key: Optional[str] = 'auto') -> dict:
     """각 fold dir 의 test_predictions.json 을 합쳐 pooled span F1 계산.
 
     pooled = 전체 fold 의 test 문장을 하나의 코퍼스로 합친 micro-average
     (fold 별 F1 의 평균이 아님). 호출자는 fold_dirs 가 전체 fold 를 빠짐없이
     포함하는지 직접 확인해야 한다 — 누락된 fold 는 감지되지 않는다.
 
-    무결성 검증(두 축):
-      - 원문(orig) 단위 cross-fold 누출: record 에 'orig'(주입 전 원문)이
-        있으면 같은 원문이 두 fold 의 test 에 걸쳐 등장하는지 본다. 같은
-        fold 안에서 같은 원문이 여러 번 나오는 것은 group 분할의 정상 동작
-        이라 허용하고, fold 가 갈리면 누출로 본다.
-      - 레거시 전체문장 중복: 'orig' 가 없는 코퍼스는 'text' 전체로 fold 간
-        중복을 본다 (예전 동작).
+    cross-fold 누출 검증: 같은 그룹 값이 두 fold 의 test 에 걸쳐 등장하면
+    누출이다. 같은 fold 안의 반복은 group 분할의 정상 동작이라 허용한다.
+    판정 근거는 `leak_check_basis` 로 남긴다 — 카운트 0 이 "이상 없음" 인지
+    "볼 수단이 없었음" 인지 구분하기 위해서다.
+
     require_no_leak=True 면 누출 발견 시 ValueError. 누출 baseline 을 일부러
-    측정할 때만 False 로 내려 ValueError 대신 cross_fold_orig_dups 카운트만
-    돌려받는다. id 는 원본 데이터셋에서 비고유(한 원문 파생 다행 공유)라
-    검증 기준으로 쓰지 않는다.
+    측정할 때만 False 로 내려 카운트만 돌려받는다.
 
     Args:
         fold_dirs: 각 fold 의 output_dir (안에 test_predictions.json 존재)
         require_no_leak: True 면 누출에 ValueError, False 면 카운트만.
+        group_key: 그룹 키 필드명. 'auto'(기본) 면 예측 파일에 기록된
+            `group_key` 를 쓰고, 없으면 레거시 orig/text 근거로 물러선다.
+            None 이면 명시적 opt-out 이라 누출을 미측정(null)으로 남긴다.
 
     Returns:
-        {"strict": {overall, per_entity},
-         "relaxed": {overall, per_entity},
-         "n_sentences": int, "n_folds": int,
-         "cross_fold_orig_dups": int}
+        {"strict", "relaxed", "n_sentences", "n_folds",
+         "group_key": str|None, "leak_check_basis": "group"|"orig"|"text"|"none",
+         "cross_fold_group_dups": int|None,
+         "cross_fold_orig_dups": int|None}   # 구 키 (하위호환, 같은 값)
     """
     gold_spans_list: List[List[dict]] = []
     pred_spans_list: List[List[dict]] = []
-    seen_texts: set = set()
-    orig_fold: dict = {}  # orig -> 처음 등장한 fold_dir
-    cross_fold_orig_dups = 0
+    seen_fold: dict = {}  # 그룹 값 -> 처음 등장한 fold_dir
+    dups = 0
+    basis_seen: set = set()
+    declared: Optional[str] = None
 
     for fold_dir in fold_dirs:
         preds_path = os.path.join(fold_dir, 'test_predictions.json')
         with open(preds_path, encoding='utf-8') as f:
             records = json.load(f)
         for rec in records:
-            orig = rec.get('orig')
-            if orig is not None:
-                prev = orig_fold.get(orig)
+            mode = _leak_mode(rec, group_key)
+            if mode == 'declared' and declared is None:
+                declared = (rec.get('group_key') if group_key == 'auto'
+                            else group_key)
+            basis, value = _leak_basis(rec, mode)
+            basis_seen.add(basis)
+            if value is not None:
+                prev = seen_fold.get(value)
                 if prev is not None and prev != fold_dir:
-                    cross_fold_orig_dups += 1
+                    dups += 1
                     if require_no_leak:
                         raise ValueError(
-                            f'cross-fold original-text leak (in {preds_path}): '
-                            f'orig in {prev} and {fold_dir}: {orig[:50]!r}'
+                            f'cross-fold sibling leak (in {preds_path}, '
+                            f'basis={basis}): value seen in {prev} and '
+                            f'{fold_dir}: {str(value)[:50]!r}'
                         )
                 else:
-                    orig_fold.setdefault(orig, fold_dir)
-            else:
-                text = rec.get('text')
-                if text is not None:
-                    if text in seen_texts:
-                        if require_no_leak:
-                            raise ValueError(
-                                f'duplicate test sentence across folds '
-                                f'(in {preds_path}): {text[:50]!r}'
-                            )
-                    else:
-                        seen_texts.add(text)
+                    seen_fold.setdefault(value, fold_dir)
             gold_spans_list.append(rec['gold_spans'])
             pred_spans_list.append(rec['pred_spans'])
 
+    # 여러 근거가 섞였으면 가장 약한 것으로 보고한다 (보수적)
+    basis = 'none'
+    for weakest in ('none', 'text', 'orig', 'group'):
+        if weakest in basis_seen:
+            basis = weakest
+            break
+
+    # 미측정: 명시적 opt-out(none). 이 경우 0 이 아니라 null 을 남긴다.
+    measured = basis != 'none'
     n_sentences = len(gold_spans_list)
     strict = compute_offset_span_f1(gold_spans_list, pred_spans_list)
     relaxed = compute_offset_span_f1_relaxed(
@@ -97,7 +143,10 @@ def pool_fold_predictions(fold_dirs: List[str],
         'relaxed': relaxed,
         'n_sentences': n_sentences,
         'n_folds': len(fold_dirs),
-        'cross_fold_orig_dups': cross_fold_orig_dups,
+        'group_key': declared,
+        'leak_check_basis': basis,
+        'cross_fold_group_dups': dups if measured else None,
+        'cross_fold_orig_dups': dups if measured else None,
     }
 
 
@@ -131,8 +180,14 @@ def main():
     )
     parser.add_argument(
         '--allow-cross-fold-leak', action='store_true',
-        help='Do not raise on cross-fold original-text leak; only count it '
-             '(cross_fold_orig_dups). Use to measure a leaked baseline.',
+        help='Do not raise on cross-fold sibling leak; only count it '
+             '(cross_fold_group_dups). Use to measure a leaked baseline.',
+    )
+    parser.add_argument(
+        '--group-key', default='auto',
+        help='Field holding the sibling-group value. Default "auto" reads '
+             'the group_key recorded in test_predictions.json. Pass "none" '
+             'to report the leak counter as unmeasured (null) instead of 0.',
     )
     args = parser.parse_args()
 
@@ -141,14 +196,22 @@ def main():
         parent = os.path.dirname(os.path.normpath(args.fold_dirs[0]))
         output = os.path.join(parent, 'pooled_metrics.json')
 
+    group_key = None if args.group_key == 'none' else args.group_key
     result = pool_fold_predictions(
-        args.fold_dirs, require_no_leak=not args.allow_cross_fold_leak
+        args.fold_dirs, require_no_leak=not args.allow_cross_fold_leak,
+        group_key=group_key,
     )
+    dups = result['cross_fold_group_dups']
     print(f"\n{'='*72}")
     print(f"  Pooled K-fold span F1  "
           f"(n_folds={result['n_folds']}, "
           f"n_sentences={result['n_sentences']}, "
-          f"cross_fold_orig_dups={result['cross_fold_orig_dups']})")
+          f"cross_fold_group_dups={'unmeasured' if dups is None else dups}, "
+          f"basis={result['leak_check_basis']})")
+    if result['leak_check_basis'] in ('text', 'none'):
+        print("  WARNING: leak check is not trustworthy "
+              f"(basis={result['leak_check_basis']}). A count of 0 here means "
+              "'not observable', not 'no leak'.")
     print(f"{'='*72}")
     _print_metrics_block('strict', result['strict'])
     _print_metrics_block("relaxed (SemEval'13 Partial)", result['relaxed'])

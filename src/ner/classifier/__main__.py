@@ -20,10 +20,12 @@ from ner.classifier.data_utils import (
     build_label_maps,
     boundary_weights_tensor,
     encode_dataset,
+    group_stats,
     load_jsonl,
     mask_pii_in_features,
     split_kfold_stratified,
     split_train_valid_test,
+    validate_group_key,
 )
 from ner.classifier.confidence_threshold import (
     DEFAULT_THRESHOLD_TYPES,
@@ -79,9 +81,11 @@ def main():
     )
     parser.add_argument(
         '--group-key', default=None,
-        help='Row field to group by for leak-free K-fold (e.g. "orig"): '
-             'rows sharing the value go to the same fold, preventing '
-             'cross-fold original-text leakage. Default: row-level split.',
+        help='REQUIRED. Row field to group by for leak-free splits (e.g. '
+             '"orig", "id"): rows sharing the value go to the same split, '
+             'preventing sibling-row leakage across train/valid/test. Pass '
+             '"none" to opt out explicitly (row-level split). The declared '
+             'key is rejected if another field groups rows more strongly.',
     )
     parser.add_argument(
         '--no-stratify', action='store_true',
@@ -165,6 +169,14 @@ def main():
         parser.error('--fold-index is required when --kfold is set')
     if args.kfold is not None and args.kfold < 3:
         parser.error('--kfold must be >= 3 (train needs at least one fold)')
+    if args.group_key is None:
+        parser.error(
+            '--group-key is required. Pass the field that marks sibling rows '
+            '(e.g. "orig" or "id"), or "none" to opt out of leak protection '
+            'explicitly. An unmeasured split must not read as a clean one.'
+        )
+    # "none" 은 명시적 opt-out — 행 단위 분할이며 누출 카운터는 null 로 남는다.
+    group_key = None if args.group_key == 'none' else args.group_key
 
     data_path = args.data or DEFAULT_DATA[args.lang]
     model_name = args.model_name or DEFAULT_MODEL[args.lang]
@@ -175,11 +187,19 @@ def main():
 
     logger.info('Loading data: %s', data_path)
     rows = load_jsonl(data_path)
+    # 분할 전에 그룹 키를 검증한다 — 잘못 고른 키는 보호를 no-op 으로 만들면서
+    # 누출 카운터는 0 을 내므로, 학습을 시작하기 전에 크게 실패해야 한다.
+    validate_group_key(rows, group_key)
+    n_rows, n_groups = group_stats(rows, group_key)
+    logger.info(
+        'Split units: %d rows -> %d groups (group_key=%s)',
+        n_rows, n_groups, args.group_key,
+    )
     if args.kfold is not None:
         strat_labels = () if args.no_stratify else ('PROD', 'EVT')
         train_rows, valid_rows, test_rows = split_kfold_stratified(
             rows, args.kfold, args.fold_index, args.seed,
-            strat_labels=strat_labels, group_key=args.group_key,
+            strat_labels=strat_labels, group_key=group_key,
         )
         logger.info(
             'K-fold: kfold=%d, fold_index=%d (test fold), valid fold=%d, '
@@ -190,7 +210,8 @@ def main():
         )
     else:
         train_rows, valid_rows, test_rows = split_train_valid_test(
-            rows, args.valid_ratio, args.test_ratio, args.seed
+            rows, args.valid_ratio, args.test_ratio, args.seed,
+            group_key=group_key,
         )
 
     if args.smoke:
@@ -371,14 +392,17 @@ def main():
     )
 
     if is_kfold:
-        # kfold pooled 평가용: test_rows 의 id·text·orig 와 gold/pred span 을
-        # zip. orig(원문)은 pooling 단계의 cross-fold 원문 누출 검증 기준이고
-        # text 는 레거시 전체문장 중복 검증 기준 (id 는 비고유)
+        # kfold pooled 평가용: test_rows 의 식별 필드와 gold/pred span 을 zip.
+        # group 은 선언된 그룹 키의 값으로, pooling 단계 cross-fold 누출 검증의
+        # 1순위 기준이다. group_key=none 이면 None 이라 누출은 미측정으로 남는다.
+        # orig·text 는 그룹 키가 없는 레거시 예측 파일용 fallback 기준.
         preds_out = [
             {
                 'id': row.get('id'),
                 'text': row['text'],
                 'orig': row.get('orig'),
+                'group': row.get(group_key) if group_key else None,
+                'group_key': args.group_key,
                 'gold_spans': gold,
                 'pred_spans': pred,
             }
@@ -433,7 +457,11 @@ def main():
         'test_ratio': args.test_ratio,
         'kfold': args.kfold,
         'fold_index': args.fold_index if is_kfold else None,
-        'group_key': args.group_key if is_kfold else None,
+        # 두 분할 경로 모두에 적용되므로 kfold 여부와 무관하게 기록한다.
+        # n_groups == n_rows 면 그룹 보호가 no-op 이었다는 뜻이다.
+        'group_key': args.group_key,
+        'n_rows': n_rows,
+        'n_groups': n_groups,
         'seed': args.seed,
         'train_seed': args.train_seed,
         'precision': args.precision,

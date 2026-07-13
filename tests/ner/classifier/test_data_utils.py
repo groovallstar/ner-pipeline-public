@@ -12,10 +12,13 @@ from ner.classifier.data_utils import (
     _context_word_count,
     build_label_maps,
     decode_bio_to_spans,
+    group_stats,
     mask_pii_in_features,
     split_holdout_deploy,
     split_kfold_stratified,
     split_train_valid_test,
+    stronger_group_keys,
+    validate_group_key,
 )
 
 
@@ -500,3 +503,130 @@ def test_mask_pii_in_features():
     assert features[0]['labels'][3] == label2id['B-EMAIL']
     # input_ids/attention_mask 보존
     assert out[0]['input_ids'] == features[0]['input_ids']
+
+
+# --- 그룹 키 검증 / 3-way 형제 묶기 ---
+
+
+def _sibling_rows(n_orig: int = 20, per_orig: int = 3) -> List[dict]:
+    """한 원문에서 per_orig 개 형제 행이 나오는 코퍼스 (문장은 전부 다르다)."""
+    rows: List[dict] = []
+    rid = 0
+    for g in range(n_orig):
+        for k in range(per_orig):
+            rows.append({'text': f'sentence {g} variant {k}',
+                         'entities': [], 'id': str(rid), 'orig': f'root{g}'})
+            rid += 1
+    return rows
+
+
+def test_group_stats_counts_rows_and_groups():
+    rows = _sibling_rows(10, 3)
+    assert group_stats(rows, None) == (30, 30)
+    assert group_stats(rows, 'id') == (30, 30)
+    assert group_stats(rows, 'orig') == (30, 10)
+
+
+def test_stronger_group_keys_finds_missed_sibling_field():
+    """고유 키를 선언하면 형제를 묶는 orig 가 더 강한 후보로 잡힌다."""
+    rows = _sibling_rows(10, 3)
+    assert stronger_group_keys(rows, 'orig') == {}
+    assert stronger_group_keys(rows, 'id') == {'orig': 10}
+    assert stronger_group_keys(rows, None) == {'orig': 10}
+
+
+def test_stronger_group_keys_none_when_no_siblings():
+    """형제가 없는 코퍼스는 어떤 필드도 더 강하게 묶지 못한다."""
+    rows = [{'text': f't{i}', 'entities': [], 'id': str(i)}
+            for i in range(50)]
+    assert stronger_group_keys(rows, 'id') == {}
+    assert stronger_group_keys(rows, None) == {}
+
+
+def test_stronger_group_keys_ignores_crosscutting_category_field():
+    """범주 필드는 그룹 수가 적어도 형제 키가 아니다 — 그룹 경계를 가로지른다.
+
+    domain 은 2개 그룹뿐이지만 같은 orig 형제들을 서로 다른 domain 으로
+    쪼갠다. 그룹 수만 보면 orig 를 밀어내는 오탐이 난다.
+    """
+    rows = [{'text': f't{i}', 'entities': [], 'id': str(i),
+             'orig': f'root{i // 3}',
+             'domain': 'news' if i % 2 else 'blog'}
+            for i in range(30)]
+    assert stronger_group_keys(rows, 'orig') == {}
+    validate_group_key(rows, 'orig')  # 통과해야 한다
+
+
+def test_stronger_group_keys_accepts_coarsening_field():
+    """선언 키의 그룹을 통째로 포함하는 필드는 진짜 후보다."""
+    rows = [{'text': f't{i}', 'entities': [], 'id': str(i),
+             'orig': f'root{i // 3}'}
+            for i in range(30)]
+    # id 그룹(싱글턴)은 orig 그룹 안에 완전히 들어간다
+    assert stronger_group_keys(rows, 'id') == {'orig': 10}
+
+
+def test_validate_group_key_rejects_unique_key_hiding_siblings():
+    """고유 키는 그룹 보호를 no-op 으로 만들면서 누출 카운터를 0 으로 만든다."""
+    rows = _sibling_rows(10, 3)
+    with pytest.raises(ValueError, match='stronger key exists'):
+        validate_group_key(rows, 'id')
+    with pytest.raises(ValueError, match='stronger key exists'):
+        validate_group_key(rows, None)
+    validate_group_key(rows, 'orig')  # 통과
+
+
+def test_validate_group_key_rejects_missing_and_null_field():
+    rows = _sibling_rows(4, 2)
+    rows[0].pop('orig')
+    with pytest.raises(ValueError, match='missing in 1/8'):
+        validate_group_key(rows, 'orig')
+    rows[0]['orig'] = None
+    with pytest.raises(ValueError, match='null in 1/8'):
+        validate_group_key(rows, 'orig')
+
+
+def test_validate_group_key_accepts_sibling_free_corpus():
+    """형제가 없으면 고유 키도 none 도 통과한다 (증명적 0)."""
+    rows = [{'text': f't{i}', 'entities': [], 'id': str(i)}
+            for i in range(50)]
+    validate_group_key(rows, 'id')
+    validate_group_key(rows, None)
+
+
+def test_split_3way_group_key_none_matches_legacy_rowlevel():
+    """group_key=None 3-way 는 기존 행 단위 셔플 분할과 완전히 동일하다."""
+    import random as _random
+    rows = [{'text': f't{i}', 'entities': [], 'id': str(i)}
+            for i in range(1000)]
+    rng = _random.Random(7)
+    shuffled = rows[:]
+    rng.shuffle(shuffled)
+    n_test, n_valid = 100, 100
+    legacy = (shuffled[n_test + n_valid:], shuffled[n_test:n_test + n_valid],
+              shuffled[:n_test])
+    got = split_train_valid_test(rows, 0.1, 0.1, seed=7)
+    for left, right in zip(got, legacy):
+        assert [r['id'] for r in left] == [r['id'] for r in right]
+
+
+def test_split_3way_group_key_prevents_sibling_leak():
+    """group_key 를 주면 test 형제가 train·valid 로 새지 않는다."""
+    rows = _sibling_rows(100, 3)
+    train, valid, test = split_train_valid_test(
+        rows, 0.1, 0.1, seed=42, group_key='orig')
+    assert len(train) + len(valid) + len(test) == len(rows)
+    train_roots = {r['orig'] for r in train}
+    valid_roots = {r['orig'] for r in valid}
+    test_roots = {r['orig'] for r in test}
+    assert not (test_roots & train_roots)
+    assert not (test_roots & valid_roots)
+    assert not (train_roots & valid_roots)
+
+
+def test_split_3way_rowlevel_does_leak_siblings():
+    """대조: 행 단위 분할은 같은 코퍼스에서 실제로 형제를 가른다."""
+    rows = _sibling_rows(100, 3)
+    train, _valid, test = split_train_valid_test(rows, 0.1, 0.1, seed=42)
+    train_roots = {r['orig'] for r in train}
+    assert any(r['orig'] in train_roots for r in test)
