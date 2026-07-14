@@ -1,7 +1,7 @@
 # issue-174: REST API 공격 표면 하드닝 — 바디 DoS·타이밍·에러 봉투
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/174
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner_pipeline/pull/175
 - 브랜치: `feat/issue-174-restapi-attack-hardening`
 - 승인일: 2026-07-14
 
