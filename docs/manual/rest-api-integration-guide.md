@@ -130,15 +130,17 @@
 {"error": {"status": 400, "message": "provide exactly one of 'text' or 'texts'"}}
 ```
 
-단, `422`(JSON 스키마 검증 실패)만은 프레임워크 기본 형식
-`{"detail": [ ... ]}`을 따릅니다.
+`422`(JSON 스키마 검증 실패)·`500`(미처리 서버 오류)도 **같은 봉투**로
+반환됩니다(프레임워크 기본형 `{"detail":[...]}`·평문이 아님). `500`은 내부
+예외 메시지·트레이스백을 응답에 노출하지 않습니다.
 
 | 상태 | 발생 조건 | 대응 |
 |---|---|---|
 | **400** | `text`·`texts` 택일 위반, 또는 지원 외 `lang` 명시 | 요청 형식 수정 |
-| **413** | 텍스트·배치 크기 한도 초과(§6) | 입력을 나눠 재전송 |
+| **413** | 텍스트·배치 크기 한도 초과, 또는 요청 바디 2MB 초과(§6) | 입력을 나눠 재전송 |
 | **422** | JSON 스키마 위반(타입 오류 등) | 본문 타입 확인 |
 | **429** | 서버 과부하(동시 처리·대기 한도 초과) | 잠시 후 **백오프 재시도** |
+| **500** | 미처리 서버 오류(일시적일 수 있음) | 1회 백오프 후 지속 시 보고 |
 | **503** | 요청 언어 모델 미준비 | 잠시 후 재시도(일시적) |
 
 - **429·503은 일시적**일 수 있으므로 지수 백오프로 재시도하기를 권장합니다
@@ -146,6 +148,8 @@
   않습니다.
 - **400·413·422는 요청 자체의 문제**이므로 그대로 재시도하지 말고 요청을
   고쳐야 합니다.
+- **500**은 서버 내부 오류로, 1회 백오프 재시도 후에도 지속되면 동일 입력을
+  운영팀에 보고합니다(내부 메시지는 응답에 노출되지 않음).
 
 ### 상태별 실제 응답 예시
 
@@ -167,11 +171,15 @@ curl -s -X POST 'http://{host}:{port}/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"<20,001자 이상 텍스트>"}'
 # → {"error":{"status":413,"message":"text exceeds max_chars (20000)"}}
 
-# 422 — 타입 오류(texts 가 리스트가 아님) → 프레임워크 기본 형식
+# 413 — 요청 바디가 2MB(max_body_bytes) 초과 → 파싱·인증 전 거절
+curl -s -X POST 'http://{host}:{port}/v1/ner' \
+  -H 'Content-Type: application/json' --data-binary @big-body.json
+# → {"error":{"status":413,"message":"request body exceeds max_body_bytes (2097152)"}}
+
+# 422 — 타입 오류(texts 가 리스트가 아님)
 curl -s -X POST 'http://{host}:{port}/v1/ner' \
   -H 'Content-Type: application/json' -d '{"texts":5}'
-# → {"detail":[{"type":"list_type","loc":["body","texts"],
-#      "msg":"Input should be a valid list","input":5}]}
+# → {"error":{"status":422,"message":"request validation failed (1 error(s))"}}
 
 # 429 — 동시 요청이 대기 한도를 넘을 때(단일 curl 로는 재현되지 않음)
 # → {"error":{"status":429,"message":"queue full (>= 32 waiting)"}}
@@ -187,6 +195,7 @@ curl -s -X POST 'http://{host}:{port}/v1/ner' \
 과부하 방지를 위해 요청당 크기 한도가 있습니다.
 | 한도 | 기본값 | 초과 시 |
 |---|---|---|
+| 요청 바디 크기 | 2MB | 413 (파싱·인증 전) |
 | 텍스트 1건 길이 | 20,000자 | 413 |
 | 배치 텍스트 개수(`texts`) | 64개 | 413 |
 | 배치 전체 글자 합 | 100,000자 | 413 |

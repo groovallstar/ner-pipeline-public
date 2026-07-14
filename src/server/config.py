@@ -24,6 +24,7 @@ class ServerConfig:
     max_chars: int = 20000         # 요청 1건 텍스트 char 상한
     max_batch: int = 64            # 배치 텍스트 개수 상한
     max_total_chars: int = 100000  # 배치 전체 char 합산 상한(작업량 가드)
+    max_body_bytes: int = 2 * 1024 * 1024  # 요청 바디 바이트 상한(전송 가드)
     max_concurrency: int = 8       # 동시 추론 상한(전역 세마포어)
     max_queue: int = 32            # 대기 큐 깊이 상한(초과 시 429)
     acquire_timeout_s: float = 10.0  # 세마포어 대기 타임아웃(초과 429)
@@ -50,6 +51,7 @@ class ServerConfig:
             max_chars=_int('NER_SERVER_MAX_CHARS', 20000),
             max_batch=_int('NER_SERVER_MAX_BATCH', 64),
             max_total_chars=_int('NER_SERVER_MAX_TOTAL_CHARS', 100000),
+            max_body_bytes=_int('NER_SERVER_MAX_BODY_BYTES', 2 * 1024 * 1024),
             max_concurrency=_int('NER_SERVER_MAX_CONCURRENCY', 8),
             max_queue=_int('NER_SERVER_MAX_QUEUE', 32),
             acquire_timeout_s=_float('NER_SERVER_ACQUIRE_TIMEOUT_S', 10.0),
