@@ -19,7 +19,6 @@ class ServerConfig:
 
     model_root: str = DEFAULT_MODEL_ROOT
     langs: Tuple[str, ...] = SUPPORTED_LANGS
-    precision: str = 'bf16'        # 추론 정밀도(fp32|bf16) — 출시 default
     max_length: int = 256          # 모델 토큰 한도(초과 시 chunk)
     max_chars: int = 20000         # 요청 1건 텍스트 char 상한
     max_batch: int = 64            # 배치 텍스트 개수 상한
@@ -46,7 +45,6 @@ class ServerConfig:
         return cls(
             model_root=os.environ.get(
                 'NER_SERVER_MODEL_ROOT', DEFAULT_MODEL_ROOT),
-            precision=os.environ.get('NER_SERVER_PRECISION', 'bf16'),
             max_length=_int('NER_SERVER_MAX_LENGTH', 256),
             max_chars=_int('NER_SERVER_MAX_CHARS', 20000),
             max_batch=_int('NER_SERVER_MAX_BATCH', 64),

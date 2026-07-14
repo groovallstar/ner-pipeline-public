@@ -1,13 +1,11 @@
 """서버 추론 처리량 벤치 — production 경로(predict) end-to-end 측정.
 
-배치 엔드포인트의 현행 경로(텍스트별 순차 predict)를 baseline 으로 동결하고,
-정밀도(fp32/tf32/bf16)를 바꿔가며 처리량을 비교한다. 측정 경계는
-tokenize→forward→decode→threshold(apply_threshold) 까지 end-to-end 다. 입력은 배포
-test set(`/data/ner/{lang}/data/test.jsonl`) 의 고정 분포를 쓴다 — parity
-측정과 동일 입력이라 처리량·정밀도를 같은 기준으로 비교할 수 있다.
+배치 엔드포인트의 현행 경로(seq=텍스트별 단건 predict / batch=predict_many
+cross-text 묶음)의 처리량을 잰다. 측정 경계는 tokenize→forward→decode→
+threshold(apply_threshold) 까지 end-to-end 다. 입력은 배포 test set
+(`/data/ner/{lang}/data/test.jsonl`) 의 고정 분포를 쓴다.
 
-`--mode` 로 seq(텍스트별 단건 predict)·batch(predict_many cross-text 묶음)를
-고른다 — bf16 은 배치(B>1)에서만 켜진다.
+서빙은 fp32 로만 돈다(운영점 정합·결정성) — precision 은 벤치 인자가 아니다.
 """
 
 import argparse
@@ -34,18 +32,8 @@ def load_test_texts(lang: str, model_root: str) -> List[str]:
     return texts
 
 
-def _set_tf32(enabled: bool) -> None:
-    """matmul/cudnn TF32 토글(fp32 baseline 은 off 로 동결)."""
-    torch.backends.cuda.matmul.allow_tf32 = enabled
-    torch.backends.cudnn.allow_tf32 = enabled
-
-
 def _run_seq(lm: LangModel, texts: List[str], apply_threshold: bool) -> None:
-    """순차 경로 — 텍스트별 단건 predict(배치 핸들러의 옛 경로 = baseline).
-
-    정밀도는 lm.autocast_dtype(predict 내장 autocast)이 결정한다 — 측정과
-    출시 런타임이 같은 코드 경로를 타도록 바깥에서 감싸지 않는다.
-    """
+    """순차 경로 — 텍스트별 단건 predict."""
     for t in texts:
         lm.predict(t, apply_threshold=apply_threshold)
 
@@ -97,24 +85,9 @@ def count_tokens(lm: LangModel, texts: List[str]) -> int:
     return total
 
 
-def _resolve_precision(lm: LangModel, precision: str) -> None:
-    """정밀도 인자 → TF32 부수효과 + lm.autocast_dtype 설정."""
-    if precision == 'tf32':
-        _set_tf32(True)
-        lm.autocast_dtype = None
-    elif precision == 'fp32':
-        _set_tf32(False)
-        lm.autocast_dtype = None
-    else:  # bf16
-        _set_tf32(False)
-        lm.autocast_dtype = torch.bfloat16
-
-
 def main() -> None:
     ap = argparse.ArgumentParser(description='NER server throughput bench')
     ap.add_argument('--lang', required=True, choices=['ja', 'vi'])
-    ap.add_argument('--precision', default='fp32',
-                    choices=['fp32', 'tf32', 'bf16'])
     ap.add_argument('--mode', default='seq', choices=['seq', 'batch'])
     ap.add_argument('--batch-size', type=int, default=32)
     ap.add_argument('--apply-threshold', default='true',
@@ -132,7 +105,6 @@ def main() -> None:
     lm = LangModel(args.lang, cfg.model_dir(args.lang),
                    cfg.thresholds_path(args.lang), cfg.max_length)
     texts = load_test_texts(args.lang, cfg.model_root)
-    _resolve_precision(lm, args.precision)
 
     times = measure(lm, texts, apply_threshold, args.warmup, args.reps,
                     args.mode, args.batch_size)
@@ -142,8 +114,6 @@ def main() -> None:
     result = {
         'lang': args.lang,
         'config': {
-            'precision': args.precision,
-            'tf32': args.precision == 'tf32',
             'mode': args.mode,
             'batch_size': args.batch_size if args.mode == 'batch' else None,
             'apply_threshold': apply_threshold,
