@@ -7,9 +7,11 @@ canonical 형식. 핸들러는 무상태 — 모든 가변 상태는 주입된 r
 """
 
 import logging
+import secrets
 from typing import List, Optional, Union
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -18,6 +20,7 @@ from server.concurrency import ConcurrencyGuard, Overloaded
 from server.config import SUPPORTED_LANGS, ServerConfig
 from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
+from server.limits import BodySizeLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +124,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     app = FastAPI(
         title='NER API', version='1',
         swagger_ui_parameters={'defaultModelsExpandDepth': -1})
+    # 라우팅·인증보다 앞서 바디 바이트를 bound — 전송 계층 메모리 고갈 가드.
+    app.add_middleware(BodySizeLimitMiddleware,
+                       max_bytes=config.max_body_bytes)
     guard = ConcurrencyGuard(config.max_concurrency, config.max_queue,
                              config.acquire_timeout_s)
 
@@ -129,15 +135,27 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
         """env API-key 가 설정된 경우에만 헤더를 검증한다(미설정 시 오픈).
 
         인증 off 가 기본이라 `x-api-key` 헤더는 Swagger/OpenAPI 파라미터에
-        노출하지 않는다(검증 로직 자체는 키 설정 시 그대로 동작).
+        노출하지 않는다(검증 로직 자체는 키 설정 시 그대로 동작). 비교는
+        secrets.compare_digest 로 상수시간 — 키에 대한 타이밍 사이드채널을
+        차단한다(bytes 로 인코딩해 임의 유니코드 입력에도 TypeError 없이).
         """
-        if config.api_key and x_api_key != config.api_key:
-            raise HTTPException(
-                status_code=401, detail='invalid or missing API key')
+        if config.api_key:
+            provided = (x_api_key or '').encode('utf-8')
+            expected = config.api_key.encode('utf-8')
+            if not secrets.compare_digest(provided, expected):
+                raise HTTPException(
+                    status_code=401, detail='invalid or missing API key')
 
     @app.exception_handler(HTTPException)
     async def _http_exc(request: Request, exc: HTTPException):
         return _error(exc.status_code, str(exc.detail))
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_exc(request: Request, exc: RequestValidationError):
+        # Pydantic 검증 실패도 구조화 봉투로 통일한다(기본 422 {detail:[...]}
+        # 대신). 필드 내부 구조는 노출하지 않고 개수만 요약한다.
+        return _error(422, f'request validation failed ({len(exc.errors())} '
+                           'error(s))')
 
     @app.exception_handler(ModelUnavailable)
     async def _model_unavail(request: Request, exc: ModelUnavailable):
@@ -146,6 +164,13 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     @app.exception_handler(Overloaded)
     async def _overloaded(request: Request, exc: Overloaded):
         return _error(429, str(exc))
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception):
+        # 미처리 예외(모델 forward 오류 등)를 봉투로 통일하고 내부 예외
+        # 메시지·트레이스백은 응답에 노출하지 않는다(서버 로그에만 기록).
+        logger.exception('unhandled error during request')
+        return _error(500, 'internal server error')
 
     def _check_text(text: str) -> None:
         if len(text) > config.max_chars:

@@ -16,7 +16,8 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 설정은 `NER_SERVER_*` 환경변수: `MODEL_ROOT`(기본 `/data/ner`)·`MAX_LENGTH`
 (256)·`PRECISION`(bf16|fp32, 기본 bf16 — 배치 forward 에만 적용)·`MAX_CHARS`
 (20000, 텍스트 1건)·`MAX_BATCH`(64, 배치 개수)·`MAX_TOTAL_CHARS`(100000,
-배치 char 합산 — 요청당 작업량 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
+배치 char 합산 — 요청당 작업량 가드)·`MAX_BODY_BYTES`(2MB, 요청 바디 바이트
+상한 — 파싱 전 전송 계층 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
 `MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
 초)·`API_KEY`(미설정 시 인증 off)·`HOST`·`PORT`.
 
@@ -37,7 +38,10 @@ ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에
 아님, 모델 미호출) — 배치는 항목별 부분성공. 명시 `lang` 이 미지원이면 400
 (클라이언트 계약). 에러는 구조화 `{error: {status, message}}` — 잘못된 요청
 (lang·text/texts 택일)→400, 크기 한도(max_chars·max_batch·max_total_chars)
-초과→413, 모델 미로드→503, API-key 불일치→401.
+초과→413, 모델 미로드→503, API-key 불일치→401. 요청 바디가 `max_body_bytes`
+초과면 파싱 전에 413(전송 계층 가드 — chunked 우회 포함). Pydantic 검증
+실패→422, 미처리 예외→500 도 모두 동일 봉투로 감싸고 500 은 내부 메시지를
+노출하지 않는다.
 
 ## 사용 예시 (curl)
 
@@ -83,6 +87,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
 | `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). bf16 autocast 는 배치(B>1) forward 에만(단건 B=1 은 fp32). 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 전역 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429 |
+| `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
 | `app.py` | `create_app(registry, config)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub) |
 | `__main__.py` | uvicorn 기동 진입점 |
 
