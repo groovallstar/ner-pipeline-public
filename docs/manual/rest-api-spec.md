@@ -67,6 +67,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | `NER_SERVER_MAX_CHARS` | `20000` | 텍스트 1건 char 상한(초과 → 413) |
 | `NER_SERVER_MAX_BATCH` | `64` | 배치 텍스트 개수 상한(초과 → 413) |
 | `NER_SERVER_MAX_TOTAL_CHARS` | `100000` | 배치 전체 char 합산 상한 — 요청당 작업량 가드(초과 → 413) |
+| `NER_SERVER_MAX_BODY_BYTES` | `2097152` | 요청 바디 바이트 상한(2MB) — 파싱·인증 전 전송 계층 가드(초과 → 413) |
 | `NER_SERVER_MAX_CONCURRENCY` | `8` | 동시 추론 상한(전역 세마포어) |
 | `NER_SERVER_MAX_QUEUE` | `32` | 대기 큐 깊이 상한(초과 → 429) |
 | `NER_SERVER_ACQUIRE_TIMEOUT_S` | `10.0` | 세마포어 대기 타임아웃 초(초과 → 429) |
@@ -195,15 +196,21 @@ language-detection-benchmark.md`.
 | **400** | `text`·`texts` 택일 위반 | `provide exactly one of 'text' or 'texts'` |
 | **400** | 명시 `lang`이 지원 외 | `unsupported lang 'en'` |
 | **401** | API-key 설정됐는데 헤더 불일치/누락 | `invalid or missing API key` |
+| **413** | 요청 바디가 `max_body_bytes` 초과(파싱·인증 전) | `request body exceeds max_body_bytes (2097152)` |
 | **413** | 텍스트 1건이 `max_chars` 초과 | `text exceeds max_chars (20000)` |
 | **413** | 배치 개수가 `max_batch` 초과 | `batch exceeds max_batch (64)` |
 | **413** | 배치 char 합이 `max_total_chars` 초과 | `batch total chars N exceeds max_total_chars (100000)` |
+| **422** | 요청 본문이 Pydantic 스키마 위반(타입 오류 등) | `request validation failed (N error(s))` |
 | **429** | 대기 큐 초과 또는 세마포어 타임아웃 | `queue full (>= 32 waiting)` / `acquire timed out (10.0s)` |
+| **500** | 미처리 서버 오류(추론 예외 등) | `internal server error` |
 | **503** | 요청 언어 모델이 미로드 | `model for lang 'vi' is not loaded` |
 
 `unsupported` 입력(자동 감지)은 에러가 아니라 **200 + 빈 결과**임에 유의
-(위 §4). 요청 본문이 Pydantic 스키마 자체를 위반하면(예: `texts`에 문자열이
-아닌 값) FastAPI가 표준 `422`를 반환한다.
+(위 §4). 모든 에러는 위 봉투 형식으로 통일된다 — Pydantic 스키마 위반(`422`)·
+미처리 예외(`500`)도 프레임워크 기본형(`{detail:[...]}`·평문)이 아니라
+`{error:{status,message}}`로 감싸며, `500`은 내부 예외 메시지·트레이스백을
+응답에 노출하지 않는다. 요청 바디가 `max_body_bytes`를 넘으면 파싱·인증
+이전에 `413`으로 거절한다(chunked 우회 포함 — §8).
 
 ## 7. 인증
 
@@ -232,6 +239,12 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 `run_in_threadpool`로 실행한다. 크기 한도(`max_chars`·`max_batch`·
 `max_total_chars`)는 요청당 작업량을 미리 잘라 과부하를 예방한다(§6의 413).
 
+크기 한도가 파싱된 필드를 보는 **논리 가드**인 것과 별도로, 요청 바디는
+파싱·인증보다 **앞선 전송 계층**에서 `max_body_bytes`(기본 2MB)로 먼저
+잘린다 — Content-Length 조기 거절 + Content-Length 없는 chunked 바디도
+수신 바이트 누적으로 거절(우회 차단)해, 대용량 바디를 통째로 버퍼링하는
+메모리 고갈을 막는다. 인증 이전 단계라 비인증 요청도 이 한도에 걸린다.
+
 ## 9. 엔티티 라벨 셋
 
 `label`은 ja·vi 공통 canonical **10종 평면** 중 하나다.
@@ -250,7 +263,9 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ```mermaid
 flowchart TD
-    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> AUTH{"API-key<br/>검증"}
+    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> BODY{"바디 크기<br/>≤ max_body_bytes?"}
+    BODY -->|초과| E413B["413 · 파싱 전"]
+    BODY -->|통과| AUTH{"API-key<br/>검증"}
     AUTH -->|불일치| E401["401"]
     AUTH -->|통과/off| VAL{"본문 검증<br/>택일·lang·크기"}
     VAL -->|위반| ERR["400 / 413"]

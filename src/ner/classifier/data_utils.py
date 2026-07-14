@@ -19,6 +19,7 @@ JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
 - JA (BertJapaneseTokenizer, slow): tokenize() 후 text.find() 로 subword char span 추적
 """
 
+import hashlib
 import json
 import random
 from typing import Dict, List, Optional, Tuple
@@ -57,25 +58,197 @@ def load_jsonl(path: str) -> List[dict]:
     return rows
 
 
+def _build_units(rows: List[dict],
+                 group_key: Optional[str]) -> List[List[int]]:
+    """분할 단위(unit)를 구성한다.
+
+    group_key 가 None 이면 행 1개가 unit 1개(행 단위 분할). 그렇지 않으면
+    같은 row[group_key] 값을 공유하는 행들을 한 unit 으로 묶는다. unit 은
+    첫 등장 순서를 보존하므로, 모든 그룹의 크기가 1인 경우 행 단위 분할과
+    완전히 동일한 순서가 된다.
+
+    필드가 없는 행이 있으면 KeyError 로 크게 실패한다 — 조용히 넘기면
+    누출 보호가 무력화된 채 통과한다.
+    """
+    if group_key is None:
+        return [[i] for i in range(len(rows))]
+    groups: Dict[object, List[int]] = {}
+    order: List[object] = []
+    for i, row in enumerate(rows):
+        k = row[group_key]
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(i)
+    return [groups[k] for k in order]
+
+
+def group_stats(rows: List[dict],
+                group_key: Optional[str]) -> Tuple[int, int]:
+    """(행 수, 그룹 수)를 반환한다. group_key=None 이면 그룹 수 = 행 수."""
+    if group_key is None:
+        return len(rows), len(rows)
+    return len(rows), len({row[group_key] for row in rows})
+
+
+def dataset_fingerprint(rows: List[dict]) -> str:
+    """데이터 내용의 순서 민감 지문(sha256 앞 16자리)을 계산한다.
+
+    각 행을 (text, 정렬된 (label,start_char,end_char) 튜플)로 정규화해 파일
+    순서대로 해시한다. 이 지문이 실험의 '자'(test gold) 를 대표한다 —
+    같은 지문이면 두 실험은 같은 문장·같은 정답을 재고 있다.
+
+    순서에 민감한 이유: 분할이 seed shuffle 이라 행 순서가 fold 멤버십을 바꾼다.
+    행을 재정렬만 해도 test gold 의 fold 분해가 달라지므로 다른 자로 본다.
+
+    지문에서 제외: `--data-extra-train-jsonl`(train 전용 증강)은 별 파일이라
+    이 함수에 넘기는 --data rows 에 애초에 들어오지 않는다 — test gold 를 안
+    바꾸므로 with/without 두 run 이 같은 지문을 갖는 게 옳다.
+    """
+    h = hashlib.sha256()
+    for row in rows:
+        spans = sorted(
+            (e['label'], e['start_char'], e['end_char'])
+            for e in row['entities']
+        )
+        h.update(repr((row['text'], spans)).encode('utf-8'))
+        h.update(b'\x00')  # 행 경계 — 연접 모호성 방지
+    return h.hexdigest()[:16]
+
+
+def _coarsens(rows: List[dict], group_key: Optional[str], field: str) -> bool:
+    """field 의 그룹이 group_key 의 그룹을 쪼개지 않고 통째로 포함하는가.
+
+    후보 필드가 선언한 키의 그룹 경계를 가로지르면(같은 group_key 값의 행이
+    서로 다른 field 값을 가지면) 그것은 형제 표시가 아니라 그냥 다른 축의
+    범주다 — 예: 문서 도메인·라벨 유무. 그런 필드는 그룹 수가 적더라도 형제를
+    묶는 키가 아니므로 후보에서 뺀다.
+
+    group_key=None(행 단위)이면 모든 그룹이 싱글턴이라 어떤 필드든 포함한다.
+    """
+    if group_key is None:
+        return True
+    seen: Dict[object, object] = {}
+    for row in rows:
+        key, value = row[group_key], row[field]
+        if key in seen:
+            if seen[key] != value:
+                return False
+        else:
+            seen[key] = value
+    return True
+
+
+def stronger_group_keys(rows: List[dict],
+                        group_key: Optional[str]) -> Dict[str, int]:
+    """선언한 group_key 보다 행을 더 강하게 묶는 후보 필드를 찾는다.
+
+    더 강하다 = (1) 그룹 수가 더 적고, (2) 선언한 키의 그룹을 쪼개지 않는다.
+    (2)가 없으면 도메인·카테고리 같은 범주 필드가 그룹 수만 적다는 이유로
+    올바른 형제 키를 밀어낸다.
+
+    이 검사가 필요한 이유: 고유값 필드(예: 행 일련번호)를 group_key 로 주면
+    모든 unit 이 싱글턴이 되어 그룹 보호가 no-op 이 되는데, 같은 필드로 누출을
+    세면 중복이 0 이라 "누출 없음" 으로 잘못 읽힌다.
+
+    후보에서 제외: 선언한 키 자신, 값이 hashable 하지 않은 필드(entities 등),
+    일부 행에만 있는 필드, 그룹 수가 1 인 필드(전체를 한 덩어리로 묶어 분할
+    자체가 불가능하므로 후보가 아니다).
+
+    한계: group_key=None 이면 (2)가 항상 참이라 범주 필드도 후보로 잡힐 수
+    있다. 이때는 후보가 여럿 보고되므로 사람이 형제 표시를 고른다.
+
+    Returns:
+        {필드명: 그룹 수} — 비어 있으면 선언한 키가 가장 강하다.
+    """
+    if not rows:
+        return {}
+    base = group_stats(rows, group_key)[1]
+    common = set(rows[0])
+    for row in rows[1:]:
+        common &= set(row)
+    out: Dict[str, int] = {}
+    for field in sorted(common):
+        if field == group_key:
+            continue
+        try:
+            n_groups = len({row[field] for row in rows})
+        except TypeError:  # list/dict 값 — 그룹 키가 될 수 없다
+            continue
+        if 1 < n_groups < base and _coarsens(rows, group_key, field):
+            out[field] = n_groups
+    return out
+
+
+def validate_group_key(rows: List[dict], group_key: Optional[str]) -> None:
+    """선언한 group_key 가 형제 행을 실제로 묶는지 검증한다 (fail-loud).
+
+    세 가지를 본다: 필드 존재, 값의 유효성, 더 강한 후보의 부재. 하나라도
+    위반하면 ValueError — 조용한 통과는 누출을 "이상 없음" 으로 만든다.
+    """
+    if not rows:
+        return
+    if group_key is not None:
+        missing = sum(1 for row in rows if group_key not in row)
+        if missing:
+            raise ValueError(
+                f'group key {group_key!r} missing in {missing}/{len(rows)} '
+                f'rows; cannot verify leak-free split'
+            )
+        empty = sum(1 for row in rows if row[group_key] is None)
+        if empty:
+            raise ValueError(
+                f'group key {group_key!r} is null in {empty}/{len(rows)} '
+                f'rows; cannot verify leak-free split'
+            )
+    stronger = stronger_group_keys(rows, group_key)
+    if stronger:
+        declared = 'none (row-level)' if group_key is None else repr(group_key)
+        found = ', '.join(f'{f}={n}' for f, n in sorted(stronger.items()))
+        raise ValueError(
+            f'group key {declared} leaves {group_stats(rows, group_key)[1]} '
+            f'groups over {len(rows)} rows, but a stronger key exists '
+            f'({found}). Sibling rows would be split across train/test. '
+            f'Pass the stronger field to --group-key.'
+        )
+
+
 def split_train_valid_test(rows: List[dict],
                            valid_ratio: float = 0.1,
                            test_ratio: float = 0.1,
-                           seed: int = 42) -> Tuple[List[dict], List[dict], List[dict]]:
-    """행 단위 셔플 후 train/valid/test 3-way 분할.
+                           seed: int = 42,
+                           group_key: Optional[str] = None
+                           ) -> Tuple[List[dict], List[dict], List[dict]]:
+    """unit 단위 셔플 후 train/valid/test 3-way 분할.
 
-    분할 순서: shuffle → 앞부분 test, 그 다음 valid, 나머지 train.
-    같은 seed 면 결정적이다.
+    group_key 가 주어지면 같은 row[group_key] 값을 공유하는 행을 한 unit 으로
+    묶어 통째로 한 split 에만 둔다 — 같은 원문에서 파생된 형제 행이 train·test
+    로 갈리는 누출이 구조적으로 불가능해진다. group_key=None 이면 행 단위
+    분할이며 기존 동작과 완전히 동일하다(같은 seed → 동일 결과).
+
+    분할 순서: unit 셔플 → 앞에서부터 누적 행 수가 목표에 이를 때까지 test,
+    다음 valid, 나머지 train. unit 을 통째로 배정하므로 group_key 가 있으면
+    실제 비율이 목표를 약간 넘을 수 있다.
     """
+    units = _build_units(rows, group_key)
     rng = random.Random(seed)
-    shuffled = rows[:]
-    rng.shuffle(shuffled)
-    n = len(shuffled)
+    rng.shuffle(units)
+    n = len(rows)
     n_test = int(n * test_ratio)
     n_valid = int(n * valid_ratio)
-    test = shuffled[:n_test]
-    valid = shuffled[n_test:n_test + n_valid]
-    train = shuffled[n_test + n_valid:]
-    return train, valid, test
+    test_idx: List[int] = []
+    valid_idx: List[int] = []
+    train_idx: List[int] = []
+    for unit in units:
+        if len(test_idx) < n_test:
+            test_idx.extend(unit)
+        elif len(valid_idx) < n_valid:
+            valid_idx.extend(unit)
+        else:
+            train_idx.extend(unit)
+    return ([rows[i] for i in train_idx],
+            [rows[i] for i in valid_idx],
+            [rows[i] for i in test_idx])
 
 
 def _context_word_count(row: dict) -> int:
@@ -146,18 +319,7 @@ def split_holdout_deploy(rows: List[dict],
         )
 
     # 분할 단위 구성 (group_key=None → 행 1개가 unit)
-    if group_key is None:
-        units: List[List[int]] = [[i] for i in range(len(rows))]
-    else:
-        groups: Dict[object, List[int]] = {}
-        order: List[object] = []
-        for i, row in enumerate(rows):
-            k = row[group_key]
-            if k not in groups:
-                groups[k] = []
-                order.append(k)
-            groups[k].append(i)
-        units = [groups[k] for k in order]
+    units = _build_units(rows, group_key)
 
     rng = random.Random(seed)
     rng.shuffle(units)
@@ -258,18 +420,7 @@ def split_kfold_stratified(rows, n_folds=5, fold_index=0, seed=42,
         )
 
     # 분할 단위 구성. group_key=None 이면 unit=행 1개(기존과 동일한 순서).
-    if group_key is None:
-        units: List[List[int]] = [[i] for i in range(len(rows))]
-    else:
-        groups: Dict[object, List[int]] = {}
-        order: List[object] = []
-        for i, row in enumerate(rows):
-            k = row[group_key]
-            if k not in groups:
-                groups[k] = []
-                order.append(k)
-            groups[k].append(i)
-        units = [groups[k] for k in order]
+    units = _build_units(rows, group_key)
 
     if n_folds > len(units):
         raise ValueError(

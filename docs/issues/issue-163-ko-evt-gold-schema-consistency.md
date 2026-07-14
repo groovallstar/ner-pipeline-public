@@ -87,6 +87,14 @@ KO EVT 는 **커밋된 canonical §3·§3.3 그대로**이며 JA·VI 와 동일�
 - **rubric 캘리브레이션 게이트**: 재판정 프롬프트를 canonical 예시 20건에
   dry-run → gemma 20/20·qwen 19/20(유일 오답은 규칙 명시된 `선거`, 모델 한계).
   통과 후 본판정 착수.
+- **KO default 백본을 koelectra 로 통일.** `koelectra-base-v3` 는 #122 벤치가
+  선정한 baseline 이자 #125·#128·#140·#153 전 진단이 쓴 production 모델인데,
+  CLI default(`__main__.py`)만 `kf-deberta-base` 로 어긋나 있었다(`--lang ko`
+  도입 커밋부터 미정합·근거 미문서화). #163 이 그 default 로 EVT 를 재며
+  불일치가 드러났다. 재측정상 두 백본은 overall 동률·EVT 백본불변이고
+  koelectra 가 전 KO 계보와 정합하므로 default·문서를 koelectra 로 정렬한다
+  (`--precision fp16` 기본; koelectra 는 fold ~0.3~3% 학습붕괴 → F1≈0 fold 만
+  `--train-seed` 재실행). 벤치 리포트의 kf-deberta 비교행은 히스토리라 불변.
 
 ## 구현 결과
 
@@ -148,6 +156,27 @@ KO EVT 는 **커밋된 canonical §3·§3.3 그대로**이며 JA·VI 와 동일�
   EVT 는 참고치이며 게이트 아님 — 구 gold(1,346·§3.5-984) 숫자와 **직접 비교
   금지**(gold 정의가 다름). 불변 타입 9종은 gold 무변경이므로 이 표의 변동은
   fold 분할·학습 seed noise 범위.
+- **백본 각주.** 위 표는 당시 CLI default 였던 `kf-deberta-base` 로 측정됐다.
+  프로젝트의 다른 KO 엔티티 진단(#122·#125·#128·#140·#153)은 전부 production
+  baseline `koelectra-base-v3` 로 측정돼 이 표는 백본이 달라 그들과 직접
+  비교되지 않았다. 이후 KO default 백본을 koelectra 로 통일(결정 로그 참조)
+  하며 같은 1,442 gold 를 koelectra 로 재측정(동일 recipe·백본만 상이)한 대조:
+
+  | entity | kf-deberta | koelectra | Δ(strict F1) |
+  |---|---|---|---|
+  | overall | 0.9221 | 0.9187 | −0.003 |
+  | EVT | 0.6640 | 0.6654 | +0.001 |
+  | ORG | 0.8328 | 0.8514 | +0.019 |
+  | PROD | 0.7363 | 0.7043 | −0.032 |
+  | LOC | 0.8574 | 0.8591 | +0.002 |
+  | PER | 0.9183 | 0.9167 | −0.002 |
+  | DAT | 0.8512 | 0.8421 | −0.009 |
+
+  EVT 는 백본-불변(0.664≈0.665, relaxed 0.7362→0.7327) — support-limited
+  진단(#125) 재확인이자 백본 교체가 EVT 레버가 아님을 실측한 것. ORG(koelectra
+  0.851)는 #153 narrow-ORG 최종(koelectra·sup 2,797)의 0.849 와 정합해 #163 표의
+  낮은 ORG(0.833)가 백본 차이임을 확인해준다. PROD 는 kf-deberta 가 우위, overall
+  은 동률(±fold noise) — koelectra 는 recall 형·kf-deberta 는 precision 형.
 - 결과-시점 refuter: **PASS** (`.omc/state/refuter/082736db0e14.json`, round 2).
 
 ## 관련 커밋

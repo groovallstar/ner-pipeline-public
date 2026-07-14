@@ -18,39 +18,44 @@ span F1 을 측정한다.
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
 | `confidence_threshold.py` | per-class 신뢰도 임계값(confidence threshold) 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
-| `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 원문(`orig`) 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만). CLI: `python -m ner.classifier.kfold_pool` |
+| `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 그룹 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만) + 판정 근거(`leak_check_basis`) 기록. CLI: `python -m ner.classifier.kfold_pool` |
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko}` |
 
 ## CLI
 
+`--group-key` 는 **모든 학습 경로에서 필수**다 (3-way·K-fold 공통). 값은 형제
+행(한 원문에서 파생된 여러 행)을 묶는 필드명이거나, 형제가 없음을 명시하는
+`none` 이다. 데이터셋별 올바른 값은 아래 "누출-free 분할" 참조.
+
 ```bash
-# JA 본 학습 (기본 hyperparameter)
-python -m ner.classifier --lang ja
+# JA 본 학습 (기본 hyperparameter) — id 가 원문 파생 다행을 묶는다
+python -m ner.classifier --lang ja --group-key id
 
-# VI 본 학습 (xlm-roberta-base 기본 모델)
-python -m ner.classifier --lang vi --epochs 5 --batch-size 16
+# VI 본 학습 (xlm-roberta-base 기본 모델) — orig 가 원문을 묶는다
+python -m ner.classifier --lang vi --group-key orig --epochs 5 --batch-size 16
 
-# KO 본 학습 (kf-deberta-base 기본 모델, data/klue/pii_all.jsonl)
-python -m ner.classifier --lang ko --precision bf16
+# KO 본 학습 (koelectra-base-v3 기본 모델, data/klue/pii_all.jsonl)
+# 원문당 1행이라 형제가 없다 — id 도 none 도 같은 분할이며 둘 다 통과한다
+python -m ner.classifier --lang ko --group-key id
 
 # 스모크 (100 train / 25 valid / 50 test / 1 epoch — CI·dev 검증용)
-python -m ner.classifier --lang ja --smoke
+python -m ner.classifier --lang ja --group-key id --smoke
 
 # 모델·데이터 override
-python -m ner.classifier --lang vi \
+python -m ner.classifier --lang vi --group-key orig \
     --model-name vinai/phobert-base \
     --data data/wikiann_vi/origin.jsonl \
     --max-length 256 --lr 5e-5
 
 # 층화 K-fold 교차 검증 (fold 별 1회 학습 후 pooled 평가)
-# --group-key orig: 같은 원문 파생 행을 한 fold 로 묶어 cross-fold 누출 차단
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   python -m ner.classifier --lang ja \
       --data data/stockmark/pii_all_phonediv.jsonl \
-      --kfold 10 --fold-index ${fold} --group-key orig \
+      --kfold 10 --fold-index ${fold} --group-key id \
       --output-dir results/classifier/ja_sweep/<실험명>/fold${fold}
 done
-# pooled 평가: 원문 단위 cross-fold 누출이 있으면 ValueError 로 중단
+# pooled 평가: 그룹 단위 cross-fold 누출이 있으면 ValueError 로 중단
+# 그룹 키는 test_predictions.json 에 기록된 값을 자동으로 읽는다
 python -m ner.classifier.kfold_pool \
     --fold-dirs results/classifier/ja_sweep/<실험명>/fold{0..9}
 
@@ -96,32 +101,71 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 기본값:
 - `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/origin.jsonl`
-- `--lang ko`: 모델 `kakaobank/kf-deberta-base`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). DeBERTa 계열이라 `--precision bf16` 권장
+- `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
 - 재현성 (`--train-seed`): 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·dropout·셔플을 고정해 재현 가능한 run 이 된다. GPU FP 비결합에 따른 seed-내 잔여 비결정성(loss ~1e-4)은 effect size 대비 무시 가능 — 비교 측정은 양 팔을 같은 `--train-seed` 로 고정하거나 multi-seed paired 로 본다. `metrics.json` 에 `train_seed`·`precision` 기록.
 - fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — F1≈0 fold 만 `--train-seed` 를 바꿔 재실행한다(full-determinism 은 붕괴를 막지 못하고 재현만 하며 ~1.9× 비용이라 비채택). 상세: `docs/reports/korean-bert-classifier-fold-collapse.md`.
 - **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
-### 누출-free 분할 (`--group-key`)
+### 누출-free 분할 (`--group-key`, 필수)
 
-합성 PII 주입은 한 원문에서 여러 행을 파생시킨다(같은 문장 + 서로 다른
-PII). 행 단위 분할은 이 파생 행들이 train·test 로 갈려 **cross-fold 원문
-누출**이 생기고 span F1 이 부풀 수 있다. `--group-key orig` 를 주면 같은
-`row['orig']`(주입 전 원문) 값을 공유하는 행들을 한 unit 으로 묶어 통째로
-한 fold 에 배정한다 — split 단계에서 누출이 구조적으로 불가능해진다.
+합성 PII 주입과 재라벨은 한 원문에서 여러 행을 파생시킨다(**형제 행**).
+형제가 train·test 로 갈리면 모델이 학습에서 본 정답을 시험에서 다시 만나
+span F1 이 부푼다. `--group-key <필드>` 를 주면 같은 값을 공유하는 행을 한
+unit 으로 묶어 통째로 한 split 에 배정한다 — 누출이 구조적으로 불가능해진다.
 
-- `split_kfold_stratified(..., group_key='orig')` 의 unit = 원문 그룹.
-  층화 기준(PROD/EVT 합집합)·라운드로빈·결정성은 행 단위와 동일.
-- `--group-key` 미지정(기본) 시 기존 행 단위 분할과 **완전히 동일**(같은
-  seed → 동일 결과). BC 유지.
-- **이중 가드**: split 단계 그룹 분할 + pooling 단계 `kfold_pool` 의 사후
-  검증. `test_predictions.json` 에 `orig` 가 실리고, `pool_fold_predictions`
-  가 같은 원문이 두 fold 의 test 에 걸치면 `cross_fold_orig_dups` 로 세고
-  `require_no_leak=True`(기본)면 `ValueError`. 누출 baseline 을 일부러
-  측정할 때만 `--allow-cross-fold-leak` 로 카운트만 받는다.
-- `orig` 가 없는 레거시 코퍼스는 `text` 전체 문장 중복으로 fallback 검증.
-  `id` 는 비고유(한 원문 파생 다행 공유)라 검증 기준으로 쓰지 않는다.
+**두 분할 경로 모두 적용된다** — `split_kfold_stratified`(K-fold)와
+`split_train_valid_test`(기본 3-way). 후자는 오래도록 인자가 없어 무방비였다.
+
+#### 데이터셋별 그룹 키
+
+`id` 의 뜻은 데이터셋마다 다르다. 코드가 못 박을 수 없고 데이터가 선언해야 한다.
+
+| 데이터 | 행 수 | `id` 그룹 | `orig` 그룹 | 그룹 키 |
+|---|---|---|---|---|
+| `data/klue/pii_all.jsonl` (KO) | 25,989 | 25,989 | 필드 없음 | `id` 또는 `none` (형제 없음) |
+| `data/wikiann_vi/origin.jsonl` (VI) | 37,706 | 37,706 | 29,337 | **`orig`** |
+| `data/stockmark/origin.jsonl` (JA) | 5,270 | **5,166** | 필드 없음 | **`id`** |
+
+KO 의 `id` 는 KLUE 원본 인덱스(train 21,008 + dev 5,000), VI 의 `id` 는 행
+일련번호, JA 의 `id` 는 원문 파생 다행이 공유하는 원문 번호다.
+
+#### 고유한 필드는 그룹 키가 될 수 없다
+
+값이 전부 다르면 unit 이 전부 싱글턴이라 그룹 보호가 **no-op** 이 된다.
+그런데 같은 필드로 누출을 세면 중복이 0 이라 "누출 없음" 으로 읽힌다 —
+보호는 없는데 게이트는 초록이다. `validate_group_key` 가 학습 **전에** 이를
+거부한다: 선언한 키보다 행을 더 강하게 묶는(그룹 수가 적은) 후보 필드가
+있으면 `ValueError`. VI 에 `--group-key id` 를 주면 `orig` 가 후보로 잡혀
+중단된다.
+
+`--group-key none` 은 형제가 없다는 **명시적 선언**이다. 이때 누출 카운터는
+`0` 이 아니라 `null`(미측정)로 기록되며, `validity.compare` 는 이를
+`INVALID`(누출 미검증)로 판정한다 — 크래시하지 않는다. 정직한 opt-out 이
+벌받고 거짓 0 이 통과하면 규칙이 편법을 보상하게 된다.
+
+#### 이중 가드와 판정 근거
+
+split 단계 그룹 분할 + pooling 단계 `kfold_pool` 사후 검증. `__main__` 이
+`test_predictions.json` 에 `group`(그룹 키의 값)과 `group_key`(필드명)를 싣고,
+`pool_fold_predictions` 가 같은 그룹 값이 두 fold 의 test 에 걸치면
+`cross_fold_group_dups` 로 세며 `require_no_leak=True`(기본)면 `ValueError`.
+누출 baseline 을 일부러 측정할 때만 `--allow-cross-fold-leak`.
+
+판정 근거는 `leak_check_basis` 로 남는다.
+
+| 근거 | 뜻 | 신뢰 |
+|---|---|---|
+| `group` | 선언된 그룹 키의 값으로 셌다 | ✅ |
+| `orig` | 그룹 키 기록이 없는 옛 예측 파일, `orig` 로 셌다 | ✅ |
+| `text` | 문장 전체 비교로 셌다 | ❌ 재작성 코퍼스에선 형제를 못 본다 |
+| `none` | 행 단위 분할을 명시했다 | ❌ 애초에 측정하지 않았다 |
+
+`text` 는 특히 위험하다. KO·VI 는 PII 주입 시 문장을 새로 짓기 때문에 형제끼리
+글자가 전부 다르고, 문장 비교는 **하나도 잡지 못한다**(KO 실측: 문장 전체
+중복 0건). 카운트 0 이 "이상 없음" 이 아니라 "볼 수단이 없었음" 인 경우다.
+
 - 발견·진단·정량 방법론(왜 dedup 으로 못 막았나, 측정 설계, 인플레 수치):
   `docs/manual/pipeline/3-verification.md` §3B
 
@@ -214,10 +258,10 @@ JA 출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·
 python -m pytest tests/ner/classifier/ -q
 ```
 
-- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / group K-fold(원문 단위 묶음·누출-free)·BC(group_key=None ≡ 행 단위) / curriculum mask
+- `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / group K-fold(원문 단위 묶음·누출-free)·BC(group_key=None ≡ 행 단위) / 3-way 형제 묶기·BC / 후보 키 검사(고유 키·필드 부재·null 거부, 형제 없는 코퍼스 통과) / curriculum mask
 - `test_encode.py` — 실제 토크나이저(JA·VI·DeBERTa-V3·PhoBERT)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
-- `test_kfold_pool.py` — pooled F1 손계산 일치 / 원문(`orig`) 단위 cross-fold 누출 검출(`ValueError`)·`--allow-cross-fold-leak` 카운트 / 레거시 text 중복 fallback / 비고유 id 허용
+- `test_kfold_pool.py` — pooled F1 손계산 일치 / 그룹 단위 cross-fold 누출 검출(`ValueError`)·`--allow-cross-fold-leak` 카운트 / 재작성 문장에서도 group 근거로 검출 / `none` → 카운터 `null`(미측정) / 레거시 orig→text fallback·근거 기록 / 섞인 근거는 가장 약한 것으로 보고
 - `test_confidence_threshold.py` — scored decode(conf_mean)·apply·fit(greedy P·R≥target)·save/load 라운드트립
 
 ## 주의
