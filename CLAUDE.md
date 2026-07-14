@@ -60,7 +60,8 @@ docker/
 ├── dev/               # 개발 컨테이너 (상세: docker/CLAUDE.md)
 ├── server/            # ja·vi NER REST API 배포 (상세: docker/server/CLAUDE.md)
 └── vllm/              # vLLM 서비스
-results/               # 벤치마크 결과 JSON + 리포트
+results/               # 벤치마크 산출물 scratch (gitignore·휘발)
+certified/             # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
 tests/                 # 테스트 (ner: tests/ner/CLAUDE.md · server: tests/server/)
 docs/                  # 문서
 │   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
@@ -123,13 +124,13 @@ flowchart TD
 | 정답 | `docs/manual/data/canonical-entity-schema.md` |
 | 채점규칙 | `src/ner/metrics/{bio_metrics,span_metrics}.py`, `src/ner/validity/{gate,comparability,leakage,variance}.py` |
 | 분할 | `src/ner/classifier/data_utils.py`, `kfold_pool.py` |
-| 결과 장부(편집 거부) | `results/**/*.json` |
+| 결과 장부(편집 거부) | `certified/**` |
 
 작업별 "레시피"(재라벨 체크리스트 등)는 둬도 되지만, 그건 사람이 참고하는 설명서일 뿐 안전장치가 아니다. 갈래를 쳐선 안 되는 건 안전이고, 여럿이어도 괜찮은 건 설명서다.
 
 **② 앞부분 — 잠금·해제 (기준을 건드렸을 때)** — 기준 파일이 diff 에 들어오면 커밋 직전에 진행이 막힌다. 이 잠금은 **사람만 풀 수 있다** — 사람이 **확인 파일**을 남겨야 풀리며, AI 가 확인 파일을 만드는 것은 `settings.json` 의 deny 로 막아둔다. 사람이 그 확인을 남기기 전에 하는 일이 바로 앞부분(Front)이다. 정답 md 는 산문이라 "데이터가 기준에 맞는가"를 기계가 자동으로 통과시킬 수 없어, 그 판단과 해제를 사람이 맡는다.
 
-**③ 검사 게이트 — 결과 장부** — 테스트가 돌 때마다 실제 결과가 `results/` 에 쌓이고, 모든 숫자 검사는 이 장부를 기준으로 삼는다. AI 는 이 장부를 직접 편집하지 못하고(deny) 오직 실제 실행만 기록을 남긴다. 사람은 고칠 수 있는데, 그래야 "AI 는 위조 못 하고 사람은 된다"가 성립한다. 게이트가 실제로 무엇을 보는지는 아래 "검사 게이트" 섹션에 있다.
+**③ 검사 게이트 — 결과 장부** — 실험은 `results/`(gitignore·휘발 scratch)에 산출물을 쌓는다. 리포트가 인용하는 실험만 그 metric JSON 을 `certified/` 로 verbatim 복사해 커밋하고, 이 **커밋된 파일이 원장**이다 — 모든 숫자 검사가 이걸 기준으로 삼는다. AI 는 원장을 직접 편집하지 못하고(`settings.json` deny), 승격은 scratch 실산출물의 복사라 값을 지어내지 못한다. 불변성·이력은 git 이 주고, 값의 진위는 커밋 diff 를 사람·PR 리뷰·판단 층 반박자가 본다. 게이트가 실제로 무엇을 보는지는 아래 "검사 게이트" 섹션에 있다.
 
 ## 코딩 컨벤션 (주석/문서 언어)
 
@@ -174,7 +175,7 @@ flowchart TD
   - `feat`·`fix` ∧ `src/ner/**` 런타임 변경 → **이슈+브랜치+PR** (추적 가치 있는 제품 진화)
   - `docs`·`chore`·`refactor` (동작 불변·구조·문서·도구) → **develop 직접** (이슈/PR 없이, 크기 무관). PR이 별도 리뷰어를 붙이지 않아 이 부류엔 PR 오버헤드가 추적 이득보다 크다 — 실제 회귀 게이트는 refuter.
   - **type↔path 불일치**(예: `feat`인데 src 런타임 미변경, `chore`인데 src 런타임 변경) **또는 추적가치 모호** → 사람에게 에스컬레이션. 과소추적(조용한·비싼 실패) > 과다추적(시끄러운·싼 실패)이므로 모호하면 이슈 쪽으로 기운다.
-- **문서 숫자는 결과 파일과 맞아야 한다.** `docs/reports/`·`docs/issues/`의 **표 안** 수치가 `results/**/*.json`과 어긋나면 `검사 게이트`의 결정적 층이 자동으로 잡는다 — 숫자가 diff 에 드는 *사건*이 트리거다(상세: "검사 게이트"). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
+- **문서 숫자는 결과 파일과 맞아야 한다.** `docs/reports/`·`docs/issues/`의 **표 안** 수치가 `certified/**`과 어긋나면 `검사 게이트`의 결정적 층이 자동으로 잡는다 — 숫자가 diff 에 드는 *사건*이 트리거다(상세: "검사 게이트"). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
 - 마일스톤은 사용하지 않는다. 영역은 라벨로 구분한다 (`area:labelers`, `area:classifier`, `area:augmenters`, `area:llm-eval`, `area:infra`, `docs` 등).
 - 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>`
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
@@ -197,7 +198,7 @@ docs/issues/
 
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
-3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `results/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 파일을 건드리므로 앞부분(Front)에서 잠긴다** — 사람 확인 전 반박자를 미리 불러 누출·조작 가능성을 점검할 수 있다(상세: "작업 흐름"·"검사 게이트").
+3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `certified/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 파일을 건드리므로 앞부분(Front)에서 잠긴다** — 사람 확인 전 반박자를 미리 불러 누출·조작 가능성을 점검할 수 있다(상세: "작업 흐름"·"검사 게이트").
 4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조. 구현을 ralph 등 자율 루프로 돌리는 것은 3단계 기준이 기계검증 가능·신뢰되고 작업이 다회차/반복-shape일 때만 — 단발은 "분해는 내가 → 한 스텝만 위임 → 내가 기준으로 검증"이 기본.
 5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **검사 게이트**(결정적 층 + 판단 층; PASS만 진행, FAIL이면 4단계 회귀) → `docs/issues/issue-{N}-{slug}.md`에 설계 + 구현 결과·검증 작성·**최초 커밋** → PR 생성(`closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
 
@@ -207,10 +208,10 @@ docs/issues/
 
 **결정적 층 — 기계가 직접, 0토큰**(위조 불가, 항상 돎):
 
-- 기준 파일 건드림 + 확인 파일 없음 → **차단** · AI 의 결과 장부(`results/**/*.json`) 편집 → **거부**
-- ruff · 테스트 무결성(순삭제·무조건 `skip`/`xfail`·assert 약화; `skipif` 제외) · 인용 **표 안** 수치 ↔ `results/**/*.json`
+- 기준 파일 건드림 + 확인 파일 없음 → **차단** · AI 의 결과 장부(`certified/**`) 편집 → **거부**
+- ruff · 테스트 무결성(순삭제·무조건 `skip`/`xfail`·assert 약화; `skipif` 제외) · 인용 **표 안** 수치 ↔ `certified/**`
 
-오탐은 **사람**이 확인 파일(`ack-<diff_hash>`)로 해제하고, 모든 판정·해제는 `log.jsonl` 에 append-only 로 쌓인다. 인용 대조는 *존재* 검사라 우연 일치를 못 거른다 — 거짓 인용을 줄이되 없애진 못한다(`results/` 는 실험과 함께 휘발하므로 값이 살아 있는 시점에만 성립).
+오탐은 **사람**이 확인 파일(`ack-<diff_hash>`)로 해제하고, 모든 판정·해제는 `log.jsonl` 에 append-only 로 쌓인다. 인용 대조는 *존재* 검사라 우연 일치를 못 거른다 — 거짓 인용을 줄이되 없애진 못한다(`certified/` 는 커밋된 원장이라 값이 사라지진 않지만, 대조가 존재 검사인 한 출처까지 보증하진 않는다).
 
 **판단 층 — 격리 반박자(모델)**, 도구가 확정 못 하는 축만:
 
