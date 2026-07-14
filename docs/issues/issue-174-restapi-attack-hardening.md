@@ -73,9 +73,9 @@ ja·vi NER REST API(`POST /v1/ner`·`GET /health`)에 적대적 입력 테스트
   `Exception`(500, 로그만·응답 비노출) 핸들러 추가.
 - `src/server/config.py`: `max_body_bytes`(기본 2MB) + env 파싱.
 - `tests/server/test_hardening.py`(신규): AC1~3 회귀 8건.
-- docs: `src/server/CLAUDE.md`·`docs/manual/rest-api-spec.md`(에러표에
-  바디 413·422·500 봉투, 설정표 knob, §8·흐름도 전송 가드),
-  `docker/server/{compose,.env.example}` knob.
+- docs: `src/server/CLAUDE.md`·`docs/manual/rest-api-spec.md`·
+  `rest-api-integration-guide.md`(에러표 바디 413·422·500 봉투, 설정·§8·
+  흐름도 전송 가드), `docker/server/{compose,.env.example}` knob.
 
 ## 검증
 
