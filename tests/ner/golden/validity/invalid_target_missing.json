@@ -1,0 +1,86 @@
+{
+  "scenario": {
+    "a": {
+      "cfg": {
+        "lang": "ko",
+        "data_path": "d.jsonl",
+        "data_fingerprint": "fp_a",
+        "kfold": 2,
+        "group_key": "orig",
+        "seed": 42,
+        "stratify": true
+      },
+      "folds": [
+        {
+          "ORG": 0.8
+        },
+        {
+          "ORG": 0.84
+        }
+      ],
+      "pooled": {
+        "ORG": 0.82
+      }
+    },
+    "b": {
+      "cfg": {
+        "lang": "ko",
+        "data_path": "d.jsonl",
+        "data_fingerprint": "fp_a",
+        "kfold": 2,
+        "group_key": "orig",
+        "seed": 42,
+        "stratify": true
+      },
+      "folds": [
+        {
+          "ORG": 0.9
+        },
+        {
+          "ORG": 0.94
+        }
+      ],
+      "pooled": {
+        "ORG": 0.92
+      }
+    },
+    "target": "ZZZ"
+  },
+  "expected": {
+    "verdict": "INVALID",
+    "comparable": true,
+    "comparability_issues": [
+      "target entity 'ZZZ' not in pooled"
+    ],
+    "leakage_ok": true,
+    "leakage_verified": true,
+    "leakage": {
+      "baseline_dups": 0,
+      "candidate_dups": 0,
+      "baseline_basis": "group",
+      "candidate_basis": "group"
+    },
+    "matching": "strict",
+    "band_k": 2.0,
+    "target": null,
+    "regressions": [],
+    "all_deltas": {
+      "ORG": {
+        "delta": 0.10000000000000009,
+        "sigma": 0.028284271247461846,
+        "band": 0.05656854249492369,
+        "band_source": "sigma_fold",
+        "status": "real_gain",
+        "fold_wins": 2,
+        "fold_losses": 0,
+        "fold_n": 2,
+        "consistent": true,
+        "consistency_downgraded": false
+      }
+    },
+    "notes": [
+      "point estimate is pooled per-entity F1 delta (matches the reported headline). Band = band_k * sigma: sigma_repro (seed-repeat reproducibility via sigma_override) when available, else sigma_fold (fold-to-fold std) — a rougher, typically wider proxy that is safe because a noise gate should err wide. Measure sigma_repro only when an INCONCLUSIVE verdict blocks a decision you will adopt.",
+      "consistency gate is tighten-only: a magnitude real_gain is downgraded to within_noise (INCONCLUSIVE) when the candidate wins in fewer than 0.67 of the folds where both runs have the entity. It never upgrades and never suppresses a regression, so it cannot create a false PASS."
+    ]
+  }
+}

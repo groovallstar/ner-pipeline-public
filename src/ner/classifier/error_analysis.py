@@ -503,10 +503,15 @@ def run_inference(
     valid_ratio: float = 0.1,
     test_ratio: float = 0.1,
     seed: int = 42,
+    group_key: Optional[str] = None,
     max_length: int = 256,
     batch_size: int = 32,
 ) -> List[dict]:
     """baseline best 모델을 test split 에 적용 → 문장별 (text, gold, pred) 리스트.
+
+    group_key 는 학습에 쓴 값과 같아야 한다 — 다르면 다른 분할을 재현하게 되어
+    학습에서 본 문장을 test 로 진단하게 된다. 그룹 키의 타당성 검증은 학습
+    CLI 가 이미 수행했으므로 여기서는 재현만 한다.
 
     Returns:
         [{'sent_idx', 'text', 'gold_spans', 'pred_spans'}, ...]
@@ -520,14 +525,18 @@ def run_inference(
         encode_dataset,
         load_jsonl,
         split_train_valid_test,
+        validate_group_key,
     )
     from ner.classifier.data_utils import decode_bio_to_spans
 
     label2id, id2label = build_label_maps()
 
     rows = load_jsonl(data_path)
+    # 학습 CLI 와 같은 게이트를 통과시킨다 — 약한 키로 다른 분할을 재현하면
+    # 학습에서 본 문장을 test 로 진단하게 된다.
+    validate_group_key(rows, group_key)
     train_rows, valid_rows, test_rows = split_train_valid_test(
-        rows, valid_ratio, test_ratio, seed,
+        rows, valid_ratio, test_ratio, seed, group_key=group_key,
     )
     split_map = {'train': train_rows, 'valid': valid_rows, 'test': test_rows}
     if split not in split_map:
@@ -845,6 +854,7 @@ def run_error_analysis(
     seed: int = 42,
     valid_ratio: float = 0.1,
     test_ratio: float = 0.1,
+    group_key: Optional[str] = None,
     max_length: int = 256,
     batch_size: int = 32,
     with_diagnosis: bool = False,
@@ -872,6 +882,7 @@ def run_error_analysis(
         valid_ratio=valid_ratio,
         test_ratio=test_ratio,
         seed=seed,
+        group_key=group_key,
         max_length=max_length,
         batch_size=batch_size,
     )
@@ -940,6 +951,14 @@ def main():
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--valid-ratio', type=float, default=0.1)
     parser.add_argument('--test-ratio', type=float, default=0.1)
+    parser.add_argument(
+        '--group-key', default=None,
+        help='Row field used to group sibling rows when the model was '
+             'trained. Must match training, otherwise a different split is '
+             'reproduced and train sentences leak into the analyzed test '
+             'split. Pass "none" for a row-level split. Required unless '
+             '--from-predictions.',
+    )
     parser.add_argument('--max-length', type=int, default=256)
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument(
@@ -994,6 +1013,14 @@ def main():
             '--model-path and --tokenizer-name are required '
             '(unless --from-predictions)'
         )
+    if args.group_key is None:
+        parser.error(
+            '--group-key is required: it must match the value used for '
+            'training, or the reproduced split will differ. Pass "none" for '
+            'a row-level split.'
+        )
+    # "none" 은 명시적 opt-out — 학습 CLI 와 같은 규약이다.
+    group_key = None if args.group_key == 'none' else args.group_key
 
     default_data = {
         'ja': 'data/stockmark/pii_all.jsonl',
@@ -1012,6 +1039,7 @@ def main():
         review_ratio=args.review_ratio,
         review_min_per_type=args.review_min_per_type,
         seed=args.seed,
+        group_key=group_key,
         valid_ratio=args.valid_ratio,
         test_ratio=args.test_ratio,
         max_length=args.max_length,
