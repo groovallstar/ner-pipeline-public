@@ -40,7 +40,7 @@ CATALOG_EXCLUDE = ('test_predictions', 'checkpoint-')
 CATALOG_MAX_BYTES = 20_000_000
 
 # 기준 파일 — 정답·채점규칙·분할의 정의. 건드리면 사람 확인(ack) 전까지
-# 진행을 막는다 (CLAUDE.md 작업 흐름 ① 표와 동기화). 좁게 잡아 리팩터·
+# 진행을 막는다 (CLAUDE.md 하네스 평가 기준 표와 동기화). 좁게 잡아 리팩터·
 # 주석 파일까지 매번 잠그지 않는다.
 RULER_PATHS = (
     'docs/manual/data/canonical-entity-schema.md',
@@ -366,7 +366,7 @@ def main():
                 'experiments (gold / metric / split) itself moved:\n'
                 + '\n'.join(f'- {p}' for p in ruler)
                 + '\n\nPin the new definition BEFORE re-scoring (CLAUDE.md '
-                '작업 흐름 앞부분), then a HUMAN unlocks by creating:\n'
+                '하네스 앞부분(Front)), then a HUMAN unlocks by creating:\n'
                 f'  {os.path.join(state_dir, "ack-" + diff_hash)}\n'
                 'The AI cannot create this file (settings.json deny).'
             )

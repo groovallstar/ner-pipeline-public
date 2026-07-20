@@ -31,7 +31,7 @@ src/ner/
 │   ├── tag_aligner.py     # BIO 태그 정렬/정규화/span 추출
 │   └── hf_ner_labeler.py  # HuggingFace BERT NER 라벨러
 ├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/ner/llm_eval/CLAUDE.md)
-│   ├── __main__.py          # CLI (python -m ner.llm_eval --lang ko|ja|vi ...)
+│   ├── __main__.py
 │   ├── benchmark_runner.py  # BenchmarkRunner (한국어 BIO / JA·VI offset-span 공용 러너)
 │   ├── report.py            # ReportGenerator (span-match, seqeval, per-entity 테이블)
 │   ├── error_analysis.py    # 문장별 오류 유형 분류 CLI
@@ -43,12 +43,12 @@ src/ner/
 │   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
 │   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
 ├── classifier/        # JA·VI·KO canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/CLAUDE.md)
-│   ├── __main__.py         # CLI (python -m ner.classifier --lang ja|vi|ko ...)
+│   ├── __main__.py
 │   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
 │   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
 └── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
 src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소비; 상세: src/server/CLAUDE.md)
-├── __main__.py        # CLI (python -m server) — uvicorn 기동
+├── __main__.py
 ├── app.py             # FastAPI /v1/ner(단일·배치)·/health
 ├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
 ├── config.py          # ServerConfig (환경변수 로드)
@@ -74,8 +74,11 @@ docs/                  # 문서
 
 ## 주요 CLI 엔트리포인트
 
+**모든 `python -m` 진입점의 단일 색인이다** — 사람이 직접 돌리는 워크플로 명령어를 여기 모은다. 위 디렉토리 트리는 구조만 보여줄 뿐 실행 명령어를 담지 않으니, 새 진입점이 생기면 이 목록에 더한다.
+
 - `python -m ner.llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
 - `python -m ner.classifier --lang {ja,vi,ko}` — BERT 파인튜닝·평가 (canonical 10종 평면; `--group-key orig` 로 누출 없는 group K-fold)
+- `python -m ner.validity {std,repro,compare}` — K-fold 분산·비교타당성 게이트 (fold σ · 시드-반복 σ_repro · 비교 판정; 상세: `src/ner/validity/CLAUDE.md`)
 - `python -m ner.augmenters.pii` — 합성 PII 주입
 - `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
 - `python -m server` — ja·vi NER REST API 서버 (uvicorn; 상세: `src/server/CLAUDE.md`)
@@ -84,53 +87,80 @@ docs/                  # 문서
 
 ## 개발 3원칙
 
+세 원칙은 **워크플로(진행)**와 **하네스(집행)**의 공통 뿌리다 — 지킬 값만 정하고, 집행 기제는 아래 두 섹션이 맡는다. 그래서 셋의 성격이 갈린다 — 검증 의무·분해는 사람 주도는 하네스가 그대로 집행하고, 원자 단위는 하네스가 안 보는 커밋 입도(워크플로)에서 산다.
+
 - **원자 단위**: 한 번의 요청은 검증 가능한 최소 기능 단위로 처리한다.
-- **검증 의무**: 테스트 통과 + `docs/` 반영 전까지 '완료'로 간주하지 않는다.
+- **검증 의무**: 테스트 통과 + `docs/` 반영 없이는 완료가 아니다.
 - **분해는 사람 주도**: 단일 단계로 검증이 어려우면 작업자에게 먼저 분해 방식을 묻는다.
 
-## 시작 전 점검 — 평가 기준을 건드리나
+## 워크플로 (작업 진행)
 
-정답·채점규칙·분할은 실험을 재는 **평가 기준**이다 — 바뀌면 그 전후 점수를 나란히 못 놓으므로 비교하려면 고정돼 있어야 한다(코드: `src/ner/validity/CLAUDE.md`).
-
-- **정답(gold)**: 라벨 인벤토리·경계 정의. 판별: *같은 문장의 정답이 달라지나?*
-- **채점규칙(metric)**: 매치 기준(strict span)·집계(pooled micro-avg)·분산 게이트. 판별: *예측을 안 바꾸고 이것만 바꿔도 숫자가 움직이나?*
-- **분할(split)**: 파티션·group-key·누출. 판별: *test 문장이 train으로 가거나 정보가 새나?*
-
-**하나라도 건드리면** 실험 전에 새 정의를 먼저 못 박는다(점수를 본 뒤 유리한 정의를 골라 숫자만 올리는 걸 막으려고 — 이후 점수로는 고치지 않는다). 옛 점수와 비교가 사라지니 옛 모델을 새 기준으로 다시 재고(`clean 동일-test`) 안 건드린 엔티티만 무회귀를 본다. **안 건드리면** 값만 바꾸는 일이라 에이전트가 자율 누적한다. 어느 쪽인지는 사람이 아니라 기준 파일이 정한다(자동 잠금 상세: "작업 흐름").
-
-## 작업 흐름 (하네스)
-
-**하네스는 하나뿐이다.** 작업 종류에 따라 안전 절차를 갈라놓지 않는다 — 어느 갈래냐를 고르는 순간 그건 스스로 붙이는 이름표가 되고, 이름표를 잘못 붙이면 게이트를 그냥 지나치기 때문이다. 그래서 **검사는 "무슨 작업이냐"가 아니라 "무엇을 건드렸냐"로 켜진다.** 흐름은 하나의 뼈대다 — 무언가 바꾸고, 기준 파일을 건드렸으면 앞부분을 거친 뒤(안 건드렸으면 건너뛰고), 고정된 기준으로 재서 비교하고, 검사 게이트를 지나 커밋한다.
+워크플로는 작업 하나가 할당돼 끝날 때까지의 **진행 경로**다. "다음에 뭘 하지?"에만 답한다 — 무엇을 통과시킬지는 §하네스가 따로 맡는다. §개발 3원칙이 이 진행 전체에 적용된다.
 
 ```mermaid
 flowchart TD
-    Work["무언가를 바꾼다<br/>라벨링·모델·증강·인프라"] --> Ruler{"평가 기준을 정하는<br/>파일을 건드렸나?"}
-    Ruler -->|"건드림 → 자동 잠금"| Front["앞부분 — 기준을 바꿨을 때<br/>새 정의 먼저 못 박기 ·<br/>바뀐 슬라이스 검사 ·<br/>사람 확인으로 잠금 해제 ·<br/>옛 모델을 새 기준으로 재측정"]
-    Ruler -->|"안 건드림"| Run["고정된 기준으로<br/>재고 비교한다"]
-    Front --> Run
-    Run --> Gate{{"검사 게이트<br/>결정적 층 + 판단 층"}}
-    Gate -->|"FAIL"| Work
-    Gate -->|"PASS"| Done["커밋·마무리"]
+    Assign["작업 요청"] --> Route{"type + path"}
+    Route -->|"feat·fix ∧ src 런타임"| Prep["이슈 → 브랜치<br/>→ 수락 기준 승인"]
+    Route -->|"docs·chore·refactor"| Direct["곧장 구현"]
+    Route -->|"불일치·모호"| Human["사람이 판단"]
+    Prep --> Work["구현 · 원자 커밋 · 마무리"]
+    Direct --> Work
+    Human --> Work
+    Work -->|"feat 브랜치"| PRm["PR → develop 머지"]
+    Work -->|"develop 직접"| Done["develop 에 반영"]
 ```
 
-각 단계를 흐름 순서대로 푼다.
+갈래는 작업자가 아니라 **type + path** 가 정한다 — type 은 커밋 종류(`feat` 새 기능·`fix` 버그·`docs` 문서·`chore` 잡무·`refactor` 구조 개선, 뒤 셋은 동작 불변), path 는 `src/ner` 런타임을 건드리나.
 
-**믿음 구조 (규칙이 갈리는 축)** — 이 하네스가 믿지 않는 쪽은 AI 다. 목적 자체가 AI 의 점수 조작을 막는 것이라서다. 믿는 쪽은 기준을 소유한 사람이고, 아래 규칙이 하나같이 "AI 는 못 하고 사람은 된다"로 갈리는 까닭이 여기 있다.
+- **feat·fix ∧ src 런타임** → 이슈 + 브랜치 + 수락 기준 + PR
+- **docs·chore·refactor** → `develop` 직접 커밋 (이슈·PR 선택)
+- **불일치·모호** → 사람이 판단
 
-**① 무엇을 건드렸나 (갈림)** — **라벨링·gold 재라벨·메트릭이나 분할 변경**은 기준을 건드리니 앞부분이 켜지고, **모델 교체·하이퍼파라미터·증강**은 기준을 안 건드려 앞부분 없이 곧장 Run 으로 간다. **서버·인프라**는 실험 숫자조차 안 나와 게이트도 대부분 비운 채 지난다. 무엇이 "기준 파일"인지는 좁게 잡는다 — 넓게 잡으면 리팩터링이나 주석까지 매번 잠겨 확인을 남발하게 되고, 그러면 잠금이 허울이 된다. 목록 밖에서 기준을 바꾸는 드문 경우는 커밋과 diff 를 읽는 사람 눈에 맡긴다.
+구현·원자 커밋·마무리는 공통, 이슈·브랜치·수락 기준만 feat 전용이다. 상세는 §이슈 진행 절차.
 
-| 무엇 | 잠그는 파일 |
+## 하네스 (집행)
+
+하네스는 워크플로와 **다른 축**이다 — 워크플로가 "무슨 작업이냐"로 갈릴 때, 하네스는 **"무엇을 건드렸냐"로 켜진다.** 갈래를 스스로 고르게 두면 이름표를 잘못 붙여 게이트를 지나치기 때문이다. 그래서 라우팅과 분리돼, 무엇을 바꿨든 커밋 전 같은 게이트를 지난다. 믿지 않는 쪽은 AI(점수 조작 방지)이고 믿는 쪽은 기준을 소유한 사람이라, 아래 규칙은 하나같이 "AI 는 못 하고 사람은 된다"로 갈린다.
+
+```mermaid
+flowchart TD
+    Change["무언가를 바꾼다<br/>gold·메트릭·분할 · 모델·증강·인프라"] --> Ruler{"평가 기준 파일을<br/>건드렸나?"}
+    Ruler -->|"건드림 → 자동 잠금"| Front["새 정의 먼저 못 박기 ·<br/>사람 확인으로 해제 ·<br/>옛 모델 재측정"]
+    Ruler -->|"안 건드림"| Gate
+    Front --> Gate{{"검사 게이트<br/>결정적 + 판단 층"}}
+    Gate -->|"FAIL"| Change
+    Gate -->|"PASS"| Done["커밋"]
+```
+
+### 평가 기준을 건드렸나 — 앞부분(Front)
+
+정답·채점규칙·분할은 실험을 재는 **자**다 — 바뀌면 전후 점수를 나란히 못 놓으므로 비교하려면 고정돼야 한다(코드: `src/ner/validity/CLAUDE.md`).
+
+- **정답(gold)**: 라벨 인벤토리·경계. 판별 — *같은 문장의 정답이 달라지나?*
+- **채점규칙(metric)**: 매치 기준(strict span)·집계(pooled micro-avg)·분산 게이트. 판별 — *예측을 안 바꾸고 이것만 바꿔도 숫자가 움직이나?*
+- **분할(split)**: 파티션·group-key·누출. 판별 — *test 문장이 train 으로 가거나 정보가 새나?*
+
+어느 쪽인지는 사람이 아니라 **기준 파일**이 정한다. 목록은 좁게 잡는다 — 넓히면 리팩터·주석까지 매번 잠겨 확인이 허울이 된다.
+
+| 무엇 | 잠그는 파일 (정본: `refuter_gate.py` 의 `RULER_PATHS`) |
 |---|---|
 | 정답 | `docs/manual/data/canonical-entity-schema.md` |
 | 채점규칙 | `src/ner/metrics/{bio_metrics,span_metrics}.py`, `src/ner/validity/{gate,comparability,leakage,variance}.py` |
 | 분할 | `src/ner/classifier/data_utils.py`, `kfold_pool.py` |
 | 결과 장부(편집 거부) | `certified/**` |
 
-작업별 "레시피"(재라벨 체크리스트 등)는 둬도 되지만, 그건 사람이 참고하는 설명서일 뿐 안전장치가 아니다. 갈래를 쳐선 안 되는 건 안전이고, 여럿이어도 괜찮은 건 설명서다.
+**건드리면** 커밋 직전 진행이 막힌다. 잠금은 **사람만** 확인 파일(`ack-<diff_hash>`)로 푼다(AI 의 ack 생성은 `settings.json` deny). 사람 확인 전에, 점수를 본 뒤 유리한 정의를 고르지 못하도록 새 정의를 먼저 못 박고, 옛 모델을 새 기준으로 다시 재(`clean 동일-test`) 안 건드린 엔티티만 무회귀를 본다. **안 건드리면** 값만 바꾸는 일이라 에이전트가 자율 누적한다.
 
-**② 앞부분 — 잠금·해제 (기준을 건드렸을 때)** — 기준 파일이 diff 에 들어오면 커밋 직전에 진행이 막힌다. 이 잠금은 **사람만 풀 수 있다** — 사람이 **확인 파일**을 남겨야 풀리며, AI 가 확인 파일을 만드는 것은 `settings.json` 의 deny 로 막아둔다. 사람이 그 확인을 남기기 전에 하는 일이 바로 앞부분(Front)이다. 정답 md 는 산문이라 "데이터가 기준에 맞는가"를 기계가 자동으로 통과시킬 수 없어, 그 판단과 해제를 사람이 맡는다.
+### 검사 게이트 — 결정적 + 판단 층
 
-**③ 검사 게이트 — 결과 장부** — 실험은 `results/`(gitignore·휘발 scratch)에 산출물을 쌓는다. 리포트가 인용하는 실험만 그 metric JSON 을 `certified/` 로 verbatim 복사해 커밋하고, 이 **커밋된 파일이 원장**이다 — 모든 숫자 검사가 이걸 기준으로 삼는다. AI 는 원장을 직접 편집하지 못하고(`settings.json` deny), 승격은 scratch 실산출물의 복사라 값을 지어내지 못한다. 불변성·이력은 git 이 주고, 값의 진위는 커밋 diff 를 사람·PR 리뷰·판단 층 반박자가 본다. 게이트가 실제로 무엇을 보는지는 아래 "검사 게이트" 섹션에 있다.
+Stop 훅(`refuter_gate.py`)이 미커밋 diff 에 두 층을 건다. **승인이 아니라 반증**이다 — 결정 가능한 것은 모델에게 맡기지 않는다.
+
+- **결정적 층** (기계·0토큰·**두 트랙 전 커밋 상시**): Stop 훅이 diff 를 직접 읽어 — 기준 파일 건드림 + ack 없음 → 차단 · ruff · 테스트 무결성(순삭제·무조건 `skip`/`xfail`·assert 약화, `skipif` 제외) · 인용 **표 안** 0–1 소수(0.00–1.9999)만 ↔ `certified/**`(퍼센트·정수 metric 은 대조 밖). 오탐은 사람이 ack 로 해제한다. `certified/**` 편집 거부는 훅이 아니라 `settings.json` permission deny 다(ack 생성 차단도 동일).
+- **판단 층** (격리 반박자·**마무리·Front** 구간; 자동은 루프 모드만): 코드 정합성·회귀(숨은 회귀·엣지케이스) · 측정 타당성(gold 변조·시드/분할 누수·"올랐다=개선"의 순환, 표 밖 산문의 Δ·σ).
+
+리포트가 인용하는 실험만 그 metric JSON 을 `results/`(gitignore·휘발 scratch)에서 `certified/` 로 verbatim 복사해 커밋하고, 이 **커밋된 원장**이 모든 숫자 검사의 기준이다. AI 는 원장을 직접 편집하지 못해 값을 지어낼 수 없고, 진위는 커밋 diff 를 사람·PR·반박자가 본다(다만 인용 대조는 존재 검사라 거짓 인용을 줄이되 없애진 못한다).
+
+백스톱(재진입·세션 누적 상한)·판정 경로(`.omc/state/refuter/`)·`log.jsonl` 이력 등 게이트 내부 동작은 `refuter_gate.py`(docstring·구현)에 있고, 절차는 `refuter` 스킬, 끄기는 `OMC_SKIP_HOOKS=refuter-gate`.
 
 ## 코딩 컨벤션 (주석/문서 언어)
 
@@ -172,10 +202,10 @@ flowchart TD
 
 - **GitHub Issues**(`groovallstar/ner_pipeline`)로 작업 단위를 관리한다. 자동 채번으로 중복을 방지한다.
 - **무엇이 이슈가 되는가 — 사람이 소유, 에이전트는 default 실행.** 작업 단위 결정(이슈 등록 여부)·수락 기준 승인은 사람이 쥔다(에이전트 자기 채점 금지). 에이전트는 type+path 기반 default를 실행한다:
-  - `feat`·`fix` ∧ `src/ner/**` 런타임 변경 → **이슈+브랜치+PR** (추적 가치 있는 제품 진화)
-  - `docs`·`chore`·`refactor` (동작 불변·구조·문서·도구) → **develop 직접** (이슈/PR 없이, 크기 무관). PR이 별도 리뷰어를 붙이지 않아 이 부류엔 PR 오버헤드가 추적 이득보다 크다 — 실제 회귀 게이트는 refuter.
+  - `feat`·`fix` ∧ `src/ner/**` 런타임 변경 → **feat 브랜치 분기 + 이슈 + PR** (추적 가치 있는 제품 진화). 브랜치명이 `issue-N`을 참조하므로 이슈가 전제된다.
+  - `docs`·`chore`·`refactor` (동작 불변·구조·문서·도구) → **develop 직접 커밋** (크기 무관). **PR 은 없다** — 별도 리뷰어가 안 붙어 PR 오버헤드가 추적 이득보다 크고, 회귀 게이트는 refuter 다. **이슈는 선택** — 추적 가치 있으면 등록해 `refs #N`으로 잇고(종결은 수동 close), 아니면 바로 커밋한다.
   - **type↔path 불일치**(예: `feat`인데 src 런타임 미변경, `chore`인데 src 런타임 변경) **또는 추적가치 모호** → 사람에게 에스컬레이션. 과소추적(조용한·비싼 실패) > 과다추적(시끄러운·싼 실패)이므로 모호하면 이슈 쪽으로 기운다.
-- **문서 숫자는 결과 파일과 맞아야 한다.** `docs/reports/`·`docs/issues/`의 **표 안** 수치가 `certified/**`과 어긋나면 `검사 게이트`의 결정적 층이 자동으로 잡는다 — 숫자가 diff 에 드는 *사건*이 트리거다(상세: "검사 게이트"). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
+- **문서 숫자는 결과 파일과 맞아야 한다.** `docs/reports/`·`docs/issues/`의 **표 안** 수치가 `certified/**`과 어긋나면 하네스 검사 게이트의 결정적 층이 자동으로 잡는다 — 숫자가 diff 에 드는 *사건*이 트리거다(상세: §하네스). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
 - 마일스톤은 사용하지 않는다. 영역은 라벨로 구분한다 (`area:labelers`, `area:classifier`, `area:augmenters`, `area:llm-eval`, `area:infra`, `docs` 등).
 - 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>`
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
@@ -198,24 +228,6 @@ docs/issues/
 
 1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
-3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `certified/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 파일을 건드리므로 앞부분(Front)에서 잠긴다** — 사람 확인 전 반박자를 미리 불러 누출·조작 가능성을 점검할 수 있다(상세: "작업 흐름"·"검사 게이트").
+3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `certified/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 파일을 건드리므로 앞부분(Front)에서 잠긴다** — 사람 확인 전 반박자를 미리 불러 누출·조작 가능성을 점검할 수 있다(상세: §하네스).
 4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조. 구현을 ralph 등 자율 루프로 돌리는 것은 3단계 기준이 기계검증 가능·신뢰되고 작업이 다회차/반복-shape일 때만 — 단발은 "분해는 내가 → 한 스텝만 위임 → 내가 기준으로 검증"이 기본.
-5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **검사 게이트**(결정적 층 + 판단 층; PASS만 진행, FAIL이면 4단계 회귀) → `docs/issues/issue-{N}-{slug}.md`에 설계 + 구현 결과·검증 작성·**최초 커밋** → PR 생성(`closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
-
-## 검사 게이트 (결정적 층 + 판단 층)
-
-게이트는 **승인이 아니라 반증**이다. Stop 훅(`refuter_gate.py`)이 미커밋 diff 에 두 층을 건다. 결정 가능한 것은 모델에게 맡기지 않는다.
-
-**결정적 층 — 기계가 직접, 0토큰**(위조 불가, 항상 돎):
-
-- 기준 파일 건드림 + 확인 파일 없음 → **차단** · AI 의 결과 장부(`certified/**`) 편집 → **거부**
-- ruff · 테스트 무결성(순삭제·무조건 `skip`/`xfail`·assert 약화; `skipif` 제외) · 인용 **표 안** 수치 ↔ `certified/**`
-
-오탐은 **사람**이 확인 파일(`ack-<diff_hash>`)로 해제하고, 모든 판정·해제는 `log.jsonl` 에 append-only 로 쌓인다. 인용 대조는 *존재* 검사라 우연 일치를 못 거른다 — 거짓 인용을 줄이되 없애진 못한다(`certified/` 는 커밋된 원장이라 값이 사라지진 않지만, 대조가 존재 검사인 한 출처까지 보증하진 않는다).
-
-**판단 층 — 격리 반박자(모델)**, 도구가 확정 못 하는 축만:
-
-- **코드 정합성·회귀** — 숨은 회귀·엣지케이스 누락은?
-- **측정 타당성** — 숫자가 다 맞아도 결론이 틀리나: gold 변조·시드/분할 누수·"올랐다=개선"의 순환/교란, 표 밖 산문의 파생값(Δ·σ).
-
-판정 `.omc/state/refuter/<diff_hash>.json`(PASS 만 진행)은 반박자(모델)가 쓴다 — 신선도는 보증하되 진정성은 못 한다. 위조 불가능한 건 결정적 층뿐. 자동 호출은 루프 모드(ralph/ultrawork)만, 단발·앞부분(확인 전 미리 부르기)은 수동. 절차는 `refuter` 스킬. 끄기: `OMC_SKIP_HOOKS=refuter-gate`.
+5. **마무리**: 테스트 통과 + `docs/` 갱신 확인 → **판단 층까지 얹은 게이트**(결정적 층은 4단계 각 커밋에서 이미 걸렸고, 마무리엔 판단 층 추가; PASS만 진행, FAIL이면 4단계 회귀) → `docs/issues/issue-{N}-{slug}.md`에 설계 + 구현 결과·검증 작성·**최초 커밋** → PR 생성(`closes #N`) → 머지 전 `git status`로 미커밋 파일 확인
