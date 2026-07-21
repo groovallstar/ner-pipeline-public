@@ -1,0 +1,35 @@
+# certified/ — 커밋된 결과 원장
+
+리포트·이슈가 **인용하는 수치의 유일한 출처**다. 검사 게이트(결정적 층)의
+인용 대조는 이 폴더의 `*.json` 만 카탈로그로 삼는다.
+
+## 무엇이 여기 들어오나
+
+- 채택된 실험의 **metric JSON 만** — `pooled_metrics.json`, fold 의
+  `metrics.json`, `thresholds.json` 등. 예측 덤프·체크포인트는 넣지 않는다
+  (모델 가중치 `*.pt/pth/bin/safetensors` 는 `.gitignore` 전역 패턴으로
+  이 폴더에서도 자동 제외).
+- `results/`(gitignore·휘발 scratch)에서 **verbatim 복사**해 커밋한다.
+  복사는 실제 실행 산출물을 그대로 옮기는 것이라 값을 새로 만들지 않는다.
+- 경로 관례: `certified/classifier/{lang}/<run-slug>/...` — scratch 구조를
+  그대로 반영해 어느 실행에서 왔는지 드러낸다.
+
+## 승격 (promotion)
+
+실험이 끝나고 그 수치를 리포트가 인용하기로 정하면, scratch 의 metric JSON 을
+이 폴더로 복사해 커밋한다:
+
+```bash
+mkdir -p certified/classifier/ko/<run-slug>
+cp results/classifier/ko/<run-slug>/pooled_metrics.json \
+   certified/classifier/ko/<run-slug>/
+git add certified/classifier/ko/<run-slug> && git commit
+```
+
+## 잠금은 두 겹
+
+1. `settings.json` 이 AI 의 **Write/Edit(손저작)** 을 막는다 — 실수·직접
+   위조 차단. 단 이건 speed-bump 이지 기계 보증이 아니다(복사 자체는
+   subprocess 라 가능하다).
+2. 진짜 앵커는 **git diff 를 PR 리뷰·판단 층 반박자가 보는 것** — 승격된
+   값이 실제 실행에서 나왔는지 사람이 확인한다. 불변성·이력은 git 이 준다.
