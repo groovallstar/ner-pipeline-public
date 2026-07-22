@@ -7,6 +7,7 @@
 
 import json
 import os
+import unicodedata
 
 import pytest
 
@@ -80,12 +81,10 @@ def _assert_batched_matches_per_chunk(model, text):
     forward) 후 글로벌 offset shift 로 각각 구해 비교한다. label·offset·
     표면형은 정확히, score 는 GPU 커널 비결정성 대비 1e-5 허용.
 
-    정밀도를 fp32 로 고정(autocast off)해 배치(B>1)·단건(B=1)이 같은 커널
-    정밀도를 쓰게 한다 — 배치화 자체(pad/stack/순서·offset 복원)의 등가만
-    보기 위함이다. bf16 배치의 정밀도 parity 는 별도 측정(parity 스크립트)이
-    담당한다. apply_threshold=False 로 임계값 경로도 배제한다.
+    추론은 fp32 로만 돌아 배치(B>1)·단건(B=1)이 같은 커널을 타므로,
+    배치화 자체(pad/stack/순서·offset 복원)의 등가만 본다.
+    apply_threshold=False 로 임계값 경로도 배제한다.
     """
-    model.autocast_dtype = None
     chunks = split_for_length(text, model.tokenizer, model.max_length)
     assert len(chunks) > 1  # 강제 분할 — 배치 경로가 실제로 작동
     batched = model.predict(text, apply_threshold=False)
@@ -290,12 +289,10 @@ def _assert_spans_equal(got, exp):
 def _assert_predict_many_matches_single(model, texts):
     """predict_many(배치)가 텍스트별 단건 predict 와 동일 — 배치화 등가.
 
-    정밀도를 fp32 로 고정해 배치(B>1)·단건(B=1)이 같은 정밀도를 쓰게 하고,
+    추론은 fp32 로만 돌아 배치(B>1)·단건(B=1)이 같은 정밀도를 쓰므로,
     cross-text 묶음→복원(입력 순서·글로벌 offset)이 단건 순차와 동일함을
-    검증한다(label·offset 정확, score 는 커널 드리프트 1e-5 허용). bf16
-    배치의 정밀도 parity 는 parity 스크립트가 따로 본다.
+    검증한다(label·offset 정확, score 는 커널 드리프트 1e-5 허용).
     """
-    model.autocast_dtype = None
     batched = model.predict_many(texts, apply_threshold=False)
     single = [model.predict(t, apply_threshold=False) for t in texts]
     assert len(batched) == len(texts)
@@ -327,15 +324,13 @@ def test_predict_batch_mixed_lang_matches_single():
     """이질 배치(ja·vi 혼합·인터리브)가 순서·lang·offset 1:1로 단건과 동일.
 
     registry.predict_batch 가 언어별로 묶어 forward 한 뒤 입력 순서로 복원
-    하므로, 정밀도를 fp32 로 통제하면 각 항목이 단건 predict 와 정확히
-    일치해야 한다 — 묶음/복원에서 순서·언어가 섞이면 깨진다.
+    하므로, 추론이 fp32 라 각 항목이 단건 predict 와 정확히 일치해야
+    한다 — 묶음/복원에서 순서·언어가 섞이면 깨진다.
     """
     ja_model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
                          _CONFIG.max_length)
     vi_model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
                          _CONFIG.max_length)
-    ja_model.autocast_dtype = None
-    vi_model.autocast_dtype = None
     registry = ModelRegistry({'ja': ja_model, 'vi': vi_model})
     ja_rows = [r for r in load_jsonl(_JA_TEST) if r['entities']][:3]
     vi_rows = [r for r in load_jsonl(_VI_TEST) if r['entities']][:3]
@@ -350,3 +345,21 @@ def test_predict_batch_mixed_lang_matches_single():
     for i, (t, lang) in enumerate(zip(texts, langs)):
         _assert_spans_equal(
             out[i], registry.predict(t, lang, apply_threshold=False))
+
+
+@pytest.mark.skipif(not _VI_CHUNK_READY, reason='vi model/test not present')
+def test_vi_nfd_input_matches_nfc():
+    """NFD(분해형) 베트남어 입력이 NFC 와 같은 엔티티를 낸다.
+
+    회귀 가드: NFD 입력은 결합부호가 별도 토큰이 돼 엔티티가 소실·절단됐다.
+    predict 가 입력을 NFC 로 정규화해 두 형태가 동일 결과를 내게 한다.
+    """
+    model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
+                      _CONFIG.max_length)
+    text = 'Hà Nội là thủ đô của Việt Nam.'
+    nfc = [(s['label'], s['start_char'], s['end_char'], s['text'])
+           for s in model.predict(unicodedata.normalize('NFC', text))]
+    nfd = [(s['label'], s['start_char'], s['end_char'], s['text'])
+           for s in model.predict(unicodedata.normalize('NFD', text))]
+    assert nfc == nfd                        # 정규화로 두 형태가 일치
+    assert any(lbl == 'LOC' for lbl, *_ in nfc)  # 엔티티가 실제로 잡힘

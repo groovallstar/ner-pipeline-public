@@ -12,6 +12,7 @@ score}` — `.jsonl` 데이터 관례와 일치해 API 결과를 파이프라인
 
 import logging
 import os
+import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -33,15 +34,6 @@ from server.chunking import split_for_length
 from server.config import ServerConfig
 
 logger = logging.getLogger(__name__)
-
-# 정밀도 → autocast dtype. fp32 는 autocast off, bf16 은 배치(B>1) forward 만
-# autocast 로 묶어 matmul 을 bf16 으로 돌린다(softmax 등은 fp32 승격). 단건
-# (B=1)은 fp32 로 둬 단건 지연을 baseline 과 동일하게 유지한다 — bf16 의
-# 처리량 이득은 큰 행렬(배치)에서만 나타난다(분기는 _infer_chunks).
-_AUTOCAST_DTYPE: Dict[str, Optional[torch.dtype]] = {
-    'fp32': None,
-    'bf16': torch.bfloat16,
-}
 
 
 class ModelUnavailable(Exception):
@@ -82,12 +74,10 @@ class LangModel:
     """
 
     def __init__(self, lang: str, model_dir: str, thresholds_path: str,
-                 max_length: int = 256, precision: str = 'bf16',
+                 max_length: int = 256,
                  device: Optional[torch.device] = None):
         self.lang = lang
         self.max_length = max_length
-        self.precision = precision
-        self.autocast_dtype = _AUTOCAST_DTYPE[precision]
         self.device = device or torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = _load_tokenizer(model_dir, lang)
@@ -116,19 +106,15 @@ class LangModel:
         """feats(list) → (pred_ids, confs) numpy [N, max_length].
 
         각 feat 는 encode_row 에서 max_length 패딩되므로 [N, max_length] 한
-        배치로 쌓아 1 forward 한다. bf16 은 배치(B>1)에서만 이득이라 단건
-        (B=1)은 fp32 로 둔다(autocast off).
+        배치로 쌓아 1 forward 한다. 추론은 fp32 로만 돈다 — 단건·배치가 같은
+        커널을 타 배치화가 결과를 바꾸지 않는다(결정적, 운영점 정합).
         """
         input_ids = torch.tensor(
             [f['input_ids'] for f in feats], dtype=torch.long).to(self.device)
         attention_mask = torch.tensor(
             [f['attention_mask'] for f in feats],
             dtype=torch.long).to(self.device)
-        use_autocast = (self.autocast_dtype is not None
-                        and input_ids.shape[0] > 1)
-        with torch.no_grad(), torch.autocast(
-                self.device.type, dtype=self.autocast_dtype,
-                enabled=use_autocast):
+        with torch.no_grad():
             logits = self.model(
                 input_ids=input_ids, attention_mask=attention_mask).logits
             probs = torch.softmax(logits, dim=-1)
@@ -174,6 +160,7 @@ class LangModel:
         span 리스트를 돌려준다 — 텍스트별 단건 predict 순차 호출과 span 이
         동일하다(배치 등가).
         """
+        texts = [unicodedata.normalize('NFC', t) for t in texts]
         feats, offs_list, bases, owners = [], [], [], []
         for ti, text in enumerate(texts):
             chunks = split_for_length(text, self.tokenizer, self.max_length)
@@ -202,8 +189,11 @@ class LangModel:
 
         긴 입력은 chunk 분할 후 모든 chunk 를 한 배치 forward 로 추론하고 각
         span 을 원문 글로벌 offset 으로 병합한다. apply_threshold=True 면 로드된
-        임계값을 적용(없으면 raw).
+        임계값을 적용(없으면 raw). 입력은 NFC 로 정규화한다 — 모델은 NFC 로
+        학습됐고, NFD(분해형) 입력은 결합부호가 별도 토큰이 돼 span 이 깨진다
+        (offset 은 정규화된 텍스트 기준).
         """
+        text = unicodedata.normalize('NFC', text)
         chunks = split_for_length(text, self.tokenizer, self.max_length)
         spans = self._infer_chunks(chunks)
         # 임계값은 canonical 변환 전 내부 span({type,...})에 적용한다 —
@@ -235,7 +225,6 @@ class ModelRegistry:
                     model_dir=config.model_dir(lang),
                     thresholds_path=config.thresholds_path(lang),
                     max_length=config.max_length,
-                    precision=config.precision,
                 )
                 logger.info('Loaded %s model (thresholds=%s)',
                             lang, models[lang].has_thresholds)

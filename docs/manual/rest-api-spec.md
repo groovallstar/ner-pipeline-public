@@ -62,7 +62,6 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 환경변수 | 기본값 | 의미 |
 |---|---|---|
 | `NER_SERVER_MODEL_ROOT` | `/data/ner` | 모델 루트. `{root}/{lang}/model`·`{root}/{lang}/thresholds.json` 레이아웃 |
-| `NER_SERVER_PRECISION` | `bf16` | 추론 정밀도(`bf16`\|`fp32`). bf16 autocast는 **배치(B>1) forward에만** — 단건은 fp32 |
 | `NER_SERVER_MAX_LENGTH` | `256` | 모델 토큰 한도. 초과 입력은 문장 단위로 분할(offset 보존) |
 | `NER_SERVER_MAX_CHARS` | `20000` | 텍스트 1건 char 상한(초과 → 413) |
 | `NER_SERVER_MAX_BATCH` | `64` | 배치 텍스트 개수 상한(초과 → 413) |
@@ -138,7 +137,9 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | `text` | string | 원문에서 잘라낸 표면형 |
 
 `start_char`/`end_char`는 **원문 char 기준**이라 긴 입력이 내부적으로 분할돼
-추론되더라도 글로벌 offset으로 복원돼 반환된다.
+추론되더라도 글로벌 offset으로 복원돼 반환된다. 입력은 서버에서 **NFC로
+정규화**되므로 offset은 NFC 기준이다 — NFC 입력은 무변, NFD(분해형) 입력만
+정규화 후 위치가 잡힌다(결합부호 분리로 인한 span 깨짐 방지).
 
 ### 언어 처리 규칙
 
@@ -282,7 +283,8 @@ flowchart TD
 토큰별 예측·confidence → BIO 디코드로 span 추출 → chunk base offset을 더해
 원문 글로벌 offset 복원 → 임계값 로드 시 자동 적용 → canonical
 변환. 배치 요청은 같은 언어끼리 묶어 한 forward로 추론한다(chunk 1개면
-단건과 결과 동일 — behavior-invariant). bf16 autocast는 배치(B>1)에만 켠다.
+단건과 결과 동일 — behavior-invariant). 서빙은 fp32라 단건·배치가 같은
+커널을 타 배치화가 결과를 바꾸지 않는다(결정적). 입력은 NFC로 정규화한다.
 
 ## 11. 사용 예시
 
