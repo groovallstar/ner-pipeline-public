@@ -105,6 +105,11 @@
 감지 신호가 없어 `unsupported`로 분류됩니다 — 이 경우 요청에 `"lang": "vi"`를
 명시해야 추출됩니다.
 
+대칭으로, 가나 없이 **한자로만 된 일본어**(인명·주소·헤드라인 등, 예:
+`東京都千代田区`)도 감지 신호가 없어 `unsupported`가 됩니다 — 이 경우
+`"lang": "ja"`를 명시해야 합니다. **언어를 아는 경우 `lang`을 항상 명시하면**
+이런 감지 한계를 겪지 않습니다.
+
 ## 4. 개체명 종류(label)
 
 `label`은 아래 10종 중 하나입니다.
@@ -124,7 +129,7 @@
 
 ## 5. 에러 규격
 
-서버가 판정하는 에러(400·413·429·503)는 모두 아래 구조로 반환됩니다.
+서버가 판정하는 에러(400·413·422·429·500·503)는 모두 아래 구조로 반환됩니다.
 
 ```json
 {"error": {"status": 400, "message": "provide exactly one of 'text' or 'texts'"}}
@@ -184,7 +189,7 @@ curl -s -X POST 'http://{host}:{port}/v1/ner' \
 # 429 — 동시 요청이 대기 한도를 넘을 때(단일 curl 로는 재현되지 않음)
 # → {"error":{"status":429,"message":"queue full (>= 32 waiting)"}}
 
-# 503 — 요청 언어 모델이 아직 로드되지 않음
+# 503 — 해당 언어 모델이 미로드일 때만 발생(정상 로드 상태에선 200)
 curl -s -X POST 'http://{host}:{port}/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"東京","lang":"ja"}'
 # → {"error":{"status":503,"message":"model for lang 'ja' is not loaded"}}
@@ -193,6 +198,7 @@ curl -s -X POST 'http://{host}:{port}/v1/ner' \
 ## 6. 요청 크기 한도
 
 과부하 방지를 위해 요청당 크기 한도가 있습니다.
+
 | 한도 | 기본값 | 초과 시 |
 |---|---|---|
 | 요청 바디 크기 | 2MB | 413 (파싱·인증 전) |

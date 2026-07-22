@@ -65,7 +65,7 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 
 ### validity/
 
-K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`·`pooled_metrics.json` 만 읽어 두 실험을 비교해도 되는지·개선이 노이즈인지 실측인지 판정한다. `metrics/`(한 run 의 F1 계산)를 한 줄도 import 하지 않는 다른 고도의 관심사라 최상위 패키지로 분리했다. CLI: `python -m ner.validity {std,repro,compare}`.
+K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`·`pooled_metrics.json` 만 읽어 두 실험을 비교해도 되는지·개선이 노이즈인지 실측인지 판정한다. `metrics/`(한 run 의 F1 계산)를 한 줄도 import 하지 않는 다른 고도의 관심사라 최상위 패키지로 분리했다. 상세: `src/ner/validity/CLAUDE.md`. CLI: `python -m ner.validity {std,repro,compare}`.
 
 | 파일 | 역할 |
 |------|------|
@@ -76,7 +76,7 @@ K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`�
 | `_common.py` | fold/pooled IO 공유 |
 | `__init__.py` | 공개 API re-export (`from ner.validity import compare`) |
 
-세 검증은 각자 독립 함수로 호출 가능하다. 어떤 검증 부분집합을 통과해야 '실험 완료'인지의 조합·우선순위·선언은 채점규칙(자)을 바꾸는 별도 하네스의 몫이며, 그때 정의-시점 반박자를 건다.
+세 검증은 각자 독립 함수로 호출 가능하다. 어떤 검증 부분집합을 통과해야 '실험 완료'인지의 조합·우선순위·선언은 채점규칙(자)을 바꾸는 별도 하네스의 몫이다 — 기준 파일을 건드리므로 앞부분(Front)에서 잠기고, 판단 층 반박자가 누출·조작을 점검한다 (루트 `CLAUDE.md` §하네스).
 
 ### scripts/
 

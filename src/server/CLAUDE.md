@@ -14,7 +14,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
 
 설정은 `NER_SERVER_*` 환경변수: `MODEL_ROOT`(기본 `/data/ner`)·`MAX_LENGTH`
-(256)·`PRECISION`(bf16|fp32, 기본 bf16 — 배치 forward 에만 적용)·`MAX_CHARS`
+(256)·`MAX_CHARS`
 (20000, 텍스트 1건)·`MAX_BATCH`(64, 배치 개수)·`MAX_TOTAL_CHARS`(100000,
 배치 char 합산 — 요청당 작업량 가드)·`MAX_BODY_BYTES`(2MB, 요청 바디 바이트
 상한 — 파싱 전 전송 계층 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
@@ -85,7 +85,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `config.py` | `ServerConfig` — env 설정·언어별 경로(`model_dir`/`thresholds_path`) |
 | `detect.py` | `detect_lang` — ja·vi **양성 감지** + 미지원 명시. 가나→ja, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi, 그 외→`unsupported`(vi 폴백 안 함). `DETECTORS` (신호,언어) 레지스트리로 확장 — 스크립트 언어 추가는 한 줄. 근거: `docs/reports/language-detection-benchmark.md` |
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
-| `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). bf16 autocast 는 배치(B>1) forward 에만(단건 B=1 은 fp32). 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
+| `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). 추론은 fp32 전용(단건·배치 결정적), 입력은 NFC 정규화. 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 전역 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429 |
 | `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
 | `app.py` | `create_app(registry, config)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub) |
@@ -98,7 +98,8 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 변환 → 임계값 로드 시 자동 적용(graceful — 파일 없으면 raw). 긴 입력은 chunk 분할, 배치 요청(`texts`)은
 언어별로 묶어 전 chunk 를 `[N, max_length]` 한 forward 로 추론하고(B=1 이면
 단건과 동일) 글로벌 offset 으로 병합 — GPU 병렬로 장문/배치에서 가속된다.
-bf16 autocast 는 배치(B>1)에만 켠다(단건은 autocast 오버헤드로 fp32 가 빠름).
+추론은 fp32 전용이라 단건·배치가 같은 커널을 타 배치화가 결과를 바꾸지 않고,
+입력은 NFC 로 정규화한다(NFD span 깨짐 방지).
 추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량·
 정밀도 측정·동결은 `scripts/throughput/`·`docs/reports/server-inference-throughput.md`.
 

@@ -89,5 +89,6 @@ docker/dev/config/.env
 *.bin
 *.safetensors
 
+# 실험 산출물 scratch (휘발). 채택분 metric JSON 만 certified/ 로 복사·커밋.
 results/
 /data/

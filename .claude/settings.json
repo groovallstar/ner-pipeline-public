@@ -6,6 +6,12 @@
       "Bash(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader)",
       "Bash(nvcc --version)",
       "Bash(python -c \"import vllm; print\\(vllm.__version__\\)\")"
+    ],
+    "deny": [
+      "Write(.omc/state/refuter/ack-*)",
+      "Edit(.omc/state/refuter/ack-*)",
+      "Write(certified/**)",
+      "Edit(certified/**)"
     ]
   },
   "hooks": {

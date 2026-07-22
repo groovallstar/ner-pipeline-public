@@ -3,6 +3,12 @@
 ja·vi NER REST API 서버(`src/server/`)의 배치 추론 처리량 최적화(bf16 +
 cross-text 배치 forward)와 동시성 과부하 제어 측정. 관련 이슈: #154.
 
+> **후속 정정(historical)**: 이 리포트가 동결했던 "bf16 배치 default" 결론은
+> 이후 철회됐다 — bf16 은 배치 크기에 따라 span 이 갈려(비결정) fp32 운영점과
+> 어긋나므로, 서빙을 **fp32 전용**으로 고정하고 `NER_SERVER_PRECISION` 옵션·
+> autocast 분기를 제거했다. 아래 처리량·동시성 수치는 유효하나(참고), 정밀도
+> 선택 결론만 무효다. 현행 서빙 동작은 `docs/manual/rest-api-spec.md` 참조.
+
 ## 측정 환경 (동결)
 
 - HW: RTX A6000 (유휴 GPU 격리 — `CUDA_VISIBLE_DEVICES`).

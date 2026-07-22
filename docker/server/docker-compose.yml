@@ -10,7 +10,6 @@ services:
       dockerfile: ./docker/server/Dockerfile
     environment:
       - NER_SERVER_MODEL_ROOT=${NER_SERVER_MODEL_ROOT:-/data/ner}
-      - NER_SERVER_PRECISION=${NER_SERVER_PRECISION:-bf16}
       - NER_SERVER_MAX_LENGTH=${NER_SERVER_MAX_LENGTH:-256}
       - NER_SERVER_MAX_CHARS=${NER_SERVER_MAX_CHARS:-20000}
       - NER_SERVER_MAX_BATCH=${NER_SERVER_MAX_BATCH:-64}
