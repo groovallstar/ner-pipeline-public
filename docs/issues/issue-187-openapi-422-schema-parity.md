@@ -1,7 +1,7 @@
 # issue-187: OpenAPI 422 선언이 실제 에러 봉투와 불일치
 
 - Issue: https://github.com/groovallstar/ner_pipeline/issues/187
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner_pipeline/pull/188
 - 브랜치: `feat/issue-187-openapi-422-schema-parity`
 - 승인일: 2026-07-23
 
