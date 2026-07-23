@@ -164,6 +164,26 @@ def test_invalid_lang_400():
     assert r.json()['error']['status'] == 400
 
 
+def test_openapi_422_declares_error_envelope():
+    """OpenAPI 의 422 선언이 실제 422 응답과 같은 모양이어야 한다.
+
+    선언을 안 덮으면 FastAPI 기본 `HTTPValidationError`(`{"detail":[...]}`)가
+    남아, 봉투로 통일된 실제 응답과 기계 계약이 어긋난다 — `/openapi.json` 으로
+    클라이언트를 생성·검증하는 소비자가 틀린 계약을 받는 지점이다. 참조 이름만
+    보면 모양이 갈려도 통과하므로, 선언한 필드와 실제 응답 필드를 대조한다.
+    """
+    client = _client()
+    spec = client.get('/openapi.json').json()
+    schema = (spec['paths']['/v1/ner']['post']['responses']['422']
+              ['content']['application/json']['schema'])
+    assert schema['$ref'].endswith('/ErrorResponse')
+
+    declared = set(spec['components']['schemas']['ErrorBody']['properties'])
+    actual = client.post('/v1/ner', json={'texts': 5})
+    assert actual.status_code == 422
+    assert set(actual.json()['error']) == declared
+
+
 def test_max_batch_413():
     """배치 개수 초과 → 413 Payload Too Large."""
     cfg = ServerConfig(max_batch=2)
