@@ -49,7 +49,8 @@ src/ner/
 └── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
 src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소비; 상세: src/server/CLAUDE.md)
 ├── __main__.py
-├── app.py             # FastAPI /v1/ner(단일·배치)·/health
+├── app.py             # FastAPI /v1/ner(단일·배치)·/health·/(웹 데모 UI)
+├── static/            # 웹 데모 UI (index.html — 자족적 HTML+vanilla JS, 동일 출처)
 ├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
 ├── config.py          # ServerConfig (환경변수 로드)
 ├── concurrency.py     # ConcurrencyGuard (동시성 세마포어·과부하 429)

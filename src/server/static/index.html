@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개체명 인식(NER) — 일본어·베트남어</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans CJK JP",
+                 "Noto Sans", sans-serif;
+    color: #1f2328; background: #f6f8fa; line-height: 1.6;
+  }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  p.sub { margin: 0 0 1.5rem; color: #656d76; font-size: .9rem; }
+  .card {
+    background: #fff; border: 1px solid #d0d7de; border-radius: 8px;
+    padding: 1rem 1.25rem; margin-bottom: 1rem;
+  }
+  label.field { display: block; font-weight: 600; font-size: .85rem;
+    margin-bottom: .4rem; color: #424a53; }
+  textarea {
+    width: 100%; min-height: 120px; resize: vertical; padding: .6rem .7rem;
+    font-family: inherit; font-size: 1rem; line-height: 1.6;
+    border: 1px solid #d0d7de; border-radius: 6px;
+  }
+  .controls { display: flex; gap: .75rem; align-items: flex-end;
+    margin-top: .85rem; flex-wrap: wrap; }
+  .controls > div { display: flex; flex-direction: column; }
+  select { padding: .5rem .6rem; font-size: .95rem; border: 1px solid #d0d7de;
+    border-radius: 6px; background: #fff; }
+  button {
+    padding: .55rem 1.4rem; font-size: .95rem; font-weight: 600;
+    color: #fff; background: #1f6feb; border: 0; border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { background: #1a5fd0; }
+  button:disabled { background: #8fb3f0; cursor: default; }
+  .status { font-size: .85rem; color: #656d76; margin: 0 0 .6rem; }
+  .status.error { color: #cf222e; font-weight: 600; }
+  .status.warn { color: #9a6700; font-weight: 600; }
+  .output {
+    white-space: pre-wrap; word-break: break-word; font-size: 1.05rem;
+    min-height: 2rem;
+  }
+  .output:empty::before { content: "결과가 여기에 표시됩니다."; color: #a0a8b0; }
+  mark.ent {
+    border-radius: 3px; padding: .05em .1em; border: 1px solid rgba(0,0,0,.12);
+    cursor: help;
+  }
+  mark.ent .lbl {
+    font-size: .6em; font-weight: 700; vertical-align: super;
+    margin-left: .15em; opacity: .75; letter-spacing: .02em;
+  }
+  .legend-title { font-size: .82rem; font-weight: 700; color: #424a53;
+    margin: 1.1rem 0 .5rem; }
+  .legend { display: grid; grid-template-columns: 1fr; gap: .3rem;
+    font-size: .8rem; }
+  .legend .row { display: flex; align-items: baseline; gap: .5rem; }
+  .legend .sw { flex: none; width: .85rem; height: .85rem; border-radius: 3px;
+    border: 1px solid rgba(0,0,0,.15); position: relative; top: .12rem; }
+  .legend code { flex: none; min-width: 6.8em; font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .legend .desc { color: #57606a; }
+  @media (min-width: 640px) {
+    .legend { grid-template-columns: 1fr 1fr; gap: .3rem 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>개체명 인식(NER) <small style="font-weight:400;color:#656d76;">일본어·베트남어</small></h1>
+  <p class="sub">텍스트를 입력하고 추론하면 개체명(인물·지명·조직 등)을 원문 위에
+    라벨별 색상으로 표시합니다. 개체에 마우스를 올리면 유형 설명이 나타납니다.</p>
+
+  <div class="card">
+    <label class="field" for="text">입력 텍스트</label>
+    <textarea id="text" placeholder="예) 織田信長は東京都千代田区に住んでいた。&#10;예) Hà Nội là thủ đô của Việt Nam."></textarea>
+    <div class="controls">
+      <div>
+        <label class="field" for="lang">언어</label>
+        <select id="lang">
+          <option value="auto">자동감지</option>
+          <option value="ja">일본어 (ja)</option>
+          <option value="vi">베트남어 (vi)</option>
+        </select>
+      </div>
+      <button id="run" type="button">추론</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="status" id="status">텍스트를 입력하고 <b>추론</b>을 누르세요.</p>
+    <div class="output" id="output"></div>
+    <h2 class="legend-title">개체 유형</h2>
+    <div class="legend" id="legend"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// canonical 10종 라벨별 색상·설명 맵 (schema: docs/manual/data/canonical-entity-schema.md)
+const LABELS = {
+  PER:         { color: "#ffd6d6", desc: "인물 — 사람 이름(직함·호칭 제외)" },
+  LOC:         { color: "#d6ebff", desc: "지명·주소 — 국가·행정구역·자연지명·주소" },
+  ORG:         { color: "#d6ffd9", desc: "조직·시설 — 기업·기관·팀·역·공항·병원·학교 등" },
+  PROD:        { color: "#fff3c4", desc: "제품·작품 — 시판 물품·창작물·소프트웨어·모델명" },
+  EVT:         { color: "#ffd6f0", desc: "행사·사건 — 행사·전쟁·조약·대회·재해·선거" },
+  DAT:         { color: "#e0d6ff", desc: "날짜 — 연·월·일·기간·상대날짜·시대·요일" },
+  EMAIL:       { color: "#d6fff7", desc: "이메일 — local@domain.TLD 형식" },
+  PHONE:       { color: "#ffe4c4", desc: "전화번호 — 국내·국제 전화번호" },
+  ID_NUM:      { color: "#e8e8e8", desc: "식별번호 — 마이넘버·주민등록번호 등 개인 식별 숫자" },
+  CREDIT_CARD: { color: "#dfe9c4", desc: "신용카드 — 13~19자리 카드 번호" },
+};
+const FALLBACK_COLOR = "#e8e8e8";
+
+const $text = document.getElementById("text");
+const $lang = document.getElementById("lang");
+const $run = document.getElementById("run");
+const $status = document.getElementById("status");
+const $output = document.getElementById("output");
+const $legend = document.getElementById("legend");
+
+// 범례 렌더 — 10종 라벨의 색상 스와치 + 코드 + 한 줄 설명
+for (const [label, info] of Object.entries(LABELS)) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const sw = document.createElement("span");
+  sw.className = "sw";
+  sw.style.background = info.color;
+  const code = document.createElement("code");
+  code.textContent = label;
+  const desc = document.createElement("span");
+  desc.className = "desc";
+  desc.textContent = info.desc;
+  row.append(sw, code, desc);
+  $legend.appendChild(row);
+}
+
+function setStatus(msg, kind) {
+  $status.textContent = msg;
+  $status.className = "status" + (kind ? " " + kind : "");
+}
+
+// 서버 offset 은 code-point(파이썬 str) 인덱스 기준이므로, JS 도 UTF-16
+// 단위가 아니라 code-point 배열로 슬라이스해야 astral 문자(이모지·CJK
+// 확장)에서도 하이라이트 경계가 어긋나지 않는다.
+function renderHighlights(text, entities) {
+  const cp = Array.from(text);
+  const sorted = entities.slice().sort((a, b) => a.start_char - b.start_char);
+  const frag = document.createDocumentFragment();
+  let cursor = 0;
+  for (const e of sorted) {
+    // 방어적: 겹치거나(커서 역행) 비어/역행하거나 범위를 벗어난 span 은
+    // 건너뛴다(NER span 은 비중첩·end>start 전제).
+    if (e.start_char < cursor || e.end_char <= e.start_char
+        || e.end_char > cp.length) continue;
+    if (e.start_char > cursor) {
+      frag.appendChild(
+        document.createTextNode(cp.slice(cursor, e.start_char).join("")));
+    }
+    const info = LABELS[e.label];
+    const mark = document.createElement("mark");
+    mark.className = "ent";
+    mark.style.background = (info && info.color) || FALLBACK_COLOR;
+    // 마우스 오버 시 유형 설명 표시(브라우저 기본 tooltip)
+    mark.title = info ? e.label + " — " + info.desc : e.label;
+    mark.appendChild(
+      document.createTextNode(cp.slice(e.start_char, e.end_char).join("")));
+    const lbl = document.createElement("sub");
+    lbl.className = "lbl";
+    lbl.textContent = e.label;
+    mark.appendChild(lbl);
+    frag.appendChild(mark);
+    cursor = e.end_char;
+  }
+  if (cursor < cp.length) {
+    frag.appendChild(document.createTextNode(cp.slice(cursor).join("")));
+  }
+  $output.replaceChildren(frag);
+}
+
+async function run() {
+  const raw = $text.value;
+  if (!raw.trim()) {
+    setStatus("입력 텍스트가 비어 있습니다.", "warn");
+    $output.replaceChildren();
+    return;
+  }
+  // 서버가 NFC 정규화 텍스트 기준으로 offset 을 내므로 입력도 NFC 로 맞춘다.
+  const text = raw.normalize("NFC");
+  const lang = $lang.value;
+  const body = { text };
+  if (lang !== "auto") body.lang = lang;
+
+  $run.disabled = true;
+  setStatus("추론 중…");
+  try {
+    const res = await fetch("/v1/ner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = (data && data.error && data.error.message) || res.statusText;
+      setStatus("에러 " + res.status + ": " + msg, "error");
+      $output.replaceChildren();
+      return;
+    }
+    if (data.lang === "unsupported") {
+      setStatus("지원하지 않는 언어입니다. 일본어(ja)·베트남어(vi)만 지원합니다. "
+        + "무부호 베트남어·로마자 일본어는 위 셀렉터에서 언어를 직접 지정하세요.",
+        "warn");
+      $output.replaceChildren(document.createTextNode(text));
+      return;
+    }
+    const n = data.entities.length;
+    setStatus("언어: " + data.lang + " · 개체 " + n + "개");
+    renderHighlights(text, data.entities);
+  } catch (err) {
+    setStatus("요청 실패: " + err, "error");
+    $output.replaceChildren();
+  } finally {
+    $run.disabled = false;
+  }
+}
+
+$run.addEventListener("click", run);
+// Ctrl/Cmd+Enter 로 빠르게 추론
+$text.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") run();
+});
+</script>
+</body>
+</html>
