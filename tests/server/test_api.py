@@ -227,3 +227,24 @@ def test_health_no_auth_required():
     cfg = ServerConfig(api_key='secret')
     r = _client(config=cfg).get('/health')
     assert r.status_code == 200
+
+
+def test_ui_page_served():
+    """루트 UI 는 HTML(200, text/html)을 반환하고 핵심 요소를 담는다."""
+    r = _client().get('/')
+    assert r.status_code == 200
+    assert r.headers['content-type'].startswith('text/html')
+    html = r.text
+    assert '<textarea' in html
+    # 동일 출처 fetch 대상·언어 셀렉터 옵션이 페이지에 있어야 한다.
+    assert '/v1/ner' in html
+    for opt in ('value="auto"', 'value="ja"', 'value="vi"'):
+        assert opt in html
+
+
+def test_ui_page_no_auth_required():
+    """UI 페이지는 API-key 설정돼 있어도 인증 없이 접근 가능(헬스와 동일)."""
+    cfg = ServerConfig(api_key='secret')
+    r = _client(config=cfg).get('/')
+    assert r.status_code == 200
+    assert r.headers['content-type'].startswith('text/html')

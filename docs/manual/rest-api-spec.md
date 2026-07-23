@@ -79,6 +79,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 메서드·경로 | 인증 | 설명 |
 |---|---|---|
 | `POST /v1/ner` | API-key(설정 시) | 단일 또는 배치 NER 추론 |
+| `GET /` | 없음 | 내부 개발·데모용 NER 추론 웹 페이지(자족적 HTML, 동일 출처로 `/v1/ner` 호출). **OpenAPI/Swagger 미노출** |
 | `GET /health` | 없음 | 언어별 모델 로드 상태·임계값 존재. **OpenAPI/Swagger 미노출**(운영 헬스체크 전용) |
 | `GET /docs` | 없음 | Swagger UI(FastAPI 자동) |
 | `GET /openapi.json` | 없음 | OpenAPI 스키마(FastAPI 자동) |
@@ -183,6 +184,22 @@ language-detection-benchmark.md`.
 - `thresholds`: `thresholds.json`이 존재해 임계값이 적용되는지(없으면 raw).
 - `status`: 요청된 모든 언어가 `loaded`면 `ok`, 하나라도 미로드면
   `degraded`(로드된 언어가 하나도 없어도 `degraded`).
+
+### `GET /` — 웹 데모 UI
+
+내부 개발·데모용 단일 웹 페이지를 반환한다(자족적 HTML+vanilla JS,
+`src/server/static/index.html`). 서버 프로세스와 **동일 출처**로 서빙되므로
+브라우저가 CORS 없이 `POST /v1/ner`를 직접 호출한다 — 별도 정적 호스팅·빌드
+스텝·신규 의존성이 없다(`python -m server` 하나로 API + UI 동시 제공).
+
+- **입력**: 텍스트 1건 + 언어 셀렉터(`자동감지`/`ja`/`vi`). 수동 선택 시
+  요청에 `lang`을 실어 자동감지를 우회한다(무부호 vi·romaji ja 대응).
+- **출력**: 추출 개체를 원문 위 라벨별 색상 하이라이트로 표시(canonical 10종
+  색상 맵 + 범례). 표시 텍스트를 **NFC 정규화**해 하이라이트 offset이 서버
+  offset과 정합한다. 자동감지 `unsupported`는 안내 문구로 표시한다.
+- **범위**: 하이라이트-only(배치 UI·엔티티 표·JSON 뷰·score 미표시). 인증 없이
+  접근 가능하며(`API_KEY` 설정 시 브라우저 호출 인증은 범위 밖), OpenAPI/Swagger
+  에는 노출하지 않는다.
 
 ## 6. 에러 규격
 
