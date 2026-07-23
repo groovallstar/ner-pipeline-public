@@ -22,6 +22,7 @@ from server.config import SUPPORTED_LANGS, ServerConfig
 from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
 from server.limits import BodySizeLimitMiddleware
+from server.request_log import RequestLogMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,15 @@ def _error(status: int, message: str) -> JSONResponse:
     )
 
 
+def _lang_summary(langs: List[str]) -> str:
+    """배치 로그용 언어 요약 — 중복 제거 후 '+' 결합(예: `ja+vi`)."""
+    seen: List[str] = []
+    for lang in langs:
+        if lang not in seen:
+            seen.append(lang)
+    return '+'.join(seen) if seen else '-'
+
+
 # OpenAPI/Swagger 노출용 — 외부 소비자를 위한 사용법만 담는다. 구현 세부는
 # 핸들러 docstring 에 두고, Swagger 에는 아래 요약·설명만 노출한다.
 _NER_SUMMARY = '텍스트에서 개체명 추출 (일본어·베트남어)'
@@ -158,6 +168,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     # 라우팅·인증보다 앞서 바디 바이트를 bound — 전송 계층 메모리 고갈 가드.
     app.add_middleware(BodySizeLimitMiddleware,
                        max_bytes=config.max_body_bytes)
+    # 요청 로그 미들웨어는 가장 바깥(마지막 add = 최외곽)에 둔다 — 전송 계층
+    # 413 을 포함한 최종 상태·전체 지연을 관측하고 request-id 를 심는다.
+    app.add_middleware(RequestLogMiddleware)
     guard = ConcurrencyGuard(config.max_concurrency, config.max_queue,
                              config.acquire_timeout_s)
 
@@ -200,7 +213,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     async def _unhandled(request: Request, exc: Exception):
         # 미처리 예외(모델 forward 오류 등)를 봉투로 통일하고 내부 예외
         # 메시지·트레이스백은 응답에 노출하지 않는다(서버 로그에만 기록).
-        logger.exception('unhandled error during request')
+        # request-id 를 실어 요청 로그 미들웨어 라인과 상관지을 수 있게 한다.
+        rid = getattr(request.state, 'request_id', '-')
+        logger.exception('unhandled error during request rid=%s', rid)
         return _error(500, 'internal server error')
 
     def _check_text(text: str) -> None:
@@ -225,7 +240,8 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                   'model': ErrorResponse,
                   'description': 'JSON 스키마 검증 실패'}},
               dependencies=[Depends(require_key)])
-    async def ner(req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
+    async def ner(request: Request,
+                  req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
         """단일(`text`) 또는 배치(`texts`) NER 추론.
 
         추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
@@ -249,10 +265,14 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
         if req.text is not None:
             lang = _resolve_one(req.text, req.lang)
             if lang == UNSUPPORTED:
+                request.state.ner_meta = {
+                    'lang': lang, 'batch': 1, 'entities': 0}
                 return {'lang': lang, 'entities': []}
             async with guard:
                 entities = await run_in_threadpool(
                     registry.predict, req.text, lang)
+            request.state.ner_meta = {
+                'lang': lang, 'batch': 1, 'entities': len(entities)}
             return {'lang': lang, 'entities': entities}
 
         assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
@@ -279,6 +299,11 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                     registry.predict_batch, sup_texts, sup_langs)
             for (i, _, lang), e in zip(sup, ents):
                 results[i] = {'lang': lang, 'entities': e}
+        request.state.ner_meta = {
+            'lang': _lang_summary(langs),
+            'batch': len(req.texts),
+            'entities': sum(len(r['entities']) for r in results),
+        }
         return {'results': results}
 
     @app.get('/', response_class=HTMLResponse, include_in_schema=False)
