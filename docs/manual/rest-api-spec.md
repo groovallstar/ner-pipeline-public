@@ -22,10 +22,11 @@ FastAPI가 런타임에 자동 생성하는 OpenAPI 문서(`GET /docs`·`GET
 6. [에러 규격](#6-에러-규격)
 7. [인증](#7-인증)
 8. [동시성·크기 한도](#8-동시성크기-한도)
-9. [엔티티 라벨 셋](#9-엔티티-라벨-셋)
-10. [요청 처리 흐름](#10-요청-처리-흐름)
-11. [사용 예시](#11-사용-예시)
-12. [검증·테스트](#12-검증테스트)
+9. [로깅·요청 추적](#9-로깅요청-추적)
+10. [엔티티 라벨 셋](#10-엔티티-라벨-셋)
+11. [요청 처리 흐름](#11-요청-처리-흐름)
+12. [사용 예시](#12-사용-예시)
+13. [검증·테스트](#13-검증테스트)
 
 ## 1. 개요·책임 경계
 
@@ -71,6 +72,8 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | `NER_SERVER_MAX_QUEUE` | `32` | 대기 큐 깊이 상한(초과 → 429) |
 | `NER_SERVER_ACQUIRE_TIMEOUT_S` | `10.0` | 세마포어 대기 타임아웃 초(초과 → 429) |
 | `NER_SERVER_API_KEY` | (없음) | 설정 시 `X-API-Key` 헤더 검증. 미설정이면 인증 off |
+| `NER_SERVER_LOG_LEVEL` | `INFO` | 루트 로그 레벨. `DEBUG`면 성공 요청까지 요청별 상세로 남는다(§9) |
+| `NER_SERVER_LOG_FILE` | `/tmp/ner-server.log` | 회전 파일 로그 경로(주 1회 회전·직전 1주치 보관). 빈 값이면 stderr만(§9) |
 | `NER_SERVER_HOST` | `0.0.0.0` | 바인드 호스트 |
 | `NER_SERVER_PORT` | `8008` | 바인드 포트 |
 
@@ -132,7 +135,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `label` | string | canonical 엔티티 타입(§9의 10종 중 하나) |
+| `label` | string | canonical 엔티티 타입(§10의 10종 중 하나) |
 | `start_char` | int | 원문 시작 char offset(포함) |
 | `end_char` | int | 원문 끝 char offset(제외) — `text[start_char:end_char]` |
 | `text` | string | 원문에서 잘라낸 표면형 |
@@ -263,7 +266,45 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 수신 바이트 누적으로 거절(우회 차단)해, 대용량 바디를 통째로 버퍼링하는
 메모리 고갈을 막는다. 인증 이전 단계라 비인증 요청도 이 한도에 걸린다.
 
-## 9. 엔티티 라벨 셋
+## 9. 로깅·요청 추적
+
+서버 로그는 **평상시 조용, 필요할 때 상세**를 원칙으로 한다. 성공 요청까지
+상시 남기면 로그량이 처리량에 비례해 늘고, 그 안에서 정작 조치가 필요한
+거절이 묻히기 때문이다.
+
+| 결과 | 레벨 | 남는 내용 |
+|---|---|---|
+| 성공(2xx) | `DEBUG` | 지연·언어·배치 크기·개체 수·request-id. 기본 레벨 `INFO`에선 침묵 |
+| 거절(400·401·413·422·429·503) | `WARNING` | 상태·사유 태그·경로·request-id. 상시 기록 |
+| 미처리 예외(500) | `ERROR` | 트레이스백 + request-id |
+
+거절만 상시 남기는 이유는 그것이 운영에서 실제로 손이 가야 하는 사건이기
+때문이다 — 인증 실패(401)·부하 셰딩(429)·모델 미로드(503)는 클라이언트가
+알려주지 않아도 로그만으로 드러나야 한다. `503`은 5xx지만 서버 결함이 아니라
+거절로 분류한다. `500`의 트레이스백은 로그에만 남고 응답 본문에는 내부
+메시지를 노출하지 않으므로(§6), 원인 추적은 서버 로그가 유일한 경로다.
+
+### 응답 헤더 `X-Request-ID`
+
+모든 응답에 실린다. 요청에 `X-Request-ID`를 실어 보내면 서버가 그 값을 그대로
+에코하므로 호출자 쪽 추적 ID와 서버 로그를 이어 붙일 수 있고, 안 보내면
+서버가 8-hex 값을 생성한다. 장애를 신고할 때 이 값을 함께 전달하면 해당
+요청의 로그 라인을 바로 특정할 수 있다.
+
+### 출력·보관
+
+로그는 stderr로 스트리밍하는 동시에 `NER_SERVER_LOG_FILE`(기본
+`/tmp/ner-server.log`)에 파일로도 남는다. 파일은 **매주 월요일 회전해 직전
+1주치만 보관**하고 그보다 오래된 파일은 자동 삭제한다 — 장기 실행 서버에서
+로그가 디스크를 무한정 먹지 않게 하는 상한이다. 빈 값을 주면 stderr만 쓴다.
+파일 열기에 실패해도(경로 권한 등) 경고 한 줄만 남기고 stderr 로깅으로 계속
+기동한다 — 로그 설정 문제가 서비스 자체를 막지 않게 한 선택이다.
+
+컨테이너의 `/tmp`는 컨테이너-로컬이라 재시작하면 사라진다. 호스트에 보존하려면
+볼륨 마운트 경로로 `NER_SERVER_LOG_FILE`을 바꾼다(스트리밍 로그 자체는
+`docker/server/logs.sh` = `docker logs`로도 본다).
+
+## 10. 엔티티 라벨 셋
 
 `label`은 ja·vi 공통 canonical **10종 평면** 중 하나다.
 
@@ -275,13 +316,14 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 정의·경계 규칙은 단일 출처 `docs/manual/data/canonical-entity-schema.md`
 참조.
 
-## 10. 요청 처리 흐름
+## 11. 요청 처리 흐름
 
 요청이 검증·감지를 거쳐 모델 추론으로, 응답이 canonical span으로 나오기까지.
 
 ```mermaid
 flowchart TD
-    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> BODY{"바디 크기<br/>≤ max_body_bytes?"}
+    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> RID["최외곽 로깅 계층<br/>request-id 부여·응답 헤더 에코<br/>최종 상태·지연 기록"]
+    RID --> BODY{"바디 크기<br/>≤ max_body_bytes?"}
     BODY -->|초과| E413B["413 · 파싱 전"]
     BODY -->|통과| AUTH{"API-key<br/>검증"}
     AUTH -->|불일치| E401["401"]
@@ -303,7 +345,7 @@ flowchart TD
 단건과 결과 동일 — behavior-invariant). 서빙은 fp32라 단건·배치가 같은
 커널을 타 배치화가 결과를 바꾸지 않는다(결정적). 입력은 NFC로 정규화한다.
 
-## 11. 사용 예시
+## 12. 사용 예시
 
 ```bash
 # 단일(자동 감지) — ja
@@ -341,7 +383,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 내부 소비자용 최소 파이썬 클라이언트는 `server.scripts.example_client`
 (`NERClient`)를 레퍼런스로 삼는다.
 
-## 12. 검증·테스트
+## 13. 검증·테스트
 
 - **계약·전송 pytest**: `uv run pytest tests/server/` — stub registry로 모델
   없이 CI 가능. 모델 통합(offset 정합·ja parity)은 `/data` 있을 때만 실행
