@@ -15,9 +15,10 @@ ja·vi NER REST API 서버의 관측성 공백을 메운다. 기존 로깅은 **
 ## 범위
 
 - 포함: 거절 경로 로깅, 요청 로그 미들웨어(request-id·지연·lang·batch·
-  entities), 로그 레벨 env 스위치, uvicorn 기본 액세스 로그 대체.
-- 제외: 구조화(JSON)·파일 로깅, `/metrics`(Prometheus), 슬로우-리퀘스트
-  임계값 로깅, `create_app` 임베드 로깅 초기화(전부 별도 트랙).
+  entities), 로그 레벨 env 스위치, uvicorn 기본 액세스 로그 대체, 주간 회전
+  파일 로그(/tmp, 일주일 보관).
+- 제외: 구조화(JSON) 로깅, `/metrics`(Prometheus), 슬로우-리퀘스트 임계값
+  로깅, `create_app` 임베드 로깅 초기화(전부 별도 트랙).
 
 ## 로그 정책 (합의: "기본 조용 + 레벨 스위치")
 
@@ -40,6 +41,8 @@ ja·vi NER REST API 서버의 관측성 공백을 메운다. 기존 로깅은 **
   `NER_SERVER_LOG_LEVEL=DEBUG` 로 상세 on.
 - [x] **AC4 무회귀·문서**: 기존 계약·전송 불변, `tests/server` green, ruff
   green, `src/server/CLAUDE.md`·`docker/server/{.env.example,compose}` 갱신.
+- [x] **AC5 파일 로그**: `NER_SERVER_LOG_FILE`(기본 `/tmp/ner-server.log`)에
+  파일 로그, 매주 회전(월요일)해 직전 1주치만 보관·오래된 파일 자동 삭제.
 
 ## 설계 결정
 
@@ -56,6 +59,10 @@ ja·vi NER REST API 서버의 관측성 공백을 메운다. 기존 로깅은 **
   `reason=model_unavailable` 로 남긴다. 500(진짜 결함)만 "failed".
 - **레벨 정책으로 로그량 억제**: 성공을 DEBUG 로 두어 기본 INFO 운영에선
   시작 로그 + 경고/오류만 보이게 한다(요청당 라인 폭주 방지).
+- **파일 로그 = 주간 회전**: stderr 와 함께 `NER_SERVER_LOG_FILE` 로 파일에도
+  남기되 `TimedRotatingFileHandler(when='W0', backupCount=1)` 로 매주 회전해
+  일주일치만 보관한다(오래된 파일 자동 삭제 — /tmp 무한 증식 방지). 파일 열기
+  실패는 stderr 로깅을 유지한 채 경고만(graceful).
 
 ## 변경 요약
 
@@ -63,21 +70,27 @@ ja·vi NER REST API 서버의 관측성 공백을 메운다. 기존 로깅은 **
   `_REASONS` 매핑 + `_request_id`/`_emit`.
 - `src/server/app.py`: 미들웨어 등록, `ner` 핸들러 `request: Request` +
   `request.state.ner_meta` 기록, `_unhandled` rid 상관, `_lang_summary`.
-- `src/server/config.py`·`__main__.py`: `log_level`(env `NER_SERVER_LOG_LEVEL`),
-  `uvicorn.run(access_log=False)`.
-- `docker/server/{.env.example,docker-compose.yml}`: `NER_SERVER_LOG_LEVEL` 전달.
+- `src/server/config.py`·`__main__.py`: `log_level`·`log_file`(env
+  `NER_SERVER_LOG_LEVEL`·`NER_SERVER_LOG_FILE`), `uvicorn.run(access_log=
+  False)`, `_configure_logging`(stderr + 주간 회전 파일 핸들러).
+- `docker/server/{.env.example,docker-compose.yml}`: `NER_SERVER_LOG_LEVEL`·
+  `NER_SERVER_LOG_FILE` 전달.
 - `src/server/CLAUDE.md`: 로깅·관측성 섹션 + env/파일 표.
 - `tests/server/test_request_log.py`(신규): 11 tests.
 
 ## 검증
 
-- 테스트: `uv run pytest tests/server/ -m "not live"` → **91 passed**(신규 11),
+- 테스트: `uv run pytest tests/server/ -m "not live"` → **93 passed**(신규 13),
   ruff green.
 - 스모크(육안): 성공 DEBUG(`status=200 latency_ms=.. lang=ja batch=1
   entities=1 rid=..`)·거절 WARNING(`reason=payload_too_large`/`model_unavailable`)
-  ·`X-Request-ID` 에코가 설계와 일치. scope 공유 meta 전달 정상.
+  ·`X-Request-ID` 에코가 설계와 일치. scope 공유 meta 전달 정상. 파일 로그는
+  `TimedRotatingFileHandler`(when=W0·backupCount=1)로 stderr 와 동일 내용 기록 확인.
 
 ## 참고 — 로그 출력 경로
 
-로그는 **stderr(콘솔) 스트리밍**(파일 미출력). 컨테이너는 `docker/server/
-logs.sh`(= `docker logs`), 로컬은 실행 터미널. 파일·구조화 로깅은 별도 트랙.
+로그는 **stderr 스트리밍 + 파일** 양쪽에 남긴다(`NER_SERVER_LOG_FILE`, 기본
+`/tmp/ner-server.log`, 주간 회전·일주일 보관·빈 값이면 stderr만). 컨테이너는
+`docker/server/logs.sh`(= `docker logs`)로 stderr 를 보고, 파일은 컨테이너-로컬
+`/tmp`(재시작 시 휘발 — 호스트에서 보려면 마운트 경로로 `LOG_FILE` 지정).
+구조화(JSON)·`/metrics` 는 별도 트랙.

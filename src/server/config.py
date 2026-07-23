@@ -31,6 +31,7 @@ class ServerConfig:
     host: str = '0.0.0.0'
     port: int = 8008
     log_level: str = 'INFO'        # 루트 로그 레벨(DEBUG 로 요청별 상세 켬)
+    log_file: str = '/tmp/ner-server.log'  # 회전 파일 로그 경로(빈 값=stderr만)
 
     @classmethod
     def from_env(cls) -> 'ServerConfig':
@@ -58,6 +59,8 @@ class ServerConfig:
             host=os.environ.get('NER_SERVER_HOST', '0.0.0.0'),
             port=_int('NER_SERVER_PORT', 8008),
             log_level=os.environ.get('NER_SERVER_LOG_LEVEL', 'INFO'),
+            log_file=os.environ.get(
+                'NER_SERVER_LOG_FILE', '/tmp/ner-server.log'),
         )
 
     def model_dir(self, lang: str) -> str:

@@ -146,6 +146,49 @@ def test_reason_table_pins_overload_and_unavailable():
     assert _REASONS[503] == 'model_unavailable'
 
 
+# --- 파일 로그 (NER_SERVER_LOG_FILE) ---
+
+def test_file_logging_writes(tmp_path):
+    """log_file 설정 시 로그가 회전 파일에도 기록된다."""
+    from server import __main__ as entry
+    log_file = tmp_path / 'ner.log'
+    cfg = ServerConfig(log_level='INFO', log_file=str(log_file))
+    with _restored_root_handlers():
+        entry._configure_logging(cfg)
+        logging.getLogger(_MW_LOGGER).warning('probe rid=zzz')
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        assert log_file.exists()
+        assert 'probe rid=zzz' in log_file.read_text(encoding='utf-8')
+
+
+def test_file_logging_disabled_when_empty():
+    """빈 log_file 이면 파일 핸들러를 추가하지 않는다(stderr 만)."""
+    from server import __main__ as entry
+    root = logging.getLogger()
+    before = list(root.handlers)
+    with _restored_root_handlers():
+        entry._configure_logging(ServerConfig(log_file=''))
+        added = [h for h in root.handlers if h not in before]
+        assert not any(isinstance(h, logging.FileHandler) for h in added)
+
+
+class _restored_root_handlers:
+    """블록 동안 루트에 추가된 핸들러를 종료 시 제거(테스트 오염 방지)."""
+
+    def __enter__(self):
+        self._before = list(logging.getLogger().handlers)
+        return self
+
+    def __exit__(self, *exc):
+        root = logging.getLogger()
+        for handler in list(root.handlers):
+            if handler not in self._before:
+                root.removeHandler(handler)
+                handler.close()
+        return False
+
+
 def _one(caplog, name):
     """지정 로거의 유일한 레코드를 돌려준다(정확히 1건 가정)."""
     recs = [rec for rec in caplog.records if rec.name == name]

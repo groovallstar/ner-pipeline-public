@@ -7,12 +7,44 @@
 
 import argparse
 import logging
+import logging.handlers
+import os
 
 import uvicorn
 
 from server.app import create_app
 from server.config import ServerConfig
 from server.inference import ModelRegistry
+
+_LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
+
+
+def _configure_logging(config: ServerConfig) -> None:
+    """루트 로거 구성 — stderr + (설정 시) 회전 파일 핸들러.
+
+    파일 로그는 `NER_SERVER_LOG_FILE`(기본 `/tmp/ner-server.log`)에 남기고,
+    매주 회전(TimedRotating, 월요일 기준)해 직전 1주치만 보관하고 그보다
+    오래된 파일은 자동 삭제한다 — /tmp 에 로그가 무한정 쌓이지 않게 일주일
+    단위로 정리. 빈 값이면 stderr 만. 파일 열기 실패(경로 권한 등)는 stderr
+    로깅을 유지한 채 경고만 낸다 — 파일 로그 실패가 서버 기동을 막지 않게.
+    """
+    logging.basicConfig(level=config.log_level.upper(), format=_LOG_FORMAT)
+    if not config.log_file:
+        return
+    try:
+        directory = os.path.dirname(config.log_file)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        # when='W0' interval=1 → 매주 월요일 회전, backupCount=1 → 직전 1주치
+        # 보관 후 자동 삭제(일주일 단위 정리). 크기 기반이 아니라 시간 기반.
+        handler = logging.handlers.TimedRotatingFileHandler(
+            config.log_file, when='W0', interval=1, backupCount=1,
+            encoding='utf-8')
+        handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+        logging.getLogger().addHandler(handler)
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            'file logging disabled (%s): %s', config.log_file, exc)
 
 
 def main() -> None:
@@ -29,9 +61,7 @@ def main() -> None:
     config.port = args.port
     config.model_root = args.model_root
 
-    logging.basicConfig(
-        level=config.log_level.upper(),
-        format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    _configure_logging(config)
 
     registry = ModelRegistry.load(config)
     app = create_app(registry, config)

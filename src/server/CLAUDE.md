@@ -20,7 +20,8 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 상한 — 파싱 전 전송 계층 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
 `MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
 초)·`API_KEY`(미설정 시 인증 off)·`LOG_LEVEL`(INFO, `DEBUG` 로 요청별 상세
-켬)·`HOST`·`PORT`.
+켬)·`LOG_FILE`(주간 회전 파일 로그 경로·일주일 보관, 기본
+`/tmp/ner-server.log`·빈 값=stderr만)·`HOST`·`PORT`.
 
 컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
 라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
@@ -125,6 +126,14 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 레벨은 `NER_SERVER_LOG_LEVEL`(기본 INFO)로 조정한다 — 요청별 상세가 필요하면
 `DEBUG`. uvicorn 기본 액세스 로그는 꺼서(`access_log=False`) 요청 라인을
 `RequestLogMiddleware` 가 단독 소유한다(요청당 이중 로그 방지).
+
+**출력** — 로그는 stderr 로 스트리밍하고(컨테이너는 `docker/server/logs.sh`
+= `docker logs`, 로컬은 실행 터미널), 동시에 `NER_SERVER_LOG_FILE`(기본
+`/tmp/ner-server.log`)에 파일로도 남긴다. 파일은 **매주 회전(월요일)해 직전
+1주치만 보관**하고 오래된 파일은 자동 삭제한다(TimedRotating, `__main__.
+_configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr 로깅을
+유지한 채 경고만 낸다. 컨테이너 안 `/tmp` 는 컨테이너-로컬(재시작 시 휘발)이라
+호스트에서 보려면 볼륨 마운트 경로로 `LOG_FILE` 을 바꾼다.
 
 ## 테스트·검증
 
