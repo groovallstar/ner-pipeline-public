@@ -30,12 +30,14 @@ def main() -> None:
     config.model_root = args.model_root
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=config.log_level.upper(),
         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
     registry = ModelRegistry.load(config)
     app = create_app(registry, config)
-    uvicorn.run(app, host=config.host, port=config.port)
+    # access_log=False: 요청당 액세스 로그는 RequestLogMiddleware 가 소유한다
+    # (이중 로그 방지). 성공 요청은 DEBUG 라 기본 INFO 에선 조용하다.
+    uvicorn.run(app, host=config.host, port=config.port, access_log=False)
 
 
 if __name__ == '__main__':

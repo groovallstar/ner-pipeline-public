@@ -19,7 +19,8 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 배치 char 합산 — 요청당 작업량 가드)·`MAX_BODY_BYTES`(2MB, 요청 바디 바이트
 상한 — 파싱 전 전송 계층 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
 `MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
-초)·`API_KEY`(미설정 시 인증 off)·`HOST`·`PORT`.
+초)·`API_KEY`(미설정 시 인증 off)·`LOG_LEVEL`(INFO, `DEBUG` 로 요청별 상세
+켬)·`HOST`·`PORT`.
 
 컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
 라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
@@ -89,6 +90,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). 추론은 fp32 전용(단건·배치 결정적), 입력은 NFC 정규화. 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 전역 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429 |
 | `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
+| `request_log.py` | `RequestLogMiddleware`(순수 ASGI, 최외곽) — 요청별 request-id 생성·`X-Request-ID` 에코, 지연·결과를 한 줄로. 성공 2xx→DEBUG(기본 침묵), 거절 4xx·503→WARNING(사유 태그). 핸들러가 `request.state.ner_meta`(lang·batch·entities)를 채워 성공 로그에 실린다 |
 | `app.py` | `create_app(registry, config)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응 |
 | `__main__.py` | uvicorn 기동 진입점 |
@@ -104,6 +106,25 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 입력은 NFC 로 정규화한다(NFD span 깨짐 방지).
 추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량·
 정밀도 측정·동결은 `scripts/throughput/`·`docs/reports/server-inference-throughput.md`.
+
+## 로깅·관측성
+
+요청 로깅은 **평상시 조용, 필요할 때 상세**를 원칙으로 한다(로그량 억제,
+`request_log.py`).
+
+- **성공(2xx)** → DEBUG 한 줄(`request status=200 latency_ms=.. lang=..
+  batch=.. entities=.. rid=..`). 기본 레벨 INFO 에선 침묵한다.
+- **거절(400·401·413·422·429·503)** → WARNING 한 줄(`request rejected
+  status=.. reason=.. path=.. rid=..`). 상시 남아 부하 셰딩·인증 실패가 보인다.
+  503(모델 미로드)은 5xx 지만 서버 결함이 아니라 거절로 분류한다.
+- **미처리 예외(500)** → 트레이스백을 ERROR 로(rid 포함, `app._unhandled`).
+  요약 라인은 중복 방지로 생략(예외는 send 없이 전파돼 미들웨어 경로를 안 탄다).
+- 모든 응답에 `X-Request-ID` 헤더를 실어 로그 라인과 상관지을 수 있다(수신
+  헤더가 있으면 에코, 없으면 8-hex 생성).
+
+레벨은 `NER_SERVER_LOG_LEVEL`(기본 INFO)로 조정한다 — 요청별 상세가 필요하면
+`DEBUG`. uvicorn 기본 액세스 로그는 꺼서(`access_log=False`) 요청 라인을
+`RequestLogMiddleware` 가 단독 소유한다(요청당 이중 로그 방지).
 
 ## 테스트·검증
 

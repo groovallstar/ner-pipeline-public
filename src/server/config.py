@@ -30,6 +30,7 @@ class ServerConfig:
     api_key: Optional[str] = None  # None 이면 인증 비활성
     host: str = '0.0.0.0'
     port: int = 8008
+    log_level: str = 'INFO'        # 루트 로그 레벨(DEBUG 로 요청별 상세 켬)
 
     @classmethod
     def from_env(cls) -> 'ServerConfig':
@@ -56,6 +57,7 @@ class ServerConfig:
             api_key=os.environ.get('NER_SERVER_API_KEY') or None,
             host=os.environ.get('NER_SERVER_HOST', '0.0.0.0'),
             port=_int('NER_SERVER_PORT', 8008),
+            log_level=os.environ.get('NER_SERVER_LOG_LEVEL', 'INFO'),
         )
 
     def model_dir(self, lang: str) -> str:
