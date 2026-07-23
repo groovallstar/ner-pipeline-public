@@ -8,11 +8,12 @@ canonical 형식. 핸들러는 무상태 — 모든 가변 상태는 주입된 r
 
 import logging
 import secrets
+from pathlib import Path
 from typing import List, Optional, Union
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -23,6 +24,18 @@ from server.inference import ModelUnavailable
 from server.limits import BodySizeLimitMiddleware
 
 logger = logging.getLogger(__name__)
+
+# 웹 데모 UI — 임포트 시 1회 읽어 재사용한다. 서버와 동일 출처로 서빙되므로
+# 브라우저는 CORS 없이 /v1/ner 를 직접 호출한다(내부 개발·데모용). 자산
+# 부재·읽기 실패는 폴백으로 흡수해 코어 API(/v1/ner·/health) 부팅을 막지 않는다.
+try:
+    _UI_HTML = (
+        Path(__file__).resolve().parent / 'static' / 'index.html'
+    ).read_text(encoding='utf-8')
+except OSError:
+    logger.warning('demo UI asset not found; serving placeholder at /')
+    _UI_HTML = ('<!doctype html><meta charset="utf-8">'
+                '<p>NER demo UI is unavailable.</p>')
 
 
 class NERRequest(BaseModel):
@@ -246,6 +259,15 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
             for (i, _, lang), e in zip(sup, ents):
                 results[i] = {'lang': lang, 'entities': e}
         return {'results': results}
+
+    @app.get('/', response_class=HTMLResponse, include_in_schema=False)
+    def ui():
+        """내부 개발·데모용 NER 추론 웹 페이지(자족적 HTML, 인증 없음).
+
+        동일 출처로 /v1/ner 를 호출하는 vanilla JS 페이지를 그대로 반환한다.
+        API 스키마엔 노출하지 않는다(JSON API 가 아니라 브라우저 UI).
+        """
+        return _UI_HTML
 
     @app.get('/health', include_in_schema=False)
     def health():
