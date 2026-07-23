@@ -75,6 +75,24 @@ class BatchResponse(BaseModel):
     results: List[BatchItem]
 
 
+class ErrorBody(BaseModel):
+    """에러 봉투 내용 — 상태코드와 사람이 읽는 한 줄 사유."""
+
+    status: int
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    """서버가 판정하는 모든 에러의 공통 봉투(`_error` 가 내는 형태).
+
+    OpenAPI 의 422 선언을 이 모델로 덮기 위해 존재한다 — 선언을 안 덮으면
+    FastAPI 기본 `HTTPValidationError`(`{"detail": [...]}`)가 남아, 봉투로
+    통일된 실제 응답과 기계 계약이 어긋난다.
+    """
+
+    error: ErrorBody
+
+
 def _error(status: int, message: str) -> JSONResponse:
     """구조화 에러 응답 `{"error": {...}}`."""
     return JSONResponse(
@@ -203,6 +221,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
               summary=_NER_SUMMARY,
               description=_NER_DESCRIPTION,
               response_model=Union[SingleResponse, BatchResponse],
+              responses={422: {
+                  'model': ErrorResponse,
+                  'description': 'JSON 스키마 검증 실패'}},
               dependencies=[Depends(require_key)])
     async def ner(req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
         """단일(`text`) 또는 배치(`texts`) NER 추론.
