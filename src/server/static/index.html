@@ -47,6 +47,8 @@
     min-height: 2rem;
   }
   .output:empty::before { content: "결과가 여기에 표시됩니다."; color: #a0a8b0; }
+  .gloss { white-space: pre-wrap; word-break: break-word; font-size: 1.05rem;
+    min-height: 1.5rem; }
   mark.ent {
     border-radius: 3px; padding: .05em .1em; border: 1px solid rgba(0,0,0,.12);
     cursor: help;
@@ -98,6 +100,16 @@
     <h2 class="legend-title">개체 유형</h2>
     <div class="legend" id="legend"></div>
   </div>
+
+  <div class="card">
+    <div class="controls">
+      <button id="translate" type="button" disabled>한국어 번역 보기</button>
+    </div>
+    <p class="status" id="glossStatus" style="margin-top:.7rem;">추론 후 원문을
+      한국어로 번역해 볼 수 있습니다(일본어·베트남어). 전화·카드 등 개인정보는
+      원문 그대로 보존됩니다.</p>
+    <div class="gloss" id="gloss"></div>
+  </div>
 </main>
 
 <script>
@@ -124,6 +136,45 @@ const $run = document.getElementById("run");
 const $status = document.getElementById("status");
 const $output = document.getElementById("output");
 const $legend = document.getElementById("legend");
+const $translate = document.getElementById("translate");
+const $glossStatus = document.getElementById("glossStatus");
+const $gloss = document.getElementById("gloss");
+
+// 마지막 추론 결과 — 번역은 이 원문·언어·개체(PII span 마스킹용)를 재사용한다.
+let lastResult = null;
+// 페이지 로드 시 1회 확인하는 번역 백엔드(vLLM) 가용 여부. 미가용이면 번역
+// 버튼은 계속 비활성이다(폴링하지 않는다).
+let translateAvailable = false;
+const GLOSS_HINT = "추론 후 원문을 한국어로 번역해 볼 수 있습니다"
+  + "(일본어·베트남어). 전화·카드 등 개인정보는 원문 그대로 보존됩니다.";
+const GLOSS_UNAVAILABLE = "번역 백엔드(vLLM)를 사용할 수 없어 번역 기능이 "
+  + "비활성화되었습니다.";
+
+function resetGloss() {
+  lastResult = null;
+  $translate.disabled = true;
+  $gloss.replaceChildren();
+  if (translateAvailable) {
+    $glossStatus.textContent = GLOSS_HINT;
+    $glossStatus.className = "status";
+  } else {
+    $glossStatus.textContent = GLOSS_UNAVAILABLE;
+    $glossStatus.className = "status warn";
+  }
+}
+
+// 페이지 로드 시 딱 1회 번역 가용성을 확인한다(폴링 아님). vLLM 백엔드가
+// 살아 있으면 이후 추론 결과가 나올 때 번역 버튼을 켤 수 있다.
+async function checkTranslateAvailable() {
+  try {
+    const res = await fetch("/v1/translate/status");
+    const data = await res.json().catch(() => null);
+    translateAvailable = !!(data && data.available);
+  } catch (_err) {
+    translateAvailable = false;
+  }
+  resetGloss();
+}
 
 // 범례 렌더 — 10종 라벨의 색상 스와치 + 코드 + 한 줄 설명
 for (const [label, info] of Object.entries(LABELS)) {
@@ -185,6 +236,7 @@ function renderHighlights(text, entities) {
 }
 
 async function run() {
+  resetGloss();
   const raw = $text.value;
   if (!raw.trim()) {
     setStatus("입력 텍스트가 비어 있습니다.", "warn");
@@ -222,6 +274,10 @@ async function run() {
     const n = data.entities.length;
     setStatus("언어: " + data.lang + " · 개체 " + n + "개");
     renderHighlights(text, data.entities);
+    // 번역은 방금 결과의 원문·감지 언어·개체(PII span)를 재사용한다.
+    lastResult = { text, lang: data.lang, entities: data.entities };
+    // 번역 백엔드가 가용할 때만 버튼을 켠다(로드 시 1회 확인 결과).
+    $translate.disabled = !translateAvailable;
   } catch (err) {
     setStatus("요청 실패: " + err, "error");
     $output.replaceChildren();
@@ -230,7 +286,72 @@ async function run() {
   }
 }
 
+// 클라이언트 측 요청 타임아웃(ms) — 서버 번역 타임아웃(NER_SERVER_TRANSLATE_
+// TIMEOUT_S, 기본 30s)보다 길게 잡아, 서버가 자체 503 을 먼저 내게 하고 이건
+// 서버·네트워크 무응답에 대한 백스톱으로만 동작하게 한다.
+const TRANSLATE_TIMEOUT_MS = 45000;
+
+// 온디맨드 번역 — 마지막 추론 결과의 원문을 한국어로 번역해 글로스로 표시한다.
+// PII span 을 함께 넘겨 서버가 마스킹-복원으로 개인정보를 원문 그대로 보존한다.
+async function translate() {
+  if (!lastResult) return;
+  $translate.disabled = true;
+  $glossStatus.textContent = "번역 중…";
+  $glossStatus.className = "status";
+  $gloss.replaceChildren();
+  // 무응답 백스톱: 시간 초과 시 요청을 취소한다.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TRANSLATE_TIMEOUT_MS);
+  try {
+    const res = await fetch("/v1/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: lastResult.text,
+        lang: lastResult.lang,
+        spans: lastResult.entities,
+      }),
+      signal: ctrl.signal,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status === 503) {
+        // 로드 시엔 가용했으나 클릭 시점엔 vLLM 백엔드가 사라진 경우 —
+        // 가용 플래그를 내려 버튼을 계속 비활성으로 둔다(재클릭 방지).
+        translateAvailable = false;
+        $glossStatus.textContent = GLOSS_UNAVAILABLE;
+      } else {
+        const msg =
+          (data && data.error && data.error.message) || res.statusText;
+        $glossStatus.textContent = "번역 실패 " + res.status + ": " + msg;
+      }
+      $glossStatus.className = "status warn";
+      return;
+    }
+    $glossStatus.textContent = "한국어 번역";
+    $glossStatus.className = "status";
+    $gloss.replaceChildren(document.createTextNode(data.translation || ""));
+  } catch (err) {
+    // AbortError = 클라이언트 타임아웃(무응답 백스톱). 그 외는 네트워크 오류.
+    if (err && err.name === "AbortError") {
+      $glossStatus.textContent = "번역 시간이 초과되었습니다. 잠시 후 다시 "
+        + "시도해 주세요.";
+      $glossStatus.className = "status warn";
+    } else {
+      $glossStatus.textContent = "번역 요청 실패: " + err;
+      $glossStatus.className = "status error";
+    }
+  } finally {
+    clearTimeout(timer);
+    // 백엔드가 사라졌으면(translateAvailable=false) 버튼을 다시 켜지 않는다.
+    $translate.disabled = !translateAvailable || lastResult === null;
+  }
+}
+
 $run.addEventListener("click", run);
+$translate.addEventListener("click", translate);
+// 페이지 로드 시 1회 번역 가용성 확인.
+checkTranslateAvailable();
 // Ctrl/Cmd+Enter 로 빠르게 추론
 $text.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") run();

@@ -23,6 +23,7 @@ from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
 from server.limits import BodySizeLimitMiddleware
 from server.request_log import RequestLogMiddleware
+from server.translate import TranslationUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,25 @@ class BatchResponse(BaseModel):
     """배치 응답 — 입력 순서와 1:1."""
 
     results: List[BatchItem]
+
+
+class TranslateRequest(BaseModel):
+    """번역 요청 — 원문 `text` + `lang`(ja/vi) + `/v1/ner` 결과 `spans`.
+
+    호출자(웹 UI)가 `/v1/ner` 에서 받은 엔티티를 그대로 넘긴다. 그중 PII
+    라벨만 마스킹 대상이며, 나머지는 무시된다(고유명사는 음차).
+    """
+
+    text: str
+    lang: str
+    spans: List[Span] = []
+
+
+class TranslateResponse(BaseModel):
+    """번역 응답 — lang + 한국어 글로스."""
+
+    lang: str
+    translation: str
 
 
 class ErrorBody(BaseModel):
@@ -153,11 +173,14 @@ _NER_BODY_EXAMPLES = {
 }
 
 
-def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
+def create_app(registry, config: Optional[ServerConfig] = None,
+               translator=None) -> FastAPI:
     """registry(추론기)와 config 로 FastAPI 앱을 구성한다.
 
     registry 는 `predict(text, lang)` / `health()` 를 제공하는
     객체면 된다(실모델 또는 테스트 stub). config 미지정 시 기본값.
+    translator 는 `translate(text, lang, spans)` 를 가진 객체(또는 None) —
+    None 이면 `/v1/translate` 는 503(번역 비활성)을 낸다.
     """
     config = config or ServerConfig()
     # defaultModelsExpandDepth=-1 → Swagger UI 하단 Schemas(모델 목록) 섹션을
@@ -305,6 +328,51 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
             'entities': sum(len(r['entities']) for r in results),
         }
         return {'results': results}
+
+    # 웹 데모 UI 전용 — 외부 소비자용 OpenAPI 명세(=/v1/ner)에 노출하지 않는다
+    # (include_in_schema=False). `/v1/ner` 계약과 독립.
+    @app.post('/v1/translate',
+              response_model=TranslateResponse,
+              dependencies=[Depends(require_key)],
+              include_in_schema=False)
+    async def translate(req: TranslateRequest = Body(...)):
+        """마스킹-복원 번역. 추론과 독립이라 NER guard 를 공유하지 않는다.
+
+        translator 미주입(비활성) 시 503. lang 은 ja/vi 만 허용하고, 텍스트
+        크기는 NER 과 동일 상한을 재사용한다. 백엔드 호출 실패는 503 으로
+        graceful degrade — 호출 측(UI)은 글로스를 생략하고 NER 은 그대로 둔다.
+        """
+        if translator is None:
+            raise HTTPException(
+                status_code=503, detail='translation is not enabled')
+        if req.lang not in SUPPORTED_LANGS:
+            raise HTTPException(
+                status_code=400, detail=f"unsupported lang '{req.lang}'")
+        _check_text(req.text)
+        spans = [s.model_dump() for s in req.spans]
+        try:
+            result = await run_in_threadpool(
+                translator.translate, req.text, req.lang, spans)
+        except ValueError:
+            # 비정상 span(겹침·범위 밖) — 클라이언트 계약 위반.
+            raise HTTPException(status_code=400, detail='invalid spans')
+        except TranslationUnavailable:
+            raise HTTPException(
+                status_code=503, detail='translation backend unavailable')
+        return {'lang': req.lang, 'translation': result.translation}
+
+    @app.get('/v1/translate/status', include_in_schema=False)
+    async def translate_status():
+        """번역 가용성 — 웹 UI 가 페이지 로드 시 1회 조회해 버튼을 켠다.
+
+        `enabled` = 서버 번역 토글. `available` = 토글 ON + 백엔드(vLLM)
+        liveness 확인 성공. 폴링용이 아니라 로드 1회용이며, OpenAPI 에는
+        노출하지 않는다(웹 UI 전용).
+        """
+        if translator is None:
+            return {'enabled': False, 'available': False}
+        available = await run_in_threadpool(translator.available)
+        return {'enabled': True, 'available': available}
 
     @app.get('/', response_class=HTMLResponse, include_in_schema=False)
     def ui():
