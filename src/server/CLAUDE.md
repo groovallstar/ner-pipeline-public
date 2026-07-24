@@ -21,7 +21,10 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 `MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
 초)·`API_KEY`(미설정 시 인증 off)·`LOG_LEVEL`(INFO, `DEBUG` 로 요청별 상세
 켬)·`LOG_FILE`(주간 회전 파일 로그 경로·일주일 보관, 기본
-`/tmp/ner-server.log`·빈 값=stderr만)·`HOST`·`PORT`.
+`/tmp/ner-server.log`·빈 값=stderr만)·`HOST`·`PORT`. 웹 데모 번역(additive,
+기본 비활성): `TRANSLATE_ENABLED`(false)·`TRANSLATE_BASE_URL`
+(`http://localhost:8081/v1`)·`TRANSLATE_MODEL`(활성 시 필수)·`TRANSLATE_API_KEY`
+·`TRANSLATE_TIMEOUT_S`(30).
 
 컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
 라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
@@ -31,7 +34,9 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 엔드포인트 | 설명 |
 |---|---|
 | `POST /v1/ner` | 단일 `{text, lang?}` 또는 배치 `{texts:[...], lang?}`. `lang` 생략 시 텍스트별 자동감지. 신뢰도 임계값은 모델 로드 시 자동 적용 |
-| `GET /` | 내부 개발·데모용 웹 UI(자족적 HTML, 동일 출처로 `/v1/ner` 호출·CORS 불필요). 인증·Swagger 미노출 |
+| `POST /v1/translate` | **웹 데모 전용**(OpenAPI 미노출) — `{text, lang, spans}`(spans=`/v1/ner` 결과)를 한국어로 번역. PII 는 마스킹-복원으로 원문 그대로 보존, 고유명사는 한글 음차. 기본 비활성→503(`NER_SERVER_TRANSLATE_*` 로 활성). `/v1/ner` 계약과 독립 |
+| `GET /v1/translate/status` | **웹 데모 전용**(OpenAPI 미노출) — `{enabled, available}`. `available` 은 토글 ON + vLLM 백엔드 liveness. UI 가 페이지 로드 시 1회 조회해 번역 버튼을 켜고, 미가용이면 계속 끈다(폴링 없음) |
+| `GET /` | 내부 개발·데모용 웹 UI(자족적 HTML, 동일 출처로 `/v1/ner`·`/v1/translate` 호출·CORS 불필요). 인증·Swagger 미노출 |
 | `GET /health` | 언어별 모델 로드 상태 + thresholds 존재 여부(인증 없음) |
 
 응답 span 은 canonical `{label, start_char, end_char, text}`
@@ -92,7 +97,8 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `concurrency.py` | `ConcurrencyGuard`(async) — 전역 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429 |
 | `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
 | `request_log.py` | `RequestLogMiddleware`(순수 ASGI, 최외곽) — 요청별 request-id 생성·`X-Request-ID` 에코, 지연·결과를 한 줄로. 성공 2xx→DEBUG(기본 침묵), 거절 4xx·503→WARNING(사유 태그). 핸들러가 `request.state.ner_meta`(lang·batch·entities)를 채워 성공 로그에 실린다 |
-| `app.py` | `create_app(registry, config)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
+| `app.py` | `create_app(registry, config, translator)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `translator`(옵션)는 `/v1/translate` 용, None 이면 503. `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
+| `translate.py` | `LLMTranslator`·`build_translator` — 온프렘 LLM(OpenAI 호환) 마스킹-복원 번역. PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. `/v1/ner`·`inference.py` 무의존 additive |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응 |
 | `__main__.py` | uvicorn 기동 진입점 |
 

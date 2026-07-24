@@ -15,6 +15,7 @@ import uvicorn
 from server.app import create_app
 from server.config import ServerConfig
 from server.inference import ModelRegistry
+from server.translate import build_translator
 
 _LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
 
@@ -64,7 +65,8 @@ def main() -> None:
     _configure_logging(config)
 
     registry = ModelRegistry.load(config)
-    app = create_app(registry, config)
+    translator = build_translator(config)
+    app = create_app(registry, config, translator)
     # access_log=False: 요청당 액세스 로그는 RequestLogMiddleware 가 소유한다
     # (이중 로그 방지). 성공 요청은 DEBUG 라 기본 INFO 에선 조용하다.
     uvicorn.run(app, host=config.host, port=config.port, access_log=False)
