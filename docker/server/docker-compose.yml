@@ -33,6 +33,12 @@ services:
       - ${NER_SERVER_DATA_DIR:-/data}:/data
     ports:
       - '${NER_SERVER_PORT:-8008}:${NER_SERVER_PORT:-8008}'
+    # 컨테이너에서 호스트(published) 서비스에 닿기 위한 매핑 — 번역 백엔드
+    # (vLLM)가 호스트 :8081 에 있을 때 NER_SERVER_TRANSLATE_BASE_URL 을
+    # host.docker.internal 로 가리킬 수 있게 한다(Linux Engine 은 이 매핑이
+    # 없으면 host.docker.internal 이 해석되지 않는다).
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     deploy:
       resources:
         reservations:
