@@ -162,6 +162,192 @@ float16 거부는 **모델 타입 수준**이라 양자화를 바꿔도 남고, 
   후 KV 예산이 부족해 기동 실패한다 — `max-model-len` 축소(4096)나 util 상향
   필요. 2080Ti 공존 배포 시 이 튜닝이 핵심 변수다.
 
+## 2080Ti 실측
+
+- 측정일: 2026-07-27
+- 목적: 위 §권고가 남긴 미해결 질문 — 실제 배포 대상인 Turing 에서 **무엇이
+  뜨는가** — 를 예측이 아니라 실기 로그로 확정한다.
+- 평가셋은 A6000 과 **같은 동결본**(`data/eval_set.jsonl`, 28문장)을 재생성 없이
+  그대로 썼다. 하네스·`server.translate` 도 무수정이다 — 바뀐 것은 엔진뿐이라
+  두 박스의 수치가 나란히 놓인다.
+- 수치 ↔ `certified/translate_bench/2080ti-gemma2-9b-gguf-q4km/summary.json`.
+
+### 측정 환경
+
+| 항목 | 값 |
+|---|---|
+| GPU | NVIDIA GeForce RTX 2080 Ti (Turing, cc 7.5) **11264 MiB × 2** — 22GB 개조판 아님 |
+| 드라이버 / CUDA | 580.126.09 / 13.0 |
+| 카드 배치 | GPU0 = NER 서버(상주), GPU1 = 번역 엔진 |
+
+카드가 두 장이라 §권고가 상정한 "번역 전담 단일 카드" 예산이 그대로 성립한다.
+
+### 1단계 — Gemma-2-9B(vLLM)는 뜨지 않는다 (확인됨)
+
+`docker/vllm/start-gemma2-9b.sh` 를 GPU1 에서 그대로 돌렸다. **결론은 §권고의
+예측대로 기동 실패**지만, **걸린 지점이 예측과 달랐다.**
+
+예측은 "vLLM 이 `float16` 을 모델 타입 수준에서 거부한다"였다. 실제로는 v0.23.0
+이 거부 대신 **bf16 → float32 자동 업캐스트**를 했다:
+
+```
+WARNING [model.py:2030] Your device 'NVIDIA GeForce RTX 2080 Ti' (with compute
+        capability 7.5) doesn't support torch.bfloat16. Falling back to
+        torch.float32 for compatibility.
+INFO    [model.py:2077] Upcasting torch.bfloat16 to torch.float32.
+INFO    [compressed_tensors_wNa16.py:112] Using MarlinLinearKernel for CompressedTensorsWNA16
+ERROR   [fa_utils.py:171] Cannot use FA version 2 is not supported due to FA2 is
+        only supported on devices with compute capability >= 8
+INFO    [cuda.py:378] Using TRITON_ATTN attention backend out of potential
+        backends: ['TRITON_ATTN', 'FLEX_ATTENTION']
+```
+
+FA2 미지원은 TRITON_ATTN 폴백으로 흡수돼 기동을 막지 않았다. 대신 그 fp32 가
+두 단계로 연달아 벽을 만들었다:
+
+| 시도 | 설정 | 죽은 지점 | 에러 원문 |
+|---|---|---|---|
+| ① | `dtype=auto`, `max-model-len` 4096 | inductor 오토튜닝 | `torch._inductor.exc.InductorError: RuntimeError: Failed to run autotuning code block: CUDA out of memory. Tried to allocate 3.42 GiB. GPU 0 has a total capacity of 10.57 GiB of which 2.61 GiB is free.` |
+| ② | `+ --enforce-eager`, `max-model-len` 2048 | Marlin GEMM | `RuntimeError: c must be passed for W4A8-FP4` (`vllm/_custom_ops.py:1397` `marlin_gemm`) |
+
+①은 fp32 업캐스트로 가중치가 7.95 GiB 를 점유한 뒤 오토튜닝이 3.42 GiB 를 더
+요구해 11GB 카드에서 터진 것이다. 이건 커널 문제가 아니라 예산 문제라
+`--enforce-eager` 로 오토튜닝 자체를 제거해 한 번 더 시도했고, 그러자 **가려져
+있던 진짜 벽**이 드러났다 — A6000 에서 예고한 Marlin 의
+`c must be passed for W4A8-FP4` 다. util 상향·컨텍스트 축소로는 넘을 수 없는
+지점이므로 **vLLM 경로는 여기서 닫힌다.**
+
+기록 가치가 있는 차이는 이것이다 — 벽의 **존재**는 예측대로였지만 **도달 경로**는
+달랐다. fp32 업캐스트가 OOM 을 먼저 일으켜 커널 실패를 가리므로, `--enforce-eager`
+없이 로그만 보면 "VRAM 만 더 있으면 된다"로 오독하기 쉽다.
+
+### 2단계 — 채택 엔진: llama.cpp(GGUF)
+
+§권고의 경로 ① 을 먼저 시도했고 **한 번에 떴다.** 경로 ②(fp16 안전 계열
+재스윕)는 불필요해져 시행하지 않았다.
+
+```mermaid
+flowchart TD
+    A["Gemma-2-9B / vLLM / Turing"] --> B["bf16 → fp32 자동 업캐스트"]
+    B --> C["오토튜닝 OOM"]
+    C -->|"--enforce-eager 로 제거"| D["Marlin: c must be passed for W4A8-FP4"]
+    D --> E["vLLM 경로 닫힘"]
+    E --> F["경로 A — 같은 모델을 llama.cpp 로"]
+    F --> G["기동 성공 · OpenAI 호환 /v1 확보"]
+    G --> H["같은 하네스로 측정"]
+```
+
+| 항목 | 값 |
+|---|---|
+| 런타임 | llama.cpp `server-cuda` (빌드 `b10143-88b47a755`) |
+| 모델 | `bartowski/gemma-2-9b-it-GGUF:Q4_K_M` → 실제 파일 `gemma-2-9b-it-Q4_K_M-fp16.gguf` |
+| 양자화 / dtype | GGUF Q4_K_M (출력·임베딩 텐서 fp16 변형) — **fp32 업캐스트 없음** |
+| 컨텍스트 | `-c 4096`, 슬롯 4개 (`n_ctx_slot` 4096) |
+| 오프로드 | `-ngl 99` (전 레이어 GPU) |
+
+llama.cpp 는 Turing 에서 bf16 을 요구하지 않고 Q4_K 커널이 cc 7.5 를 직접
+지원하므로, vLLM 을 막은 두 벽(업캐스트·Marlin)이 **둘 다 발생하지 않는다.**
+`server.translate` 와 벤치 하네스는 손대지 않았다 — llama-server 가 OpenAI 호환
+`/v1/chat/completions` 를 그대로 제공해 엔드포인트 교체만으로 끝났다.
+
+### 3단계 — 지연·PII (28문장, 판정자 없음)
+
+```bash
+uv run python -m server.scripts.translate_bench.run_bench \
+  --engine gemma2-9b-gguf bartowski/gemma-2-9b-it-GGUF:Q4_K_M \
+  http://localhost:8081/v1 --no-judge
+```
+
+28행 0에러. 지연 단위는 초.
+
+| lang | n | PII 보존 | lat_mean | lat_p50 | lat_max |
+|---|---|---|---|---|---|
+| ja | 14 | 12/12 (100%) | 1.25 | 1.22 | 3.03 |
+| vi | 14 | 12/12 (100%) | 1.07 | 1.09 | 1.80 |
+
+PII 보존은 A6000 의 모든 후보와 같이 **24/24** 다 — 마스킹-복원이 구조적으로
+보장하는 부분이라 런타임·양자화를 바꿔도 그대로였다. §결과가 이미 짚었듯 이건
+엔진 선택 기준이 아니므로, 이 실측에서도 판단에 쓰지 않는다.
+
+콜드 스타트는 별개로 보아야 한다. `--no-warmup` 으로 띄우면 **첫 요청 1회만
+약 32초**(CUDA 커널 초기화)가 걸리고 이후 정상 상태로 떨어진다. 상주 서비스라
+사용자가 겪는 값은 위 표지만, 배포 시 워밍업을 켜거나 기동 직후 더미 요청 한
+번을 흘려 이 1회를 흡수하는 편이 낫다.
+
+### 품질 — 판정자 미도달, 객관 지표로 대체
+
+**adequacy·translit 는 이번에 측정하지 못했다.** 중립 판정자
+(`Qwen3.6-35B-A3B-AWQ-4bit`)가 A6000 박스에만 있고 이 박스에서 도달하지 않아
+`--no-judge` 로 돌렸다 — `summary.json` 의 `adequacy_mean`·`translit_mean` 은
+`null` 이다. 따라서 **A6000 대비 품질 차이는 이 실측으로 확정되지 않는다.**
+
+대신 판정자가 필요 없는 객관 지표로 출력을 검사했다. §VI→KO 신뢰성이 Qwen 탈락
+근거로 삼은 것과 같은 축이다(`dump.md` 육안 + 스크립트 집계).
+
+| 축 | vi (14) | ja (14) | A6000 Gemma-2-9B |
+|---|---|---|---|
+| 중국어(Han) 혼입 | 0 | — | 0 |
+| 프롬프트 에코 | 1 | 0 | 0 |
+| 한글 <50% | 0 | 0 | 0 |
+| 본문에 원문 문자 잔류 | 0 | 2 | (미집계) |
+
+읽어야 할 것은 두 가지다.
+
+- **VI→KO 오염 0 은 유지됐다.** Qwen 계열을 탈락시킨 중국어 코드스위칭이
+  llama.cpp/Q4_K_M 경로에서도 나타나지 않았다 — 채택의 핵심 근거가 런타임 교체를
+  건너 살아남았다.
+- **A6000 에 없던 흠 두 가지가 새로 보인다.** 프롬프트 에코 1건은 PII 가 아예
+  없는 문장(`ntrex-vi-0952`, `has_pii=False`)인데 출력 앞에 마스킹 마커
+  `【PII…】` 가 환각으로 붙었다. 원문 문자 잔류 2건은 ja 본문에 가나·한자가
+  남은 것이다(`아이브로ックス`, `司法委員会`) — PII 로 verbatim 복원된 문자열은
+  제외하고 센 값이라 복원 동작과는 무관한 번역 실패다.
+
+이 흠들이 **양자화 차이(w4a16 → Q4_K_M) 때문인지, 런타임 차이 때문인지, 아니면
+N=14 의 표집 요동인지는 이 데이터로 가릴 수 없다.** 판정자를 붙여 같은 축으로
+재기 전까지는 "A6000 대비 열화"라고 말할 근거가 없고, 반대로 "동등"이라고 말할
+근거도 없다.
+
+### 4단계 — NER 공존 VRAM
+
+NER 서버(GPU0)와 번역 엔진(GPU1)에 **동시에** 부하를 걸고 1초 간격으로 75회
+샘플링했다(번역 8스트림 × 6요청, NER 은 예제 클라이언트의 동시 200요청 과부하
+시나리오 포함). 두 부하 모두 정상 완료했다(NER `DEMO PASS`, 과부하 구간 429 정상).
+
+| 카드 | 역할 | 피크 (MiB) | 총량 대비 | 여유 (MiB) |
+|---|---|---|---|---|
+| GPU0 | NER 서버 (BERT ja·vi) | 1524 | 14% | 9740 |
+| GPU1 | 번역 (Gemma-2-9B Q4_K_M) | 8182 | 73% | 3082 |
+
+GPU1 은 부하와 무관하게 8182 로 **일정하다** — llama.cpp 가 기동 시 KV 캐시를
+선할당하기 때문이라, 동시 요청이 늘어도 VRAM 이 자라지 않는다. 즉 이 배치의
+VRAM 위험은 런타임에 있지 않고 기동 파라미터(`-c`, 슬롯 수)에 있다.
+
+카드가 분리돼 있어 두 서비스는 서로의 예산을 잠식하지 않는다. 한 장에 합치면
+1524 + 8182 ≈ 9706 MiB 로 11264 안에 들어가는 것처럼 보이지만, 이 구성은
+측정하지 않았으므로 권고 근거로 쓰지 않는다.
+
+### 판단 — 온디맨드 UX 유지 가능
+
+평균 1.25/1.07초, 최악 3.03초다. 현행 웹 데모의 **온디맨드 번역 버튼** UX
+(사용자가 눌러야 번역이 시작되고 스피너를 보는 방식)에는 충분하다 — 버튼을 누른
+뒤 3초 안에 끝나므로 기다림이 상호작용의 일부로 읽힌다. 반면 **자동 번역**
+(입력·NER 결과에 따라 저절로 도는 방식)으로 바꾸기에는 느리다. §캐비엇이 이미
+"자동 번역 대신 온디맨드 버튼 UX 유지"를 권했는데, 그 권고가 2080Ti 실측에서도
+같은 방향으로 지지된다.
+
+### 2080Ti 실측의 캐비엇
+
+- **A6000 지연과 직접 비교하지 말 것.** A6000 의 840/670ms 는 vLLM + w4a16
+  경로 값이고 여기 1.25/1.07초는 llama.cpp + Q4_K_M 경로 값이다. 하드웨어·런타임
+  ·양자화가 **동시에** 바뀌었으므로 두 값의 차이를 카드 성능 차로 귀속할 수 없다.
+  이 표는 "2080Ti 에서 실제로 이만큼 걸린다"는 절대값으로만 쓴다.
+- **품질은 열린 채로 남았다** — 위 §품질 참조. 판정자에 도달하는 망에서
+  `--judge-url` 을 붙여 같은 하네스로 한 번 더 돌리면 그대로 채워진다.
+- **N=28 소규모**는 A6000 과 동일한 한계다. 새로 관측된 에코 1건·잔류 2건은
+  방향 신호이지 비율 추정이 아니다.
+- **경로 ②(fp16 안전 계열 스윕)는 미시행**이다. 경로 ① 이 성공해 불필요해졌을
+  뿐, 그쪽이 더 나은지는 측정하지 않았다.
+
 ## 다음
 
 하네스는 순수 HTTP 클라이언트라 GPU 를 쓰지 않는다 — 후보 서버만 띄우면 어느
@@ -179,7 +365,19 @@ uv run python -m server.scripts.translate_bench.run_bench \
 
 - **Ampere 이상 배포**: Gemma-2-9B 로 진행 — 서버 번역
   env(`NER_SERVER_TRANSLATE_{BASE_URL,MODEL}`)를 이 엔드포인트로 배선한다.
-- **2080Ti 배포**: §권고의 두 대안 중 선택 후 재측정 — ① llama.cpp(GGUF)
-  백엔드로 Gemma-2-9B 를 띄워 같은 하네스로 품질·지연 재확인, 또는 ② fp16
-  안전 계열(Llama-3.1-8B·EXAONE-3.5·Qwen3-8B 등) 스윕. 어느 쪽이든 실기에서
-  **VRAM 공존 피크**(NER 1장 / 번역 1장)와 지연을 함께 잰다.
+- **2080Ti 배포**: 해결됨 — §2080Ti 실측 참조. 경로 ①(llama.cpp/GGUF)로
+  확정했고 지연·VRAM 공존 피크를 실측했다. 기동은 위 vLLM 스크립트가 아니라
+  llama.cpp 서버로 한다:
+
+  ```bash
+  docker run -d --name llamacpp-gemma2-9b --gpus all \
+    -e CUDA_VISIBLE_DEVICES=1 -e LLAMA_CACHE=/root/.cache/huggingface/llamacpp \
+    -v /work/.huggingface:/root/.cache/huggingface -p 8081:8081 \
+    ghcr.io/ggml-org/llama.cpp:server-cuda \
+    -hf bartowski/gemma-2-9b-it-GGUF:Q4_K_M \
+    --host 0.0.0.0 --port 8081 -ngl 99 -c 4096
+  ```
+
+  `NER_SERVER_TRANSLATE_{BASE_URL,MODEL}` 을 이 엔드포인트로 배선하면 코드
+  변경 없이 붙는다. 남은 일은 **품질 재확인 하나** — 판정자에 도달하는 망에서
+  `--judge-url` 을 붙여 같은 하네스로 돌린다.
