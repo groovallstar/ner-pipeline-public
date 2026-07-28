@@ -42,7 +42,7 @@ src/ner/
 ├── metrics/               # span/BIO 메트릭 공용 구현
 └── scripts/               # 보조 스크립트
 src/server/                # ja·vi NER REST API 서비스 (FastAPI)
-docker/{dev,server,vllm}/  # 개발 컨테이너 + REST API 배포 + vLLM
+docker/{server,vllm}/      # REST API 배포 + vLLM
 results/                   # 벤치마크 산출물 scratch (gitignore·휘발)
 certified/                 # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
 tests/{ner,server}/        # pytest 테스트
