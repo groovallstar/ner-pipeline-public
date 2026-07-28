@@ -113,6 +113,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
 | `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
 | `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`) |
+| `scripts/translate_bench/` | 번역 엔진 후보 비교 하네스 — 상세는 아래 §번역 엔진 벤치 |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
 ## 추론 경로
@@ -171,3 +172,17 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 - **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
   서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
   skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
+
+## 번역 엔진 벤치 (translate_bench)
+
+웹 데모 번역기(`translate.py`) 후보 LLM 을 비교하는 하네스가
+`scripts/translate_bench/` 에 있다 — 프로덕션 마스킹-복원 경로를 그대로 태워
+PII 보존·음차·뜻전달(중립 LLM-judge)·지연을 잰다. 평가셋은 NTREX-128 유래
+28문장(`data/eval_set.jsonl`, PII 주입 gold). 결과·근거·엔진 선정은
+`docs/reports/translate-engine-lightweight-benchmark.md`.
+
+```bash
+uv run python -m server.scripts.translate_bench.build_eval_set   # 평가셋 재생성
+uv run python -m server.scripts.translate_bench.run_bench \
+  --engine <name> <model> <base_url> [--engine ...] --judge-url <url>
+```
