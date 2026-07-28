@@ -49,7 +49,11 @@ ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에
 초과→413, 모델 미로드→503, API-key 불일치→401. 요청 바디가 `max_body_bytes`
 초과면 파싱 전에 413(전송 계층 가드 — chunked 우회 포함). Pydantic 검증
 실패→422, 미처리 예외→500 도 모두 동일 봉투로 감싸고 500 은 내부 메시지를
-노출하지 않는다.
+노출하지 않는다. 라우터가 내는 라우트 미매칭→404·메서드 불일치→405 도 같은
+봉투다(405 는 `Allow` 헤더 유지) — 소비자는 에러 파싱 경로를 하나만 두면
+된다. 봉투 통일은 예외 핸들러를 `starlette.exceptions.HTTPException`(부모)에
+걸어 얻는다: `fastapi.HTTPException` 에만 걸면 라우터가 부모 클래스를 직접
+던지는 404·405 가 FastAPI 기본 `{"detail": ...}` 로 샌다.
 
 ## 사용 예시 (curl)
 

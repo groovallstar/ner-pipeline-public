@@ -35,8 +35,7 @@ def load_wikiann_vi_gold(
         'HF_DATASETS_CACHE', '/work/.huggingface/datasets',
     )
     ds = load_dataset(
-        hf_name, hf_config, split=split,
-        cache_dir=cache, trust_remote_code=False,
+        hf_name, hf_config, split=split, cache_dir=cache,
     )
     if max_samples is not None:
         ds = ds.select(range(min(max_samples, len(ds))))

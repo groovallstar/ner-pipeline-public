@@ -39,8 +39,7 @@ def _load_wikiann_hf(
         'HF_DATASETS_CACHE', '/work/.huggingface/datasets',
     )
     hf_dataset = load_dataset(
-        hf_name, hf_config, split=split,
-        cache_dir=cache, trust_remote_code=False,
+        hf_name, hf_config, split=split, cache_dir=cache,
     )
     if max_samples is not None:
         hf_dataset = hf_dataset.select(

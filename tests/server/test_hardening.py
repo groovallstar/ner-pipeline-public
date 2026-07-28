@@ -124,6 +124,26 @@ def test_pydantic_validation_wrapped_in_envelope():
         assert r.json()['error']['status'] == 422
 
 
+def test_unknown_route_404_envelope():
+    """라우트 미매칭도 봉투 — 라우터는 starlette 쪽 HTTPException 을 던진다.
+
+    핸들러를 fastapi.HTTPException 에만 걸면 404·405 는 FastAPI 기본 핸들러로
+    새어 `{"detail": ...}` 를 낸다. 부모 클래스에 걸어야 전 경로가 통일된다.
+    """
+    r = _client().post('/v1/nonexistent', json={'text': 'a'})
+    assert r.status_code == 404
+    assert r.json()['error']['status'] == 404
+    assert 'detail' not in r.json()
+
+
+def test_method_not_allowed_405_envelope_keeps_allow_header():
+    """메서드 불일치도 봉투 — 단 405 의 `Allow` 헤더는 보존해야 한다."""
+    r = _client().get('/v1/ner')
+    assert r.status_code == 405
+    assert r.json()['error']['status'] == 405
+    assert 'POST' in r.headers['allow']
+
+
 def test_unhandled_exception_wrapped_no_leak():
     """미처리 모델 예외는 500 봉투로 통일하고 내부 메시지를 노출하지 않는다."""
     r = _client(raise_server_exceptions=False).post(

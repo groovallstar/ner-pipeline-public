@@ -1,7 +1,7 @@
 # server — ja·vi NER REST API 배포
 
-`src/server` 추론 서버를 컨테이너로 빌드·기동한다. dev 와 동일 CUDA 베이스
-(`pytorch:2.11.0-cuda13.0`)에서 uv 로 프로젝트(ner·server)를 설치하고
+`src/server` 추론 서버를 컨테이너로 빌드·기동한다. CUDA 베이스
+(`pytorch:2.13.0-cuda13.0`)에서 uv 로 프로젝트(ner·server)를 설치하고
 `python -m server` 를 띄운다. 모델은 이미지에 넣지 않고 런타임에 호스트
 `/data` 를 마운트해 읽는다. 소비자는 **내부망 별도 프로세스**(공개 노출·인증은
 범위 외 — 내부 신뢰망 전제)다.
@@ -24,7 +24,7 @@ GPU 는 1장만 컨테이너에 노출돼 고정된다(`device_ids`; 기본 0, `
 
 | 파일 | 역할 |
 |------|------|
-| `Dockerfile` | dev 와 동일 CUDA 베이스 + uv sync(`ner`·`server` 설치). `curl`(healthcheck)·build-essential(토크나이저 빌드) 포함. ENTRYPOINT=`uv run python -m server` |
+| `Dockerfile` | CUDA 베이스(`pytorch:2.13.0-cuda13.0`) + uv sync(`ner`·`server` 설치). `curl`(healthcheck)·build-essential(토크나이저 빌드) 포함. ENTRYPOINT=`uv run python -m server` |
 | `docker-compose.yml` | `ner-server` 서비스 — `NER_SERVER_*` env, `/data` 마운트, GPU reservation, 포트 publish, 준비성 healthcheck, restart unless-stopped |
 | `start.sh` | 빌드 + 기동. 기존 컨테이너 정리 후 올림. `--no-build` 로 기존 이미지 빠른 기동(코드 변경 없을 때 `uv sync` 레이어 재실행 회피) |
 | `stop.sh` | 컨테이너 중지·제거 |
