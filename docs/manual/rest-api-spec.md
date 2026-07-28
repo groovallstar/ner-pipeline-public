@@ -221,6 +221,8 @@ language-detection-benchmark.md`.
 | **413** | 텍스트 1건이 `max_chars` 초과 | `text exceeds max_chars (20000)` |
 | **413** | 배치 개수가 `max_batch` 초과 | `batch exceeds max_batch (64)` |
 | **413** | 배치 char 합이 `max_total_chars` 초과 | `batch total chars N exceeds max_total_chars (100000)` |
+| **404** | 존재하지 않는 경로 | `Not Found` |
+| **405** | 경로는 있으나 메서드 불일치(예: `GET /v1/ner`) | `Method Not Allowed` |
 | **422** | 요청 본문이 Pydantic 스키마 위반(타입 오류 등) | `request validation failed (N error(s))` |
 | **429** | 대기 큐 초과 또는 세마포어 타임아웃 | `queue full (>= 32 waiting)` / `acquire timed out (10.0s)` |
 | **500** | 미처리 서버 오류(추론 예외 등) | `internal server error` |
@@ -232,6 +234,17 @@ language-detection-benchmark.md`.
 `{error:{status,message}}`로 감싸며, `500`은 내부 예외 메시지·트레이스백을
 응답에 노출하지 않는다. 요청 바디가 `max_body_bytes`를 넘으면 파싱·인증
 이전에 `413`으로 거절한다(chunked 우회 포함 — §8).
+
+핸들러가 판정하는 에러뿐 아니라 **라우터가 내는 `404`·`405`도 같은 봉투**다.
+소비자는 상태 코드와 무관하게 에러 파싱 경로를 하나만 두면 된다. 다만 `405`
+응답에는 봉투와 별개로 `Allow` 헤더(예: `Allow: POST`)가 함께 실린다 —
+RFC 7231이 요구하는 프로토콜 헤더라 봉투로 감싸면서도 보존한다.
+
+> **구현 메모** — 봉투 통일은 예외 핸들러를 부모 클래스
+> `starlette.exceptions.HTTPException`에 걸어 얻는다. 자식인
+> `fastapi.HTTPException`에만 걸면 핸들러가 직접 던지는 `400`·`401`·`413`은
+> 잡히지만, 라우터가 부모 클래스를 직접 던지는 `404`·`405`는 매칭되지 않고
+> FastAPI 기본 핸들러로 새어 `{"detail": ...}`가 된다.
 
 ## 7. 인증
 
@@ -276,6 +289,7 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 |---|---|---|
 | 성공(2xx) | `DEBUG` | 지연·언어·배치 크기·개체 수·request-id. 기본 레벨 `INFO`에선 침묵 |
 | 거절(400·401·413·422·429·503) | `WARNING` | 상태·사유 태그·경로·request-id. 상시 기록 |
+| 그 밖의 4xx(404·405) | `WARNING` | 같은 형식이나 사유 태그는 `error`로 뭉뚱그림 |
 | 미처리 예외(500) | `ERROR` | 트레이스백 + request-id |
 
 거절만 상시 남기는 이유는 그것이 운영에서 실제로 손이 가야 하는 사건이기

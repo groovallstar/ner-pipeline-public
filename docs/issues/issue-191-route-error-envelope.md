@@ -44,7 +44,9 @@
 - [x] 기존 봉투 경로(400·401·413·422·429·500·503) 무회귀
 - [x] 위 3건을 stub registry 회귀 테스트로 고정(모델·GPU 불요)
 - [x] `uv run pytest tests/server/` 전건 통과 + ruff clean
-- [x] `src/server/CLAUDE.md` 에러 계약 문단에 404·405 반영
+- [x] 에러 계약 문서에 404·405 반영 — `src/server/CLAUDE.md`,
+      `docs/manual/rest-api-spec.md`(§6 에러 규격·§9 로깅),
+      `docs/manual/rest-api-integration-guide.md`(§5 에러 규격)
 
 ## 구현 결과
 
