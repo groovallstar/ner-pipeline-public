@@ -15,6 +15,7 @@ default port is 8000).
 | `docker-compose.yml` | vLLM service: configurable model/GPU/memory/dtype/port via env vars, IPC host, HF cache mount |
 | `start-gemma4-31b-awq-8bit.sh` | Start gemma-4-31B-it-AWQ-8bit (GPU1, port 8081) |
 | `start-qwen3.6-35b-a3b-awq.sh` | Start Qwen3.6-35B-A3B-AWQ-4bit (GPU2, port 8082) |
+| `start-gemma2-9b.sh` | Start gemma-2-9b-it-w4a16 for web-demo translation (GPU1, port 8081; GPU/port/memory overridable via env). **Ampere+ only** — bf16-only model (fp16 rejected, fp32 fails in Marlin kernel), so it will not start on Turing |
 | `stop.sh` | Stop vLLM container |
 | `logs.sh` | Tail vLLM logs |
 
