@@ -16,5 +16,4 @@ tests
 .claude
 .github
 node_modules
-docker/dev
 docker/vllm
