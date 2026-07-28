@@ -41,6 +41,6 @@
 - `ner.labelers.ja.ner_prompts`, `ner.labelers.span_matcher` (공용), `ner.labelers.ja.dataset_loader`
 
 ### External
-- `openai`, `datasets`
+- `openai` — `datasets` 는 쓰지 않는다. 로더는 pre-dumped canonical JSONL 만 읽고 HF 를 호출하지 않으므로(위 "No HF fetch"), 이 패키지에 HuggingFace 의존은 없다
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

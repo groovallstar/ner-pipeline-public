@@ -39,7 +39,7 @@
 | 서브모듈 | 역할 |
 |---------|------|
 | `pii/` | 합성 PII 주입기 (suffix/llm 모드, vLLM 교차 검증). CLI: `python -m ner.augmenters.pii` |
-| `wikiann_vi/` | WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증. CLI: `python -m ner.augmenters.wikiann_vi` |
+| `wikiann_vi/` | WikiANN-vi(3종 BIO) → canonical **NER 5종** 재라벨 + Wikidata 검증 (PII 5종은 `pii/` 가 별도 주입해 10종 평면이 된다). CLI: `python -m ner.augmenters.wikiann_vi` |
 
 ### classifier/
 
@@ -60,8 +60,8 @@ span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유).
 
 | 파일 | 역할 |
 |------|------|
-| `bio_metrics.py` | seqeval 기반 BIO 레벨 메트릭 |
-| `span_metrics.py` | `compute_offset_span_f1` 등 span 레벨 메트릭 |
+| `bio_metrics.py` | `MetricsCalculator` — static 메서드 3종의 채점 경로. `compute_seqeval`(seqeval 기반 BIO 레벨) · `compute_span_f1`(BIO → char-offset span 추출 후 exact match, KLUE 방식) · `compute_span_match`(BIO 없이 텍스트 span 직접 비교, exact + 포함관계 relaxed). 뒤 둘은 seqeval 을 쓰지 않는 별도 알고리즘이다 |
+| `span_metrics.py` | `compute_offset_span_f1`(strict — `(start, end, type)` 정확 매칭) · `compute_offset_span_f1_relaxed`(SemEval'13 Partial 매칭) |
 
 ### validity/
 
@@ -74,13 +74,14 @@ K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`�
 | `variance.py` | σ_fold·σ_repro·paired Δ·방향 일관성(조이기 전용·false PASS 불가) — 노이즈 밴드 재료 |
 | `gate.py` | `compare` — 세 축 통합 verdict(`PASS/FAIL/INVALID/INCONCLUSIVE`) |
 | `_common.py` | fold/pooled IO 공유 |
+| `__main__.py` | CLI: `std`·`repro`·`compare` 세 서브커맨드를 각 판정 함수로 dispatch 후 결과 JSON 을 stdout(·`--out` 파일)으로 |
 | `__init__.py` | 공개 API re-export (`from ner.validity import compare`) |
 
 세 검증은 각자 독립 함수로 호출 가능하다. 어떤 검증 부분집합을 통과해야 '실험 완료'인지의 조합·우선순위·선언은 채점규칙(자)을 바꾸는 별도 하네스의 몫이다 — 기준 파일을 건드리므로 앞부분(Front)에서 잠기고, 판단 층 반박자가 누출·조작을 점검한다 (루트 `CLAUDE.md` §하네스).
 
 ### scripts/
 
-보조 스크립트 (`eval_ja_ner_test.py` 등).
+배포 추론 스크립트 — JA·VI 각 한 벌(`eval_ja_ner_test.py`·`eval_vi_ner_test.py` + 동명 `.sh` uv 래퍼). 학습 없이 고정 test 와 저장된 임계값으로 추론·채점만 한다. 상세: `src/ner/scripts/CLAUDE.md`.
 
 ## 라벨 스키마
 

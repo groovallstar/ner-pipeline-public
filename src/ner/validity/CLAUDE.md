@@ -19,6 +19,7 @@ K-fold 실험 결과를 **재학습 0회**로 검증한다. 기존 산출물(`fo
 | `variance.py` | 노이즈 밴드 재료 — `σ_fold`(fold 간 std, 넓은 기본 프록시) · `σ_repro`(시드 반복 pooled 헤드라인 흔들림, 수요기반 정밀 밴드) · paired fold Δ · 방향 일관성(조이기 전용) |
 | `gate.py` | `compare` — 세 축 통합 verdict(`PASS`/`FAIL`/`INVALID`/`INCONCLUSIVE`) |
 | `_common.py` | fold/pooled `metrics.json` IO 공유 헬퍼 (순수 함수) |
+| `__main__.py` | CLI 진입점 — `std`/`repro`/`compare` 서브커맨드를 파싱해 각각 `fold_std`, `repro_std`·`write_sigma_repro`, `gate.compare` 로 dispatch. 결과는 JSON 으로 stdout, `--out` 지정 시 파일에도 쓴다 |
 | `__init__.py` | 공개 API re-export (`from ner.validity import compare`) |
 
 ## 핵심 개념
@@ -56,13 +57,18 @@ K-fold 실험 결과를 **재학습 0회**로 검증한다. 기존 산출물(`fo
 python -m ner.validity std --run <run_dir> [--matching strict|relaxed]
 
 # 시드 반복 CV run 들의 재현 분산(σ_repro) → 캐시 저장
-python -m ner.validity repro --runs <run1> <run2> [...] [--out <sigma.json>]
+python -m ner.validity repro --runs <run1> <run2> [...] \
+    [--matching strict|relaxed] [--out <sigma.json>]
 
 # candidate 를 baseline 대비 게이트
 python -m ner.validity compare \
     --baseline <base_dir> --candidate <cand_dir> --target <ENTITY> \
-    [--band-k 2.0] [--sigma-repro <sigma.json>] [--out <verdict.json>]
+    [--matching strict|relaxed] [--band-k 2.0] \
+    [--sigma-repro <sigma.json>] [--out <verdict.json>]
 ```
+
+`--matching`(기본 `strict`)은 세 서브커맨드 모두에 있다 — 한 비교 안에서는 같은
+값으로 통일해야 한다. strict 로 잰 σ 를 relaxed Δ 에 밴드로 대면 자가 어긋난다.
 
 `σ_repro` 는 (데이터×아키텍처×학습설정) setup 의 성질이라 setup 당 한 번만 재서(`repro --out`) 이후 `compare --sigma-repro` 로 재사용한다.
 

@@ -26,7 +26,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 
 | Directory | Purpose |
 |-----------|---------|
-| `ko/` | 한국어 NER 라벨러 — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분; PII는 augmenters에서 합성 주입) (see `ko/CLAUDE.md`) |
+| `ko/` | 한국어 NER 라벨러 — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분; PII는 augmenters에서 합성 주입). **LOC/ORG 는 narrow-ORG 재정의를 따라 JA·VI 와 외연이 다르다** — ORG=정부·행정·공공·정치 기관만이고 인공 시설·민간조직은 비-entity (see `ko/CLAUDE.md`) |
 | `ja/` | 일본어 NER 라벨러 — canonical 10종 평면; pre-dumped Stockmark JSONL 전용 (see `ja/CLAUDE.md`) |
 | `vi/` | 베트남어 NER 라벨러 — canonical 10종 평면; canonical WikiANN-vi JSONL 덤프 전용 |
 
@@ -35,10 +35,13 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 ## For AI Agents
 
 ### Working In This Directory
-- 모든 라벨러 공통 인터페이스: `label(text)`, `label_spans(text)`, `label_records(records)`
+- **LLM 라벨러** 공통 인터페이스: `label(text)`, `label_spans(text)`, `label_records(records)`.
+  `hf_ner_labeler.py`의 `HFNERLabeler`는 이 계약 밖이다 — 로컬 BERT 베이스라인이라
+  `label()` 외에 `label_sentence()`·`label_syllables()`를 갖고 `label_spans()`·`label_records()`가 없다
 - `parse_json_response()`는 `labeler_base.py`의 canonical JSON 추출 유틸 — 새 JSON 파싱 코드 작성 금지
 - `split_sentences()`와 `spans_to_bio()`는 `llm_helpers.py`에 단일 정의되며 베이스 클래스를 통해 호출됨
-- 각 라벨러는 `total_prompt_tokens`, `total_completion_tokens`로 토큰 사용량 추적
+- LLM 라벨러는 `total_prompt_tokens`, `total_completion_tokens`로 토큰 사용량 추적 —
+  `HFNERLabeler`는 로컬 추론이라 이 속성이 없다
 - `DatasetLoader`는 JSONL fallback 경로(`/data/ner/`)를 지원
 
 ### Testing Requirements
@@ -48,7 +51,8 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 
 ### Common Patterns
 - 프롬프트 엔지니어링이 주요 품질 레버 — 언어별로 고도 튜닝됨
-- 라벨러는 `openai.AsyncOpenAI` 사용 (vllm/openai 공용)
+- 클라이언트는 백엔드마다 다르다 — vLLM 베이스는 `AsyncOpenAI` 전용(전 문장 동시 발사),
+  OpenAI 베이스는 동기 `OpenAI` 와 `AsyncOpenAI` 를 둘 다 만들어 `label()` 은 동기 클라이언트로 간다
 - 모델 예시: vLLM 호환 OpenAI API 모델, OpenAI gpt 시리즈
 
 ## Dependencies

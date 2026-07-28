@@ -20,77 +20,29 @@
 
 ## 핵심 디렉토리 구조
 
-```
-src/ner/
-├── labelers/          # NER 라벨링 모듈 (상세: src/ner/labelers/CLAUDE.md)
-│   ├── ko/            # 한국어 (vllm, openai)
-│   ├── ja/            # 일본어 (vllm, openai)
-│   ├── vi/            # 베트남어 (vllm, openai)
-│   ├── dataset_loader.py
-│   ├── labeler_base.py
-│   ├── tag_aligner.py     # BIO 태그 정렬/정규화/span 추출
-│   └── hf_ner_labeler.py  # HuggingFace BERT NER 라벨러
-├── llm_eval/          # 벤치마크 오케스트레이션 + 리포트 (상세: src/ner/llm_eval/CLAUDE.md)
-│   ├── __main__.py
-│   ├── benchmark_runner.py  # BenchmarkRunner (한국어 BIO / JA·VI offset-span 공용 러너)
-│   ├── report.py            # ReportGenerator (span-match, seqeval, per-entity 테이블)
-│   ├── error_analysis.py    # 문장별 오류 유형 분류 CLI
-│   └── span_evaluator.py / span_evaluator_cli.py
-├── metrics/           # span/BIO 메트릭 공용 구현 (classifier·llm_eval 공유)
-│   ├── bio_metrics.py       # seqeval 기반 BIO 레벨 메트릭
-│   └── span_metrics.py      # compute_offset_span_f1 등 span 레벨 메트릭
-├── augmenters/        # 학습 데이터 증강 (상세: src/ner/augmenters/CLAUDE.md)
-│   ├── pii/           # 합성 PII 주입 (suffix/llm 모드, vLLM 교차 검증)
-│   └── wikiann_vi/    # WikiANN-vi → canonical 10종 평면 재라벨 + Wikidata 검증
-├── classifier/        # JA·VI·KO canonical 10종 평면 BERT 파인튜닝 (상세: src/ner/classifier/CLAUDE.md)
-│   ├── __main__.py
-│   ├── data_utils.py       # JSONL 로딩, fast(offset-trim)·PhoBERT(pyvi)·JA(slow) tokenizer 분기, BIO↔span 변환
-│   └── train_eval.py       # HF Trainer 래퍼, char-offset span F1 (metrics 공용)
-└── scripts/           # 보조 스크립트 (eval_ja_ner_test.py 등)
-src/server/            # ja·vi NER REST API 서비스 (ner 라이브러리 소비; 상세: src/server/CLAUDE.md)
-├── __main__.py
-├── app.py             # FastAPI /v1/ner(단일·배치)·/health·/(웹 데모 UI)
-├── static/            # 웹 데모 UI (index.html — 자족적 HTML+vanilla JS, 동일 출처)
-├── inference.py       # LangModel·ModelRegistry (모델 1회 로드·재사용, char-offset span)
-├── config.py          # ServerConfig (환경변수 로드)
-├── concurrency.py     # ConcurrencyGuard (동시성 세마포어·과부하 429)
-├── detect.py          # 언어 자동감지 (가나→ja, vi 전용 결합부호→vi, 그 외→unsupported)
-├── chunking.py        # 긴 입력 문장분할 + offset 보존
-└── scripts/           # 로컬 실행·스모크·처리량·언어감지 벤치 스크립트
-docker/
-├── server/            # ja·vi NER REST API 배포 (상세: docker/server/CLAUDE.md)
-└── vllm/              # vLLM 서비스
-results/               # 벤치마크 산출물 scratch (gitignore·휘발)
-certified/             # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
-tests/                 # 테스트 (ner: tests/ner/CLAUDE.md · server: tests/server/)
-docs/                  # 문서
-│   ├── wiki/          # 프로젝트 독립적 도메인 지식 (상세: docs/wiki/schema.md)
-│   ├── specs/         # 개발 규약 (코딩 컨벤션)
-│   ├── manual/        # 프로젝트 구현 레퍼런스 (src/ 모듈 API·알고리즘 맵)
-│   │   └── data/      # 데이터 스키마·엔티티 정의·데이터셋 스펙·데이터 검증
-│   ├── reports/       # 자유 형식 벤치마크·실험 리포트 (GitHub Issue 무관)
-│   └── issues/        # GitHub Issue별 plan/report 스냅샷
-```
+모듈별 파일·역할은 각 디렉토리의 `CLAUDE.md` 에 있다. 여기는 최상위 배치와 그 문서로 가는 입구만 둔다 — 같은 목록을 두 곳에 두면 한쪽이 반드시 낡는다.
 
-## 주요 CLI 엔트리포인트
-
-**모든 `python -m` 진입점의 단일 색인이다** — 사람이 직접 돌리는 워크플로 명령어를 여기 모은다. 위 디렉토리 트리는 구조만 보여줄 뿐 실행 명령어를 담지 않으니, 새 진입점이 생기면 이 목록에 더한다.
-
-- `python -m ner.llm_eval` — LLM NER 벤치마크 (ko/ja/vi 공용)
-- `python -m ner.classifier --lang {ja,vi,ko}` — BERT 파인튜닝·평가 (canonical 10종 평면; `--group-key orig` 로 누출 없는 group K-fold)
-- `python -m ner.validity {std,repro,compare}` — K-fold 분산·비교타당성 게이트 (fold σ · 시드-반복 σ_repro · 비교 판정; 상세: `src/ner/validity/CLAUDE.md`)
-- `python -m ner.augmenters.pii` — 합성 PII 주입
-- `python -m ner.augmenters.wikiann_vi` — WikiANN-vi canonical 10종 평면 재라벨 (상세: `docs/manual/data/canonical-entity-schema.md`)
-- `python -m server` — ja·vi NER REST API 서버 (uvicorn; 상세: `src/server/CLAUDE.md`)
-
-상세 옵션은 각 모듈의 `--help` 또는 `src/**/CLAUDE.md` 참조.
+| 경로 | 무엇 | 상세 |
+|---|---|---|
+| `src/ner/` | NER 라이브러리 — `labelers`·`llm_eval`·`metrics`·`validity`·`augmenters`·`classifier`·`scripts` | `src/ner/CLAUDE.md` (모듈별 문서로 다시 분기) |
+| `src/server/` | ja·vi NER REST API — FastAPI · 웹 데모 UI(`static/`). `ner` 와 분리된 top-level 패키지 | `src/server/CLAUDE.md` |
+| `docker/` | vLLM 서비스 · server 배포 (개발 컨테이너는 없다) | `docker/CLAUDE.md` |
+| `tests/` | 테스트 | `tests/ner/CLAUDE.md` · `tests/server/` |
+| `results/` | 벤치마크 산출물 scratch — gitignore·휘발 | §하네스 |
+| `certified/` | 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준) | §하네스 |
+| `docs/wiki/` | 프로젝트 독립적 도메인 지식 | `docs/wiki/schema.md` |
+| `docs/specs/` | 개발 규약 | `docs/specs/coding-conventions.md` |
+| `docs/manual/` | 구현 레퍼런스 — `src/` 모듈 API·알고리즘 맵 | — |
+| `docs/manual/data/` | 데이터 스키마·엔티티 정의·데이터셋 스펙·검증 | `canonical-entity-schema.md` |
+| `docs/reports/` | 자유 형식 벤치마크·실험 리포트 (GitHub Issue 무관) | — |
+| `docs/issues/` | GitHub Issue별 설계·구현 스냅샷 | `docs/issues/README.md` |
 
 ## 개발 3원칙
 
-세 원칙은 **워크플로(진행)**와 **하네스(집행)**의 공통 뿌리다 — 지킬 값만 정하고, 집행 기제는 아래 두 섹션이 맡는다. 그래서 셋의 성격이 갈린다 — 검증 의무·분해는 사람 주도는 하네스가 그대로 집행하고, 원자 단위는 하네스가 안 보는 커밋 입도(워크플로)에서 산다.
+세 원칙은 **워크플로(진행)**와 **하네스(집행)**의 공통 뿌리다 — 지킬 값만 정하고, 집행 기제는 아래 두 섹션이 맡는다. 다만 **셋 중 무엇도 하네스가 통째로 집행하지는 않는다.** 게이트는 diff 의 글자만 읽으므로, 원칙이 깨졌을 때 diff 에 흔적이 남는 경우(테스트를 지웠나 · 기준 파일을 건드렸나 · 라벨과 브랜치가 어긋나나)만 잡는다. 원칙 자체를 지켰는지는 사람과 에이전트가 본다.
 
 - **원자 단위**: 한 번의 요청은 검증 가능한 최소 기능 단위로 처리한다.
-- **검증 의무**: 테스트 통과 + `docs/` 반영 없이는 완료가 아니다.
+- **검증 의무**: 테스트 통과 + `docs/` 반영 없이는 완료가 아니다. **게이트가 대신 봐주지 않는다** — 테스트를 실행하지도, `docs/` 갱신을 확인하지도 않는다. 게이트가 잡는 건 깨진 테스트를 *지워 숨기는* 쪽뿐이므로, 통과 여부는 직접 돌려서 확인한다.
 - **분해는 사람 주도**: 단일 단계로 검증이 어려우면 작업자에게 먼저 분해 방식을 묻는다.
 
 ## 워크플로 (작업 진행)
@@ -149,7 +101,7 @@ flowchart TD
 | 분할 | `src/ner/classifier/data_utils.py`, `kfold_pool.py` |
 | 결과 장부(편집 거부) | `certified/**` |
 
-**건드리면** 커밋 직전 진행이 막힌다. 잠금은 **사람 확인 파일**(`ack-<diff_hash>`)과 **반박자 PASS 판정** 둘 다 있어야 풀린다 — ack 는 사람만 만들고(AI 의 ack 생성은 `settings.json` deny), 판정은 격리 반박자가 쓴다. 판단 층 자동 강제는 이 구간뿐이다: 반박자가 잡아야 할 위험(gold 변조·분할 누수·"올랐다=개선"의 순환)이 여기 몰려 있고, 어차피 사람이 멈춰 서는 지점이라 추가 마찰이 작기 때문이다. 사람 확인 전에, 점수를 본 뒤 유리한 정의를 고르지 못하도록 새 정의를 먼저 못 박고, 옛 모델을 새 기준으로 다시 재(`clean 동일-test`) 안 건드린 엔티티만 무회귀를 본다. **안 건드리면** 값만 바꾸는 일이라 에이전트가 자율 누적한다.
+**건드리면** 커밋 직전 진행이 막힌다. 잠금은 **사람 확인 파일**(`ack-<diff_hash>`)과 **반박자 PASS 판정** 둘 다 있어야 풀린다 — ack 는 사람이 만들고(AI 의 Write/Edit 은 `settings.json` deny. 다만 셸 `touch` 는 안 막히므로 `certified/` 복사와 같은 speed-bump 이지 기계 보증은 아니다), 판정은 격리 반박자가 쓴다. 판단 층 자동 강제는 이 구간뿐이다: 반박자가 잡아야 할 위험(gold 변조·분할 누수·"올랐다=개선"의 순환)이 여기 몰려 있고, 어차피 사람이 멈춰 서는 지점이라 추가 마찰이 작기 때문이다. 사람 확인 전에, 점수를 본 뒤 유리한 정의를 고르지 못하도록 새 정의를 먼저 못 박고, 옛 모델을 새 기준으로 다시 재(`clean 동일-test`) 안 건드린 엔티티만 무회귀를 본다. **안 건드리면** 값만 바꾸는 일이라 에이전트가 자율 누적한다.
 
 ### 검사 게이트 — 결정적 + 판단 층
 
@@ -162,7 +114,7 @@ flowchart TD
 
 **커밋 직전이 주 진입점이다** — 커밋을 마친 턴에는 미커밋 diff 가 남지 않아, Stop 만으로는 한 턴에서 고치고 커밋까지 하면 검사 대상 자체가 사라진다. 반대로 판단 층은 반박자 서브에이전트를 요구해 커밋 명령 중간에 걸 수 없으므로 Stop 에만 있다. 커밋 직전에는 `git add` 된 새 파일도 diff 에 잡히므로, 새로 만드는 이슈 문서의 인용 표까지 검사 범위에 든다. 둘은 같은 diff 해시를 쓰기에 사람이 만든 ack 하나가 양쪽에 듣고, 검사 구현은 `gate_core.py` 공용이다.
 
-- **결정적 층** (기계·0토큰·**두 트랙 전 커밋 상시**): 게이트가 diff 를 직접 읽어 — 기준 파일 건드림 + ack 없음 → 차단 · ruff · 테스트 무결성(순삭제·무조건 `skip`/`xfail`·assert 약화, `skipif` 제외) · 인용 **표 안** 0–1 소수(0.00–1.9999)만 ↔ 그 표가 선언한 출처(없으면 `certified/**` 전체; 퍼센트·정수 metric 은 대조 밖). 오탐은 사람이 ack 로 해제한다. `certified/**` 편집 거부는 훅이 아니라 `settings.json` permission deny 다(ack 생성 차단도 동일).
+- **결정적 층** (기계·0토큰·**두 트랙 전 커밋 상시**): 게이트가 diff 를 직접 읽어 — 기준 파일 건드림 + ack 없음 → 차단 · ruff · 테스트 무결성(순삭제·무조건 `skip`/`xfail`·assert 약화, `skipif` 제외) · 라우팅(`feat`·`fix` 라벨 ∧ `src/**.py` 변경인데 브랜치에 `issue-N` 없음) · 인용 **표 안** 0–1 소수(0.00–1.9999)만 ↔ 그 표가 선언한 출처(없으면 `certified/**` 전체; 퍼센트·정수 metric 은 대조 밖). **게이트가 실제로 실행하는 프로그램은 `git` 과 `ruff` 둘뿐이다** — 테스트는 돌리지 않으므로 깨진 채 둔 커밋은 그대로 통과한다. 오탐은 사람이 ack 로 해제하되 ruff 만은 예외다(기계로 고칠 결함이라 해제 대상이 아니다). `certified/**` 편집 거부는 훅이 아니라 `settings.json` permission deny 다(ack 생성 차단도 동일 — 둘 다 Write/Edit 만 막고 셸 경로는 열려 있다).
 - **판단 층** (격리 반박자·**마무리·Front** 구간; **Front 는 게이트가 상시 요구**, 그 밖은 루프 모드만 자동): 코드 정합성·회귀(숨은 회귀·엣지케이스) · 측정 타당성(gold 변조·시드/분할 누수·"올랐다=개선"의 순환, 표 밖 산문의 Δ·σ).
 
 리포트가 인용하는 실험만 그 metric JSON 을 `results/`(gitignore·휘발 scratch)에서 `certified/` 로 verbatim 복사해 커밋하고, 이 **커밋된 원장**이 모든 숫자 검사의 기준이다. 표 위에 출처를 선언하면 게이트가 **그 파일·디렉토리 안에서만** 대조한다 — 원장이 커져도 검출력이 유지되고, 그 수치가 어느 실행에서 나왔는지가 문서에 남는다.
@@ -217,7 +169,7 @@ flowchart TD
 
 - **GitHub Issues**(`groovallstar/ner-pipeline`)로 작업 단위를 관리한다. 자동 채번으로 중복을 방지한다.
 - **무엇이 이슈가 되는가 — 사람이 소유, 에이전트는 default 실행.** 작업 단위 결정(이슈 등록 여부)·수락 기준 승인은 사람이 쥔다(에이전트 자기 채점 금지). 에이전트는 type+path 기반 default를 실행한다:
-  - `feat`·`fix` ∧ `src/**` 런타임 변경(`ner`·`server` 공통) → **feat 브랜치 분기 + 이슈 + PR** (추적 가치 있는 제품 진화). 브랜치명이 `issue-N`을 참조하므로 이슈가 전제된다. 커밋 게이트가 커밋 라벨과 브랜치를 대조해 이 갈래만 확인한다 — 라벨 자체가 옳은지(동작이 바뀌는데 `refactor`라 붙였나)는 판단 문제라 사람 몫이다.
+  - `feat`·`fix` ∧ `src/**` 런타임 변경(`ner`·`server` 공통) → **feat 브랜치 분기 + 이슈 + PR** (추적 가치 있는 제품 진화). 브랜치명이 `issue-N`을 참조하므로 이슈가 전제된다. 커밋 게이트가 커밋 라벨과 브랜치를 대조해 이 갈래만 확인하는데 **범위가 좁다** — 커밋 메시지에 `feat`·`fix` 접두사가 있고 변경 파일에 `src/**.py` 가 있을 때만 본다. 접두사를 안 붙이거나 `.py` 아닌 런타임 파일(`src/server/static/**` 등)만 바꾸면 검사 자체가 안 걸리고, 라벨이 옳은지(동작이 바뀌는데 `refactor`라 붙였나)도 판단 문제다 — 셋 다 사람 몫이다.
   - `docs`·`chore`·`refactor` (동작 불변·구조·문서·도구) → **develop 직접 커밋** (크기 무관). **PR 은 없다** — 별도 리뷰어가 안 붙어 PR 오버헤드가 추적 이득보다 크고, 회귀 게이트는 refuter 다. **이슈는 선택** — 추적 가치 있으면 등록해 `refs #N`으로 잇고(종결은 수동 close), 아니면 바로 커밋한다.
   - **type↔path 불일치**(예: `feat`인데 src 런타임 미변경, `chore`인데 src 런타임 변경) **또는 추적가치 모호** → 사람에게 에스컬레이션. 과소추적(조용한·비싼 실패) > 과다추적(시끄러운·싼 실패)이므로 모호하면 이슈 쪽으로 기운다.
 - **문서 숫자는 결과 파일과 맞아야 한다.** `docs/reports/`·`docs/issues/`의 **표 안** 수치가 `certified/**`과 어긋나면 하네스 검사 게이트의 결정적 층이 자동으로 잡는다 — 숫자가 diff 에 드는 *사건*이 트리거다. 표 위에 `<!-- certified: <경로> -->` 로 출처를 선언하면 그 파일 안에서만 대조한다(상세: §하네스). 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
@@ -226,18 +178,7 @@ flowchart TD
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
 - 커밋 메시지: 기존 컨벤션(한국어 제목 + `type(스코프):` 접두사) 유지, 본문 끝에 `refs #12` 참조. 최종 PR 또는 마지막 커밋에는 `closes #12`로 이슈 종결.
 - **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도. 이슈와 무관한 자유 형식 벤치마크·실험 리포트는 `docs/reports/`에 둔다.
-
-### 이슈 문서 구조
-
-이슈별로 `docs/issues/issue-{번호}-{슬러그}.md` 단일 파일을 만든다. 상세 규칙과 템플릿은 `docs/issues/README.md` 참조.
-
-```
-docs/issues/
-├── README.md
-└── issue-12-vi-crawler.md   # 설계 + 구현 결과 통합 단일 파일
-```
-
-- 실시간 게이트는 Issue 본문의 **수락 기준 목록**이다(3단계). `docs/issues/...md`는 산문 설계 + 구현 결과·검증을 합친 **영구 아카이브**로, 구현 완료(5단계) 후 작성·**최초 커밋**한다 — 재독용이 아니며 숫자 정합성은 검사 게이트가 보증한다.
+- 이슈 문서는 `docs/issues/issue-{번호}-{슬러그}.md` 단일 파일 — 섹션 구조·템플릿·커밋 시점은 `docs/issues/README.md`.
 
 ### 이슈 진행 절차 (경량 5단계, 승인 1회)
 

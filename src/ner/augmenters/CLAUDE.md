@@ -5,8 +5,13 @@
 라벨 스키마는 canonical 영문 축약 **10종 평면 목록**
 (`docs/manual/data/canonical-entity-schema.md`). NER 5종
 (`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`).
-JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 재정의돼
-인공 시설은 모두 ORG로 분류된다.
+
+**LOC/ORG 경계는 언어마다 다르다** — 10종 평면 목록만 공통이다. JA·VI 는 13종 →
+10종 평면화 때 인공 시설을 모두 ORG 로 흡수했고, KO 는 narrow-ORG 재정의를 따라
+ORG 를 정부·행정·공공·정치 기관으로 좁히고 인공 시설·민간조직을 아예 버린다.
+`generators/ko.py` 로 KO 주입을 돌릴 때 이 차이를 JA·VI 기준으로 착각하면
+주입 자체는 맞아도 gold 해석이 틀어진다. 언어별 정본: 위 스키마 문서 §KO 및
+`docs/manual/data/korean-entity-labeling-rules.md`.
 
 ## 서브 모듈
 
@@ -45,11 +50,27 @@ JA·VI 공통 스키마이며, 13종 → 10종 평면화 후 LOC/ORG 경계가 �
 CLI `--pii-max` 로 상한 조정 가능. 결정론성은 `--seed` 로 보장.
 
 ### wikiann_vi/
-WikiANN-vi를 canonical 5종으로 재라벨하는 async LLM 클라이언트
-+ 검증 유틸(kappa·Wikidata anchor·confidence 병합). HF 원본(WikiANN 3종
-BIO)을 읽는 책임은 본 패키지의 `__main__.py._load_wikiann_hf`에 있으며,
-평가용 canonical 덤프 로더(`labelers/vi/dataset_loader.py`)는 HF를
-호출하지 않는다. 상세: `docs/manual/pipeline/2-augmentation.md` §2B.
+WikiANN-vi를 canonical 5종으로 재라벨하는 async LLM 클라이언트 + 품질 측정
+유틸 + 코퍼스 빌드 단계. HF 원본(WikiANN 3종 BIO)을 읽는 책임은 본 패키지의
+`__main__.py._load_wikiann_hf`에 있으며, 평가용 canonical 덤프
+로더(`labelers/vi/dataset_loader.py`)는 HF를 호출하지 않는다.
+상세: `docs/manual/pipeline/2-augmentation.md` §2B.
+
+**품질 측정과 코퍼스 빌드를 섞지 말 것** — 앞은 데이터를 안 바꾸고 재라벨이
+쓸 만한지만 재고(kappa·Wikidata anchor), 뒤는 학습에 실제로 들어갈 span 을
+고르므로 결과가 바뀐다(merge_confidence·silver_gap).
+
+#### 주요 파일
+
+| 파일 | 역할 | 성격 |
+|------|------|------|
+| `prompts.py` | `SINGLE_PROMPT_TEMPLATE`·`BATCH_PROMPT_TEMPLATE`·`DEFAULT_ENTITY_TYPES`(NER 5종) | — |
+| `relabel.py` | `Relabeler`·`parse_spans`·`match_offsets` — async 재라벨 + 응답 파싱·오프셋 정렬 | 재라벨 |
+| `__main__.py` | CLI `python -m ner.augmenters.wikiann_vi`. `_load_wikiann_hf` 가 HF 원본 3종 BIO 로딩 담당 | 재라벨 |
+| `kappa.py` | Cohen's kappa + agreement 비율 + 타입별 일치·혼동행렬 (span union 기준 pair 수집). CLI: `python -m ner.augmenters.wikiann_vi.kappa` | 품질 측정 |
+| `wikidata_anchor.py` | vi.wikipedia 인터링크 → Q-ID → `P31` → canonical 5종 매핑(`WIKIDATA_TO_CANONICAL`), JSON 캐시·요청 간 대기. CLI: `...wikiann_vi.wikidata_anchor` | 품질 측정 |
+| `merge_confidence.py` | 정책별 span 선택·필터(`_filter_by_policy`) — `POLICIES` 7종(`recall`·`precision`·`high_only`·`full`·`recall_strict`·`recall_strict_evt`·`recall_strict_prod`). CLI: `...wikiann_vi.merge_confidence --policy <P>` | **코퍼스 빌드** |
+| `silver_gap.py` | `apply_silver_gap` — 검증기가 'gold 누락 legit' 으로 독립 확인한 FP→TP 만 골라 gold 에 **additive** 삽입 (leak-free group-kfold 유지) | **코퍼스 빌드** |
 
 ## 사용 예
 
@@ -100,8 +121,13 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
 
 ## 통합
 
-생성된 JSONL은 `labelers.ja.JapaneseDatasetLoader.load_local(path)` 로
-canonical 라벨 레코드(`{id, text, gold_spans}`)로 로딩된다.
+생성된 JSONL 의 소비자는 둘이고 목적이 다르다.
+
+- **LLM 벤치마크 평가**: `labelers.ja.JapaneseDatasetLoader.load_local(path)` →
+  canonical 라벨 레코드(`{id, text, gold_spans}`)
+- **BERT 학습**: `classifier.data_utils.load_jsonl(path)` → 학습용 행. 이쪽은
+  라벨이 canonical 10종 안에 있는지 검증하고 위반 시 `ValueError` 로 끊는다.
+  증강 산출물이 실제로 학습에 들어가는 지점이라 계약 위반이 여기서 드러난다.
 
 ## 테스트
 - `tests/ner/augmenters/pii/test_injector.py` — suffix 모드 span 일치, 밀도 분포, seed 결정론성, 라벨 병합
@@ -109,4 +135,6 @@ canonical 라벨 레코드(`{id, text, gold_spans}`)로 로딩된다.
 - `tests/ner/augmenters/pii/test_label_merger.py` — 병합 규칙 단위 테스트 (`injector.apply_label_merge` 대상)
 - `tests/ner/augmenters/pii/test_loader_integration.py` — JSONL → `load_local` 라운드트립
 - `tests/ner/augmenters/pii/test_verifier.py` — 교차 검증 (confirmed/missed/conflict, 정책별 동작, 부분 매칭, 데이터셋 리포트)
-- `tests/ner/augmenters/wikiann_vi/` — 재라벨 파서·offset 매칭·kappa·Wikidata anchor·confidence 병합
+- `tests/ner/augmenters/pii/test_ko_injection.py` · `test_vi_injection.py` — 언어별 PII 생성기·주입기 동작
+- `tests/ner/augmenters/pii/test_main_verify_dispatch.py` — `__main__._build_verify_labeler` 의 lang 분기
+- `tests/ner/augmenters/wikiann_vi/` — 재라벨 파서·offset 매칭·kappa·Wikidata anchor·confidence 병합·silver-갭 additive 삽입(`test_audit_silver_gap.py`)

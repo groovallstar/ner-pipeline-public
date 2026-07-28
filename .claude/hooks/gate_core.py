@@ -114,7 +114,9 @@ def state_dir(proj):
 
 
 def acked(sdir, dhash):
-    # 결정적 층의 오탐 해제 토글 — 사람이 만든다 (settings.json deny)
+    # 결정적 층의 오탐 해제 토글 — 사람이 만든다. AI 의 Write/Edit 은
+    # settings.json deny 지만 셸 경로는 안 막히므로 speed-bump 이지
+    # 기계 보증은 아니다 (`certified/` 복사와 같은 성격)
     return os.path.exists(os.path.join(sdir, f'ack-{dhash}'))
 
 
@@ -510,7 +512,9 @@ def run_deterministic(proj, sdir, dhash, command=None):
                 'and a refuter pass — run the refuter first, then a HUMAN '
                 'unlocks by creating:\n'
                 f'  {ack_path}\n'
-                'The AI cannot create this file (settings.json deny).',
+                'The AI must not create it (Write/Edit are denied in '
+                'settings.json); creating it by any other route defeats '
+                'the gate.',
                 ruler,
             )
         state, findings, meta = read_verdict(sdir, dhash)
