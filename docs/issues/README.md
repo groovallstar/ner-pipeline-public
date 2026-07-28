@@ -70,7 +70,7 @@ docs/issues/
 ```markdown
 # issue-{N}: {제목}
 
-- Issue: https://github.com/groovallstar/ner_pipeline/issues/{N}
+- Issue: https://github.com/groovallstar/ner-pipeline/issues/{N}
 - PR: <!-- 머지 직전 채움 -->
 - 브랜치: `feat/issue-{N}-{슬러그}`
 - 승인일: YYYY-MM-DD

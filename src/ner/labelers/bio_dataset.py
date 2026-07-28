@@ -202,9 +202,11 @@ def load(
             spec.config,
             split=split,
             cache_dir=cache_dir,
-            trust_remote_code=False,
         )
-    except (HFDatasetNotFoundError, FileNotFoundError, ValueError, TypeError) as exc:
+    # ValueError 는 존재하지 않는 config·split 을 가리키므로 부재로 묶는다.
+    # 반면 TypeError 같은 호출 오류는 데이터 부재가 아니라 코드 결함이라
+    # 삼키지 않고 그대로 전파한다.
+    except (HFDatasetNotFoundError, FileNotFoundError, ValueError) as exc:
         raise DatasetNotFoundError(f"HF load failed for {spec.name!r}: {exc}") from exc
 
     if max_samples is not None:

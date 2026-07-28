@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
-# ja·vi NER REST API 추론 서버 이미지 — dev 와 동일 CUDA 베이스에서 uv 로
+# ja·vi NER REST API 추론 서버 이미지 — CUDA 베이스에서 uv 로
 # 프로젝트(ner·server)를 설치하고 `python -m server` 로 기동한다. 모델은
 # 이미지에 넣지 않고 런타임에 호스트 /data 를 마운트해 읽는다.
-FROM pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel
+FROM pytorch/pytorch:2.13.0-cuda13.0-cudnn9-devel
 
 SHELL ["/bin/bash", "-c"]
 

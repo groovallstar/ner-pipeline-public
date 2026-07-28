@@ -30,6 +30,15 @@ class ServerConfig:
     api_key: Optional[str] = None  # None 이면 인증 비활성
     host: str = '0.0.0.0'
     port: int = 8008
+    log_level: str = 'INFO'        # 루트 로그 레벨(DEBUG 로 요청별 상세 켬)
+    log_file: str = '/tmp/ner-server.log'  # 회전 파일 로그 경로(빈 값=stderr만)
+    # 웹 데모 UI용 한국어 번역(additive, 기본 비활성). 활성 시 온프렘 LLM
+    # (vLLM/OpenAI 호환) 엔드포인트에 런타임 의존한다 — /v1/ner 코어와는 독립.
+    translate_enabled: bool = False
+    translate_base_url: str = 'http://localhost:8081/v1'
+    translate_model: str = ''      # 활성 시 필수(미지정이면 기동 실패)
+    translate_api_key: Optional[str] = None  # OpenAI 호환 키(vLLM 은 불필요)
+    translate_timeout_s: float = 30.0  # LLM 호출 타임아웃(초)
 
     @classmethod
     def from_env(cls) -> 'ServerConfig':
@@ -41,6 +50,12 @@ class ServerConfig:
         def _float(name: str, default: float) -> float:
             raw = os.environ.get(name)
             return float(raw) if raw else default
+
+        def _bool(name: str, default: bool) -> bool:
+            raw = os.environ.get(name)
+            if raw is None or raw == '':
+                return default
+            return raw.strip().lower() in ('1', 'true', 'yes', 'on')
 
         return cls(
             model_root=os.environ.get(
@@ -56,6 +71,16 @@ class ServerConfig:
             api_key=os.environ.get('NER_SERVER_API_KEY') or None,
             host=os.environ.get('NER_SERVER_HOST', '0.0.0.0'),
             port=_int('NER_SERVER_PORT', 8008),
+            log_level=os.environ.get('NER_SERVER_LOG_LEVEL', 'INFO'),
+            log_file=os.environ.get(
+                'NER_SERVER_LOG_FILE', '/tmp/ner-server.log'),
+            translate_enabled=_bool('NER_SERVER_TRANSLATE_ENABLED', False),
+            translate_base_url=os.environ.get(
+                'NER_SERVER_TRANSLATE_BASE_URL', 'http://localhost:8081/v1'),
+            translate_model=os.environ.get('NER_SERVER_TRANSLATE_MODEL', ''),
+            translate_api_key=os.environ.get(
+                'NER_SERVER_TRANSLATE_API_KEY') or None,
+            translate_timeout_s=_float('NER_SERVER_TRANSLATE_TIMEOUT_S', 30.0),
         )
 
     def model_dir(self, lang: str) -> str:

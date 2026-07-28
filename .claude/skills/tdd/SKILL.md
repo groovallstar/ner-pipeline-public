@@ -3,7 +3,7 @@ name: tdd
 description: Test-Driven Development. Use when implementing new logic, fixing a bug, or changing behavior in src/labelers/ or src/evaluators/. Write a failing pytest test before the implementation; reproduce bugs with a test before fixing.
 metadata:
   source: https://github.com/addyosmani/agent-skills/tree/main/skills/test-driven-development
-  adaptedFor: ner_pipeline
+  adaptedFor: ner-pipeline
 ---
 
 # TDD (NER 파이프라인 맞춤)

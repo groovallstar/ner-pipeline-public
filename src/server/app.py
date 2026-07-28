@@ -16,12 +16,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.concurrency import ConcurrencyGuard, Overloaded
 from server.config import SUPPORTED_LANGS, ServerConfig
 from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
 from server.limits import BodySizeLimitMiddleware
+from server.request_log import RequestLogMiddleware
+from server.translate import TranslationUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +78,63 @@ class BatchResponse(BaseModel):
     results: List[BatchItem]
 
 
-def _error(status: int, message: str) -> JSONResponse:
-    """구조화 에러 응답 `{"error": {...}}`."""
+class TranslateRequest(BaseModel):
+    """번역 요청 — 원문 `text` + `lang`(ja/vi) + `/v1/ner` 결과 `spans`.
+
+    호출자(웹 UI)가 `/v1/ner` 에서 받은 엔티티를 그대로 넘긴다. 그중 PII
+    라벨만 마스킹 대상이며, 나머지는 무시된다(고유명사는 음차).
+    """
+
+    text: str
+    lang: str
+    spans: List[Span] = []
+
+
+class TranslateResponse(BaseModel):
+    """번역 응답 — lang + 한국어 글로스."""
+
+    lang: str
+    translation: str
+
+
+class ErrorBody(BaseModel):
+    """에러 봉투 내용 — 상태코드와 사람이 읽는 한 줄 사유."""
+
+    status: int
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    """서버가 판정하는 모든 에러의 공통 봉투(`_error` 가 내는 형태).
+
+    OpenAPI 의 422 선언을 이 모델로 덮기 위해 존재한다 — 선언을 안 덮으면
+    FastAPI 기본 `HTTPValidationError`(`{"detail": [...]}`)가 남아, 봉투로
+    통일된 실제 응답과 기계 계약이 어긋난다.
+    """
+
+    error: ErrorBody
+
+
+def _error(status: int, message: str, headers=None) -> JSONResponse:
+    """구조화 에러 응답 `{"error": {...}}`.
+
+    headers 는 예외가 실어 보낸 응답 헤더(405 의 `Allow` 등)를 그대로
+    통과시키기 위한 것 — 봉투로 감싸면서 프로토콜 헤더를 잃지 않는다.
+    """
     return JSONResponse(
         status_code=status,
         content={'error': {'status': status, 'message': message}},
+        headers=headers,
     )
+
+
+def _lang_summary(langs: List[str]) -> str:
+    """배치 로그용 언어 요약 — 중복 제거 후 '+' 결합(예: `ja+vi`)."""
+    seen: List[str] = []
+    for lang in langs:
+        if lang not in seen:
+            seen.append(lang)
+    return '+'.join(seen) if seen else '-'
 
 
 # OpenAPI/Swagger 노출용 — 외부 소비자를 위한 사용법만 담는다. 구현 세부는
@@ -125,11 +179,14 @@ _NER_BODY_EXAMPLES = {
 }
 
 
-def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
+def create_app(registry, config: Optional[ServerConfig] = None,
+               translator=None) -> FastAPI:
     """registry(추론기)와 config 로 FastAPI 앱을 구성한다.
 
     registry 는 `predict(text, lang)` / `health()` 를 제공하는
     객체면 된다(실모델 또는 테스트 stub). config 미지정 시 기본값.
+    translator 는 `translate(text, lang, spans)` 를 가진 객체(또는 None) —
+    None 이면 `/v1/translate` 는 503(번역 비활성)을 낸다.
     """
     config = config or ServerConfig()
     # defaultModelsExpandDepth=-1 → Swagger UI 하단 Schemas(모델 목록) 섹션을
@@ -140,6 +197,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     # 라우팅·인증보다 앞서 바디 바이트를 bound — 전송 계층 메모리 고갈 가드.
     app.add_middleware(BodySizeLimitMiddleware,
                        max_bytes=config.max_body_bytes)
+    # 요청 로그 미들웨어는 가장 바깥(마지막 add = 최외곽)에 둔다 — 전송 계층
+    # 413 을 포함한 최종 상태·전체 지연을 관측하고 request-id 를 심는다.
+    app.add_middleware(RequestLogMiddleware)
     guard = ConcurrencyGuard(config.max_concurrency, config.max_queue,
                              config.acquire_timeout_s)
 
@@ -159,9 +219,13 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                 raise HTTPException(
                     status_code=401, detail='invalid or missing API key')
 
-    @app.exception_handler(HTTPException)
-    async def _http_exc(request: Request, exc: HTTPException):
-        return _error(exc.status_code, str(exc.detail))
+    # 부모 클래스(starlette)에 등록해야 봉투가 전 경로를 덮는다 — 핸들러가
+    # 던지는 fastapi.HTTPException 은 서브클래스라 함께 잡히지만, 라우트
+    # 미매칭(404)·메서드 불일치(405)는 라우터가 starlette 쪽을 직접 던지므로
+    # fastapi 쪽에만 걸면 FastAPI 기본 핸들러로 새어 `{"detail": ...}` 가 된다.
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_exc(request: Request, exc: StarletteHTTPException):
+        return _error(exc.status_code, str(exc.detail), headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError):
@@ -182,7 +246,9 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
     async def _unhandled(request: Request, exc: Exception):
         # 미처리 예외(모델 forward 오류 등)를 봉투로 통일하고 내부 예외
         # 메시지·트레이스백은 응답에 노출하지 않는다(서버 로그에만 기록).
-        logger.exception('unhandled error during request')
+        # request-id 를 실어 요청 로그 미들웨어 라인과 상관지을 수 있게 한다.
+        rid = getattr(request.state, 'request_id', '-')
+        logger.exception('unhandled error during request rid=%s', rid)
         return _error(500, 'internal server error')
 
     def _check_text(text: str) -> None:
@@ -203,8 +269,12 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
               summary=_NER_SUMMARY,
               description=_NER_DESCRIPTION,
               response_model=Union[SingleResponse, BatchResponse],
+              responses={422: {
+                  'model': ErrorResponse,
+                  'description': 'JSON 스키마 검증 실패'}},
               dependencies=[Depends(require_key)])
-    async def ner(req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
+    async def ner(request: Request,
+                  req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
         """단일(`text`) 또는 배치(`texts`) NER 추론.
 
         추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
@@ -228,10 +298,14 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
         if req.text is not None:
             lang = _resolve_one(req.text, req.lang)
             if lang == UNSUPPORTED:
+                request.state.ner_meta = {
+                    'lang': lang, 'batch': 1, 'entities': 0}
                 return {'lang': lang, 'entities': []}
             async with guard:
                 entities = await run_in_threadpool(
                     registry.predict, req.text, lang)
+            request.state.ner_meta = {
+                'lang': lang, 'batch': 1, 'entities': len(entities)}
             return {'lang': lang, 'entities': entities}
 
         assert req.texts is not None  # 위 oneof 검증이 보장 — 타입 narrowing
@@ -258,7 +332,57 @@ def create_app(registry, config: Optional[ServerConfig] = None) -> FastAPI:
                     registry.predict_batch, sup_texts, sup_langs)
             for (i, _, lang), e in zip(sup, ents):
                 results[i] = {'lang': lang, 'entities': e}
+        request.state.ner_meta = {
+            'lang': _lang_summary(langs),
+            'batch': len(req.texts),
+            'entities': sum(len(r['entities']) for r in results),
+        }
         return {'results': results}
+
+    # 웹 데모 UI 전용 — 외부 소비자용 OpenAPI 명세(=/v1/ner)에 노출하지 않는다
+    # (include_in_schema=False). `/v1/ner` 계약과 독립.
+    @app.post('/v1/translate',
+              response_model=TranslateResponse,
+              dependencies=[Depends(require_key)],
+              include_in_schema=False)
+    async def translate(req: TranslateRequest = Body(...)):
+        """마스킹-복원 번역. 추론과 독립이라 NER guard 를 공유하지 않는다.
+
+        translator 미주입(비활성) 시 503. lang 은 ja/vi 만 허용하고, 텍스트
+        크기는 NER 과 동일 상한을 재사용한다. 백엔드 호출 실패는 503 으로
+        graceful degrade — 호출 측(UI)은 글로스를 생략하고 NER 은 그대로 둔다.
+        """
+        if translator is None:
+            raise HTTPException(
+                status_code=503, detail='translation is not enabled')
+        if req.lang not in SUPPORTED_LANGS:
+            raise HTTPException(
+                status_code=400, detail=f"unsupported lang '{req.lang}'")
+        _check_text(req.text)
+        spans = [s.model_dump() for s in req.spans]
+        try:
+            result = await run_in_threadpool(
+                translator.translate, req.text, req.lang, spans)
+        except ValueError:
+            # 비정상 span(겹침·범위 밖) — 클라이언트 계약 위반.
+            raise HTTPException(status_code=400, detail='invalid spans')
+        except TranslationUnavailable:
+            raise HTTPException(
+                status_code=503, detail='translation backend unavailable')
+        return {'lang': req.lang, 'translation': result.translation}
+
+    @app.get('/v1/translate/status', include_in_schema=False)
+    async def translate_status():
+        """번역 가용성 — 웹 UI 가 페이지 로드 시 1회 조회해 버튼을 켠다.
+
+        `enabled` = 서버 번역 토글. `available` = 토글 ON + 백엔드(vLLM)
+        liveness 확인 성공. 폴링용이 아니라 로드 1회용이며, OpenAPI 에는
+        노출하지 않는다(웹 UI 전용).
+        """
+        if translator is None:
+            return {'enabled': False, 'available': False}
+        available = await run_in_threadpool(translator.available)
+        return {'enabled': True, 'available': available}
 
     @app.get('/', response_class=HTMLResponse, include_in_schema=False)
     def ui():

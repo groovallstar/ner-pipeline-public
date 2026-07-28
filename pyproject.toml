@@ -22,6 +22,8 @@ dependencies = [
     "sentence-transformers",
     "seqeval",
     "sentencepiece",
+    # OpenAI SDK (vLLM/OpenAI 호환 클라이언트 — labelers·server 직접 사용)
+    "openai",
     # LangChain ecosystem
     "langchain",
     "langgraph",
@@ -60,12 +62,26 @@ packages = [
     "src/server",
 ]
 
+# explicit = true 필수.
+# 이 미러는 requests/urllib3/certifi/charset-normalizer 등의 낡은 복사본도
+# 함께 제공하기 때문에, 생략하면 uv 가 그쪽을 먼저 집어가 일반 패키지까지
+# 수년 전 버전으로 내려앉습니다. explicit 를 켜면 아래 sources 에서
+# 명시한 torch 에만 이 인덱스를 사용합니다.
+# (torch 의 nvidia-*/triton 의존성은 PyPI 에서 정상 해결됩니다.)
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
+
+# select 를 명시하지 않으면 ruff 의 그때그때 기본값을 그대로 물려받아,
+# 린터를 올리는 것만으로 커밋 게이트(refuter_gate 의 결정적 층)가 막힌다.
+# 실제로 0.15 → 0.16 에서 기본 활성 규칙이 59 개에서 413 개로 늘며 지적이
+# 1 건에서 920 건이 됐다. 아래 값은 0.15 까지의 기본값과 같다.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 markers = [

@@ -19,7 +19,12 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 배치 char 합산 — 요청당 작업량 가드)·`MAX_BODY_BYTES`(2MB, 요청 바디 바이트
 상한 — 파싱 전 전송 계층 가드)·`MAX_CONCURRENCY`(8, 동시 추론 상한)·
 `MAX_QUEUE`(32, 대기 큐 깊이)·`ACQUIRE_TIMEOUT_S`(10, 세마포어 대기 타임아웃
-초)·`API_KEY`(미설정 시 인증 off)·`HOST`·`PORT`.
+초)·`API_KEY`(미설정 시 인증 off)·`LOG_LEVEL`(INFO, `DEBUG` 로 요청별 상세
+켬)·`LOG_FILE`(주간 회전 파일 로그 경로·일주일 보관, 기본
+`/tmp/ner-server.log`·빈 값=stderr만)·`HOST`·`PORT`. 웹 데모 번역(additive,
+기본 비활성): `TRANSLATE_ENABLED`(false)·`TRANSLATE_BASE_URL`
+(`http://localhost:8081/v1`)·`TRANSLATE_MODEL`(활성 시 필수)·`TRANSLATE_API_KEY`
+·`TRANSLATE_TIMEOUT_S`(30).
 
 컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
 라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
@@ -29,7 +34,9 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 엔드포인트 | 설명 |
 |---|---|
 | `POST /v1/ner` | 단일 `{text, lang?}` 또는 배치 `{texts:[...], lang?}`. `lang` 생략 시 텍스트별 자동감지. 신뢰도 임계값은 모델 로드 시 자동 적용 |
-| `GET /` | 내부 개발·데모용 웹 UI(자족적 HTML, 동일 출처로 `/v1/ner` 호출·CORS 불필요). 인증·Swagger 미노출 |
+| `POST /v1/translate` | **웹 데모 전용**(OpenAPI 미노출) — `{text, lang, spans}`(spans=`/v1/ner` 결과)를 한국어로 번역. PII 는 마스킹-복원으로 원문 그대로 보존, 고유명사는 한글 음차. 기본 비활성→503(`NER_SERVER_TRANSLATE_*` 로 활성). `/v1/ner` 계약과 독립 |
+| `GET /v1/translate/status` | **웹 데모 전용**(OpenAPI 미노출) — `{enabled, available}`. `available` 은 토글 ON + vLLM 백엔드 liveness. UI 가 페이지 로드 시 1회 조회해 번역 버튼을 켜고, 미가용이면 계속 끈다(폴링 없음) |
+| `GET /` | 내부 개발·데모용 웹 UI(자족적 HTML, 동일 출처로 `/v1/ner`·`/v1/translate` 호출·CORS 불필요). 인증·Swagger 미노출 |
 | `GET /health` | 언어별 모델 로드 상태 + thresholds 존재 여부(인증 없음) |
 
 응답 span 은 canonical `{label, start_char, end_char, text}`
@@ -42,7 +49,11 @@ ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에
 초과→413, 모델 미로드→503, API-key 불일치→401. 요청 바디가 `max_body_bytes`
 초과면 파싱 전에 413(전송 계층 가드 — chunked 우회 포함). Pydantic 검증
 실패→422, 미처리 예외→500 도 모두 동일 봉투로 감싸고 500 은 내부 메시지를
-노출하지 않는다.
+노출하지 않는다. 라우터가 내는 라우트 미매칭→404·메서드 불일치→405 도 같은
+봉투다(405 는 `Allow` 헤더 유지) — 소비자는 에러 파싱 경로를 하나만 두면
+된다. 봉투 통일은 예외 핸들러를 `starlette.exceptions.HTTPException`(부모)에
+걸어 얻는다: `fastapi.HTTPException` 에만 걸면 라우터가 부모 클래스를 직접
+던지는 404·405 가 FastAPI 기본 `{"detail": ...}` 로 샌다.
 
 ## 사용 예시 (curl)
 
@@ -89,7 +100,9 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). 추론은 fp32 전용(단건·배치 결정적), 입력은 NFC 정규화. 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 전역 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429 |
 | `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
-| `app.py` | `create_app(registry, config)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
+| `request_log.py` | `RequestLogMiddleware`(순수 ASGI, 최외곽) — 요청별 request-id 생성·`X-Request-ID` 에코, 지연·결과를 한 줄로. 성공 2xx→DEBUG(기본 침묵), 거절 4xx·503→WARNING(사유 태그). 핸들러가 `request.state.ner_meta`(lang·batch·entities)를 채워 성공 로그에 실린다 |
+| `app.py` | `create_app(registry, config, translator)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `translator`(옵션)는 `/v1/translate` 용, None 이면 503. `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
+| `translate.py` | `LLMTranslator`·`build_translator` — 온프렘 LLM(OpenAI 호환) 마스킹-복원 번역. PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. `/v1/ner`·`inference.py` 무의존 additive |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응 |
 | `__main__.py` | uvicorn 기동 진입점 |
 
@@ -104,6 +117,33 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 입력은 NFC 로 정규화한다(NFD span 깨짐 방지).
 추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량·
 정밀도 측정·동결은 `scripts/throughput/`·`docs/reports/server-inference-throughput.md`.
+
+## 로깅·관측성
+
+요청 로깅은 **평상시 조용, 필요할 때 상세**를 원칙으로 한다(로그량 억제,
+`request_log.py`).
+
+- **성공(2xx)** → DEBUG 한 줄(`request status=200 latency_ms=.. lang=..
+  batch=.. entities=.. rid=..`). 기본 레벨 INFO 에선 침묵한다.
+- **거절(400·401·413·422·429·503)** → WARNING 한 줄(`request rejected
+  status=.. reason=.. path=.. rid=..`). 상시 남아 부하 셰딩·인증 실패가 보인다.
+  503(모델 미로드)은 5xx 지만 서버 결함이 아니라 거절로 분류한다.
+- **미처리 예외(500)** → 트레이스백을 ERROR 로(rid 포함, `app._unhandled`).
+  요약 라인은 중복 방지로 생략(예외는 send 없이 전파돼 미들웨어 경로를 안 탄다).
+- 모든 응답에 `X-Request-ID` 헤더를 실어 로그 라인과 상관지을 수 있다(수신
+  헤더가 있으면 에코, 없으면 8-hex 생성).
+
+레벨은 `NER_SERVER_LOG_LEVEL`(기본 INFO)로 조정한다 — 요청별 상세가 필요하면
+`DEBUG`. uvicorn 기본 액세스 로그는 꺼서(`access_log=False`) 요청 라인을
+`RequestLogMiddleware` 가 단독 소유한다(요청당 이중 로그 방지).
+
+**출력** — 로그는 stderr 로 스트리밍하고(컨테이너는 `docker/server/logs.sh`
+= `docker logs`, 로컬은 실행 터미널), 동시에 `NER_SERVER_LOG_FILE`(기본
+`/tmp/ner-server.log`)에 파일로도 남긴다. 파일은 **매주 회전(월요일)해 직전
+1주치만 보관**하고 오래된 파일은 자동 삭제한다(TimedRotating, `__main__.
+_configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr 로깅을
+유지한 채 경고만 낸다. 컨테이너 안 `/tmp` 는 컨테이너-로컬(재시작 시 휘발)이라
+호스트에서 보려면 볼륨 마운트 경로로 `LOG_FILE` 을 바꾼다.
 
 ## 테스트·검증
 
