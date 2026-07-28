@@ -10,8 +10,10 @@
     "deny": [
       "Write(.omc/state/refuter/ack-*)",
       "Edit(.omc/state/refuter/ack-*)",
-      "Write(certified/**)",
-      "Edit(certified/**)"
+      "Write(certified/**/*.json)",
+      "Edit(certified/**/*.json)",
+      "Write(certified/*.json)",
+      "Edit(certified/*.json)"
     ]
   },
   "hooks": {
