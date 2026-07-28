@@ -16,6 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.concurrency import ConcurrencyGuard, Overloaded
 from server.config import SUPPORTED_LANGS, ServerConfig
@@ -114,11 +115,16 @@ class ErrorResponse(BaseModel):
     error: ErrorBody
 
 
-def _error(status: int, message: str) -> JSONResponse:
-    """구조화 에러 응답 `{"error": {...}}`."""
+def _error(status: int, message: str, headers=None) -> JSONResponse:
+    """구조화 에러 응답 `{"error": {...}}`.
+
+    headers 는 예외가 실어 보낸 응답 헤더(405 의 `Allow` 등)를 그대로
+    통과시키기 위한 것 — 봉투로 감싸면서 프로토콜 헤더를 잃지 않는다.
+    """
     return JSONResponse(
         status_code=status,
         content={'error': {'status': status, 'message': message}},
+        headers=headers,
     )
 
 
@@ -213,9 +219,13 @@ def create_app(registry, config: Optional[ServerConfig] = None,
                 raise HTTPException(
                     status_code=401, detail='invalid or missing API key')
 
-    @app.exception_handler(HTTPException)
-    async def _http_exc(request: Request, exc: HTTPException):
-        return _error(exc.status_code, str(exc.detail))
+    # 부모 클래스(starlette)에 등록해야 봉투가 전 경로를 덮는다 — 핸들러가
+    # 던지는 fastapi.HTTPException 은 서브클래스라 함께 잡히지만, 라우트
+    # 미매칭(404)·메서드 불일치(405)는 라우터가 starlette 쪽을 직접 던지므로
+    # fastapi 쪽에만 걸면 FastAPI 기본 핸들러로 새어 `{"detail": ...}` 가 된다.
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_exc(request: Request, exc: StarletteHTTPException):
+        return _error(exc.status_code, str(exc.detail), headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError):
