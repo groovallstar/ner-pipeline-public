@@ -3,7 +3,7 @@ name: debug-triage
 description: Systematic root-cause debugging for NER pipeline failures. Use when pytest fails, benchmarks produce unexpected metrics, LLM backends (vLLM/Ollama/OpenAI) error out, or BIO/span logic misbehaves. Follow stop-the-line + triage checklist instead of guessing.
 metadata:
   source: https://github.com/addyosmani/agent-skills/tree/main/skills/debugging-and-error-recovery
-  adaptedFor: ner_pipeline
+  adaptedFor: ner-pipeline
 ---
 
 # Debug Triage (NER 파이프라인 맞춤)

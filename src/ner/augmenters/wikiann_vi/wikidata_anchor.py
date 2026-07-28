@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 _VI_WIKI_API = 'https://vi.wikipedia.org/w/api.php'
 _WIKIDATA_API = 'https://www.wikidata.org/w/api.php'
-_UA = 'ner_pipeline (research; https://github.com/groovallstar/ner_pipeline)'
+_UA = 'ner-pipeline (research; https://github.com/groovallstar/ner-pipeline)'
 _BATCH = 50
 _SLEEP = 0.2
 

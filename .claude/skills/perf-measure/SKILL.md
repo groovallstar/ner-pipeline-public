@@ -3,7 +3,7 @@ name: perf-measure
 description: Measure-first performance optimization for NER benchmarks and labelers. Use when LLM throughput/latency matters, when tuning vLLM batch/context settings, or when a change is suspected to have regressed speed. Never optimize without measurement.
 metadata:
   source: https://github.com/addyosmani/agent-skills/tree/main/skills/performance-optimization
-  adaptedFor: ner_pipeline
+  adaptedFor: ner-pipeline
 ---
 
 # Performance Measurement (NER 파이프라인 맞춤)

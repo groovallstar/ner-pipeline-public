@@ -2,11 +2,11 @@
   "name": "NER Pipeline Dev",
   "dockerComposeFile": "../docker/dev/docker-compose.yml",
   "service": "ner-pipeline",
-  "workspaceFolder": "/work/git/ner_pipeline",
+  "workspaceFolder": "/work/git/ner-pipeline",
 
   "remoteUser": "${localEnv:USER}",
   "remoteEnv": {
-    "PYTHONPATH": "/work/git/ner_pipeline/src/",
+    "PYTHONPATH": "/work/git/ner-pipeline/src/",
     "HF_HOME": "/work/.huggingface/"
   },
 
