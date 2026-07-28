@@ -19,7 +19,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 from collections import Counter
 
 # 렛저 경로 (프로젝트 루트 기준)
