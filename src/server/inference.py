@@ -155,10 +155,11 @@ class LangModel:
         """여러 텍스트를 언어 공통 배치 forward 로 추론(입력 순서 보존).
 
         각 텍스트를 chunk 분할한 뒤 전 텍스트의 chunk 를 [TotalChunks,
-        max_length] 한 배치로 묶어 1 forward 한다(B>1 → bf16). chunk 를 원
-        텍스트로 되돌려 글로벌 offset·임계값을 적용하고 텍스트별 canonical
-        span 리스트를 돌려준다 — 텍스트별 단건 predict 순차 호출과 span 이
-        동일하다(배치 등가).
+        max_length] 한 배치로 묶어 1 forward 한다. chunk 를 원 텍스트로
+        되돌려 글로벌 offset·임계값을 적용하고 텍스트별 canonical span
+        리스트를 돌려준다 — 추론이 fp32 전용이라(모델 로드 시 고정) 배치
+        크기가 커널을 바꾸지 않으므로, 텍스트별 단건 predict 순차 호출과
+        span 이 동일하다(배치 등가).
         """
         texts = [unicodedata.normalize('NFC', t) for t in texts]
         feats, offs_list, bases, owners = [], [], [], []

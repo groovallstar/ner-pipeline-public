@@ -1,0 +1,30 @@
+{
+  "gemma2-9b-gguf|ja": {
+    "engine": "gemma2-9b-gguf",
+    "lang": "ja",
+    "n": 14,
+    "errors": 0,
+    "pii_preserved": 12,
+    "pii_total": 12,
+    "pii_preserve_pct": 100.0,
+    "latency_mean_s": 1.25,
+    "latency_p50_s": 1.22,
+    "latency_max_s": 3.03,
+    "adequacy_mean": null,
+    "translit_mean": null
+  },
+  "gemma2-9b-gguf|vi": {
+    "engine": "gemma2-9b-gguf",
+    "lang": "vi",
+    "n": 14,
+    "errors": 0,
+    "pii_preserved": 12,
+    "pii_total": 12,
+    "pii_preserve_pct": 100.0,
+    "latency_mean_s": 1.07,
+    "latency_p50_s": 1.09,
+    "latency_max_s": 1.8,
+    "adequacy_mean": null,
+    "translit_mean": null
+  }
+}

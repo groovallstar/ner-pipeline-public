@@ -15,7 +15,7 @@ span F1 을 측정한다.
 | 파일 | 역할 |
 |---|---|
 | `data_utils.py` | canonical 10종 라벨 맵 / JSONL 로더 / fast(offset-trim)·PhoBERT(pyvi)·JA(slow) 3-way tokenizer 분기 정렬 / BIO ↔ char-span 변환 (`decode_bio_to_spans(confs=...)` 시 span 에 conf_mean `score` 부착) |
-| `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착) |
+| `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착, `capture_timing=True` 시 `load_seconds`·`infer_seconds` 반환 — 배포 추론 스크립트가 쓴다). **평가는 학습 `--precision` 과 무관하게 항상 float32** 로 모델을 로드한다 (DeBERTa-v3 계열의 fp16 NaN underflow 회피) |
 | `confidence_threshold.py` | per-class 신뢰도 임계값(confidence threshold) 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
 | `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 그룹 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만) + 판정 근거(`leak_check_basis`) 기록. CLI: `python -m ner.classifier.kfold_pool` |
@@ -60,22 +60,31 @@ python -m ner.classifier.kfold_pool \
     --fold-dirs results/classifier/ja_sweep/<실험명>/fold{0..9}
 
 # 신뢰도 임계값 운영점: valid 에서 per-class 신뢰도 임계값 fit → test 적용·저장
-python -m ner.classifier --lang ja --fit-threshold
+python -m ner.classifier --lang ja --group-key id --fit-threshold
 # 저장된 thresholds.json 을 다른 run 에 적용
-python -m ner.classifier --lang ja --confidence-thresholds path/to/thresholds.json
+python -m ner.classifier --lang ja --group-key id \
+    --confidence-thresholds path/to/thresholds.json
 
 # stratification 비활성화 (PROD/EVT 유무와 무관한 fold 구성 — before/after 통제 비교용)
-python -m ner.classifier --lang ja --no-stratify
+# K-fold 경로 전용 옵션이다 — 기본 3-way 분할은 애초에 층화를 하지 않아 no-op 이 된다
+python -m ner.classifier --lang ja --group-key id \
+    --kfold 10 --fold-index 0 --no-stratify
 
 # 2단계 NER 커리큘럼 warmup (stage1: PII 를 O 로 마스킹 후 워밍업, stage2: 21-class 본학습)
-python -m ner.classifier --lang ja --curriculum --curriculum-stage1-epochs 3
+python -m ner.classifier --lang ja --group-key id \
+    --curriculum --curriculum-stage1-epochs 3
 
 # 콘솔 출력 span-F1 모드 선택 (strict|relaxed|both, 기본 both; metrics.json 은 항상 둘 다 저장)
-python -m ner.classifier --lang ja --metric-mode strict
+python -m ner.classifier --lang ja --group-key id --metric-mode strict
 
 # B-/I- 토큰 per-token loss 가중 (경계 인식 강화, 기본 1.0 = 미적용)
-python -m ner.classifier --lang ja --boundary-b-weight 2.0 --boundary-i-weight 1.5
+python -m ner.classifier --lang ja --group-key id \
+    --boundary-b-weight 2.0 --boundary-i-weight 1.5
 ```
+
+위 예시가 모두 `--group-key` 를 달고 있는 것은 장식이 아니다 — 빠뜨리면
+argparse 가 즉시 `parser.error` 로 끊는다. 옵션 하나를 시험하려고 짧게 잘라
+붙이면 실행 자체가 안 된다.
 
 ### 신뢰도 임계값 운영점 (per-class confidence threshold)
 
@@ -233,21 +242,36 @@ results/classifier/{ja,vi,ko}/
 docs/reports/japanese-bert-classifier-benchmark.md      # JA 요약 (현 상태·교훈)
 docs/reports/japanese-bert-classifier-history.md         # JA 히스토리 1편 (Phase 0~8, 동결)
 docs/reports/japanese-bert-classifier-per-entity-diagnosis.md  # JA 엔티티별 성능 진단 (1편 후속, 층화 K-fold)
-docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 리포트
+docs/reports/japanese-bert-classifier-spec.md            # JA 최종 출하 스펙
+docs/reports/vietnamese-bert-classifier-benchmark.md    # VI 요약
+docs/reports/vietnamese-bert-classifier-history.md       # VI 히스토리
+docs/reports/vietnamese-bert-classifier-spec.md          # VI 최종 출하 스펙
+docs/reports/korean-bert-classifier-benchmark.md         # KO 요약
+docs/reports/korean-bert-classifier-per-entity-diagnosis.md  # KO 엔티티별 성능 진단
 docs/reports/korean-bert-classifier-fold-collapse.md     # KO fold 붕괴 조사 (재현성·안정성)
 ```
 
-## 출하·배포 (JA deploy)
+## 출하·배포 (JA·VI deploy)
 
-JA 출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·`docs/`)에
+출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·`docs/`)에
 둔다 — 학습은 CLI(`python -m ner.classifier`, `--fit-threshold` 포함)에
-흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음).
+흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음). **JA·VI 두 언어가
+같은 골격으로 출하돼 있다** — 아래 세 아티팩트가 언어별로 한 벌씩 있다.
 
-| 아티팩트 | 위치 | 역할 |
+| 아티팩트 | JA | VI |
 |---|---|---|
-| 배포 추론 | `src/ner/scripts/eval_ja_ner_test.py` (`.sh` = uv 래퍼) | 학습 없이 고정 test + 저장된 `thresholds.json` 으로 추론·태깅·P/R/F1 출력. 절대경로만 허용. 기본 배포 레이아웃 `/data/ner/ja/{model,data/test.jsonl,thresholds.json}` |
-| 출하 모델 번들 | `data/stockmark/ja_ner_prod_seed1/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `thresholds.json` + `MODEL_CARD.md` (배포 시 `/data/ner/ja/` 로 복사) |
-| 최종 출하 스펙 | `docs/reports/japanese-bert-classifier-spec.md` | 모델·데이터·엔티티·평가지표 단일 출처 (10-fold pooled 0.9361 / raw 0.9273) |
+| 배포 추론 (`.sh` = uv 래퍼) | `src/ner/scripts/eval_ja_ner_test.py` | `src/ner/scripts/eval_vi_ner_test.py` |
+| 출하 모델 번들 | `data/stockmark/ja_ner_prod_seed1/` | `data/wikiann_vi/vi_ner_prod_seed1/` |
+| 최종 출하 스펙 | `docs/reports/japanese-bert-classifier-spec.md` | `docs/reports/vietnamese-bert-classifier-spec.md` |
+
+배포 추론 스크립트는 학습 없이 고정 test + 저장된 `thresholds.json` 으로
+추론·태깅·P/R/F1·단계별 타이밍을 낸다(절대경로만 허용). 기본 배포 레이아웃은
+`/data/ner/{ja,vi}/{model,data/test.jsonl,thresholds.json}` 이고, 번들은
+`model/` + `data/{train,valid,test}.jsonl` + `metrics.json` +
+`thresholds.json` + `MODEL_CARD.md` 를 담아 배포 시 그 경로로 복사한다.
+차이는 둘뿐이다 — VI 는 `thresholds.json` 이 없으면 raw 로 폴백하고, 배포
+test 가 orig 그룹 단위 홀드아웃이라 개수가 딱 맞지 않아 앞 100문장으로 잘라
+평가한다(`N_TEST=100`). JA 출하 수치는 위 JA 스펙 문서가 단일 출처다.
 
 > 배포 추론은 위 "책임 경계 제외(추론 서빙)" 와 직교 — `scripts/` 의 독립
 > 도구이며 classifier 패키지를 import 만 한다 (패키지에 서빙 코드 없음).
@@ -260,7 +284,8 @@ python -m pytest tests/ner/classifier/ -q
 
 - `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 / 층화 K-fold 무결성·층화 균등성 / group K-fold(원문 단위 묶음·누출-free)·BC(group_key=None ≡ 행 단위) / 3-way 형제 묶기·BC / 후보 키 검사(고유 키·필드 부재·null 거부, 형제 없는 코퍼스 통과) / curriculum mask
 - `test_encode.py` — 실제 토크나이저(JA·VI·DeBERTa-V3·PhoBERT)로 round-trip 검증
-- `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링 (10 테스트)
+- `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링
+- `test_boundary_weights.py` — B-/I- per-token loss 가중 텐서의 shape·값·기본값(1.0 = 무효과)
 - `test_kfold_pool.py` — pooled F1 손계산 일치 / 그룹 단위 cross-fold 누출 검출(`ValueError`)·`--allow-cross-fold-leak` 카운트 / 재작성 문장에서도 group 근거로 검출 / `none` → 카운터 `null`(미측정) / 레거시 orig→text fallback·근거 기록 / 섞인 근거는 가장 약한 것으로 보고
 - `test_confidence_threshold.py` — scored decode(conf_mean)·apply·fit(greedy P·R≥target)·save/load 라운드트립
 

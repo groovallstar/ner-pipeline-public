@@ -8,8 +8,8 @@
       "Bash(python -c \"import vllm; print\\(vllm.__version__\\)\")"
     ],
     "deny": [
-      "Write(.omc/state/refuter/ack-*)",
-      "Edit(.omc/state/refuter/ack-*)",
+      "Write(.omc/state/refuter/human-allow-*)",
+      "Edit(.omc/state/refuter/human-allow-*)",
       "Write(certified/**/*.json)",
       "Edit(certified/**/*.json)",
       "Write(certified/*.json)",

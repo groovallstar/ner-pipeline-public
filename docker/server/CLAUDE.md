@@ -24,8 +24,8 @@ GPU 는 1장만 컨테이너에 노출돼 고정된다(`device_ids`; 기본 0, `
 
 | 파일 | 역할 |
 |------|------|
-| `Dockerfile` | CUDA 베이스(`pytorch:2.13.0-cuda13.0`) + uv sync(`ner`·`server` 설치). `curl`(healthcheck)·build-essential(토크나이저 빌드) 포함. ENTRYPOINT=`uv run python -m server` |
-| `docker-compose.yml` | `ner-server` 서비스 — `NER_SERVER_*` env, `/data` 마운트, GPU reservation, 포트 publish, 준비성 healthcheck, restart unless-stopped |
+| `Dockerfile` | CUDA 베이스(`pytorch:2.13.0-cuda13.0`) + uv sync(`ner`·`server` 설치). `curl`(healthcheck)·`build-essential`(토크나이저 빌드)·`git` 포함. ENTRYPOINT=`uv run --frozen python -m server` — `--frozen` 이라 런타임에 `uv.lock` 을 재해결하지 않는다(이미지에 굳은 의존성 그대로 기동) |
+| `docker-compose.yml` | `ner-server` 서비스 — `NER_SERVER_*` env, `/data` 마운트, GPU reservation, 포트 publish, 준비성 healthcheck, restart unless-stopped, `extra_hosts`(`host.docker.internal:host-gateway`) |
 | `start.sh` | 빌드 + 기동. 기존 컨테이너 정리 후 올림. `--no-build` 로 기존 이미지 빠른 기동(코드 변경 없을 때 `uv sync` 레이어 재실행 회피) |
 | `stop.sh` | 컨테이너 중지·제거 |
 | `logs.sh` | 컨테이너 로그 tail |
@@ -36,6 +36,11 @@ GPU 는 1장만 컨테이너에 노출돼 고정된다(`device_ids`; 기본 0, `
 런타임 동작은 `NER_SERVER_*` env 로 조정한다(상세 표면·기본값은 `.env.example`,
 의미는 `src/server/CLAUDE.md`). compose 가 같은 디렉토리 `.env` 를 자동 로드한다.
 이미지 태그는 `:latest` 금지 — 버전 pin(`ner-server:0.1.0`).
+
+compose 가 `extra_hosts` 로 `host.docker.internal` 을 host-gateway 에 붙여 둔다 —
+컨테이너 안에서 `localhost` 는 컨테이너 자신이라 호스트에 떠 있는 vLLM 에 닿지
+못하기 때문이다. 웹 데모 번역을 켤 때 `NER_SERVER_TRANSLATE_BASE_URL` 을
+`http://host.docker.internal:8081/v1` 로 주는 것이 이 설정을 쓰는 경로다.
 
 ## 헬스체크 / 준비성
 
