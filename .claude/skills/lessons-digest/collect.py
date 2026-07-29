@@ -114,8 +114,13 @@ def _refuter_findings(worktrees):
                 continue
             ref = d.get("diff_hash") or os.path.basename(fp)[:12]
             model = d.get("model", "")
-            for f in d.get("findings", []):
-                yield ("refuter", ref, model, str(f))
+            # 판정은 결함(defects)과 확인 기록(checked)을 나눠 적는다. 규칙
+            # 승격 후보는 둘 다에서 나온다 — 통과시키며 남긴 경미한 지적이
+            # 오히려 반복 패턴을 드러낸다. 옛 판정은 둘을 `findings` 한
+            # 배열에 섞어 썼으므로 그 키도 읽는다.
+            for key in ("defects", "checked", "findings"):
+                for f in d.get(key) or []:
+                    yield ("refuter", ref, model, str(f))
 
 
 # 소스 어댑터 레지스트리 — 새 소스는 여기에 함수 하나를 추가한다

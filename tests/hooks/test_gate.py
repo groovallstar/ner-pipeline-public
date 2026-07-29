@@ -145,8 +145,8 @@ def test_ruler_needs_both_human_allow_and_refuter_pass(repo):
     assert result[0] == 'ruler-refuter'  # 승인만으론 부족
 
     Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
-        {'verdict': 'PASS', 'diff_hash': dhash, 'findings': [],
-         'model': 'sonnet', 'round': 1}
+        {'verdict': 'PASS', 'diff_hash': dhash, 'defects': [],
+         'checked': ['gold 재계산 일치'], 'model': 'sonnet', 'round': 1}
     ))
     _, _, result = _gate(repo)
     assert result is None
@@ -158,12 +158,38 @@ def test_refuter_fail_keeps_the_gate_shut(repo):
     dhash, sdir, _ = _gate(repo)
     _allow(sdir, dhash)
     Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
-        {'verdict': 'FAIL', 'diff_hash': dhash, 'findings': ['gold moved'],
-         'model': 'opus', 'round': 1}
+        {'verdict': 'FAIL', 'diff_hash': dhash, 'defects': ['gold moved'],
+         'checked': [], 'model': 'opus', 'round': 1}
     ))
     _, _, result = _gate(repo)
     assert result[0] == 'ruler-refuter'
     assert 'gold moved' in result[1]
+
+
+def test_old_verdict_files_are_still_readable(repo):
+    """옛 판정은 결함과 확인 기록을 `findings` 한 배열에 섞어 썼다.
+    섞인 배열에서 결함만 골라낼 수는 없으니 통째로 사유로 읽는다."""
+    sdir = core.state_dir(repo)
+    Path(core.verdict_path(sdir, 'oldhash')).write_text(json.dumps(
+        {'verdict': 'FAIL', 'diff_hash': 'oldhash',
+         'findings': ['PASS: 테스트 무결성 확인', 'σ 표기 불일치'],
+         'model': 'sonnet', 'round': 1}
+    ))
+    state, defects, meta = core.read_verdict(sdir, 'oldhash')
+    assert state == 'FAIL'
+    assert 'σ 표기 불일치' in defects
+    assert meta['model'] == 'sonnet'
+
+
+def test_verdict_without_defects_key_passes(repo):
+    """새 형식에서 `defects` 가 비면 PASS 다."""
+    sdir = core.state_dir(repo)
+    Path(core.verdict_path(sdir, 'h2')).write_text(json.dumps(
+        {'verdict': 'PASS', 'diff_hash': 'h2', 'defects': [],
+         'checked': ['확인 기록 세 줄'], 'model': 'opus', 'round': 1}
+    ))
+    state, defects, _ = core.read_verdict(sdir, 'h2')
+    assert state == 'PASS' and defects == []
 
 
 def test_allow_dies_when_the_diff_changes(repo):

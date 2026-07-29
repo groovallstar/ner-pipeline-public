@@ -175,7 +175,7 @@ def main():
 
     # 7) 반박자 판정. 기준 파일을 건드린 diff 라면 기계 검사가 이미 같은
     #    판정을 요구했으므로 여기서는 추가 비용 없이 통과한다.
-    state, findings, meta = core.read_verdict(state_dir, dhash)
+    state, defects, meta = core.read_verdict(state_dir, dhash)
     if state in ('missing', 'unreadable'):
         _bump(counter, n_blocks)
         _block(core.spawn_instructions(
@@ -193,11 +193,11 @@ def main():
     _bump(counter, n_blocks)
     core.log(state_dir, {
         'diff_hash': dhash, 'entry': 'stop', 'layer': 'refuter',
-        'result': 'FAIL', 'findings': findings, **meta,
+        'result': 'FAIL', 'defects': defects, **meta,
     })
     body = (
-        '\n'.join(f'- {x}' for x in findings)
-        if findings else '(no findings recorded)'
+        '\n'.join(f'- {x}' for x in defects)
+        if defects else '(no defects recorded)'
     )
     _block(
         'Refuter returned FAIL on the current diff. Address these, then the '

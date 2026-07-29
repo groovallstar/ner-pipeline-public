@@ -502,10 +502,14 @@ def verdict_path(sdir, dhash):
 
 
 def read_verdict(sdir, dhash):
-    """반박자 판정을 읽는다. (state, findings, meta) — state 는
+    """반박자 판정을 읽는다. (state, defects, meta) — state 는
     'missing' · 'unreadable' · 'PASS' · 'FAIL'. 파일명이 diff 해시라
     diff 가 바뀌면 이전 판정은 자동으로 무효다. 다만 이 파일은 모델이
     쓰므로 위조 가능하다 — 신선도는 보증하되 진정성은 보증하지 않는다.
+
+    `defects`(막는 사유)와 `checked`(확인 기록)를 나눠 받는다. 옛 판정은
+    둘을 `findings` 한 배열에 섞어 썼으므로 그 형식도 읽는다 — 다만 섞인
+    배열에서 결함만 골라낼 수는 없어 통째로 사유로 취급한다.
     """
     path = verdict_path(sdir, dhash)
     if not os.path.exists(path):
@@ -515,10 +519,12 @@ def read_verdict(sdir, dhash):
             data = json.load(f)
     except Exception:
         return 'unreadable', [], {}
-    findings = data.get('findings') or []
+    defects = data.get('defects')
+    if defects is None:
+        defects = data.get('findings') or []
     state = 'PASS' if str(data.get('verdict', '')).upper() == 'PASS' else 'FAIL'
     meta = {'model': data.get('model'), 'round': data.get('round')}
-    return state, findings, meta
+    return state, defects, meta
 
 
 def spawn_instructions(dhash, path, why):
@@ -534,8 +540,15 @@ def spawn_instructions(dhash, path, why):
         'The refuter MUST write its verdict to:\n'
         f'  {path}\n'
         'as JSON: {"verdict":"PASS"|"FAIL","diff_hash":"' + dhash +
-        '","findings":[...],"model":"...","round":1}\n'
-        'Keep it narrow: judge from the diff + criteria; read files only to '
+        '","defects":[...],"checked":[...],"model":"...","round":1}\n'
+        'FAIL only when letting the diff through would record a wrong '
+        'conclusion as true (numbers that disagree with the artifact, a '
+        'silently moved gold/split/metric, a check that green-lights what it '
+        'should block, a test that no longer verifies the same contract). '
+        'Things that fail safe — over-blocking, not reachable with current '
+        'data, a disclosed discrepancy — go in "checked" with a PASS. When '
+        'genuinely unsure, FAIL: one more round is cheaper than a wrong pass.'
+        '\nKeep it narrow: judge from the diff + criteria; read files only to '
         'verify a specific claim. Do not declare done until verdict is PASS.'
     )
 
@@ -582,7 +595,7 @@ def run_deterministic(proj, sdir, dhash):
                 'the gate.',
                 ruler,
             )
-        state, findings, meta = read_verdict(sdir, dhash)
+        state, defects, meta = read_verdict(sdir, dhash)
         vpath = verdict_path(sdir, dhash)
         if state in ('missing', 'unreadable'):
             why = (
@@ -592,13 +605,13 @@ def run_deterministic(proj, sdir, dhash):
             return ('ruler-refuter', spawn_instructions(dhash, vpath, why),
                     ruler)
         if state == 'FAIL':
-            body = ('\n'.join(f'- {x}' for x in findings)
-                    if findings else '(no findings recorded)')
+            body = ('\n'.join(f'- {x}' for x in defects)
+                    if defects else '(no defects recorded)')
             return (
                 'ruler-refuter',
                 'Refuter returned FAIL on this ruler-touching diff. Address '
                 f'these, then the gate re-evaluates the new diff:\n{body}',
-                findings,
+                defects,
             )
         log(sdir, {
             'diff_hash': dhash, 'layer': 'deterministic',
