@@ -167,8 +167,18 @@ PII 보존·음차·뜻전달(중립 LLM-judge)·지연을 잰다. 평가셋은 
 28문장(`data/eval_set.jsonl`, PII 주입 gold). 결과·근거·엔진 선정은
 `docs/reports/translate-engine-lightweight-benchmark.md`.
 
+**표본은 앞에서만 자란다.** `--per-lang` 으로 표본을 키워도 처음 14문장
+(언어별)은 난수 호출 순서가 같아 그대로 남고 확장분만 별도 seed 로 덧붙는다
+— 확대 전 수치를 그 부분집합에서 그대로 재현할 수 있어, 표본을 키운 것이
+기준을 바꾼 게 아님을 보일 수 있다. 인자 없이 돌리면 커밋된 28문장이 바이트
+단위로 재생성된다. 확대판은 커밋하지 않으므로(파생물), 인용하는 결과의
+`certified/**` metric JSON 에 빌더 인자·seed·`sha256_16` 을 함께 남겨 재현
+가능성을 잇는다.
+
 ```bash
 uv run python -m server.scripts.translate_bench.build_eval_set   # 평가셋 재생성
+uv run python -m server.scripts.translate_bench.build_eval_set \
+  --per-lang 100 --out /tmp/eval_200.jsonl        # 확대판(동결 28문장 보존)
 uv run python -m server.scripts.translate_bench.run_bench \
   --engine <name> <model> <base_url> [--engine ...] --judge-url <url>
 ```

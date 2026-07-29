@@ -1,0 +1,62 @@
+{
+  "run": "nllb-600m-2080ti",
+  "model": "facebook/nllb-200-distilled-600M",
+  "task": "ja/vi -> ko translation",
+  "hardware": "RTX 2080 Ti (Turing), fp16, in-process transformers",
+  "decoding": {
+    "num_beams": 4,
+    "max_new_tokens": 256,
+    "sentence_split": true
+  },
+  "eval_set": {
+    "source": "NTREX-128 newstest2019 (ja/vi/ko multi-parallel)",
+    "builder": "server.scripts.translate_bench.build_eval_set --per-lang 100",
+    "builder_note": "frozen first 14 per language reproduce the committed 28-record eval_set.jsonl byte-for-byte; extras drawn with a separate seed",
+    "seed": 1234,
+    "extra_seed": 5678,
+    "n_records": 200,
+    "n_ja": 100,
+    "n_vi": 100,
+    "n_pii_records": 100,
+    "n_pii_spans": 186,
+    "sha256_16": "7ecac9e352a3d211"
+  },
+  "quality_chrf2pp": {
+    "metric": "chrF++ (char 6-gram + word 2-gram) vs NTREX ko_ref",
+    "scored_on": "base_text (PII-free source) of all records",
+    "all": 23.35,
+    "ja": 23.7,
+    "vi": 23.0,
+    "frozen_clean_subset_n14": 25.89,
+    "frozen_subset_note": "reproduces the pre-expansion measurement on the same 14 records"
+  },
+  "transliteration_residue": {
+    "sentences_with_residue": 1,
+    "residue_chars": 4,
+    "n_sentences": 200
+  },
+  "sentinel_preservation": {
+    "lenticular_bracket_prod_format": {
+      "format": "U+3010 PII{nonce}_{i} U+3011",
+      "restored": 0,
+      "total": 186,
+      "verdict": "FAIL",
+      "cause": "NLLB SentencePiece vocab lacks the lenticular brackets; both map to <unk> at tokenization"
+    },
+    "ascii_bracket": {
+      "format": "[PII{i}]",
+      "restored": 186,
+      "total": 186,
+      "verdict": "PASS"
+    }
+  },
+  "latency_s": {
+    "n": 300,
+    "mean_s": 0.57,
+    "p50_s": 0.53,
+    "max_s": 3.12,
+    "mean_ja_s": 0.55,
+    "mean_vi_s": 0.59
+  },
+  "peak_vram_mib": 1254
+}
