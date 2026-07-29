@@ -30,13 +30,15 @@ bash docker/vllm/logs.sh
 
 ## 이미지 Pull 규칙
 
-- `:latest` 태그 사용 금지. 항상 명시된 버전 태그로 pin 한다 (예: `python:3.12.7-slim`, `pytorch/pytorch:2.13.0-cuda13.0-cudnn9-devel`).
+- `:latest` 태그 사용 금지. 항상 명시된 버전 태그로 pin 한다 (실제 사용 중인 pin: `pytorch/pytorch:2.13.0-cuda13.0-cudnn9-devel`(server), `vllm/vllm-openai:v0.23.0`(vllm)).
 - 최신 이미지를 받아야 할 때는 Docker Hub/GHCR에서 **최신 안정 버전 태그를 확인한 뒤 그 버전을 명시**한다.
 - 이유: `:latest`는 빌드 재현성을 깨고, 무인지 업그레이드로 회귀·환경 불일치를 유발한다.
 
 ## 환경 변수
 
-- `HF_HOME=~/.huggingface/` (호스트 사용자 홈 기준; ner-server 는 `/data/ner/_hf_cache`)
+- HF 캐시는 환경변수가 아니라 **볼륨 마운트**로 정한다 — vLLM compose 가 호스트 고정 경로
+  `/work/.huggingface` 를 컨테이너 `/root/.cache/huggingface` 에 박아 마운트한다(`HF_HOME` 미사용).
+  ner-server 는 `/data/ner/_hf_cache`.
 - `OPENAI_API_KEY` — 레포 루트 `.env`에서 로드 (CLI `_load_env`)
 - `CUDA_VISIBLE_DEVICES` — vLLM 시작 스크립트에서 자동 설정
 
@@ -46,4 +48,4 @@ bash docker/vllm/logs.sh
 - GPU 배정: vLLM 은 gemma(labeler)=GPU1, qwen(verifier)=GPU2 각 tensor-parallel=1; ner-server 는 1장 고정(기본 GPU0, NER_SERVER_GPU 로 교체)
 - 호스트 경로 `/work`·`/data` 가 존재해야 한다
 - 컨테이너명: `vllm-gemma`+`vllm-qwen`(운영, 각자 `-p <name>` compose 프로젝트); `ner-server`(server)
-- 모든 라이프사이클 스크립트는 `cd "$(dirname "$0")"` 를 쓰므로 각 하위 디렉토리에서 실행한다
+- compose 를 부르는 스크립트(`start-*.sh`·`stop.sh`)는 `cd "$(dirname "$0")"` 로 자기 디렉토리로 옮겨 상대경로 compose 파일을 찾는다. `logs.sh` 는 `docker logs` 만 쓰므로 이 이동이 없다 — 어디서 실행해도 같다

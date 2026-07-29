@@ -5,6 +5,11 @@
 confidence_threshold(임계값 fit·apply)에 의존하고, 학습·평가 모듈은
 import 하지 않는다.
 
+이 문서는 **모듈 오리엔테이션**(어느 파일이 무엇을 하고 왜 그렇게 갈랐나)이다.
+소비자에게 주는 계약 문서는 따로 있다 — `docs/manual/rest-api-spec.md`(요청·응답
+스키마·상태코드 명세)와 `docs/manual/rest-api-integration-guide.md`(연동 절차).
+계약이 바뀌면 그 둘도 같이 고쳐야 한다.
+
 ## 기동
 
 ```bash
@@ -34,7 +39,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 엔드포인트 | 설명 |
 |---|---|
 | `POST /v1/ner` | 단일 `{text, lang?}` 또는 배치 `{texts:[...], lang?}`. `lang` 생략 시 텍스트별 자동감지. 신뢰도 임계값은 모델 로드 시 자동 적용 |
-| `POST /v1/translate` | **웹 데모 전용**(OpenAPI 미노출) — `{text, lang, spans}`(spans=`/v1/ner` 결과)를 한국어로 번역. PII 는 마스킹-복원으로 원문 그대로 보존, 고유명사는 한글 음차. 기본 비활성→503(`NER_SERVER_TRANSLATE_*` 로 활성). `/v1/ner` 계약과 독립 |
+| `POST /v1/translate` | **웹 데모 전용**(OpenAPI 미노출) — `{text, lang, spans}`(spans=`/v1/ner` 결과)를 한국어로 번역. PII 는 마스킹-복원으로 원문 그대로 보존, 고유명사는 한글 음차. 기본 비활성→503(`NER_SERVER_TRANSLATE_*` 로 활성). `/v1/ner` 과 같은 `max_chars` 상한을 재사용하므로 초과→413, 미지원 lang·비정상 span→400 도 낸다. `/v1/ner` 계약과 독립 |
 | `GET /v1/translate/status` | **웹 데모 전용**(OpenAPI 미노출) — `{enabled, available}`. `available` 은 토글 ON + vLLM 백엔드 liveness. UI 가 페이지 로드 시 1회 조회해 번역 버튼을 켜고, 미가용이면 계속 끈다(폴링 없음) |
 | `GET /` | 내부 개발·데모용 웹 UI(자족적 HTML, 동일 출처로 `/v1/ner`·`/v1/translate` 호출·CORS 불필요). 인증·Swagger 미노출 |
 | `GET /health` | 언어별 모델 로드 상태 + thresholds 존재 여부(인증 없음) |
@@ -46,7 +51,8 @@ ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에
 아님, 모델 미호출) — 배치는 항목별 부분성공. 명시 `lang` 이 미지원이면 400
 (클라이언트 계약). 에러는 구조화 `{error: {status, message}}` — 잘못된 요청
 (lang·text/texts 택일)→400, 크기 한도(max_chars·max_batch·max_total_chars)
-초과→413, 모델 미로드→503, API-key 불일치→401. 요청 바디가 `max_body_bytes`
+초과→413, 동시성 한도 초과(큐 만석·대기 타임아웃)→429, 모델 미로드→503,
+API-key 불일치→401(헤더 이름은 `x-api-key`). 요청 바디가 `max_body_bytes`
 초과면 파싱 전에 413(전송 계층 가드 — chunked 우회 포함). Pydantic 검증
 실패→422, 미처리 예외→500 도 모두 동일 봉투로 감싸고 500 은 내부 메시지를
 노출하지 않는다. 라우터가 내는 라우트 미매칭→404·메서드 불일치→405 도 같은
@@ -103,8 +109,12 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `request_log.py` | `RequestLogMiddleware`(순수 ASGI, 최외곽) — 요청별 request-id 생성·`X-Request-ID` 에코, 지연·결과를 한 줄로. 성공 2xx→DEBUG(기본 침묵), 거절 4xx·503→WARNING(사유 태그). 핸들러가 `request.state.ner_meta`(lang·batch·entities)를 채워 성공 로그에 실린다 |
 | `app.py` | `create_app(registry, config, translator)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `translator`(옵션)는 `/v1/translate` 용, None 이면 503. `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
 | `translate.py` | `LLMTranslator`·`build_translator` — 온프렘 LLM(OpenAI 호환) 마스킹-복원 번역. PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. `/v1/ner`·`inference.py` 무의존 additive |
-| `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응 |
-| `__main__.py` | uvicorn 기동 진입점 |
+| `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다 |
+| `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
+| `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
+| `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`) |
+| `scripts/translate_bench/` | 번역 엔진 후보 비교 하네스 — 상세는 아래 §번역 엔진 벤치 |
+| `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
 ## 추론 경로
 
@@ -130,8 +140,12 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
   503(모델 미로드)은 5xx 지만 서버 결함이 아니라 거절로 분류한다.
 - **미처리 예외(500)** → 트레이스백을 ERROR 로(rid 포함, `app._unhandled`).
   요약 라인은 중복 방지로 생략(예외는 send 없이 전파돼 미들웨어 경로를 안 탄다).
-- 모든 응답에 `X-Request-ID` 헤더를 실어 로그 라인과 상관지을 수 있다(수신
-  헤더가 있으면 에코, 없으면 8-hex 생성).
+- 응답에 `X-Request-ID` 헤더를 실어 로그 라인과 상관지을 수 있다(수신 헤더가
+  있으면 에코, 없으면 8-hex 생성). **미처리 예외(500)는 예외다** — 헤더 주입이
+  미들웨어의 `send` 래퍼 안에서 일어나는데 예외는 그 호출을 통과해 밖으로
+  전파되므로, Starlette 바깥 층이 만든 500 응답에는 헤더가 붙지 않는다. 위
+  "요약 라인 생략" 과 같은 원인이다 — 이때 상관짓는 단서는 ERROR 트레이스백에
+  실린 rid 다.
 
 레벨은 `NER_SERVER_LOG_LEVEL`(기본 INFO)로 조정한다 — 요청별 상세가 필요하면
 `DEBUG`. uvicorn 기본 액세스 로그는 꺼서(`access_log=False`) 요청 라인을
