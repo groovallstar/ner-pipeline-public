@@ -290,6 +290,47 @@ def test_non_scoring_code_stays_unlocked(repo):
     assert result is None
 
 
+# ── 원장 잠금이 '증거로 읽는 형식' 과 어긋나지 않는가 ────────────────
+
+def _deny_patterns():
+    with open(REPO_ROOT / '.claude/settings.json') as f:
+        return set(json.load(f)['permissions']['deny'])
+
+
+def test_every_ledger_format_is_write_denied():
+    """인용 대조가 증거로 읽는 형식은 AI 가 손으로 못 쓰게 막혀 있어야 한다.
+
+    카탈로그를 넓히면서(예: csv 추가) deny 를 안 늘리면 AI 가 증거 파일을
+    직접 지어낼 수 있게 된다. 그 어긋남을 여기서 잡는다.
+    """
+    deny = _deny_patterns()
+    for ext in core.CATALOG_EXT:
+        for tool in ('Write', 'Edit'):
+            # `**/*` 가 최상위를 안 잡는 경우가 있어 두 층 모두 필요하다
+            assert f'{tool}(certified/**/*.{ext})' in deny
+            assert f'{tool}(certified/*.{ext})' in deny
+
+
+def test_ledger_docs_stay_editable():
+    """원장의 설명 문서는 증거가 아니다 — 잠그면 보호되는 것 없이 갱신만
+    막힌다(카탈로그가 안 읽는다)."""
+    deny = _deny_patterns()
+    assert not any(p.endswith('(certified/**)') for p in deny)
+    assert not any('.md)' in p for p in deny if 'certified' in p)
+    assert 'md' not in core.CATALOG_EXT
+
+
+def test_ledger_files_reads_only_catalog_formats(tmp_path):
+    ledger = tmp_path / 'certified'
+    (ledger / 'run').mkdir(parents=True)
+    (ledger / 'README.md').write_text('설명 문서\n')
+    (ledger / 'top.json').write_text('{}')
+    (ledger / 'run' / 'pooled_metrics.json').write_text('{}')
+    (ledger / 'run' / 'notes.txt').write_text('메모')
+    got = {os.path.basename(p) for p in core.ledger_files(str(ledger))}
+    assert got == {'top.json', 'pooled_metrics.json'}
+
+
 # ── 게이트가 스스로 못 돌면 조용히 넘어가지 않는가 ───────────────────
 
 def test_gate_reports_when_it_could_not_run(tmp_path):

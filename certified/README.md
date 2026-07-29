@@ -66,8 +66,13 @@ git add certified/classifier/ko/<run-slug> && git commit
 ## 잠금은 두 겹
 
 1. `settings.json` 이 AI 의 **Write/Edit(손저작)** 을 막는다 — 실수·직접
-   위조 차단. 잠금 대상은 metric JSON 이고, 이 README 같은 설명 문서는
-   빠진다. 단 이건 speed-bump 이지 기계 보증이 아니다(복사 자체는
+   위조 차단. 단 이건 speed-bump 이지 기계 보증이 아니다(복사 자체는
    subprocess 라 가능하다).
+
+   **잠그는 범위 = 인용 대조가 증거로 읽는 형식**(`gate_core.py` 의
+   `CATALOG_EXT`, 현재 `*.json`). 좁으면 증거를 손댈 수 있고, 넓히면 이
+   README 같은 설명 문서까지 잠겨 갱신이 막히는데 정작 보호되는 건 없다 —
+   카탈로그가 안 읽기 때문이다. 둘이 어긋나면 `tests/hooks/test_gate.py`
+   가 잡으므로, 카탈로그 형식을 늘릴 때는 deny 패턴도 같이 늘린다.
 2. 진짜 앵커는 **git diff 를 PR 리뷰·반박자가 보는 것** — 승격된 값이
    실제 실행에서 나왔는지 사람이 확인한다. 불변성·이력은 git 이 준다.

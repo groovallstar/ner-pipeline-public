@@ -131,7 +131,7 @@ touch .omc/state/refuter/human-allow-<diff_hash>
 | 정답 | `docs/manual/data/canonical-entity-schema.md` (변경 이력·배경 절은 면제 — 정의가 안 움직인다) |
 | 채점규칙 | `src/ner/metrics/`·`src/ner/validity/` **패키지 안의 모든 `.py`** — 파일을 열거하면 새 파일이 생겨도 목록이 조용히 낡는다. 둘 다 변경이 드물어 통째로 잡아도 과잉 잠금이 안 된다 |
 | 분할 | `src/ner/classifier/data_utils.py`, `kfold_pool.py` — 이 패키지는 학습·분석 코드가 섞여 있어 파일로 적는다. **채점에 닿는 파일을 새로 만들면 목록도 함께 갱신해야 한다** |
-| 결과 장부(편집 거부) | `certified/**` |
+| 결과 장부 | `certified/` 의 **metric JSON** — AI 의 Write/Edit 거부(`settings.json`). 거부 범위는 인용 대조가 증거로 *읽는* 형식(`gate_core.py` 의 `CATALOG_EXT`)과 같아야 하며, 어긋나면 `tests/hooks` 가 잡는다. 원장의 설명 문서(`README.md`)는 증거가 아니라 안 잠긴다 |
 
 여기만 **사람 승인 + 격리 반박자 PASS 둘 다** 요구한다. 반박자가 잡아야 할 위험(gold 변조·분할 누수·"올랐다=개선"의 순환)이 여기 몰려 있고, 어차피 사람이 멈춰 서는 지점이라 추가 마찰이 작기 때문이다. 승인 전에 — 점수를 본 뒤 유리한 정의를 고르지 못하도록 — 새 정의를 먼저 못 박고, 옛 모델을 새 기준으로 다시 재(`clean 동일-test`) 안 건드린 엔티티만 무회귀를 본다. **안 건드리면** 값만 바꾸는 일이라 에이전트가 자율 누적한다.
 

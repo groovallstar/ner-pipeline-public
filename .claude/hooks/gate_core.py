@@ -38,6 +38,12 @@ WEAKEN_RE = re.compile(
 CATALOG_EXCLUDE = ('test_predictions', 'checkpoint-')
 CATALOG_MAX_BYTES = 20_000_000
 
+# 원장에서 '증거' 로 읽는 파일 형식. 인용 대조가 이 형식만 보므로, AI 의
+# 손저작을 막는 `settings.json` deny 도 정확히 이 형식이어야 한다 — 좁으면
+# 증거를 손댈 수 있고 넓으면 원장의 설명 문서(README)까지 잠겨 갱신이 막힌다.
+# 둘의 어긋남은 tests/hooks 가 잡는다.
+CATALOG_EXT = ('json',)
+
 # 기준 파일 — 정답·채점규칙·분할의 정의. 건드리면 사람 승인 전까지
 # 진행을 막는다 (CLAUDE.md 하네스 기준 파일 표와 동기화).
 RULER_PATHS = (
@@ -168,13 +174,23 @@ def _collect_numbers(node, cat):
             cat.add(text.rstrip('0'))
 
 
+def ledger_files(root):
+    # 원장 트리에서 증거로 읽을 파일들 (형식은 `CATALOG_EXT` 가 정본)
+    found = []
+    for ext in CATALOG_EXT:
+        found += glob.glob(
+            os.path.join(root, '**', f'*.{ext}'), recursive=True
+        )
+    return sorted(found)
+
+
 def _metric_catalog(proj):
     # certified/ 의 커밋된 metrics JSON = 인용 수치의 카탈로그 (git 원장)
     cat = set()
     root = os.path.join(proj, 'certified')
     if not os.path.isdir(root):
         return cat
-    for path in glob.glob(os.path.join(root, '**', '*.json'), recursive=True):
+    for path in ledger_files(root):
         if any(token in path for token in CATALOG_EXCLUDE):
             continue
         try:
@@ -238,7 +254,7 @@ def _catalog_of(proj, src):
     rel = src if src.startswith('certified/') else os.path.join('certified', src)
     full = os.path.join(proj, rel)
     if os.path.isdir(full):
-        paths = glob.glob(os.path.join(full, '**', '*.json'), recursive=True)
+        paths = ledger_files(full)
     elif os.path.isfile(full):
         paths = [full]
     else:
