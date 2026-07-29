@@ -3,19 +3,23 @@
 
 검사 게이트는 두 진입점으로 걸린다.
 
-- 커밋 직전(`commit_gate.py`, PreToolUse): 결정적 층. 커밋되는 내용을
+- 커밋 직전(`commit_gate.py`, PreToolUse): 기계 검사. 커밋되는 내용을
   커밋 전에 검사한다 — 게이트의 주 진입점이다.
-- 턴 종료(이 파일, Stop): 커밋 없이 끝나는 턴을 받는다. 결정적 층에
-  더해 **판단 층**을 얹는다 — 반박자 서브에이전트를 요구하므로 커밋
-  명령 중간에는 걸 수 없고 여기에만 있다.
+- 턴 종료(이 파일, Stop): 커밋 없이 끝나는 턴을 받는다. 기계 검사에
+  더해 **반박자 판정**을 얹는다 — 서브에이전트를 요구하므로 커밋 명령
+  중간에는 걸 수 없고 여기에만 있다.
 
-결정적 층(기준 파일 변경 감지, ruff, 테스트 무결성, 인용 표 수치 ↔
+기계 검사(기준 파일 변경 감지, ruff, 테스트 무결성, 인용 표 수치 ↔
 `certified/` 대조)의 구현은 `gate_core.py` 에 있고 두 진입점이 공유한다.
-판단 층 판정 파일은 반박자(모델)가 쓰므로 위조 가능하며, 결정적 층을
-대체하지 않는다.
+반박자 판정 파일은 모델이 쓰므로 위조 가능하며, 기계 검사를 대체하지
+않는다.
 
-결정적 층의 오탐은 사람이 `ack-<diff_hash>` 파일로 해제한다. 해시가
-같으므로 한 번 만든 ack 는 두 진입점에서 함께 듣는다. 모든 판정·해제는
+반박자를 자동으로 요구하는 구간은 둘뿐이다 — 기준 파일을 건드린
+diff(`gate_core` 가 요구)와 자율 루프가 도는 중(`_loop_active`). 평범한
+단발 작업에는 걸리지 않는다.
+
+기계 검사의 오탐은 사람이 `human-allow-<diff_hash>` 파일로 해제한다.
+해시가 같으므로 한 번 만든 승인은 두 진입점에서 함께 듣는다. 모든 판정·해제는
 `log.jsonl` 에 append-only 로 남는다. 무한 루프는 연속 block 카운터로
 차단하되 통과할 때마다 리셋하고, 상한에 걸려 게이트가 열리는 순간도
 `log.jsonl` 과 사용자 화면 양쪽에 남긴다 — 조용히 꺼지지 않게.
@@ -49,10 +53,12 @@ def _reset(counter):
         pass
 
 
-def _passthrough(counter=None):
-    # exit 0 = 완료 허용 (출력 없음)
+def _passthrough(counter=None, notice=None):
+    # exit 0 = 완료 허용. 검사가 대상 없이 지나갔으면 그 사실만 알린다.
     if counter:
         _reset(counter)
+    if notice:
+        print(json.dumps({'systemMessage': notice}, ensure_ascii=False))
     sys.exit(0)
 
 
@@ -130,9 +136,11 @@ def main():
     # 3) 미커밋 diff 없으면 통과 (잡담·조회 턴, 또는 커밋을 마친 턴 —
     #    후자는 커밋 직전에 `commit_gate.py` 가 이미 검사했다)
     diff = core.diff_text(proj)
-    if not diff.strip():
-        _passthrough(counter)
     dhash = core.diff_hash(diff)
+    if not diff.strip():
+        # git 호출이 실패해도 여기로 온다 — 그 경우 '변경 없음' 이 아니라
+        # '못 봤음' 이므로 조용히 넘기지 않는다.
+        _passthrough(counter, core.degraded_notice(state_dir, dhash))
 
     # 4) 무한루프 차단: 연속 block 상한. 통과할 때마다 카운터가 지워지므로
     #    여기 걸리는 건 같은 문제를 못 고치고 도는 상황이다. 무력화는 조용히
@@ -148,24 +156,25 @@ def main():
             'still gated separately. Review the diff manually.'
         )
 
-    # 5) 결정적 층 — 루프 여부와 무관하게 항상 실행한다. 모델을 부르지
+    # 5) 기계 검사 — 루프 여부와 무관하게 항상 실행한다. 모델을 부르지
     #    않으므로 토큰 비용이 0 이다.
     result = core.run_deterministic(proj, state_dir, dhash)
     if result is not None:
         check, reason, findings = result
         _bump(counter, n_blocks)
         core.log(state_dir, {
-            'diff_hash': dhash, 'entry': 'stop', 'layer': 'deterministic',
+            'diff_hash': dhash, 'entry': 'stop', 'layer': 'machine',
             'check': check, 'result': 'BLOCK', 'findings': findings,
         })
         _block(reason)
 
-    # 6) 판단 층은 반박자 서브에이전트를 요구하므로 루프 모드에서만 건다.
+    # 6) 반박자는 서브에이전트를 요구해 비싸므로 자율 루프에서만 자동으로
+    #    건다. 평범한 단발 작업은 여기서 끝난다.
     if not _loop_active(proj, session_id):
-        _passthrough(counter)
+        _passthrough(counter, core.degraded_notice(state_dir, dhash))
 
-    # 7) 판단 층: 반박자 판정. 기준 파일을 건드린 diff 라면 결정적 층이 이미
-    #    같은 판정을 요구했으므로 여기서는 추가 비용 없이 통과한다.
+    # 7) 반박자 판정. 기준 파일을 건드린 diff 라면 기계 검사가 이미 같은
+    #    판정을 요구했으므로 여기서는 추가 비용 없이 통과한다.
     state, findings, meta = core.read_verdict(state_dir, dhash)
     if state in ('missing', 'unreadable'):
         _bump(counter, n_blocks)
@@ -175,7 +184,7 @@ def main():
         ))
     if state == 'PASS':
         core.log(state_dir, {
-            'diff_hash': dhash, 'entry': 'stop', 'layer': 'judgment',
+            'diff_hash': dhash, 'entry': 'stop', 'layer': 'refuter',
             'result': 'PASS', **meta,
         })
         _passthrough(counter)
@@ -183,7 +192,7 @@ def main():
     # FAIL: 결함 보고 + 수정 요구
     _bump(counter, n_blocks)
     core.log(state_dir, {
-        'diff_hash': dhash, 'entry': 'stop', 'layer': 'judgment',
+        'diff_hash': dhash, 'entry': 'stop', 'layer': 'refuter',
         'result': 'FAIL', 'findings': findings, **meta,
     })
     body = (

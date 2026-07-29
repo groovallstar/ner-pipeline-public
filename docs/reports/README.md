@@ -40,5 +40,5 @@ GitHub Issue에 매이지 않는 단발성 측정·비교 실험 결과를 **시
 ## 원시 데이터 취급
 
 - 원시 벤치 JSON은 `results/`(gitignore·휘발 scratch)에 로컬 보관하고, 리포트에는 **재현 명령**과 **요약 지표**만 남긴다.
-- 리포트가 **인용하는 수치**는 그 metric JSON을 `certified/`(커밋된 결과 원장)로 verbatim 복사해 커밋한다 — 하네스 검사 게이트의 결정적 층이 표 안 수치를 이 원장과 대조한다(상세: 루트 `CLAUDE.md` §하네스, `certified/README.md`).
+- 리포트가 **인용하는 수치**는 그 metric JSON을 `certified/`(커밋된 결과 원장)로 verbatim 복사해 커밋한다 — 하네스의 기계 검사가 표 안 수치를 이 원장과 대조한다(상세: 루트 `CLAUDE.md` §하네스, `certified/README.md`).
 - 합성/주입 데이터셋은 `data/`(gitignore 대상)에 로컬 보관. 생성 커맨드를 리포트 상단에 명시한다.
