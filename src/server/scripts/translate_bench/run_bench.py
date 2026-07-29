@@ -1,13 +1,19 @@
 """번역 엔진 벤치마크 러너 — 프로덕션 마스킹-복원 경로로 후보를 스윕한다.
 
-각 후보(OpenAI 호환 vLLM 엔드포인트)를 `server.translate.LLMTranslator` 로
-그대로 태워(실 nonce-sentinel 마스킹-복원) 자동지표를 재고, 선택적으로
-중립 LLM-judge 로 음차·뜻전달을 채점한다. 품질은 하드웨어 독립이라 임의
-GPU 에서 재고, 2080Ti 정합을 위해 후보는 4-bit 양자화 체크포인트로 서빙한다.
+후보를 `server.translate` 의 마스킹-복원에 그대로 태워(실 nonce-sentinel)
+자동지표를 재고, 선택적으로 중립 LLM-judge 로 음차·뜻전달을 채점한다. 두 갈래를
+받는다 — OpenAI 호환 엔드포인트(`--engine`)와 in-process 전용 NMT(`--nllb`).
+품질은 하드웨어 독립이라 임의 GPU 에서 재고, 2080Ti 정합을 위해 LLM 후보는
+4-bit 양자화 체크포인트로 서빙한다.
 
 자동지표(객관):
   - PII 보존   : 원본 PII 가 출력에 verbatim 생존한 수 / 마스킹한 수
-  - 지연        : 문장당 왕복 wall-clock(마스킹·복원 포함, LLM 호출이 지배)
+  - 지연        : 문장당 왕복 wall-clock(마스킹·복원 포함, 번역 호출이 지배)
+  - 생성 붕괴  : 같은 어절이 5회 이상 연속 반복된 레코드 수. 평균 품질 지표는
+                 붕괴를 흡수해 가리므로 건수로 따로 센다
+  - chrF++     : `--chrf` 일 때. 참조 번역과의 문자 6-gram + 단어 2-gram F-score.
+                 PII 주입물이 참조에 없어 점수를 왜곡하므로 **PII 없는
+                 `base_text` 를 따로 한 번 더 번역해** 그 출력으로만 잰다
 LLM-judge(참고, 편향 주의 — 판정자가 후보와 계열이 겹치면 유리 편향 가능):
   - adequacy   : 원문 뜻 전달 정확·완전성(1~5)
   - translit   : 고유명사 한글 음차 자연스러움(1~5; 고유명사 없으면 5)
@@ -17,6 +23,9 @@ LLM-judge(참고, 편향 주의 — 판정자가 후보와 계열이 겹치면 �
     --engine gemma31b cyankiwi/gemma-4-31B-it-AWQ-8bit http://localhost:8081/v1 \
     --engine qwen25-7b Qwen/Qwen2.5-7B-Instruct-AWQ http://localhost:8090/v1 \
     --judge-url http://localhost:8082/v1 --judge-model cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit
+
+  uv run python -m server.scripts.translate_bench.run_bench \
+    --nllb nllb-1.3b facebook/nllb-200-distilled-1.3B --chrf --no-judge
 """
 from __future__ import annotations
 
@@ -26,9 +35,13 @@ import re
 import statistics
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 
+from server.scripts.translate_bench.nllb import NLLBTranslator, max_token_repeat
 from server.translate import LLMTranslator, TranslationUnavailable
+
+# 후보 번역기 — `available`·`translate` 만 있으면 같은 자리에 끼운다.
+Translator = Union[LLMTranslator, NLLBTranslator]
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[3]
@@ -67,7 +80,7 @@ def _to_prod_spans(pii_spans: List[dict]) -> List[dict]:
              'end_char': s['end'], 'text': s['text']} for s in pii_spans]
 
 
-def run_engine(name: str, translator: LLMTranslator,
+def run_engine(name: str, translator: Translator,
                records: List[dict]) -> List[dict]:
     """한 엔진으로 전 레코드를 번역하고 행별 지표를 수집한다."""
     rows: List[dict] = []
@@ -93,8 +106,35 @@ def run_engine(name: str, translator: LLMTranslator,
             'ko_ref': r['ko_ref'], 'translated': translated,
             'n_pii': masked, 'pii_restored': restored, 'pii_dropped': dropped,
             'pii_verbatim': verbatim, 'latency_s': round(dt, 3), 'error': err,
+            'max_token_repeat': max_token_repeat(translated),
         })
     return rows
+
+
+def score_chrf(name: str, translator: Translator,
+               records: List[dict]) -> Dict[str, float]:
+    """PII 없는 `base_text` 를 따로 번역해 chrF++ 를 전체·언어별로 잰다.
+
+    주입된 PII 는 참조 번역(`ko_ref`)에 없어 그대로 채점하면 점수가 눌린다.
+    그래서 품질만은 주입 전 원문으로 다시 한 번 돌려서 잰다 — 지연·PII 지표를
+    낸 본 실행과는 별개 통과다.
+    """
+    from sacrebleu.metrics import CHRF
+
+    chrf = CHRF(word_order=2)          # word_order=2 가 chrF++ 다
+    hyps: Dict[str, List[str]] = {'all': [], 'ja': [], 'vi': []}
+    refs: Dict[str, List[str]] = {'all': [], 'ja': [], 'vi': []}
+    for r in records:
+        try:
+            out = translator.translate(r['base_text'], r['lang'], []).translation
+        except (TranslationUnavailable, ValueError) as exc:
+            print(f'  [chrf] {name} {r["id"]}: {exc}')
+            continue
+        for key in ('all', r['lang']):
+            hyps[key].append(out)
+            refs[key].append(r['ko_ref'])
+    return {k: round(chrf.corpus_score(hyps[k], [refs[k]]).score, 2)
+            for k in hyps if hyps[k]}
 
 
 def judge_rows(rows: List[dict], judge: LLMTranslator, judge_model: str) -> None:
@@ -125,18 +165,22 @@ def judge_rows(rows: List[dict], judge: LLMTranslator, judge_model: str) -> None
             row['judge_note'] = f'judge error: {exc}'
 
 
-def summarize(rows: List[dict]) -> dict:
-    """엔진×언어 집계(보존·지연·judge 평균)를 dict 로 반환한다."""
+def summarize(rows: List[dict],
+              chrf: Optional[Dict[str, Dict[str, float]]] = None) -> dict:
+    """엔진×언어 집계(보존·지연·붕괴·judge 평균)를 dict 로 반환한다."""
     from collections import defaultdict
     agg: dict = defaultdict(lambda: {
         'n': 0, 'lat': [], 'pii_ok': 0, 'pii_tot': 0,
-        'adq': [], 'trl': [], 'errors': 0})
+        'adq': [], 'trl': [], 'errors': 0, 'degen': 0})
     for r in rows:
         a = agg[(r['engine'], r['lang'])]
         a['n'] += 1
         a['lat'].append(r['latency_s'])
         a['pii_ok'] += r['pii_restored']
         a['pii_tot'] += r['n_pii']
+        # 어절 5회 연속 반복부터 붕괴로 본다 — 정상 문장에서는 나오지 않는다.
+        if r.get('max_token_repeat', 0) >= 5:
+            a['degen'] += 1
         if r.get('error'):
             a['errors'] += 1
         if r.get('adequacy') is not None:
@@ -153,8 +197,10 @@ def summarize(rows: List[dict]) -> dict:
             'latency_mean_s': round(statistics.mean(a['lat']), 2) if a['lat'] else None,
             'latency_p50_s': round(statistics.median(a['lat']), 2) if a['lat'] else None,
             'latency_max_s': round(max(a['lat']), 2) if a['lat'] else None,
+            'degenerate_repeat_records': a['degen'],
             'adequacy_mean': round(statistics.mean(a['adq']), 2) if a['adq'] else None,
             'translit_mean': round(statistics.mean(a['trl']), 2) if a['trl'] else None,
+            'chrf2pp': (chrf or {}).get(eng, {}).get(lang),
         }
     return out
 
@@ -163,17 +209,20 @@ def print_summary(summary: dict) -> None:
     """요약 표를 stdout 에 출력한다."""
     print('\n=== SUMMARY (engine x lang) ===')
     hdr = (f'{"engine":22} {"lang":4} {"n":>3} {"PII보존":>10} '
-           f'{"lat_mean":>9} {"lat_max":>8} {"adequacy":>9} {"translit":>9}')
+           f'{"lat_mean":>9} {"lat_max":>8} {"붕괴":>5} {"chrF++":>7} '
+           f'{"adequacy":>9} {"translit":>9}')
     print(hdr)
     for row in summary.values():
         pii = (f'{row["pii_preserved"]}/{row["pii_total"]}'
                if row['pii_total'] else '-')
         adq = f'{row["adequacy_mean"]}' if row['adequacy_mean'] is not None else '-'
         trl = f'{row["translit_mean"]}' if row['translit_mean'] is not None else '-'
+        chrf = f'{row["chrf2pp"]}' if row.get('chrf2pp') is not None else '-'
         lat_m = f'{row["latency_mean_s"]}s' if row['latency_mean_s'] is not None else '-'
         lat_x = f'{row["latency_max_s"]}s' if row['latency_max_s'] is not None else '-'
         print(f'{row["engine"]:22} {row["lang"]:4} {row["n"]:>3} {pii:>10} '
-              f'{lat_m:>9} {lat_x:>8} {adq:>9} {trl:>9}')
+              f'{lat_m:>9} {lat_x:>8} {row["degenerate_repeat_records"]:>5} '
+              f'{chrf:>7} {adq:>9} {trl:>9}')
 
 
 def write_dump(rows: List[dict], path: Path) -> None:
@@ -199,7 +248,22 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description='Translation engine benchmark sweep')
     p.add_argument('--engine', nargs=3, action='append',
                    metavar=('NAME', 'MODEL', 'BASE_URL'),
-                   help='Add an engine (repeatable): NAME MODEL BASE_URL')
+                   help='Add an OpenAI-compatible engine (repeatable): '
+                        'NAME MODEL BASE_URL')
+    p.add_argument('--nllb', nargs=2, action='append',
+                   metavar=('NAME', 'MODEL_ID'),
+                   help='Add an in-process NLLB engine (repeatable): '
+                        'NAME HF_MODEL_ID')
+    p.add_argument('--nllb-device', default='cuda:0',
+                   help='Device for in-process NLLB engines')
+    p.add_argument('--nllb-beams', type=int, default=4,
+                   help='Beam width for NLLB decoding')
+    p.add_argument('--nllb-no-repeat-ngram', type=int, default=0,
+                   help='Block repeated n-grams in NLLB decoding '
+                        '(0 = off; 3 removes the degenerate repeat collapse)')
+    p.add_argument('--chrf', action='store_true',
+                   help='Also score chrF++ against ko_ref. Costs one extra '
+                        'translation pass over the PII-free base_text')
     p.add_argument('--eval', type=Path, default=DEFAULT_EVAL,
                    help='Eval set jsonl path')
     p.add_argument('--out-dir', type=Path, default=DEFAULT_OUT,
@@ -221,25 +285,46 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    engines = args.engine or [[
+    # --engine 도 --nllb 도 없으면 기존 기본 후보 하나를 돈다.
+    engines = args.engine or ([] if args.nllb else [[
         'gemma31b', 'cyankiwi/gemma-4-31B-it-AWQ-8bit',
-        'http://localhost:8081/v1']]
+        'http://localhost:8081/v1']])
     records = load_eval(args.eval)
     print(f'loaded {len(records)} eval records from {args.eval}')
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
+    candidates: List[tuple] = [
+        (name, model, lambda base_url=base_url, model=model: LLMTranslator(
+            base_url=base_url, model=model, timeout_s=args.timeout,
+            max_tokens=args.max_tokens))
+        for name, model, base_url in engines
+    ] + [
+        (name, model_id, lambda model_id=model_id: NLLBTranslator(
+            model_id, device=args.nllb_device, beams=args.nllb_beams,
+            no_repeat_ngram=args.nllb_no_repeat_ngram))
+        for name, model_id in (args.nllb or [])
+    ]
+
     all_rows: List[dict] = []
-    for name, model, base_url in engines:
-        tr = LLMTranslator(base_url=base_url, model=model,
-                           timeout_s=args.timeout, max_tokens=args.max_tokens)
+    chrf_scores: Dict[str, Dict[str, float]] = {}
+    for name, model, build in candidates:
+        tr = build()
         if not tr.available():
-            print(f'[skip] engine {name}: backend not available at {base_url}')
+            print(f'[skip] engine {name}: backend not available')
             continue
         print(f'running engine {name} ({model}) ...')
         rows = run_engine(name, tr, records)
         all_rows += rows
         n_err = sum(1 for r in rows if r['error'])
-        print(f'  done: {len(rows)} rows, {n_err} errors')
+        n_degen = sum(1 for r in rows if r['max_token_repeat'] >= 5)
+        print(f'  done: {len(rows)} rows, {n_err} errors, '
+              f'{n_degen} degenerate-repeat records')
+        if args.chrf:
+            print(f'  scoring chrF++ on PII-free base_text ({name}) ...')
+            chrf_scores[name] = score_chrf(name, tr, records)
+        peak = getattr(tr, 'peak_vram_mib', lambda: None)()
+        if peak is not None:
+            print(f'  peak vram: {peak} MiB')
 
     judge: Optional[LLMTranslator] = None
     if args.judge and all_rows:
@@ -255,10 +340,16 @@ def main() -> None:
     with out_rows.open('w', encoding='utf-8') as f:
         for row in all_rows:
             f.write(json.dumps(row, ensure_ascii=False) + '\n')
-    summary = summarize(all_rows)
+    summary = summarize(all_rows, chrf_scores)
     (args.out_dir / 'summary.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     write_dump(all_rows, args.out_dir / 'dump.md')
+    if chrf_scores:
+        # 전체(all)까지 담아 따로 남긴다 — summary 는 언어별 행만 갖는다.
+        (args.out_dir / 'chrf.json').write_text(
+            json.dumps(chrf_scores, ensure_ascii=False, indent=2),
+            encoding='utf-8')
+        print(f'wrote chrf++   -> {args.out_dir / "chrf.json"}')
     print(f'\nwrote {len(all_rows)} rows -> {out_rows}')
     print(f'wrote summary -> {args.out_dir / "summary.json"}')
     print(f'wrote dump    -> {args.out_dir / "dump.md"}')

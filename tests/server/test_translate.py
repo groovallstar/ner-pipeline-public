@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 from server.app import create_app
 from server.config import ServerConfig
 from server.translate import (
+    DEFAULT_SENTINEL,
+    SentinelFormat,
     TranslationResult,
     TranslationUnavailable,
     _mask,
@@ -161,6 +163,42 @@ def test_literal_sentinel_lookalike_in_source_untouched():
     assert '【PII0】' in restored           # 유사 문자열 보존(오염 없음)
     assert restored.count(phone) == 1      # PII 는 원위치 1회만
     assert (n_ok, n_drop) == (1, 0)
+
+
+def test_alternate_sentinel_format_round_trips():
+    """괄호를 갈아끼워도 마스킹-복원 불변식은 그대로다.
+
+    전용 NMT 처럼 lenticular bracket 이 어휘에 없는 번역기를 위해 표기를
+    엔진 속성으로 뺐다 — 바뀌는 것은 감싸는 괄호뿐이고 nonce·번호는 같다.
+    """
+    ascii_fmt = SentinelFormat(left='[', right=']')
+    text, spans, phone = _phone_record()
+    masked, id2val = _mask(text, spans, ascii_fmt)
+    assert _sentinel(0, ascii_fmt) in masked
+    assert _sentinel(0) not in masked        # 기본 표기는 섞이지 않는다
+    assert phone not in masked               # 번역기에 PII 미노출
+    restored, n_ok, n_drop = _restore(masked, id2val, ascii_fmt)
+    assert phone in restored and (n_ok, n_drop) == (1, 0)
+
+
+def test_alternate_sentinel_leaves_default_format_text_alone():
+    """ASCII 표기로 돌 때 원문의 `【…】` 자연 표기를 건드리지 않는다."""
+    ascii_fmt = SentinelFormat(left='[', right=']')
+    phone = '010-1234-5678'
+    text = f'【重要】連絡先 {phone}'
+    p = text.index(phone)
+    spans = [{'label': 'PHONE', 'start_char': p, 'end_char': p + len(phone),
+              'text': phone}]
+    masked, id2val = _mask(text, spans, ascii_fmt)
+    restored, n_ok, n_drop = _restore(masked, id2val, ascii_fmt)
+    assert '【重要】' in restored
+    assert phone in restored and (n_ok, n_drop) == (1, 0)
+
+
+def test_default_sentinel_unchanged_by_format_parameter():
+    """기본 인자로 부르면 종전과 같은 lenticular 표기를 낸다(동작 불변)."""
+    assert _sentinel(0).startswith('【') and _sentinel(0).endswith('】')
+    assert _sentinel(3) == _sentinel(3, DEFAULT_SENTINEL)
 
 
 # ---------- 엔드포인트 계약 ----------

@@ -108,7 +108,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
 | `request_log.py` | `RequestLogMiddleware`(순수 ASGI, 최외곽) — 요청별 request-id 생성·`X-Request-ID` 에코, 지연·결과를 한 줄로. 성공 2xx→DEBUG(기본 침묵), 거절 4xx·503→WARNING(사유 태그). 핸들러가 `request.state.ner_meta`(lang·batch·entities)를 채워 성공 로그에 실린다 |
 | `app.py` | `create_app(registry, config, translator)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `translator`(옵션)는 `/v1/translate` 용, None 이면 503. `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
-| `translate.py` | `LLMTranslator`·`build_translator` — 온프렘 LLM(OpenAI 호환) 마스킹-복원 번역. PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. `/v1/ner`·`inference.py` 무의존 additive |
+| `translate.py` | `LLMTranslator`·`build_translator` — 온프렘 LLM(OpenAI 호환) 마스킹-복원 번역. PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. sentinel 을 감싸는 괄호는 `SentinelFormat` 으로 갈아끼운다 — 표기가 번역기 토크나이저에 종속되기 때문이며 기본값은 종전 `【…】` 그대로다. `/v1/ner`·`inference.py` 무의존 additive |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
 | `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
@@ -175,11 +175,34 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 
 ## 번역 엔진 벤치 (translate_bench)
 
-웹 데모 번역기(`translate.py`) 후보 LLM 을 비교하는 하네스가
+웹 데모 번역기(`translate.py`) 후보를 비교하는 하네스가
 `scripts/translate_bench/` 에 있다 — 프로덕션 마스킹-복원 경로를 그대로 태워
-PII 보존·음차·뜻전달(중립 LLM-judge)·지연을 잰다. 평가셋은 NTREX-128 유래
-28문장(`data/eval_set.jsonl`, PII 주입 gold). 결과·근거·엔진 선정은
-`docs/reports/translate-engine-lightweight-benchmark.md`.
+PII 보존·음차·뜻전달(중립 LLM-judge)·지연·생성 붕괴·chrF++ 를 잰다. 평가셋은
+NTREX-128 유래 28문장(`data/eval_set.jsonl`, PII 주입 gold). 결과·근거·엔진
+선정은 `docs/reports/translate-engine-lightweight-benchmark.md`.
+
+후보는 두 갈래다 — OpenAI 호환 엔드포인트(`--engine`)와 in-process 전용
+NMT(`--nllb`, `nllb.py`). 둘은 `available`·`translate` 계약만 맞추면 같은
+자리에 끼워지고, 갈라지는 것은 **엔진 속성 둘**뿐이다.
+
+- **sentinel 표기**(`SentinelFormat`) — LLM 은 기본 `【…】`, NLLB 는 ASCII
+  `[…]`. NLLB 의 SentencePiece 어휘에 lenticular bracket 이 없어 양쪽 괄호가
+  `<unk>` 로 죽는데, sentinel 본체는 통과하므로 복원만 전량 실패한다. 괄호를
+  옮기면 nonce 를 포함해 복원된다. 표기가 토크나이저에 종속되는 성질이라
+  프로덕션(`translate.py`)에서 갈아끼울 수 있는 인자로 두고 엔진이 고른다.
+- **문장 분할** — NLLB 는 문장 단위 모델이라 통짜 입력을 주면 뒷문장을 통째로
+  버린다. 경계 규칙은 "마침표류 + 공백"이 기본이고 한 글자 약어만 예외다
+  (반대로 경계인 경우를 열거하면 연도·자리표시자·닫는 따옴표에서 샌다).
+
+**생성 붕괴는 따로 센다.** beam search 를 반복 억제 없이 돌리면 한 어절을
+`max_new_tokens` 까지 되풀이해 출력을 통째로 버리는 레코드가 나온다. 평균 품질
+지표는 이 붕괴를 흡수해 가리므로 건수(`degenerate_repeat_records`)로 센다.
+`--nllb-no-repeat-ngram 3` 이 이를 없애지만 공짜가 아니다 — 한 문장에 두 번
+나온 고유명사가 잘리는 부작용이 있어, 기본값은 원장 실측과 같은 `0`(끔)이다.
+
+**chrF++ 는 PII 없는 원문으로 잰다.** 주입된 PII 는 참조 번역(`ko_ref`)에 없어
+그대로 채점하면 점수가 눌린다. 그래서 `--chrf` 는 `base_text` 를 한 번 더
+번역해 그 출력으로만 채점한다 — 지연·PII 지표를 낸 본 실행과는 별개 통과다.
 
 **표본은 앞에서만 자란다.** `--per-lang` 으로 표본을 키워도 처음 14문장
 (언어별)은 난수 호출 순서가 같아 그대로 남고 확장분만 별도 seed 로 덧붙는다
@@ -195,4 +218,6 @@ uv run python -m server.scripts.translate_bench.build_eval_set \
   --per-lang 100 --out /tmp/eval_200.jsonl        # 확대판(동결 28문장 보존)
 uv run python -m server.scripts.translate_bench.run_bench \
   --engine <name> <model> <base_url> [--engine ...] --judge-url <url>
+uv run python -m server.scripts.translate_bench.run_bench \
+  --nllb nllb-1.3b facebook/nllb-200-distilled-1.3B --chrf --no-judge
 ```

@@ -15,6 +15,9 @@ sentinel 은 `【PII{nonce}_{i}】` 형식이다. lenticular bracket(벤치 생�
 nonce 는 출력에 남지 않아 클라이언트가 알 수 없으므로, 복원의 전역 문자열
 치환이 원문의 sentinel-형식 텍스트를 덮어쓰는 오염을 막는다. 복원·잔여 제거는
 이 nonce 형식만 대상으로 한다.
+
+괄호 쌍은 `SentinelFormat` 으로 갈아끼울 수 있다 — 표기가 번역기의 토크나이저에
+종속되기 때문이다. nonce 와 번호 부분은 고정이고 바뀌는 것은 감싸는 괄호뿐이다.
 """
 from __future__ import annotations
 
@@ -30,21 +33,47 @@ logger = logging.getLogger(__name__)
 # 않고 번역기가 한글 음차한다.
 PII_LABELS = frozenset({'DAT', 'EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD'})
 
-# sentinel 접두 — lenticular bracket 에 프로세스별 랜덤 nonce 를 더한다.
-# 클라이언트가 예측·재현할 수 없어 원문을 만들어 충돌시키는 게 불가능하다.
+# sentinel 접두 — 프로세스별 랜덤 nonce. 클라이언트가 예측·재현할 수 없어
+# 원문을 만들어 충돌시키는 게 불가능하다.
 _SENTINEL_TAG = f'PII{secrets.token_hex(3)}_'
-_SENTINEL_RE = re.compile(rf'【{re.escape(_SENTINEL_TAG)}(\d+)】')
 _LANG_NAME = {'ja': '일본어', 'vi': '베트남어'}
 
 _PROMPT_TEMPLATE = (
     '다음 {lang_name} 문장을 한국어로 번역하세요.\n'
     '규칙:\n'
-    '1) 문장에 있는 【…】 형태의 자리표시자(예: 【PII…】)는 위치와 형태를 '
-    '절대 바꾸지 말고 그대로 두세요.\n'
+    '1) 문장에 있는 {left}…{right} 형태의 자리표시자(예: {left}PII…{right})는 '
+    '위치와 형태를 절대 바꾸지 말고 그대로 두세요.\n'
     '2) 인물·지명·조직·제품명 등 고유명사는 한글로 음차하세요.\n'
     '3) 번역문만 출력하고 설명은 하지 마세요.\n\n'
     '문장: {text}'
 )
+
+
+@dataclass(frozen=True)
+class SentinelFormat:
+    """sentinel 을 감싸는 괄호 쌍 — 번역기 토크나이저에 종속되는 부분이다.
+
+    기본값 lenticular bracket 은 LLM 경로에서 생존율 100% 다. 반면 전용 NMT
+    처럼 SentencePiece 어휘에 그 글자가 없는 모델에서는 양쪽 괄호가 모두
+    `<unk>` 로 죽어 sentinel 본체가 멀쩡해도 복원이 전량 실패한다. 그래서
+    표기를 번역기 속성으로 두고 엔진이 고르게 한다.
+    """
+
+    left: str = '【'
+    right: str = '】'
+
+    def token(self, i: int) -> str:
+        """i 번째 sentinel 문자열(프로세스 nonce 포함)."""
+        return f'{self.left}{_SENTINEL_TAG}{i}{self.right}'
+
+    def pattern(self) -> re.Pattern:
+        """이 표기의 sentinel 만 잡는 정규식 — 자연 텍스트 괄호는 비대상."""
+        return re.compile(
+            rf'{re.escape(self.left)}{re.escape(_SENTINEL_TAG)}'
+            rf'(\d+){re.escape(self.right)}')
+
+
+DEFAULT_SENTINEL = SentinelFormat()
 
 
 class TranslationUnavailable(Exception):
@@ -65,12 +94,13 @@ class TranslationResult:
     dropped_pii: int
 
 
-def _sentinel(i: int) -> str:
+def _sentinel(i: int, fmt: SentinelFormat = DEFAULT_SENTINEL) -> str:
     """sentinel 토큰 문자열(프로세스 nonce 포함)."""
-    return f'【{_SENTINEL_TAG}{i}】'
+    return fmt.token(i)
 
 
-def _mask(text: str, spans: List[dict]) -> tuple[str, Dict[int, str]]:
+def _mask(text: str, spans: List[dict],
+          fmt: SentinelFormat = DEFAULT_SENTINEL) -> tuple[str, Dict[int, str]]:
     """PII 라벨 span 을 sentinel 로 치환한다(오른쪽부터, offset 보존).
 
     반환: (마스킹된 텍스트, {sentinel_id: 원본 PII 문자열}). PII 가 없으면
@@ -96,11 +126,13 @@ def _mask(text: str, spans: List[dict]) -> tuple[str, Dict[int, str]]:
     # 오른쪽(뒤) span 부터 치환해야 앞쪽 offset 이 밀리지 않는다.
     for i in reversed(range(len(pii))):
         s = pii[i]
-        masked = masked[:s['start_char']] + _sentinel(i) + masked[s['end_char']:]
+        masked = (masked[:s['start_char']] + fmt.token(i)
+                  + masked[s['end_char']:])
     return masked, id2val
 
 
-def _restore(translated: str, id2val: Dict[int, str]) -> tuple[str, int, int]:
+def _restore(translated: str, id2val: Dict[int, str],
+             fmt: SentinelFormat = DEFAULT_SENTINEL) -> tuple[str, int, int]:
     """sentinel 을 원본 PII 로 복원한다.
 
     반환: (복원된 텍스트, 복원 성공 수, 소실 수). 번역 중 사라진 sentinel 은
@@ -111,14 +143,14 @@ def _restore(translated: str, id2val: Dict[int, str]) -> tuple[str, int, int]:
     out = translated
     restored = 0
     for i, value in id2val.items():
-        token = _sentinel(i)
+        token = fmt.token(i)
         if token in out:
             out = out.replace(token, value)
             restored += 1
     dropped = len(id2val) - restored
     # 매핑에 없는 잔여 sentinel(환각·부분 소실)은 화면 노이즈이므로 제거한다.
-    # 우리 형식(`【PII\d+】`)만 대상이라 자연 텍스트의 `【N】` 은 보존된다.
-    out = _SENTINEL_RE.sub('', out)
+    # 우리 형식(nonce 포함)만 대상이라 자연 텍스트의 `【N】` 은 보존된다.
+    out = fmt.pattern().sub('', out)
     return out, restored, dropped
 
 
@@ -127,13 +159,15 @@ class LLMTranslator:
 
     def __init__(self, base_url: str, model: str,
                  api_key: Optional[str] = None, timeout_s: float = 30.0,
-                 temperature: float = 0.0, max_tokens: int = 2048) -> None:
+                 temperature: float = 0.0, max_tokens: int = 2048,
+                 sentinel: SentinelFormat = DEFAULT_SENTINEL) -> None:
         from openai import OpenAI
         self._client = OpenAI(base_url=base_url, api_key=api_key or 'none',
                               timeout=timeout_s)
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._sentinel = sentinel
         logger.info('LLMTranslator ready: %s @ %s', model, base_url)
 
     def available(self) -> bool:
@@ -156,9 +190,10 @@ class LLMTranslator:
         LLM 호출 실패·타임아웃은 `TranslationUnavailable` 로 올린다. span 이
         비정상(겹침·범위 밖)이면 `_mask` 가 `ValueError` 를 올린다.
         """
-        masked, id2val = _mask(text, spans)
+        masked, id2val = _mask(text, spans, self._sentinel)
         prompt = _PROMPT_TEMPLATE.format(
-            lang_name=_LANG_NAME.get(lang, lang), text=masked)
+            lang_name=_LANG_NAME.get(lang, lang), text=masked,
+            left=self._sentinel.left, right=self._sentinel.right)
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
@@ -171,7 +206,7 @@ class LLMTranslator:
             logger.warning('translation backend call failed: %s', exc)
             raise TranslationUnavailable(str(exc)) from exc
         raw = (resp.choices[0].message.content or '').strip()
-        restored, n_ok, n_drop = _restore(raw, id2val)
+        restored, n_ok, n_drop = _restore(raw, id2val, self._sentinel)
         if n_drop:
             logger.warning('translation dropped %d/%d PII sentinel(s)',
                            n_drop, len(id2val))
