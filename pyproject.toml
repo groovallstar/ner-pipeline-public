@@ -22,8 +22,6 @@ dependencies = [
     "sentence-transformers",
     "seqeval",
     "sentencepiece",
-    # 번역 벤치 chrF++ (translate_bench)
-    "sacrebleu",
     # OpenAI SDK (vLLM/OpenAI 호환 클라이언트 — labelers·server 직접 사용)
     "openai",
     # LangChain ecosystem

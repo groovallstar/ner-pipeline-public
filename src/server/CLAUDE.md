@@ -113,7 +113,6 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
 | `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
 | `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`) |
-| `scripts/translate_bench/` | 번역 엔진 후보 비교 하네스 — 상세는 아래 §번역 엔진 벤치 |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
 ## 추론 경로
@@ -173,52 +172,26 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
   서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
   skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
 
-## 번역 엔진 벤치 (translate_bench)
+## 번역 엔진 — sentinel 표기가 엔진에 종속된다
 
-웹 데모 번역기(`translate.py`) 후보를 비교하는 하네스가
-`scripts/translate_bench/` 에 있다 — 프로덕션 마스킹-복원 경로를 그대로 태워
-PII 보존·음차·뜻전달(중립 LLM-judge)·지연·생성 붕괴·chrF++ 를 잰다. 평가셋은
-NTREX-128 유래 28문장(`data/eval_set.jsonl`, PII 주입 gold). 결과·근거·엔진
-선정은 `docs/reports/translate-engine-lightweight-benchmark.md`.
+번역기 후보를 비교하던 하네스(`scripts/translate_bench/`)는 제거됐다. 번역은
+NER 에 딸린 부가 기능이라 품질이 엔진 선정 기준이 아니고, 상시 돌 하네스를
+유지할 값이 없었다. 과거 측정 경위·엔진 선정 근거는
+`docs/reports/translate-engine-lightweight-benchmark.md` 에 남아 있다.
 
-후보는 두 갈래다 — OpenAI 호환 엔드포인트(`--engine`)와 in-process 전용
-NMT(`--nllb`, `nllb.py`). 둘은 `available`·`translate` 계약만 맞추면 같은
-자리에 끼워지고, 갈라지는 것은 **엔진 속성 둘**뿐이다.
+하네스와 함께 사라지지 않는 것이 하나 있다 — **sentinel 을 감싸는 괄호는
+번역기의 토크나이저에 종속된다.** 그래서 `translate.py` 가 표기를
+`SentinelFormat` 으로 받아 번역기가 고르게 한다.
 
-- **sentinel 표기**(`SentinelFormat`) — LLM 은 기본 `【…】`, NLLB 는 ASCII
-  `[…]`. NLLB 의 SentencePiece 어휘에 lenticular bracket 이 없어 양쪽 괄호가
-  `<unk>` 로 죽는데, sentinel 본체는 통과하므로 복원만 전량 실패한다. 괄호를
-  옮기면 nonce 를 포함해 복원된다. 표기가 토크나이저에 종속되는 성질이라
-  프로덕션(`translate.py`)에서 갈아끼울 수 있는 인자로 두고 엔진이 고른다.
-- **문장 분할** — NLLB 는 문장 단위 모델이라 통짜 입력을 주면 뒷문장을 통째로
-  버린다. 경계 규칙은 "마침표류 + 공백"이 기본이고 한 글자 약어만 예외다
-  (반대로 경계인 경우를 열거하면 연도·자리표시자·닫는 따옴표에서 샌다).
+- 기본 `【…】`(lenticular bracket)는 LLM 경로에서 생존율 100% 다.
+- 전용 NMT(NLLB) 계열은 SentencePiece 어휘에 그 글자가 없어 **양쪽 괄호가
+  `<unk>` 로 죽는다.** sentinel 본체는 멀쩡히 통과하는데 복원이 괄호째
+  매칭하니 전량 실패로 집계된다 — 근거는
+  `certified/translate_bench/nllb-1.3b-sentinel-ascii-2080ti/summary.json`
+  (현행 표기 0/186, ASCII 괄호 186/186). 괄호만 ASCII 로 옮기면 nonce 를
+  포함해 복원된다.
 
-**생성 붕괴는 따로 센다.** beam search 를 반복 억제 없이 돌리면 한 어절을
-`max_new_tokens` 까지 되풀이해 출력을 통째로 버리는 레코드가 나온다. 평균 품질
-지표는 이 붕괴를 흡수해 가리므로 건수(`degenerate_repeat_records`)로 센다.
-`--nllb-no-repeat-ngram 3` 이 이를 없애지만 공짜가 아니다 — 한 문장에 두 번
-나온 고유명사가 잘리는 부작용이 있어 기본값은 `0`(끔)으로 두고 켜는 쪽을
-호출자가 고르게 한다.
-
-**chrF++ 는 PII 없는 원문으로 잰다.** 주입된 PII 는 참조 번역(`ko_ref`)에 없어
-그대로 채점하면 점수가 눌린다. 그래서 `--chrf` 는 `base_text` 를 한 번 더
-번역해 그 출력으로만 채점한다 — 지연·PII 지표를 낸 본 실행과는 별개 통과다.
-
-**표본은 앞에서만 자란다.** `--per-lang` 으로 표본을 키워도 처음 14문장
-(언어별)은 난수 호출 순서가 같아 그대로 남고 확장분만 별도 seed 로 덧붙는다
-— 확대 전 수치를 그 부분집합에서 그대로 재현할 수 있어, 표본을 키운 것이
-기준을 바꾼 게 아님을 보일 수 있다. 인자 없이 돌리면 커밋된 28문장이 바이트
-단위로 재생성된다. 확대판은 커밋하지 않으므로(파생물), 인용하는 결과의
-`certified/**` metric JSON 에 빌더 인자·seed·`sha256_16` 을 함께 남겨 재현
-가능성을 잇는다.
-
-```bash
-uv run python -m server.scripts.translate_bench.build_eval_set   # 평가셋 재생성
-uv run python -m server.scripts.translate_bench.build_eval_set \
-  --per-lang 100 --out /tmp/eval_200.jsonl        # 확대판(동결 28문장 보존)
-uv run python -m server.scripts.translate_bench.run_bench \
-  --engine <name> <model> <base_url> [--engine ...] --judge-url <url>
-uv run python -m server.scripts.translate_bench.run_bench \
-  --nllb nllb-1.3b facebook/nllb-200-distilled-1.3B --chrf --no-judge
-```
+전용 NMT 를 백엔드로 고를 수 있게 하는 작업은 별건이며, 그때 함께 필요한 것이
+둘 더 있다 — **문장 단위 분할**(문장 모델이라 통짜 입력의 뒷문장을 버린다)과
+**반복 억제**(억제 없이 beam search 를 돌리면 한 어절을 `max_new_tokens` 까지
+되풀이해 출력을 통째로 버리는 레코드가 나온다).
