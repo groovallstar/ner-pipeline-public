@@ -1,0 +1,47 @@
+name: 작업 이슈
+description: 기능·수정·진단 작업 단위를 등록한다
+body:
+  - type: markdown
+    attributes:
+      value: |
+        섹션 구조·필수 여부의 정본은 `docs/issues/README.md` 의 tier 표다.
+        등록 후 `area:*` 라벨을 붙이고, 브랜치는 `feat/issue-{번호}-{슬러그}` 로 판다.
+
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 (배경·문제)
+      description: 왜 지금 이 이슈가 필요한가 — 현재 무엇이 문제·공백·거짓 안심인가. 있으면 측정값·재현 경로를 함께. 도달 상태는 아래 §목적에 적는다.
+      placeholder: |
+        예) cross-fold 중복 카운터가 그룹 키를 고를 수 없어 '중복 0' 재검증이
+        주입 텍스트 기준으로 통과했다 — 원문 단위 누출이 그대로 남았다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목적
+      description: 측정 가능한 goal — 1~3줄. metric 으로 표현.
+    validations:
+      required: true
+
+  - type: textarea
+    id: criteria
+    attributes:
+      label: 성공 기준
+      description: 검증 가능한 acceptance criteria 3~6개. test·metric 이 걸린 이슈면 목표 수치를 명시한다.
+      value: |
+        - [ ] 테스트:
+        - [ ] 문서 갱신:
+        - [ ] 메트릭/검증:
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 범위
+      description: 포함·제외. 명시적으로 빠진 것을 적어 drift 를 막는다.
+    validations:
+      required: false
