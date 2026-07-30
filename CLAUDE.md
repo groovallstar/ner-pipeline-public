@@ -203,7 +203,7 @@ touch .omc/state/refuter/human-allow-<diff_hash>
 - **GitHub Issues**(`groovallstar/ner-pipeline`)로 작업 단위를 관리한다. 자동 채번으로 중복을 방지한다. 무엇이 이슈가 되는지는 §워크플로의 type+path 표가 정한다.
 - 이슈·리포트 문서의 **표 안** 수치는 `certified/` 원장과 대조된다 — 출처 선언 문법과 대조 범위는 §하네스. 산문·링크·오타만 바꾸는 docs 커밋은 해당 없음.
 - 마일스톤은 사용하지 않는다. 영역은 라벨로 구분한다 (`area:labelers`, `area:classifier`, `area:augmenters`, `area:llm-eval`, `area:infra`, `docs` 등).
-- 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>`
+- 이슈 등록: `gh issue create --title "제목" --body "설명" --label <area>`. 본문 칸은 `.github/ISSUE_TEMPLATE/task.yml` 이 정하지만 **폼은 웹 UI 에서만 강제된다** — `--body` 로 만들면 폼을 지나가므로 왜·목적·성공 기준을 본문에 직접 적는다
 - 브랜치명: `feat/issue-{번호}-{짧은-슬러그}` 예) `feat/issue-12-vi-crawler`
 - 커밋 메시지: 기존 컨벤션(한국어 제목 + `type(스코프):` 접두사) 유지, 본문 끝에 `refs #12` 참조. 최종 PR 또는 마지막 커밋에는 `closes #12`로 이슈 종결.
 - **계획·보고 문서는 GitHub Issue와 `docs/issues/` 양쪽에 모두 남긴다.** Issue는 실시간 협의·승인 기록, `docs/issues/`는 기능 설계·구현 히스토리의 영구 보관 용도. 이슈와 무관한 자유 형식 벤치마크·실험 리포트는 `docs/reports/`에 둔다.
@@ -211,7 +211,7 @@ touch .omc/state/refuter/human-allow-<diff_hash>
 
 ### 이슈 진행 절차 (경량 5단계, 승인 1회)
 
-1. **등록**: GitHub Issue 작성 — 목적, 성공 기준(테스트/메트릭), 범위 정리
+1. **등록**: GitHub Issue 작성 — **왜 만드나**(지금 무엇이 문제·공백인가), 목적, 성공 기준(테스트/메트릭), 범위 정리. **왜가 없으면 등록하지 않는다** — 도달 상태만 적힌 이슈는 범위가 흔들릴 때 무엇을 지켜야 하는지, 끝난 뒤 그 작업이 실제로 문제를 없앴는지를 판단할 근거가 없다. 자리·필수 여부는 `docs/issues/README.md` 의 tier 표가 정본이다
 2. **브랜치**: `develop`에서 `feat/issue-{N}-slug` 분기
 3. **수락 기준 확정 → 승인 요청**: 검증 가능한 acceptance criteria 3~6개를 Issue 본문에 적고 **이 기준 목록에 대해서만** 승인받는다 — 사람이 읽는 게이트는 산문 계획이 아니라 이 짧은 목록이다. test·metric이 걸린 이슈면 기준에 **목표 수치를 명시**한다(형식은 이슈마다 다름 — `certified/*.json` 강제 아님). 하위 작업은 같은 본문에 체크박스로 분해. **eval·metric 이슈는 기준 파일을 건드려 커밋이 잠기므로**(§하네스), 누출·조작 점검을 미루지 말고 커밋 전에 돌린다.
 4. **구현 & 원자 커밋**: 의미 단위로 커밋(체크박스 개수와 무관), 각 커밋 본문에 `refs #N`. 입도 기준은 위 "커밋 입도" 섹션 참조. 구현을 ralph 등 자율 루프로 돌리는 것은 3단계 기준이 기계검증 가능·신뢰되고 작업이 다회차/반복-shape일 때만 — 단발은 "분해는 내가 → 한 스텝만 위임 → 내가 기준으로 검증"이 기본.
