@@ -1,13 +1,22 @@
-"""번역 서비스 테스트 — 마스킹-복원 PII 보존 + 엔드포인트 계약.
+"""번역 서비스 테스트 — 마스킹-복원 PII 보존 + 백엔드 선택 + 엔드포인트 계약.
 
 핵심 불변식: PII 문자열은 (a) 번역기에 노출되지 않고, (b) 출력에서 원문 그대로
 보존되거나(sentinel 생존), (c) 소실 시 훼손 없이 '부재'로 처리된다. 실 LLM 없이
 stub translator 로 검증한다.
+
+백엔드 선택(`build_translator`)은 **설정만 보고 무엇을 부르는지 알 수 있는가**를
+본다 — 기본값으로 때우지 않고 기동을 실패시키는지. 동시성은 번역 예산이 NER
+예산과 분리돼 서로를 잠식하지 않는지를 양방향으로 본다.
 """
 
+import asyncio
+import threading
+
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from server import translate_nllb
 from server.app import create_app
 from server.config import ServerConfig
 from server.translate import (
@@ -18,6 +27,7 @@ from server.translate import (
     _mask,
     _restore,
     _sentinel,
+    build_translator,
 )
 
 
@@ -320,3 +330,197 @@ def test_status_unavailable_when_backend_down():
     r = _client(translator=_EchoTranslator(available=False)).get(
         '/v1/translate/status')
     assert r.json() == {'enabled': True, 'available': False}
+
+
+# ---------- 백엔드 선택·설정 검증(기동 시점) ----------
+
+def _cfg(**kw) -> ServerConfig:
+    """번역 활성 config — 나머지 키는 테스트가 채운다."""
+    return ServerConfig(translate_enabled=True, **kw)
+
+
+def test_disabled_builds_nothing():
+    """비활성이면 백엔드를 안 봐도 None(엔드포인트가 503 을 낸다)."""
+    assert build_translator(ServerConfig()) is None
+
+
+def test_backend_is_required_when_enabled():
+    """번역 활성인데 백엔드 미지정이면 기동 실패 — 기본값이 없다."""
+    with pytest.raises(ValueError, match='BACKEND'):
+        build_translator(_cfg(translate_model='m'))
+
+
+def test_unknown_backend_rejected():
+    """llm·nllb 외 값은 기동 실패(오타가 조용히 통과하지 않는다)."""
+    with pytest.raises(ValueError, match='unknown translation backend'):
+        build_translator(_cfg(translate_backend='deepl',
+                              translate_model='m'))
+
+
+def test_model_is_required_for_both_backends():
+    """MODEL 은 두 백엔드 공용 필수다."""
+    for backend in ('llm', 'nllb'):
+        with pytest.raises(ValueError, match='MODEL'):
+            build_translator(_cfg(translate_backend=backend))
+
+
+def test_llm_requires_base_url():
+    """BASE_URL 기본값을 없앴으므로 llm 은 명시해야 뜬다."""
+    with pytest.raises(ValueError, match='BASE_URL'):
+        build_translator(_cfg(translate_backend='llm',
+                              translate_model='m'))
+
+
+def test_llm_rejects_nllb_only_keys():
+    """llm 인데 nllb 전용 키가 오면 기동 실패(설정≠동작 방지)."""
+    with pytest.raises(ValueError, match='DEVICE'):
+        build_translator(_cfg(translate_backend='llm', translate_model='m',
+                              translate_base_url='http://x/v1',
+                              translate_device='cuda:0'))
+
+
+def test_nllb_rejects_llm_only_keys():
+    """nllb 인데 원격 호출용 키가 오면 기동 실패."""
+    with pytest.raises(ValueError, match='BASE_URL'):
+        build_translator(_cfg(translate_backend='nllb', translate_model='m',
+                              translate_base_url='http://x/v1'))
+
+
+def test_llm_backend_builds_llm_translator():
+    """유효한 llm 설정은 종전 경로를 그대로 만든다(동작 불변)."""
+    translator = build_translator(
+        _cfg(translate_backend='llm', translate_model='m',
+             translate_base_url='http://localhost:8081/v1'))
+    assert type(translator).__name__ == 'LLMTranslator'
+
+
+class _NLLBSpy:
+    """모델 로드 없이 nllb 경로에 넘어간 인자만 받아 둔다."""
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+def test_nllb_backend_defaults(monkeypatch):
+    """nllb 기본값 — device cuda:0, 반복 억제는 미지정(=번역기가 정한다)."""
+    monkeypatch.setattr(translate_nllb, 'NLLBTranslator', _NLLBSpy)
+    built = build_translator(
+        _cfg(translate_backend='nllb', translate_model='facebook/nllb'))
+    assert built.kwargs == {'model_id': 'facebook/nllb', 'device': 'cuda:0',
+                            'no_repeat_ngram': None}
+
+
+def test_nllb_explicit_keys_pass_through(monkeypatch):
+    """명시한 값은 그대로 넘어간다(0=끔 포함)."""
+    monkeypatch.setattr(translate_nllb, 'NLLBTranslator', _NLLBSpy)
+    built = build_translator(
+        _cfg(translate_backend='nllb', translate_model='facebook/nllb',
+             translate_no_repeat_ngram=0, translate_device='cpu'))
+    assert built.kwargs['no_repeat_ngram'] == 0
+    assert built.kwargs['device'] == 'cpu'
+
+
+# ---------- 동시성(번역 예산은 NER 과 분리된다) ----------
+
+class _BlockingTranslator:
+    """슬롯을 붙잡고 있는 번역기 — 동시 점유 수를 관측한다."""
+
+    def __init__(self):
+        self.release = threading.Event()
+        self._lock = threading.Lock()
+        self.in_flight = 0
+        self.max_in_flight = 0
+
+    def translate(self, text, lang, spans):
+        with self._lock:
+            self.in_flight += 1
+            self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        self.release.wait(timeout=5)
+        with self._lock:
+            self.in_flight -= 1
+        return TranslationResult(lang, text, 0, 0, 0)
+
+    def available(self):
+        return True
+
+
+class _BlockingReg(_Reg):
+    """NER 슬롯을 붙잡고 있는 registry."""
+
+    def __init__(self):
+        self.release = threading.Event()
+        self.entered = threading.Event()
+
+    def predict(self, *a, **k):
+        self.entered.set()
+        self.release.wait(timeout=5)
+        return []
+
+
+def _async_client(app):
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                             base_url='http://test')
+
+
+async def _wait_until(predicate, timeout_s=5.0):
+    """조건이 참이 될 때까지 이벤트 루프를 양보하며 기다린다."""
+    for _ in range(int(timeout_s / 0.01)):
+        if predicate():
+            return True
+        await asyncio.sleep(0.01)
+    return False
+
+
+def test_translate_concurrency_bounded_and_excess_rejected():
+    """동시 in-flight ≤ 상한, 초과는 429 — NER 요청은 그대로 통과한다."""
+    payload = {'text': '連絡先', 'lang': 'ja', 'spans': []}
+
+    async def scenario():
+        translator = _BlockingTranslator()
+        app = create_app(_Reg(), ServerConfig(translate_max_concurrency=2),
+                         translator)
+        async with _async_client(app) as client:
+            holders = [asyncio.create_task(
+                client.post('/v1/translate', json=payload)) for _ in range(2)]
+            saturated = await _wait_until(
+                lambda: translator.in_flight == 2)
+            excess = await client.post('/v1/translate', json=payload)
+            ner = await client.post('/v1/ner',
+                                    json={'text': '東京', 'lang': 'ja'})
+            translator.release.set()
+            held = await asyncio.gather(*holders)
+        return (saturated, translator.max_in_flight, excess.status_code,
+                ner.status_code, [r.status_code for r in held])
+
+    saturated, max_in_flight, excess, ner, held = asyncio.run(scenario())
+    assert saturated                 # 두 요청이 실제로 동시에 들어갔다
+    assert max_in_flight == 2        # 상한을 넘지 않는다
+    assert excess == 429             # 초과는 대기 없이 거절
+    assert ner == 200                # 번역 포화가 NER 예산을 잠식하지 않는다
+    assert held == [200, 200]
+
+
+def test_ner_saturation_does_not_block_translation():
+    """반대 방향 — NER 이 포화여도 번역은 자기 예산으로 돈다."""
+    async def scenario():
+        registry = _BlockingReg()
+        config = ServerConfig(max_concurrency=1, max_queue=0,
+                              translate_max_concurrency=2)
+        app = create_app(registry, config, _EchoTranslator())
+        async with _async_client(app) as client:
+            held = asyncio.create_task(
+                client.post('/v1/ner', json={'text': '東京', 'lang': 'ja'}))
+            saturated = await _wait_until(registry.entered.is_set)
+            ner_excess = await client.post('/v1/ner',
+                                           json={'text': '大阪', 'lang': 'ja'})
+            translated = await client.post(
+                '/v1/translate',
+                json={'text': '連絡先', 'lang': 'ja', 'spans': []})
+            registry.release.set()
+            await held
+        return saturated, ner_excess.status_code, translated.status_code
+
+    saturated, ner_excess, translated = asyncio.run(scenario())
+    assert saturated                 # NER 슬롯이 실제로 점유된 상태에서
+    assert ner_excess == 429         # NER 은 자기 상한에서 거절되고
+    assert translated == 200         # 번역은 영향을 받지 않는다

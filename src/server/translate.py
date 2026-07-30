@@ -1,4 +1,4 @@
-"""웹 데모 UI용 한국어 번역 서비스 — 온프렘 LLM(vLLM/OpenAI 호환) 백엔드.
+"""웹 데모 UI용 한국어 번역 서비스 — 마스킹-복원 + 온프렘 LLM 백엔드.
 
 `/v1/ner`·`inference.py` 와 독립된 additive 모듈이다. 입력 원문의 PII span 을
 sentinel 로 마스킹해 원문 PII 를 번역기에 노출하지 않고, 번역 후 원본값으로
@@ -18,6 +18,10 @@ nonce 는 출력에 남지 않아 클라이언트가 알 수 없으므로, 복�
 
 괄호 쌍은 `SentinelFormat` 으로 갈아끼울 수 있다 — 표기가 번역기의 토크나이저에
 종속되기 때문이다. nonce 와 번호 부분은 고정이고 바뀌는 것은 감싸는 괄호뿐이다.
+
+이 모듈은 마스킹-복원과 원격 LLM 백엔드(`LLMTranslator`)를 담고, 인프로세스
+전용 NMT 백엔드는 `translate_nllb.py` 에 따로 둔다 — 그쪽은 torch·transformers
+를 끌고 오므로 `backend=llm` 기동이 그 무게를 지지 않게 임포트를 미룬다.
 """
 from __future__ import annotations
 
@@ -216,19 +220,88 @@ class LLMTranslator:
         )
 
 
-def build_translator(config) -> Optional[LLMTranslator]:
-    """config 로 translator 를 구성한다. 비활성이면 None(엔드포인트는 503).
+# 백엔드 전용 설정 키 — env 이름과 config 속성을 한 곳에 묶는다. 검증이 이
+# 표만 읽으므로 키가 늘어도 규칙이 흩어지지 않는다. 공용 키(BACKEND·MODEL·
+# MAX_CONCURRENCY)는 어느 쪽에도 안 들어간다.
+_BACKEND_KEYS = {
+    'llm': (
+        ('NER_SERVER_TRANSLATE_BASE_URL', 'translate_base_url'),
+        ('NER_SERVER_TRANSLATE_API_KEY', 'translate_api_key'),
+        ('NER_SERVER_TRANSLATE_TIMEOUT_S', 'translate_timeout_s'),
+    ),
+    'nllb': (
+        ('NER_SERVER_TRANSLATE_DEVICE', 'translate_device'),
+        ('NER_SERVER_TRANSLATE_NO_REPEAT_NGRAM',
+         'translate_no_repeat_ngram'),
+    ),
+}
+BACKENDS = tuple(_BACKEND_KEYS)
 
-    활성인데 모델이 미지정이면 기동 시점에 명확히 실패시킨다.
+# 백엔드 전용 키의 실효 기본값 — config 는 "안 준 것"을 None 으로 남겨야
+# 하므로(§config) 기본값은 여기서 넣는다.
+DEFAULT_TIMEOUT_S = 30.0
+DEFAULT_DEVICE = 'cuda:0'
+# 반복 억제(`NO_REPEAT_NGRAM`)의 기본값은 여기에 없다 — 켜는 것이 기본이되 그
+# 강도의 하한이 sentinel 을 몇 토큰으로 쪼개느냐에 달려 있어, 토크나이저를 쥔
+# `translate_nllb.resolve_no_repeat_ngram` 이 정한다.
+
+
+def _resolve_backend(config) -> str:
+    """번역 활성 설정을 검증하고 백엔드 이름을 돌려준다.
+
+    설정만 보고 무엇을 부르는지 알 수 있어야 하므로 기본값으로 때우지 않고
+    기동을 실패시킨다 — 미지정·오값, 공용 필수키 누락, 그리고 **고른 백엔드에
+    안 맞는 키**(예: `nllb` + `BASE_URL`)가 대상이다. 마지막 것은 값이 조용히
+    무시되면 설정 파일이 실제 동작과 어긋난 채 남기 때문이다.
     """
-    if not getattr(config, 'translate_enabled', False):
-        return None
+    backend = (getattr(config, 'translate_backend', '') or '').strip().lower()
+    if not backend:
+        raise ValueError(
+            'NER_SERVER_TRANSLATE_BACKEND is required when translation is '
+            f'enabled (one of: {", ".join(BACKENDS)})')
+    if backend not in _BACKEND_KEYS:
+        raise ValueError(
+            f'unknown translation backend {backend!r} '
+            f'(one of: {", ".join(BACKENDS)})')
     if not config.translate_model:
         raise ValueError(
             'NER_SERVER_TRANSLATE_MODEL is required when translation is '
             'enabled')
-    return LLMTranslator(
-        base_url=config.translate_base_url, model=config.translate_model,
-        api_key=config.translate_api_key,
-        timeout_s=config.translate_timeout_s,
+    foreign = sorted(
+        env for other, keys in _BACKEND_KEYS.items() if other != backend
+        for env, attr in keys if getattr(config, attr, None) is not None)
+    if foreign:
+        raise ValueError(
+            f'{", ".join(foreign)} does not apply to translation backend '
+            f'{backend!r}')
+    if backend == 'llm' and not config.translate_base_url:
+        raise ValueError(
+            'NER_SERVER_TRANSLATE_BASE_URL is required for translation '
+            "backend 'llm'")
+    return backend
+
+
+def build_translator(config):
+    """config 로 translator 를 구성한다. 비활성이면 None(엔드포인트는 503).
+
+    활성이면 `translate_backend` 가 구현을 고른다 — `llm` 은 원격 OpenAI 호환
+    엔드포인트, `nllb` 는 인프로세스 전용 NMT. 두 구현은 같은 계약
+    (`translate`·`available`)을 낸다. 설정 결함은 기동 시점에 올린다.
+    """
+    if not getattr(config, 'translate_enabled', False):
+        return None
+    backend = _resolve_backend(config)
+    if backend == 'llm':
+        timeout_s = config.translate_timeout_s
+        return LLMTranslator(
+            base_url=config.translate_base_url, model=config.translate_model,
+            api_key=config.translate_api_key,
+            timeout_s=DEFAULT_TIMEOUT_S if timeout_s is None else timeout_s,
+        )
+    # torch·transformers 를 여기서 처음 끌어온다 — llm 경로는 안 지나간다.
+    from server import translate_nllb
+    return translate_nllb.NLLBTranslator(
+        model_id=config.translate_model,
+        device=config.translate_device or DEFAULT_DEVICE,
+        no_repeat_ngram=config.translate_no_repeat_ngram,
     )
