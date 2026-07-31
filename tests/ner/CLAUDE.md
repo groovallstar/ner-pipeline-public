@@ -35,14 +35,18 @@ tests/ner/
 │   └── validity/      # verdict 별 byte-고정 스냅샷 11종 (pass·fail·invalid·
 │                      # inconclusive) — compare() 출력 전체를 대조
 ├── labelers/
+│   ├── test_ko_evt_r2_audit.py  # KO EVT canonical 규칙 감사·R2 회수 —
+│   │                  # 형태소 경계, 위반 탐지(축2·축3 트림·R1)와 겹침 가드,
+│   │                  # 회수 삽입·불변 타입 byte-identical, 보고 전용 bare 비대칭
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
 └── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,
                        # wikiann_vi_gold 테스트
 ```
 
-`labelers/` 에 `ko/` 는 없다 — 한국어 라벨러 테스트는 최상위
-`test_base_labelers.py`·`test_bio_dataset.py` 에 있다.
+`labelers/` 에 `ko/` 디렉토리는 없다 — 한국어 라벨러 테스트는 최상위
+`test_base_labelers.py`·`test_bio_dataset.py` 와 `labelers/test_ko_evt_r2_audit.py`
+에 흩어져 있다.
 
 `tests/server/`는 별도 패키지(server 계약·통합·live 테스트)로, 본 문서는
 `tests/ner/`만 다룬다. 상세 전략: `src/server/CLAUDE.md`.

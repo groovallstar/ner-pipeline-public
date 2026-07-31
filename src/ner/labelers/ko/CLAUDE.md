@@ -21,6 +21,8 @@ Two backend implementations (vLLM, OpenAI) encode the same rules in **two differ
 | `openai_ner_labeler.py` | `OpenAINERLabeler` — token-budget-based batching (max_tokens_per_batch=1000) with chat format |
 | `klue_to_canonical_gold.py` | KLUE BIO → canonical char-span gold JSONL conversion (CLI) |
 | `ko_prod_evt_relabel.py` | PROD/EVT LLM relabel incremental pipeline (CLI: relabel\|merge) |
+| `ko_evt_r2_audit.py` | EVT gold audit against the canonical §5.3 rules + R2 recovery (CLI: audit\|judge\|apply). `audit` is a **re-runnable machine gate** — it reports the R2 coverage rate and rule violations and exits non-zero via `--gate-rate`/`--gate-violations`, so the same command verifies gold before and after a recovery. `judge` asks two independent LLMs per occurrence and keeps only unanimous verdicts; `apply` inserts them and fixes deterministic violations, asserting the other nine types stay byte-identical |
+| `data/evt_r2_judgements.jsonl` | Committed per-occurrence provenance for the issue #198 recovery — both models' votes, verdict, and context for all **222** candidates (223 raw occurrences minus the one rejected as KLUE markup residue, `한<일:;LC>월드컵`). Kept in the repo so a later session can tell *which* spans moved and why (the #163 recovery deleted its provenance and left an unexplained −42) |
 
 ## For AI Agents
 
