@@ -77,6 +77,10 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | `NER_SERVER_HOST` | `0.0.0.0` | 바인드 호스트 |
 | `NER_SERVER_PORT` | `8008` | 바인드 포트 |
 
+`NER_SERVER_TRANSLATE_*`(웹 데모 번역)는 이 표에 없다 — 그 엔드포인트가 이
+계약(§3)에 없기 때문이다. 기본 비활성이며 켜도 `/v1/ner` 동작·응답은 바뀌지
+않는다(동시성 예산도 분리 — §8). 설정 표면은 `src/server/CLAUDE.md`.
+
 ## 3. 엔드포인트 목록
 
 | 메서드·경로 | 인증 | 설명 |
@@ -260,7 +264,8 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 ## 8. 동시성·크기 한도
 
 단일 GPU 추론은 직렬에 가까워, 무제한 동시 요청은 지연 절벽·OOM을 부른다.
-전역 `ConcurrencyGuard`가 이를 bound한다:
+추론 `ConcurrencyGuard`가 이를 bound한다(웹 데모 번역은 자기 guard·자기 예산을
+따로 갖는다 — `/v1/ner`의 슬롯을 잠식하지 않는다):
 
 - **동시 in-flight ≤ `max_concurrency`**(전역 세마포어). 초과 요청은 대기.
 - **대기 큐 ≤ `max_queue`**. 슬롯이 없어 대기해야 하는데 큐가 가득이면
