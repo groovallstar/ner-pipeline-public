@@ -185,6 +185,10 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 
 ## 번역 백엔드 — 기동 때 고르고, 기본값은 없다
 
+여기는 설정 표면과 그렇게 가른 이유가 정본이다. 함수·알고리즘 수준의 구현
+레퍼런스(마스킹-복원 계약·검증 분기·잠금 불변식·테스트 맵)는
+`docs/manual/web-demo-translation.md` 에 있다.
+
 번역을 켜면 `NER_SERVER_TRANSLATE_BACKEND` 가 구현을 정한다. **기본값을 두지
 않은 것이 이 설계의 핵심이다** — 예전에는 `TRANSLATE_BASE_URL` 이
 `http://localhost:8081/v1` 을 기본으로 가져, base_url 을 안 주고 번역을 켜도
