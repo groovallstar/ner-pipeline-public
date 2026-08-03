@@ -813,6 +813,134 @@ def check_axis1_gate(
     }
 
 
+# ── 잔여 불일치 계수기 ─────────────────────────────────────────────────
+
+# 583(최대-span) 위반 — 인접 고유명이 그 행에서 무라벨인데 EVT span 이 안 품었다.
+RESIDUE_UNDER = "과축소"
+# 586(겹침 정책) 위반 — 라벨된 고유명을 EVT span 이 삼켰다. 실측 0 이 전제다.
+RESIDUE_SWALLOW = "고유명삼킴"
+
+
+def find_boundary_residue(
+    rows: Sequence[dict],
+    min_len: int = DEFAULT_MIN_PROPER_LEN,
+    min_ratio: float = DEFAULT_MIN_PROPER_RATIO,
+) -> List[dict]:
+    """확정된 축3 경계 조건절을 **기존 EVT span 전수**에 적용해 불일치를 센다.
+
+    소급 교정은 하지 않는다(canonical 584) — 트림 경계 판정은 이미 폐기된 비결정
+    구간이다. 그래서 **보고 자체가 게이트**다: 회수된 자리는 gold EVT 이력을 얻어
+    자리 스캔의 모집단에서 영구히 빠지므로, 오삽입은 회수를 몇 번 더 돌려도 스스로는
+    안 보인다. 이 계수기만 그 뒤를 본다.
+
+    **모집단을 축1 head 로 좁히지 않는다.** 좁히면 규칙이 못 보는 곳을 규칙의 시야로
+    재는 셈이라, 넓힌 자리에서 생긴 불일치가 분모 밖으로 빠진다.
+    """
+    lexicon = proper_noun_lexicon(rows, min_len=min_len, min_ratio=min_ratio)
+    out: List[dict] = []
+    for index, row in enumerate(rows):
+        text = row["text"]
+        entities = row.get("entities", [])
+        row_proper = {
+            str(e.get("text", "")) for e in entities
+            if e.get("label") in PROPER_LABELS
+            and len(str(e.get("text", ""))) >= min_len
+        }
+        labeled: Set[int] = set()
+        for ent in entities:
+            if ent.get("label") != EVT:
+                labeled.update(range(int(ent["start_char"]), int(ent["end_char"])))
+        tokens = [(m.group(), m.start()) for m in _TOKEN.finditer(text)]
+        starts = {offset: position for position, (_, offset) in enumerate(tokens)}
+        for start, end in sorted(_evt_spans(row)):
+            swallowed = sorted({
+                str(e.get("label")) for e in entities
+                if e.get("label") != EVT
+                and start < int(e["end_char"]) and int(e["start_char"]) < end
+            })
+            if swallowed:
+                out.append({"row_index": index, "row_id": row.get("id"),
+                            "kind": RESIDUE_SWALLOW, "span": [start, end],
+                            "surface": text[start:end], "candidate": "",
+                            "labels": swallowed, "expected": ""})
+                continue
+            # 왼쪽에 무엇이 붙어 있나 — 어절 안이면 그 앞부분, 어절 머리면 앞 어절.
+            position = starts.get(start)
+            if position is not None:
+                if position == 0:
+                    continue
+                prev_raw, prev_offset = tokens[position - 1]
+                candidate = _EDGE.sub("", prev_raw)
+                # 조사가 붙어 있으면 수식이 아니라 문장 성분이다
+                if not candidate or _strip_particle(candidate) is not None:
+                    continue
+                cand_start = prev_offset + prev_raw.find(candidate)
+            else:
+                token = max((t for t in tokens if t[1] < start), key=lambda t: t[1],
+                            default=None)
+                if token is None:
+                    continue
+                raw, offset = token
+                if offset + len(raw) < end:
+                    continue          # span 이 어절 경계와 어긋난다 — 다른 관심사다
+                candidate = _EDGE.sub("", text[offset:start])
+                if not candidate:
+                    continue
+                cand_start = offset + text[offset:start].find(candidate)
+            if candidate not in row_proper and candidate not in lexicon:
+                continue
+            # 그 고유명이 라벨돼 있으면 안 삼킨 것이 규칙대로다 — 위반이 아니다.
+            if labeled & set(range(cand_start, cand_start + len(candidate))):
+                continue
+            out.append({"row_index": index, "row_id": row.get("id"),
+                        "kind": RESIDUE_UNDER, "span": [start, end],
+                        "surface": text[start:end], "candidate": candidate,
+                        "labels": [], "expected": text[cand_start:end]})
+    return out
+
+
+def residue_report(
+    rows: Sequence[dict], gold_path: Optional[str] = None,
+    min_len: int = DEFAULT_MIN_PROPER_LEN, min_ratio: float = DEFAULT_MIN_PROPER_RATIO,
+) -> dict:
+    items = find_boundary_residue(rows, min_len=min_len, min_ratio=min_ratio)
+    spans = [(index, s, e) for index, row in enumerate(rows)
+             for s, e in _evt_spans(row)]
+    multi = sum(1 for index, s, e in spans
+                if len(_TOKEN.findall(rows[index]["text"][s:e])) > 1)
+    return {
+        "params": {
+            "gold_sha256": file_sha256(gold_path) if gold_path else None,
+            "min_proper_len": min_len,
+            "min_proper_ratio": min_ratio,
+        },
+        "evt_spans": len(spans),
+        "evt_spans_multiword": multi,
+        "residue": len(items),
+        "by_kind": dict(collections.Counter(i["kind"] for i in items).most_common()),
+        "by_candidate": dict(collections.Counter(
+            i["candidate"] for i in items if i["candidate"]).most_common()),
+        "items": items,
+    }
+
+
+def cmd_residue(args: argparse.Namespace) -> None:
+    rows = load_gold(args.gold)
+    report = residue_report(rows, gold_path=args.gold)
+    logger.info("EVT spans %d (multiword %d) — boundary residue %d %s",
+                report["evt_spans"], report["evt_spans_multiword"],
+                report["residue"], report["by_kind"])
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fp:
+            json.dump(report, fp, ensure_ascii=False, indent=2)
+        logger.info("wrote %s", args.out)
+    # 과축소는 소급 교정 대상이 아니라 보고 항목이다. 삼킴은 다르다 — 평면 BIO 가
+    # 표현할 수 없는 상태라 실측 0 이 전제이고, 깨지면 삽입이 만든 것이다.
+    swallowed = report["by_kind"].get(RESIDUE_SWALLOW, 0)
+    if swallowed:
+        raise SystemExit(f"FAIL: {swallowed} EVT spans swallow a labeled proper noun")
+
+
 # ── 적용 ───────────────────────────────────────────────────────────────
 
 # 삽입을 막아야 하는 어긋남. 전부 "원장과 현 규칙이 같은 자리를 가리키지 않는다" 는
@@ -1043,6 +1171,13 @@ def main() -> None:
     p_ga.add_argument("--ledger", help="per-site judgement ledger JSONL")
     p_ga.add_argument("--out", help="write gate report JSON here")
     p_ga.set_defaults(func=cmd_gate)
+
+    p_re = sub.add_parser(
+        "residue",
+        help="count boundary-clause mismatches across every existing EVT span")
+    p_re.add_argument("--gold", required=True)
+    p_re.add_argument("--out", help="write residue report JSON here")
+    p_re.set_defaults(func=cmd_residue)
 
     p_ap = sub.add_parser(
         "apply", help="insert the ledger's EVT verdicts into gold")

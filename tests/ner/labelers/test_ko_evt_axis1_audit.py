@@ -24,6 +24,7 @@ from ner.labelers.ko.ko_evt_axis1_audit import (
     assign_codes,
     check_axis1_gate,
     evt_span_words,
+    find_boundary_residue,
     ledger_gold_sha,
     heads_sha256,
     parse_canonical_axis1,
@@ -443,6 +444,66 @@ def test_boundary_condition_trims_only_the_labeled_proper_noun():
     assert sites[1].boundary_reason.startswith("head 만")
     assert rows[2]["text"][sites[2].insert_start:sites[2].insert_end] == "보스턴 마라톤"
     assert sites[2].boundary_reason.startswith("고유명 포함")
+
+
+def _residue_rows(extra=()):
+    """`보스턴` 을 전역 고유명 어휘에 올려 두는 최소 코퍼스."""
+    return [
+        _row(1, "보스턴 은 도시 다", [("LOC", 0, 3)]),
+        _row(2, "보스턴 은 항구 다", [("LOC", 0, 3)]),
+    ] + list(extra)
+
+
+def test_residue_counts_a_span_that_left_an_unlabeled_proper_noun_out():
+    rows = _residue_rows([_row(3, "보스턴 마라톤 중계", [("EVT", 4, 7)])])
+    items = find_boundary_residue(rows)
+    assert [(i["kind"], i["candidate"], i["expected"]) for i in items] == [
+        ("과축소", "보스턴", "보스턴 마라톤")]
+
+
+def test_residue_does_not_flag_a_labeled_adjacent_proper_noun():
+    """라벨돼 있으면 안 삼킨 것이 규칙대로다 — 위반이 아니라 조건절의 다른 갈래다."""
+    rows = _residue_rows([_row(3, "보스턴 마라톤 중계", [("LOC", 0, 3), ("EVT", 4, 7)])])
+    assert find_boundary_residue(rows) == []
+
+
+def test_residue_ignores_a_preceding_eojeol_with_a_particle():
+    rows = _residue_rows([_row(3, "보스턴에서 마라톤 중계", [("EVT", 6, 9)])])
+    assert find_boundary_residue(rows) == []
+
+
+def test_residue_flags_a_swallowed_labeled_proper_noun():
+    """평면 BIO 가 표현할 수 없는 상태라 실측 0 이 전제다 — 깨지면 삽입이 만든 것이다."""
+    rows = _residue_rows([
+        _row(3, "보스턴 마라톤 중계", [("LOC", 0, 3), ("EVT", 0, 7)])])
+    items = find_boundary_residue(rows)
+    assert [(i["kind"], i["labels"]) for i in items] == [("고유명삼킴", ["LOC"])]
+
+
+def test_residue_population_is_every_evt_span_not_only_axis1_heads():
+    """모집단을 축1 head 로 좁히면 규칙이 못 보는 곳이 분모 밖으로 빠진다."""
+    rows = _residue_rows([_row(3, "보스턴 정상회담 중계", [("EVT", 4, 8)])])
+    assert "정상회담" not in AXIS1_HEADS
+    assert [i["expected"] for i in find_boundary_residue(rows)] == ["보스턴 정상회담"]
+
+
+def test_residue_catches_a_word_internal_proper_noun_prefix():
+    rows = _residue_rows([_row(3, "보스턴마라톤 중계", [("EVT", 3, 6)])])
+    assert [i["expected"] for i in find_boundary_residue(rows)] == ["보스턴마라톤"]
+
+
+def test_committed_residue_report_was_measured_on_the_applied_gold():
+    """계수기가 회수 **뒤** gold 를 봤나 — 앞을 보면 오삽입이 분모에 안 들어온다."""
+    base = pathlib.Path(__file__).resolve().parents[3] / "src/ner/labelers/ko/data"
+    residue = json.loads((base / "evt_axis1_residue.json").read_text(encoding="utf-8"))
+    prov = json.loads((base / "evt_axis1_apply.json").read_text(encoding="utf-8"))
+    assert residue["params"]["gold_sha256"] == prov["gold_sha256"]["after"]
+    assert residue["evt_spans"] == prov["checks"]["evt_after"]
+    assert residue["by_kind"].get("고유명삼킴", 0) == 0
+    # 보고 자체가 게이트다 — 0 을 요구하지 않되 항목마다 근거가 남아야 한다
+    assert len(residue["items"]) == residue["residue"]
+    assert all(i["surface"] and i["expected"] != i["surface"]
+               for i in residue["items"] if i["kind"] == "과축소")
 
 
 def _apply_rows():
