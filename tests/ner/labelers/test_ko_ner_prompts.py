@@ -29,9 +29,15 @@ def _few_shots():
     return out
 
 
-def test_few_shot_examples_are_present_and_parse():
+def test_the_parser_reads_every_example_in_the_template():
+    """파서가 빠뜨린 예시는 **영원히 검사 밖**이다 — 개수를 원문과 대조한다.
+
+    `>= N` 같은 하한만 두면 예시가 조용히 사라져도 통과하고, 그러면 안전망이 있다는
+    기록만 남는다.
+    """
+    written = SINGLE_PROMPT_TEMPLATE.count("입력: ") - 1     # `{sentence}` 자리 제외
     shots = _few_shots()
-    assert len(shots) >= 8
+    assert len(shots) == written
     assert all(spans for _, spans in shots)
 
 
@@ -75,19 +81,48 @@ def test_no_two_same_type_spans_are_separated_only_by_whitespace():
                 f"{left} spans touch in: {text}")
 
 
-def test_axis1_head_list_matches_the_module():
-    """프롬프트가 canonical 보다 좁은 head 를 가르치면 라벨링이 gold 와 어긋난다."""
-    line = next(ln for ln in SINGLE_PROMPT_TEMPLATE.splitlines()
-                if "고유명이 조사 없이 바로 앞에 오면" in ln)
-    quoted = _QUOTED.findall(line)
-    heads = [q for q in quoted if q in AXIS1_HEADS]
-    assert set(heads) == set(AXIS1_HEADS)
+def _taught_heads(template: str) -> set:
+    """프롬프트가 실제로 가르치는 축1 head 집합.
+
+    `사건·재해 head(...)`·`대회·행사 head(...)` 두 묶음에서만 뽑는다. 따옴표를 통째로
+    긁으면 같은 줄의 예시(`"세월호 참사"`)와 다른 규칙의 head(`"침몰 사고"`)가 섞이고,
+    **모듈 상수에 있는 것만 남기고 거르면 초과분을 못 본다** — 프롬프트에만 있는
+    head 는 걸러져 사라지므로 집합 비교가 한쪽 방향으로만 작동한다.
+    """
+    groups = re.findall(r"(?:사건·재해|대회·행사) head\(([^)]*)\)", template)
+    return {head for group in groups for head in _QUOTED.findall(group)}
 
 
-def test_both_backends_teach_the_axis1_rule():
-    """vLLM 과 OpenAI 는 템플릿이 두 벌이라 한쪽만 고치면 백엔드가 갈린다."""
+def test_both_backends_teach_the_same_axis1_head_list():
+    """vLLM 과 OpenAI 는 템플릿이 두 벌이라 한쪽만 고치면 백엔드가 갈린다.
+
+    존재 검사(`"사건 head" in template`)로는 부족하다 — 그 문자열은 PROD 절에도 있어서
+    **축1 절을 통째로 지워도 통과한다.** 두 템플릿 각각에서 head 집합을 실제로 뽑아
+    모듈 상수와 대조해야 좁힘·넓힘·한쪽만 수정이 전부 걸린다.
+    """
     for template in (SINGLE_PROMPT_TEMPLATE, SYSTEM_PROMPT):
-        assert "고유명" in template and "사건 head" in template
+        assert _taught_heads(template) == set(AXIS1_HEADS)
+
+
+def test_head_extraction_ignores_examples_and_other_rules():
+    """뽑는 범위가 넓어지면 위 집합 비교가 의미를 잃는다 — 추출기 자체를 고정한다.
+
+    같은 줄에 예시(`"세월호 참사"`)가 있고 다른 절에는 PROD 용 head(`"침몰 사고"`)가
+    있다. 둘 중 하나라도 섞이면 집합이 안 맞아 비교가 늘 실패하거나, 반대로 필터를
+    넣어 맞추면 초과분을 못 보게 된다.
+    """
+    taught = _taught_heads(SINGLE_PROMPT_TEMPLATE)
+    assert "세월호 참사" not in taught
+    assert "침몰 사고" not in taught
+    assert "보스턴 마라톤" not in taught
+    assert {"참사", "마라톤"} <= taught
+
+
+def test_axis1_rule_names_the_particle_exclusion_in_both_backends():
+    """조사 붙은 선행 고유명 제외는 head 목록만큼 모집단을 바꾼다."""
+    for template in (SINGLE_PROMPT_TEMPLATE, SYSTEM_PROMPT):
+        assert "앞 고유명에 조사가 붙으면" in template
+        assert '"파리에서 테러"' in template
 
 
 def test_particle_bearing_modifier_is_taught_as_out_of_span():
