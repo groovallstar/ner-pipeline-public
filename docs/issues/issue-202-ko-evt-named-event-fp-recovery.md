@@ -1,7 +1,7 @@
 # issue-202: 한국어 EVT 축1-복합(고유명 + 사건 head) 원칙화·회수
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/202
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/204
 - 브랜치: `feat/issue-202-ko-evt-named-event-fp-recovery`
 - 승인일: 2026-08-03
 
