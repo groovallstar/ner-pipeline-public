@@ -517,6 +517,40 @@ def test_committed_blindspot_report_prereqisters_the_inputs():
     assert len(report["items"]) == report["stats"]["absent_from_population"]
 
 
+def test_prereg_pins_every_input_that_could_move_after_the_numbers_land():
+    """head 팔 학습 전 상태의 사전등록 — 나중에 규칙을 손대면 여기서 어긋난다.
+
+    "커밋 diff 로 본다" 는 집행이 아니다. 실행 순서는 diff 에 남지 않고 `results/`
+    는 휘발이라, 지문을 다시 계산해 대조하는 것만이 순서를 되짚을 수 있다.
+    """
+    root = pathlib.Path(__file__).resolve().parents[3]
+    base = root / "src/ner/labelers/ko/data"
+    prereg = json.loads((base / "evt_axis1_prereg.json").read_text(encoding="utf-8"))
+
+    def sha(path):
+        return hashlib.sha256((root / path).read_bytes()).hexdigest()
+
+    assert prereg["rule"]["canonical_sha256"] == \
+        sha("docs/manual/data/canonical-entity-schema.md")
+    assert prereg["rule"]["heads_sha256"] == heads_sha256(AXIS1_HEADS)
+    assert prereg["rule"]["judgements_sha256"] == \
+        sha("src/ner/labelers/ko/data/evt_axis1_judgements.jsonl")
+    # σ 는 base 팔에서 뽑아 승격했다 — 그 파일이 바뀌면 노이즈 밴드가 바뀐다
+    arm = prereg["base_arm"]
+    assert arm["fold_sigma_sha256"] == \
+        sha("certified/classifier/ko/issue202-axis1-base/fold_sigma.json")
+    assert arm["pooled_metrics_sha256"] == \
+        sha("certified/classifier/ko/issue202-axis1-base/pooled_metrics.json")
+    # base 예측을 잃으면 비순환 재채점이 불가능해진다 — 보존본을 지문으로 묶는다
+    for fold, digest in arm["preserved_pred_spans_sha256"].items():
+        assert digest == sha(
+            f"preserved/classifier/ko/issue202-axis1-base/{fold}/pred_spans.json")
+    # 두 팔은 서로 다른 gold 를 본다 — 같으면 회수가 반영되지 않았다는 뜻이다
+    prov = json.loads((base / "evt_axis1_apply.json").read_text(encoding="utf-8"))
+    assert arm["gold_sha256"] == prov["gold_sha256"]["before"]
+    assert prereg["head_arm"]["gold_sha256"] == prov["gold_sha256"]["after"]
+
+
 def _residue_rows(extra=()):
     """`보스턴` 을 전역 고유명 어휘에 올려 두는 최소 코퍼스."""
     return [

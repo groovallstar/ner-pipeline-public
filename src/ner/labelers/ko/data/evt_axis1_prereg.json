@@ -1,0 +1,37 @@
+{
+  "round": "issue-202-axis1-r1",
+  "rule": {
+    "canonical_sha256": "c7972c1e8ece1341ad19fa6f5352da83c6ffba7faa16d81010b9d71a88368134",
+    "heads_sha256": "480a333cbb64e196b0eed3ace2cfc915ab346683656994f4e478aa84c67b9206",
+    "judgements_sha256": "b9768f7e9dc179bc2233a5439748dc5b169af1ba30314d51227c57958b5785bb"
+  },
+  "base_arm": {
+    "run": "issue202-axis1-base",
+    "gold_sha256": "2645d26b17f0b845d21365c5ea445fcb6d416a53c726e916afc3dd22d801d0c8",
+    "data_fingerprint": "0720800779e24bff",
+    "kfold": 10,
+    "group_key": "id",
+    "seed": 42,
+    "stratify": true,
+    "model_name": "monologg/koelectra-base-v3-discriminator",
+    "fold_sigma_sha256": "39b95ab83537e00d929b71dcdaf4c351267cf436e42fc8355df72336d40174f3",
+    "pooled_metrics_sha256": "6646ff7f01ce7fd41cff75bccecc6b6b97494bffbfe2a34c842d7a92cbd60d27",
+    "preserved_pred_spans_sha256": {
+      "fold0": "35e1b538fa67d880300155aab60b59b884013fde10d199807a6f96a0c87d26e4",
+      "fold1": "37abbaf3a9131b227cac8ff44678f9802ee35f8f1f8405751fbe17b0134f2c0b",
+      "fold2": "9151f876d4b53e13d5ad9fb3f98e23f11e4d9047c6b9dc48e4a077536b8fe5c9",
+      "fold3": "5fb68c594d367cb672ef1baf97427bd0a306a7417f50217a1fd00c090ca9b7eb",
+      "fold4": "c76906fdbfe32c9adcbd2c8dc2c0160f96052831caf02b4484abfb7e1570db5b",
+      "fold5": "3d5512f6401899d01646ac1cd3f4c4b285aff348b33e398eb21603ddeb74c827",
+      "fold6": "884d35736b45ec3ea6e2c27274fd222f3c439b3ea67b5d73c9d993885c646642",
+      "fold7": "9f75babc4a52f838e2101a87384867c28437a6ea0c709b04bb826b77ff14e435",
+      "fold8": "4309a284a88a3a5ed7a345145168a4b76563afd804130ff71f59f1ac28b1d2ab",
+      "fold9": "258b4080a1cb2b584ce8dc070b0a0af1698f6aa838962b707b46b60781cc6370"
+    }
+  },
+  "head_arm": {
+    "run": "issue202-axis1-head",
+    "gold_sha256": "30bd861af51bea506f04097762be7d9a36930dd1b2d034805518d3cb9cd9788e",
+    "trained": false
+  }
+}
