@@ -854,41 +854,52 @@ def rescore_arms(
 
     ``skip_ids`` 는 회수가 손댄 행이다. 그 행을 뺀 부분집합의 Δ 가 **회수 무관 Δ** 로,
     "gold 에 답을 넣어 준 자리" 밖에서도 나아졌나를 본다.
+
+    **pooled Δ 와 paired Δ 는 성립 조건이 다르다.** pooled 는 두 팔이 같은 행 집합을
+    한 번씩 덮으면 되므로 fold 배정과 무관하다. paired 는 fold 가 서로 대응해야 하는데,
+    gold 를 바꾸면 층화 분할이 통째로 움직여 대응이 깨진다. 깨진 채로 짝지어 계산하면
+    **서로 다른 문장 집합을 비교한 수가 그럴듯한 모습으로 나온다** — 그래서 대응이
+    깨졌으면 paired 를 내지 않고 안 낸 이유와 실측 겹침을 남긴다.
     """
     by_id = {str(row.get("id")): row for row in rows}
     skip = {str(i) for i in skip_ids}
-    base_ids = {i for _, fold in base_folds for i in fold}
-    head_ids = {i for _, fold in head_folds for i in fold}
-    if base_ids != head_ids:
+    base = {i: spans for _, fold in base_folds for i, spans in fold.items()}
+    head = {i: spans for _, fold in head_folds for i, spans in fold.items()}
+    for arm, folds, merged in (("base", base_folds, base), ("head", head_folds, head)):
+        entries = sum(len(fold) for _, fold in folds)
+        if entries != len(merged):
+            raise SystemExit(
+                f"FAIL: {arm} arm has {entries - len(merged)} rows in more than one fold")
+    if set(base) != set(head):
         raise SystemExit(
-            f"FAIL: arms cover different rows (base {len(base_ids)}, head {len(head_ids)})")
+            f"FAIL: arms cover different rows (base {len(base)}, head {len(head)})")
     # gold 에 없는 행을 조용히 빼면 분모가 줄어든 채로 F1 이 나온다 — 값은 그럴듯하고
     # 무엇이 빠졌는지는 어디에도 안 남는다.
-    missing = base_ids - set(by_id)
+    missing = set(base) - set(by_id)
     if missing:
         raise SystemExit(
             f"FAIL: {len(missing)} predicted rows are absent from gold "
             f"(e.g. {sorted(missing)[:3]})")
-    per_fold: Dict[str, Dict[str, float]] = {}
-    pooled_gold: List[List[dict]] = []
-    pooled: Dict[str, List[List[dict]]] = {"base": [], "head": []}
+
+    ids = [i for i in sorted(base) if i not in skip]
+    pooled_gold = [_gold_spans(by_id[i]) for i in ids]
+    scores = {"base": _score(pooled_gold, [base[i] for i in ids]),
+              "head": _score(pooled_gold, [head[i] for i in ids])}
+
     head_by_name = dict(head_folds)
-    for name, fold in base_folds:
-        other = head_by_name.get(name)
-        if other is None or set(other) != set(fold):
-            raise SystemExit(f"FAIL: fold {name} partitions differ between arms")
-        ids = [i for i in sorted(fold) if i in by_id and i not in skip]
-        gold = [_gold_spans(by_id[i]) for i in ids]
-        base = [fold[i] for i in ids]
-        head = [other[i] for i in ids]
-        pooled_gold.extend(gold)
-        pooled["base"].extend(base)
-        pooled["head"].extend(head)
-        per_fold[name] = {
-            "base": _score(gold, base)["per_entity"].get(EVT, {}).get("f1", 0.0),
-            "head": _score(gold, head)["per_entity"].get(EVT, {}).get("f1", 0.0),
-        }
-    scores = {arm: _score(pooled_gold, preds) for arm, preds in pooled.items()}
+    matched = [(name, fold, head_by_name[name]) for name, fold in base_folds
+               if name in head_by_name and set(head_by_name[name]) == set(fold)]
+    per_fold: Dict[str, Dict[str, float]] = {}
+    if len(matched) == len(base_folds) == len(head_folds):
+        for name, fold, other in matched:
+            fold_ids = [i for i in sorted(fold) if i not in skip]
+            gold = [_gold_spans(by_id[i]) for i in fold_ids]
+            per_fold[name] = {
+                "base": _score(gold, [fold[i] for i in fold_ids])
+                        ["per_entity"].get(EVT, {}).get("f1", 0.0),
+                "head": _score(gold, [other[i] for i in fold_ids])
+                        ["per_entity"].get(EVT, {}).get("f1", 0.0),
+            }
     types = sorted(set(scores["base"]["per_entity"]) | set(scores["head"]["per_entity"]))
     per_entity = {}
     for label in types + ["overall"]:
@@ -901,22 +912,37 @@ def rescore_arms(
         per_entity[label] = {
             "base": base_f1, "head": head_f1,
             "delta": round(head_f1 - base_f1, 4),
+            # 판정에 쓰이는 것은 Δ 가 아니라 Δ 의 크기와 σ 대비 비다. 문서가 그걸
+            # 손으로 계산하면 산출물에 없는 수가 표에 앉는다 — 여기서 함께 낸다.
+            "abs_delta": round(abs(head_f1 - base_f1), 4),
             "support": pick("head").get("support", 0),
         }
-    deltas = [v["head"] - v["base"] for v in per_fold.values()]
-    mean = sum(deltas) / len(deltas) if deltas else 0.0
-    spread = (sum((d - mean) ** 2 for d in deltas) / (len(deltas) - 1)) ** 0.5 \
-        if len(deltas) > 1 else 0.0
-    return {
-        "rows_scored": len(pooled_gold),
-        "per_entity": per_entity,
-        "paired_evt": {
+    if per_fold:
+        deltas = [v["head"] - v["base"] for v in per_fold.values()]
+        mean = sum(deltas) / len(deltas)
+        spread = (sum((d - mean) ** 2 for d in deltas) / (len(deltas) - 1)) ** 0.5 \
+            if len(deltas) > 1 else 0.0
+        paired = {
+            "available": True,
             "mean": round(mean, 4), "stdev": round(spread, 4),
             "wins": sum(1 for d in deltas if d > 0),
             "losses": sum(1 for d in deltas if d < 0),
             "per_fold": {k: {a: round(v, 4) for a, v in vals.items()}
                          for k, vals in sorted(per_fold.items())},
-        },
+        }
+    else:
+        overlaps = [len(set(fold) & set(head_by_name.get(name, {}))) / max(len(fold), 1)
+                    for name, fold in base_folds]
+        paired = {
+            "available": False,
+            "reason": "fold partitions do not correspond between the arms — "
+                      "the stratified split moved when gold changed",
+            "mean_fold_overlap": round(sum(overlaps) / max(len(overlaps), 1), 4),
+        }
+    return {
+        "rows_scored": len(pooled_gold),
+        "per_entity": per_entity,
+        "paired_evt": paired,
     }
 
 
@@ -933,7 +959,11 @@ def cmd_rescore(args: argparse.Namespace) -> None:
         "method": "base 팔 예측을 회수 후 gold 로 재채점해 head 팔과 같은 자로 비교한다. "
                   "구 gold 기준 수치와는 나란히 놓지 않는다.",
         "sigma_source": args.sigma,
+        # 사전등록과 이어 붙이는 지문 — σ 나 예측이 바뀌면 이 표가 스스로 어긋난다
         "gold_sha256": file_sha256(args.gold),
+        "sigma_sha256": file_sha256(args.sigma) if args.sigma else None,
+        "pred_sha256": {"base": [file_sha256(p) for p in args.base_preds],
+                        "head": [file_sha256(p) for p in args.head_preds]},
         "full": rescore_arms(rows, base, head),
         # 회수가 손댄 행을 뺀다 — gold 에 답을 넣어 준 자리 밖에서도 나아졌나
         "recovery_free_subset": rescore_arms(rows, base, head, skip_ids=recovered),
@@ -942,8 +972,10 @@ def cmd_rescore(args: argparse.Namespace) -> None:
     for block in ("full", "recovery_free_subset"):
         for label, values in report[block]["per_entity"].items():
             std = sigma.get(label, {}).get("std")
-            if std is not None:
+            if std:
                 values["sigma_pre"] = std
+                # 밴드 안인가를 결정하는 값 — 사전등록 σ 대비 Δ 의 크기
+                values["sigma_ratio"] = round(values["abs_delta"] / std, 2)
     logger.info("EVT delta full %+.4f / recovery-free %+.4f (sigma_pre %.4f)",
                 report["full"]["per_entity"][EVT]["delta"],
                 report["recovery_free_subset"]["per_entity"][EVT]["delta"],

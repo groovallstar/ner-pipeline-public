@@ -570,13 +570,27 @@ def test_rescore_refuses_predictions_for_rows_gold_does_not_have():
         rescore_arms(rows, arm, arm)
 
 
-def test_rescore_refuses_a_different_fold_partition():
-    """분할이 다르면 fold 짝짓기가 성립하지 않아 paired Δ 가 의미를 잃는다."""
+def test_rescore_withholds_paired_delta_when_the_split_moved():
+    """분할이 안 맞으면 paired 를 내지 않는다 — 짝지어 계산하면 서로 다른 문장
+    집합을 비교한 수가 그럴듯한 모습으로 나온다. pooled 는 그대로 유효하다."""
     rows = _score_rows()
     base = _arm({1: [("EVT", 0, 7)]}, {2: [("EVT", 0, 6)]})
     head = _arm({2: [("EVT", 0, 6)]}, {1: [("EVT", 0, 7)]})
+    report = rescore_arms(rows, base, head)
+    assert report["paired_evt"]["available"] is False
+    assert report["paired_evt"]["mean_fold_overlap"] == 0.0
+    assert "mean" not in report["paired_evt"]
+    # pooled 는 fold 배정과 무관하다 — 두 팔이 같은 행을 한 번씩 덮으면 성립한다
+    assert report["rows_scored"] == 2
+    assert report["per_entity"]["EVT"]["delta"] == 0.0
+
+
+def test_rescore_refuses_a_row_that_lands_in_two_folds():
+    """한 행이 두 fold 에 있으면 pooled 에서 조용히 한 번만 세어진다."""
+    rows = _score_rows()
+    arm = _arm({1: [("EVT", 0, 7)], 2: []}, {2: [("EVT", 0, 6)]})
     with pytest.raises(SystemExit):
-        rescore_arms(rows, base, head)
+        rescore_arms(rows, arm, arm)
 
 
 def test_rescore_counts_paired_fold_wins_and_losses():
@@ -586,6 +600,29 @@ def test_rescore_counts_paired_fold_wins_and_losses():
     paired = rescore_arms(rows, base, head)["paired_evt"]
     assert paired["wins"] == 1 and paired["losses"] == 1
     assert set(paired["per_fold"]) == {"fold0", "fold1"}
+
+
+def test_certified_noncircular_is_anchored_to_the_preregistered_inputs():
+    """승격된 비순환 표가 사전등록한 자로 쟀나 — 아니면 사전등록이 장식이 된다."""
+    root = pathlib.Path(__file__).resolve().parents[3]
+    base = root / "src/ner/labelers/ko/data"
+    prereg = json.loads((base / "evt_axis1_prereg.json").read_text(encoding="utf-8"))
+    report = json.loads((
+        root / "certified/classifier/ko/issue202-axis1-head/noncircular.json"
+    ).read_text(encoding="utf-8"))
+    assert report["gold_sha256"] == prereg["head_arm"]["gold_sha256"]
+    assert report["sigma_sha256"] == prereg["base_arm"]["fold_sigma_sha256"]
+    preserved = prereg["base_arm"]["preserved_pred_spans_sha256"]
+    assert report["pred_sha256"]["base"] == [preserved[f"fold{i}"] for i in range(10)]
+    ledger = [json.loads(line) for line
+              in (base / "evt_axis1_judgements.jsonl").read_text(
+                  encoding="utf-8").splitlines() if line.strip()]
+    assert report["recovered_sites"] == sum(
+        1 for r in ledger if r["verdict"] == "EVT")
+    # 분할이 안 맞아 못 낸 통계는 빠지는 게 아니라 못 낸 이유가 남아야 한다
+    for block in ("full", "recovery_free_subset"):
+        paired = report[block]["paired_evt"]
+        assert paired["available"] or (paired["reason"] and "mean" not in paired)
 
 
 def test_prereg_pins_every_input_that_could_move_after_the_numbers_land():
