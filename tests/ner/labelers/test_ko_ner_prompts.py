@@ -32,8 +32,9 @@ def _few_shots():
 def test_the_parser_reads_every_example_in_the_template():
     """파서가 빠뜨린 예시는 **영원히 검사 밖**이다 — 개수를 원문과 대조한다.
 
-    `>= N` 같은 하한만 두면 예시가 조용히 사라져도 통과하고, 그러면 안전망이 있다는
-    기록만 남는다.
+    `>= N` 같은 하한만 두면 파서가 예시를 빠뜨려도 통과하고, 그러면 안전망이 있다는
+    기록만 남는다. **잡는 것은 파싱 누락뿐이다** — 세는 기준이 같은 원문이라 예시를
+    템플릿에서 통째로 지우면 양쪽이 같이 줄어 안 걸린다.
     """
     written = SINGLE_PROMPT_TEMPLATE.count("입력: ") - 1     # `{sentence}` 자리 제외
     shots = _few_shots()
