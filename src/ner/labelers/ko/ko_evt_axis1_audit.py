@@ -51,6 +51,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 # 못 보게 된다 — 자가 둘이 되는 것과 같다.
 from ner.labelers.ko.ko_evt_r2_audit import (
     CANONICAL_PATH,
+    _load_jsonl,
     _strip_particle,
     extract_noun_candidates,
     file_sha256,
@@ -61,6 +62,7 @@ logger = logging.getLogger(__name__)
 
 _TOKEN = re.compile(r"\S+")
 _EDGE = re.compile(r"^[^가-힣A-Za-z0-9]+|[^가-힣A-Za-z0-9]+$")
+_WORD_CHAR = re.compile(r"[가-힣A-Za-z0-9]")
 
 # 고유명 판정에 쓰는 타입 — canonical 이 고유명으로 다루는 넷이다.
 PROPER_LABELS = ("PER", "LOC", "ORG", "PROD")
@@ -387,6 +389,10 @@ class Axis1Site:
     proper_basis: str      # `동행라벨` | `전역이력`
     attachment: str        # `어절내` | `선행어절`
     gold_evt_overlap: str  # `none` | `exact` | `inside_longer` | `partial`
+    insert_start: int = -1   # canonical 축3 조건절을 적용한 실제 삽입 경계
+    insert_end: int = -1
+    boundary_reason: str = ""      # 왼쪽 경계를 무엇이 확정했나
+    clash_labels: Tuple[str, ...] = ()   # 삽입 경계와 겹치는 비-EVT gold 라벨
 
 
 def proper_noun_lexicon(
@@ -492,6 +498,32 @@ def find_axis1_sites(
                 if site is None:
                     break
                 s_start, s_end, proper, attachment = site
+                basis = "동행라벨" if proper in row_proper else "전역이력"
+                head_start = s_end - len(head)
+                # canonical 축3 경계 조건절 — gold 는 평면 BIO 라 중첩이 표현되지
+                # 않는다. 라벨된 인접 고유명은 삼킬 수 없으므로 그만큼 왼쪽을 자르고,
+                # 잘라도 head 까지 덮여 있으면 삽입 자체가 불가능한 타입 충돌이다.
+                # **부착 형태로 가리지 않는다** — `서울월드컵` 처럼 한 어절 안에서도
+                # gold 가 앞부분(`서울`)만 LOC 로 잡아 두는 자리가 있다.
+                covering = [
+                    e for e in row.get("entities", [])
+                    if e.get("label") != "EVT"
+                    and s_start < int(e["end_char"]) and int(e["start_char"]) < s_end
+                ]
+                clash = tuple(sorted({
+                    str(e.get("label")) for e in covering
+                    if head_start < int(e["end_char"])
+                    and int(e["start_char"]) < s_end
+                }))
+                i_start, reason = s_start, "고유명 포함 — 인접 고유명 무라벨"
+                if clash:
+                    reason = "삽입 불가 — head 까지 다른 타입이 덮는다"
+                elif covering:
+                    i_start = max(int(e["end_char"]) for e in covering)
+                    # 공백만 건너뛰면 `\'` 같은 인용부호가 span 머리에 남는다
+                    while i_start < s_end and not _WORD_CHAR.match(text[i_start]):
+                        i_start += 1
+                    reason = "head 만 — 인접 고유명이 이미 라벨됨"
                 out.append(Axis1Site(
                     row_index=index,
                     start=s_start,
@@ -499,9 +531,13 @@ def find_axis1_sites(
                     surface=text[s_start:s_end],
                     head=head,
                     proper=proper,
-                    proper_basis=("동행라벨" if proper in row_proper else "전역이력"),
+                    proper_basis=basis,
                     attachment=attachment,
-                    gold_evt_overlap=_overlap_kind((s_start, s_end), evt),
+                    gold_evt_overlap=_overlap_kind((i_start, s_end), evt),
+                    insert_start=i_start,
+                    insert_end=s_end,
+                    boundary_reason=reason,
+                    clash_labels=clash,
                 ))
                 break
     return out
@@ -652,6 +688,149 @@ def cmd_codes(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+STATUS_ALREADY = "already_evt"
+STATUS_RECOVERED = "recovered"
+STATUS_EXCLUDED = "excluded"
+STATUS_JUDGED_NOT = "judged_not"
+STATUS_COVERED = "covered_by_longer_evt"
+STATUS_TYPE_CLASH = "type_clash_recorded"
+STATUS_UNCLASSIFIED = "unclassified"
+
+
+def _site_key(site: Axis1Site) -> Tuple[int, int, int]:
+    """자리의 신원은 **탐지 span** 이다.
+
+    삽입 span 이 아니라 탐지 span 으로 잡는 이유는 경계 규칙이 바뀌어도 같은 자리를
+    가리키기 위해서다 — 신원이 삽입 경계에 묶이면 규칙을 손볼 때마다 판정이 통째로
+    떨어져 나간다.
+    """
+    return (site.row_index, site.start, site.end)
+
+
+def ledger_verdicts(ledger: Sequence[dict]) -> Dict[Tuple[int, int, int], str]:
+    """판정 원장을 자리별로 읽는다 — 표면형이 아니라 자리다.
+
+    같은 표면형이 행마다 다른 판정을 받는 것이 실측되므로(`세월호 사고` 는 한 행에서
+    사건이고 다른 행에서 대책위 이름의 일부다), 표면형 단위로 접으면 한 행의 정당한
+    판정이 다른 행을 사면한다.
+    """
+    out: Dict[Tuple[int, int, int], str] = {}
+    for rec in ledger:
+        try:
+            key = (int(rec["row_index"]), int(rec["start"]), int(rec["end"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        out[key] = str(rec.get("verdict", "")).upper()
+    return out
+
+
+def classify_axis1_sites(
+    sites: Sequence[Axis1Site], ledger: Sequence[dict] = (),
+    excluded_surfaces: Sequence[str] = (),
+) -> List[Tuple[Axis1Site, str]]:
+    """자리마다 상태를 붙인다 — 어디에도 안 들면 미분류다.
+
+    순서가 의미를 갖는다. 이미 gold EVT 인 자리와 더 긴 EVT 안에 든 자리는 판정
+    대상이 아니고, 삽입 자체가 불가능한 타입 충돌은 **범위 밖으로 선언하되 세어서**
+    남긴다 — 이 출구가 없으면 게이트를 통과시키는 유일한 길이 "원장에 NOT 이라고
+    쓰는 것" 뿐이라, 사람이 판정해도 결론이 강제돼 판정이 형식이 된다.
+    """
+    verdicts = ledger_verdicts(ledger)
+    excluded = set(excluded_surfaces)
+    out: List[Tuple[Axis1Site, str]] = []
+    for site in sites:
+        key = _site_key(site)
+        verdict = verdicts.get(key, "")
+        if site.gold_evt_overlap == "exact":
+            status = STATUS_ALREADY
+        elif site.gold_evt_overlap == "inside_longer":
+            status = STATUS_COVERED
+        elif site.clash_labels:
+            status = STATUS_TYPE_CLASH
+        elif verdict == "EVT":
+            status = STATUS_RECOVERED
+        elif verdict == "NOT":
+            status = STATUS_JUDGED_NOT
+        elif site.surface in excluded or site.head in excluded:
+            status = STATUS_EXCLUDED
+        else:
+            status = STATUS_UNCLASSIFIED
+        out.append((site, status))
+    return out
+
+
+def check_axis1_gate(
+    rows: Sequence[dict],
+    heads: Sequence[str] = AXIS1_HEADS,
+    ledger: Sequence[dict] = (),
+    gold_path: Optional[str] = None,
+) -> dict:
+    """주 게이트 — 축1-복합 자리가 전부 분류됐나. 미분류가 0 이어야 통과한다.
+
+    **회수 건수를 함께 보고하는 이유**: 모든 자리가 제외·흡수·충돌로 분류되면
+    **0 건 회수도 전 기준을 통과한다.** 0 에 가까우면 그 자체가 재검토 신호다.
+    """
+    sites = find_axis1_sites(rows, heads)
+    excluded = [f for forms in AXIS1_EXCLUDE.values() for f in forms]
+    classified = classify_axis1_sites(sites, ledger, excluded)
+    counts: collections.Counter = collections.Counter(s for _, s in classified)
+    judged = counts[STATUS_RECOVERED] + counts[STATUS_JUDGED_NOT]
+    pending = [
+        {"row_index": s.row_index, "start": s.start, "end": s.end,
+         "surface": s.surface, "head": s.head,
+         "insert": [s.insert_start, s.insert_end],
+         "boundary_reason": s.boundary_reason}
+        for s, st in classified if st == STATUS_UNCLASSIFIED
+    ]
+    return {
+        "params": {
+            "heads_sha256": heads_sha256(heads),
+            "gold_sha256": file_sha256(gold_path) if gold_path else None,
+            "min_proper_len": DEFAULT_MIN_PROPER_LEN,
+            "min_proper_ratio": DEFAULT_MIN_PROPER_RATIO,
+        },
+        "sites": len(sites),
+        "status_counts": dict(counts.most_common()),
+        "unclassified": pending,
+        "recovered": counts[STATUS_RECOVERED],
+        "judged": judged,
+        # ④ 가 대량 흡수 통로가 되면 회수량이 아니라 흡수량을 보고 있는 셈이라,
+        # 비율이 과반이면 사람이 표본을 확인해야 한다.
+        "covered_ratio": (counts[STATUS_COVERED] / len(sites)) if sites else 0.0,
+        "covered_by_longer_evt": [
+            {"row_index": s.row_index, "surface": s.surface}
+            for s, st in classified if st == STATUS_COVERED
+        ],
+        "type_clash_recorded": [
+            {"row_index": s.row_index, "surface": s.surface,
+             "labels": list(s.clash_labels)}
+            for s, st in classified if st == STATUS_TYPE_CLASH
+        ],
+    }
+
+
+def cmd_gate(args: argparse.Namespace) -> None:
+    rows = load_gold(args.gold)
+    ledger = _load_jsonl(args.ledger) if args.ledger else []
+    report = check_axis1_gate(rows, AXIS1_HEADS, ledger, gold_path=args.gold)
+    logger.info("sites %d / unclassified %d / recovered %d",
+                report["sites"], len(report["unclassified"]), report["recovered"])
+    if report["covered_ratio"] > 0.5:
+        logger.warning(
+            "covered_by_longer_evt is %.0f%% of all sites — sample-check it",
+            report["covered_ratio"] * 100)
+    if report["recovered"] == 0 and ledger:
+        logger.warning("no site recovered — every site was excluded or absorbed")
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fp:
+            json.dump(report, fp, ensure_ascii=False, indent=2)
+        logger.info("wrote %s", args.out)
+    if report["unclassified"]:
+        for item in report["unclassified"]:
+            logger.error("unclassified: row %d %s", item["row_index"], item["surface"])
+        raise SystemExit(1)
+
+
 def cmd_sites(args: argparse.Namespace) -> None:
     rows = load_gold(args.gold)
     heads = [h.strip() for h in args.heads.split(",") if h.strip()]
@@ -720,6 +899,14 @@ def main() -> None:
     p_co.add_argument("--gate", action="store_true",
                       help="exit non-zero if any candidate is unassigned")
     p_co.set_defaults(func=cmd_codes)
+
+    p_ga = sub.add_parser(
+        "gate",
+        help="main gate — every axis-1 site must be classified (site-level)")
+    p_ga.add_argument("--gold", required=True)
+    p_ga.add_argument("--ledger", help="per-site judgement ledger JSONL")
+    p_ga.add_argument("--out", help="write gate report JSON here")
+    p_ga.set_defaults(func=cmd_gate)
 
     args = parser.parse_args()
     args.func(args)

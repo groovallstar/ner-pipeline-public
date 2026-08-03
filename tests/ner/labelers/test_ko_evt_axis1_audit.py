@@ -20,6 +20,7 @@ from ner.labelers.ko.ko_evt_axis1_audit import (
     HeadCandidate,
     MIN_HEAD_LEN,
     assign_codes,
+    check_axis1_gate,
     evt_span_words,
     heads_sha256,
     parse_canonical_axis1,
@@ -221,16 +222,19 @@ def test_site_uses_global_history_when_row_has_no_label():
 
 def test_gold_evt_overlap_is_measured_not_dropped():
     """겹친 자리를 버리면 흡수량이 안 세어져 회수량과 구별되지 않는다."""
+    # 평면 BIO 라 EVT 와 고유명은 겹칠 수 없다 — 겹친 픽스처는 gold 에 없는 상태다
     rows = [
-        _row(1, "보스턴 테러 가 났다", [("LOC", 0, 3), ("EVT", 0, 6)]),
-        _row(2, "보스턴 테러 참사 추모", [("EVT", 0, 11)]),
-        _row(3, "보스턴 테러 이후", []),
+        _row(1, "보스턴 은 도시 다", [("LOC", 0, 3)]),
+        _row(2, "보스턴 에 갔다", [("LOC", 0, 3)]),
+        _row(3, "보스턴 테러 가 났다", [("EVT", 0, 6)]),
+        _row(4, "보스턴 테러 참사 추모", [("EVT", 0, 11)]),
+        _row(5, "보스턴 테러 이후", []),
     ]
     kinds = {s.row_index: s.gold_evt_overlap
              for s in find_axis1_sites(rows, ["테러"])}
-    assert kinds[0] == "exact"
-    assert kinds[1] == "inside_longer"
-    assert kinds[2] == "none"
+    assert kinds[2] == "exact"
+    assert kinds[3] == "inside_longer"
+    assert kinds[4] == "none"
 
 
 def test_longest_head_wins():
@@ -374,3 +378,65 @@ def test_sites_report_fingerprints_head_list_and_gold():
     assert one["params"]["heads_sha256"] != two["params"]["heads_sha256"]
     assert one["params"]["gold_sha256"] is None          # 경로를 안 주면 없다
     assert heads_sha256(["사고", "테러"]) == heads_sha256(["테러", "사고"])
+
+
+def _gate_rows():
+    return [
+        _row(1, "보스턴 은 도시 다", [("LOC", 0, 3)]),
+        _row(2, "보스턴 테러 가 났다", []),
+        _row(3, "보스턴 테러 이후", []),
+    ]
+
+
+def test_gate_fails_while_a_site_is_unclassified():
+    report = check_axis1_gate(_gate_rows(), ["테러"])
+    assert len(report["unclassified"]) == 2   # 라벨 행에는 head 가 없다
+    assert report["recovered"] == 0
+
+
+def test_ledger_is_read_per_site_not_per_surface():
+    """같은 표면형이 행마다 다른 판정을 받는다 — 접으면 한 행이 다른 행을 사면한다."""
+    rows = _gate_rows()
+    sites = find_axis1_sites(rows, ["테러"])
+    first, second = sites[0], sites[1]
+    ledger = [{"row_index": first.row_index, "start": first.start,
+               "end": first.end, "verdict": "EVT"}]
+    report = check_axis1_gate(rows, ["테러"], ledger)
+    assert report["recovered"] == 1
+    assert [u["row_index"] for u in report["unclassified"]] == [second.row_index]
+
+
+def test_type_clash_gets_its_own_bucket_instead_of_a_forced_not():
+    """삽입 불가한 충돌에 출구가 없으면 게이트 통과 경로가 NOT 하나뿐이 된다."""
+    rows = [
+        _row(1, "세월호 는 배 다", [("PROD", 0, 3)]),
+        _row(2, "세월호 참사 가족대책위원회 가 모였다", [("ORG", 0, 14)]),
+    ]
+    report = check_axis1_gate(rows, ["참사"])
+    assert report["status_counts"].get("type_clash_recorded") == 1
+    assert report["unclassified"] == []
+    assert report["type_clash_recorded"][0]["labels"] == ["ORG"]
+
+
+def test_site_inside_longer_evt_is_absorbed_not_recovered():
+    rows = [
+        _row(1, "보스턴 은 도시 다", [("LOC", 0, 3)]),
+        _row(2, "보스턴 테러 참사 추모", [("EVT", 0, 11)]),
+    ]
+    report = check_axis1_gate(rows, ["테러"])
+    assert report["status_counts"].get("covered_by_longer_evt") == 1
+    assert report["recovered"] == 0
+
+
+def test_boundary_condition_trims_only_the_labeled_proper_noun():
+    """라벨된 인접 고유명은 삼키지 않고, head 까지 덮이면 삽입 자체가 불가능하다."""
+    rows = [
+        _row(1, "보스턴 은 도시 다", [("LOC", 0, 3)]),
+        _row(2, "미국 보스턴 마라톤 중계", [("LOC", 0, 6)]),
+        _row(3, "보스턴 마라톤 중계", []),
+    ]
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    assert rows[1]["text"][sites[1].insert_start:sites[1].insert_end] == "마라톤"
+    assert sites[1].boundary_reason.startswith("head 만")
+    assert rows[2]["text"][sites[2].insert_start:sites[2].insert_end] == "보스턴 마라톤"
+    assert sites[2].boundary_reason.startswith("고유명 포함")
