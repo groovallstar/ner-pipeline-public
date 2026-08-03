@@ -44,18 +44,22 @@ import logging
 import pathlib
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-# 조사 처리는 R2 감사의 구현을 그대로 쓴다. 어절에서 조사를 어떻게 떼는지가 두 벌이
-# 되면 같은 자리를 두 모듈이 다르게 읽어, 한쪽 게이트가 통과시킨 것을 다른 쪽이
-# 못 보게 된다 — 자가 둘이 되는 것과 같다.
+# 조사 처리·삽입 무결성 검사는 R2 감사의 구현을 그대로 쓴다. 어절에서 조사를 어떻게
+# 떼는지가, 또 불변 타입이 안 움직였는지를 무엇으로 판정하는지가 두 벌이 되면 같은
+# 자리를 두 모듈이 다르게 읽어, 한쪽 게이트가 통과시킨 것을 다른 쪽이 못 보게 된다
+# — 자가 둘이 되는 것과 같다.
 from ner.labelers.ko.ko_evt_r2_audit import (
     CANONICAL_PATH,
+    EVT,
     _load_jsonl,
     _strip_particle,
+    dump_gold,
     extract_noun_candidates,
     file_sha256,
     load_gold,
+    verify_invariants,
 )
 
 logger = logging.getLogger(__name__)
@@ -809,6 +813,138 @@ def check_axis1_gate(
     }
 
 
+# ── 적용 ───────────────────────────────────────────────────────────────
+
+# 삽입을 막아야 하는 어긋남. 전부 "원장과 현 규칙이 같은 자리를 가리키지 않는다" 는
+# 뜻이라, 세고 넘어가면 회수 건수 주장이 조용히 거짓이 된다.
+APPLY_BLOCKERS = ("site_missing", "insert_span_drift", "surface_mismatch",
+                  "insert_clash")
+
+
+def ledger_gold_sha(ledger: Sequence[dict]) -> Tuple[str, ...]:
+    """원장이 **무엇을 보고 판정했는지** 기록한 gold 지문.
+
+    둘 이상이면 서로 다른 gold 를 본 판정이 한 원장에 섞인 것이라, 그대로 적용하면
+    어느 쪽 기준으로 회수했는지가 사라진다.
+    """
+    return tuple(dict.fromkeys(
+        str(rec["gold_sha256_before"]) for rec in ledger
+        if rec.get("gold_sha256_before")
+    ))
+
+
+def apply_axis1_decisions(
+    rows: Sequence[dict],
+    ledger: Sequence[dict],
+    heads: Sequence[str] = AXIS1_HEADS,
+) -> Tuple[List[dict], dict]:
+    """원장의 EVT 판정을 gold 에 삽입한다 — **경계는 원장과 현 규칙이 둘 다 동의해야 한다.**
+
+    삽입 span 을 원장에서만 읽으면 경계 규칙을 나중에 고쳐도 원장이 조용히 낡고, 현
+    규칙으로 다시 계산하기만 하면 사람이 승인한 경계와 다른 자리가 소리 없이 들어간다.
+    그래서 자리를 다시 스캔해 **탐지 span 으로** 원장 행을 찾고, 삽입 경계가 어긋나면
+    삽입하지 않고 센다 — 어긋남은 통과가 아니라 실패로 다뤄야 하기 때문이다.
+    """
+    stats: collections.Counter = collections.Counter()
+    sites = {_site_key(s): s for s in find_axis1_sites(rows, heads)}
+    # 판정은 row_id 로 되돌린다. 위치(row_index)로만 붙이면 gold 를 재생성해 행
+    # 순서가 달라졌을 때 엉뚱한 문장에 span 이 조용히 박힌다.
+    index_of = {str(row.get("id", i)): i for i, row in enumerate(rows)}
+    by_row: Dict[int, List[Axis1Site]] = collections.defaultdict(list)
+    for rec in ledger:
+        verdict = str(rec.get("verdict", "")).upper()
+        if verdict != EVT:
+            stats["skipped_" + (verdict.lower() or "blank")] += 1
+            continue
+        row_index = int(rec["row_index"])
+        idx = index_of.get(str(rec.get("row_id")), row_index)
+        if idx != row_index:
+            stats["row_index_drift"] += 1
+        site = sites.get((idx, int(rec["start"]), int(rec["end"])))
+        if site is None:
+            stats["site_missing"] += 1
+            continue
+        if (site.insert_start, site.insert_end) != (
+                int(rec["insert_start"]), int(rec["insert_end"])):
+            stats["insert_span_drift"] += 1
+            continue
+        text = rows[idx]["text"]
+        if text[site.insert_start:site.insert_end] != rec.get("insert_surface"):
+            stats["surface_mismatch"] += 1
+            continue
+        by_row[idx].append(site)
+
+    out: List[dict] = []
+    for idx, row in enumerate(rows):
+        ents = list(row["entities"])
+        occupied: Set[int] = set()
+        for ent in ents:
+            occupied.update(range(int(ent["start_char"]), int(ent["end_char"])))
+        for site in sorted(by_row[idx], key=lambda s: s.insert_start):
+            span = set(range(site.insert_start, site.insert_end))
+            if span & occupied:
+                stats["insert_clash"] += 1
+                continue
+            ents.append({"label": EVT, "start_char": site.insert_start,
+                         "end_char": site.insert_end,
+                         "text": row["text"][site.insert_start:site.insert_end]})
+            occupied |= span
+            stats["recovered"] += 1
+        ents.sort(key=lambda e: (e["start_char"], e["end_char"]))
+        out.append({**row, "entities": ents})
+    return out, dict(stats)
+
+
+def cmd_apply(args: argparse.Namespace) -> None:
+    rows = load_gold(args.gold)
+    ledger = _load_jsonl(args.ledger)
+    gold_before = file_sha256(args.gold)
+    recorded = ledger_gold_sha(ledger)
+    # 판정 당시의 gold 와 지금의 gold 가 다르면 offset 이 그대로일 보장이 없다.
+    if recorded and (len(recorded) > 1 or recorded[0] != gold_before):
+        raise SystemExit(
+            f"FAIL: ledger judged gold {list(recorded)} but --gold is {gold_before}")
+    expected = sum(1 for rec in ledger
+                   if str(rec.get("verdict", "")).upper() == EVT)
+    new_rows, stats = apply_axis1_decisions(rows, ledger)
+    blocked = {k: stats[k] for k in APPLY_BLOCKERS if stats.get(k)}
+    if blocked:
+        raise SystemExit(f"FAIL: ledger disagrees with the current site scan {blocked}")
+    if stats.get("recovered", 0) != expected:
+        raise SystemExit(
+            f"FAIL: inserted {stats.get('recovered', 0)} spans for {expected} EVT verdicts")
+    checks = verify_invariants(rows, new_rows)
+    if not checks["frozen_types_identical"]:
+        raise SystemExit("FAIL: non-EVT types changed")
+    if checks["span_text_mismatch"] or checks["entity_overlap"]:
+        raise SystemExit(f"FAIL: integrity broken {checks}")
+    # 적용 뒤 같은 게이트를 다시 돌린다. 회수한 자리가 gold EVT 로 안 잡히거나 삽입이
+    # 다른 자리의 분류를 무너뜨리면 여기서 드러난다 — 삽입 자체가 잔여를 만든다.
+    after = check_axis1_gate(new_rows, AXIS1_HEADS, ledger)
+    if after["unclassified"]:
+        raise SystemExit(
+            f"FAIL: {len(after['unclassified'])} sites unclassified after apply")
+    dump_gold(new_rows, args.out)
+    payload = {
+        "stats": stats,
+        "checks": checks,
+        # gold 는 버전 관리 밖이라 이 회수가 어떤 diff 에도 남지 않는다. 이 원장이
+        # 유일한 감사 흔적이므로 입력 넷의 지문을 전부 함께 박는다.
+        "gold_sha256": {"before": gold_before, "after": file_sha256(args.out)},
+        "ledger_sha256": file_sha256(args.ledger),
+        "heads_sha256": heads_sha256(AXIS1_HEADS),
+        "canonical_sha256": file_sha256(CANONICAL_PATH),
+        "gate_after": {"sites": after["sites"],
+                       "status_counts": after["status_counts"],
+                       "unclassified": len(after["unclassified"])},
+    }
+    with open(args.provenance, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, ensure_ascii=False, indent=2)
+    logger.info("recovered %d sites — EVT %d -> %d, wrote %s",
+                stats.get("recovered", 0), checks["evt_before"],
+                checks["evt_after"], args.out)
+
+
 def cmd_gate(args: argparse.Namespace) -> None:
     rows = load_gold(args.gold)
     ledger = _load_jsonl(args.ledger) if args.ledger else []
@@ -907,6 +1043,17 @@ def main() -> None:
     p_ga.add_argument("--ledger", help="per-site judgement ledger JSONL")
     p_ga.add_argument("--out", help="write gate report JSON here")
     p_ga.set_defaults(func=cmd_gate)
+
+    p_ap = sub.add_parser(
+        "apply", help="insert the ledger's EVT verdicts into gold")
+    p_ap.add_argument("--gold", required=True)
+    p_ap.add_argument("--ledger", required=True,
+                      help="per-site judgement ledger JSONL")
+    p_ap.add_argument("--out", required=True, help="write the new gold here")
+    p_ap.add_argument("--provenance", required=True,
+                      help="write apply provenance JSON here — gold is outside "
+                           "version control, so this is the only audit trail")
+    p_ap.set_defaults(func=cmd_apply)
 
     args = parser.parse_args()
     args.func(args)

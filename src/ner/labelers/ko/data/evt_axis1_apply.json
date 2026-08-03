@@ -1,0 +1,30 @@
+{
+  "stats": {
+    "skipped_not": 8,
+    "recovered": 14
+  },
+  "checks": {
+    "frozen_types_identical": true,
+    "span_text_mismatch": 0,
+    "entity_overlap": 0,
+    "evt_before": 1717,
+    "evt_after": 1731
+  },
+  "gold_sha256": {
+    "before": "2645d26b17f0b845d21365c5ea445fcb6d416a53c726e916afc3dd22d801d0c8",
+    "after": "30bd861af51bea506f04097762be7d9a36930dd1b2d034805518d3cb9cd9788e"
+  },
+  "ledger_sha256": "b9768f7e9dc179bc2233a5439748dc5b169af1ba30314d51227c57958b5785bb",
+  "heads_sha256": "480a333cbb64e196b0eed3ace2cfc915ab346683656994f4e478aa84c67b9206",
+  "canonical_sha256": "c7972c1e8ece1341ad19fa6f5352da83c6ffba7faa16d81010b9d71a88368134",
+  "gate_after": {
+    "sites": 186,
+    "status_counts": {
+      "already_evt": 132,
+      "covered_by_longer_evt": 41,
+      "judged_not": 8,
+      "type_clash_recorded": 5
+    },
+    "unclassified": 0
+  }
+}

@@ -20,9 +20,11 @@ from ner.labelers.ko.ko_evt_axis1_audit import (
     CODE_COVERED,
     HeadCandidate,
     MIN_HEAD_LEN,
+    apply_axis1_decisions,
     assign_codes,
     check_axis1_gate,
     evt_span_words,
+    ledger_gold_sha,
     heads_sha256,
     parse_canonical_axis1,
     find_axis1_sites,
@@ -443,6 +445,131 @@ def test_boundary_condition_trims_only_the_labeled_proper_noun():
     assert sites[2].boundary_reason.startswith("고유명 포함")
 
 
+def _apply_rows():
+    """`미국 보스턴 마라톤` 은 LOC 가 앞을 덮어 head 만, `보스턴 마라톤` 은 통째로."""
+    return [
+        _row(1, "보스턴 은 도시 다", [("LOC", 0, 3)]),
+        _row(2, "미국 보스턴 마라톤 중계", [("LOC", 0, 6)]),
+        _row(3, "보스턴 마라톤 중계", []),
+    ]
+
+
+def _decision(rows, site, verdict="EVT", **over):
+    text = rows[site.row_index]["text"]
+    rec = {
+        "row_index": site.row_index, "row_id": rows[site.row_index]["id"],
+        "start": site.start, "end": site.end, "surface": site.surface,
+        "insert_start": site.insert_start, "insert_end": site.insert_end,
+        "insert_surface": text[site.insert_start:site.insert_end],
+        "verdict": verdict,
+    }
+    rec.update(over)
+    return rec
+
+
+def test_apply_inserts_the_judged_boundary_and_leaves_other_types_alone():
+    rows = _apply_rows()
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    ledger = [_decision(rows, sites[1]), _decision(rows, sites[2])]
+    new_rows, stats = apply_axis1_decisions(rows, ledger, ["마라톤"])
+    assert stats["recovered"] == 2
+    inserted = {r["text"][e["start_char"]:e["end_char"]]
+                for r in new_rows for e in r["entities"] if e["label"] == "EVT"}
+    assert inserted == {"마라톤", "보스턴 마라톤"}
+    # 불변 타입은 한 글자도 안 움직인다 — LOC 두 개가 그대로 있어야 한다
+    assert [e for r in new_rows for e in r["entities"] if e["label"] == "LOC"] == \
+           [e for r in rows for e in r["entities"] if e["label"] == "LOC"]
+
+
+def test_apply_skips_not_verdicts():
+    rows = _apply_rows()
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    new_rows, stats = apply_axis1_decisions(
+        rows, [_decision(rows, sites[2], verdict="NOT")], ["마라톤"])
+    assert stats == {"skipped_not": 1}
+    assert not [e for r in new_rows for e in r["entities"] if e["label"] == "EVT"]
+
+
+def test_apply_refuses_a_ledger_whose_insert_boundary_drifted():
+    """원장이 승인한 경계와 현 규칙이 어긋나면 삽입하지 않고 센다.
+
+    원장만 믿으면 경계 규칙을 고쳐도 원장이 조용히 낡고, 현 규칙만 믿으면 사람이
+    승인하지 않은 경계가 소리 없이 들어간다.
+    """
+    rows = _apply_rows()
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    stale = _decision(rows, sites[1], insert_start=3, insert_surface="보스턴 마라톤")
+    new_rows, stats = apply_axis1_decisions(rows, [stale], ["마라톤"])
+    assert stats == {"insert_span_drift": 1}
+    assert not [e for r in new_rows for e in r["entities"] if e["label"] == "EVT"]
+
+
+def test_apply_reports_a_ledger_site_the_current_scan_no_longer_produces():
+    rows = _apply_rows()
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    dropped = _decision(rows, sites[2])
+    # head 목록에서 `마라톤` 이 빠지면 그 자리는 더 이상 열거되지 않는다
+    _, stats = apply_axis1_decisions(rows, [dropped], ["올림픽"])
+    assert stats == {"site_missing": 1}
+
+
+def test_apply_resolves_rows_by_id_not_position():
+    """행 순서가 달라져도 판정이 엉뚱한 문장에 박히면 안 된다."""
+    rows = _apply_rows()
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    decision = _decision(rows, sites[2])
+    shifted = [rows[2], rows[0], rows[1]]     # row_id 3 이 0 번으로 온다
+    new_rows, stats = apply_axis1_decisions(shifted, [decision], ["마라톤"])
+    assert stats["row_index_drift"] == 1 and stats["recovered"] == 1
+    evt = [(r["id"], r["text"][e["start_char"]:e["end_char"]])
+           for r in new_rows for e in r["entities"] if e["label"] == "EVT"]
+    assert evt == [(3, "보스턴 마라톤")]
+
+
+def test_apply_never_inserts_over_an_existing_span():
+    rows = _apply_rows()
+    sites = {s.row_index: s for s in find_axis1_sites(rows, ["마라톤"])}
+    decision = _decision(rows, sites[2])
+    occupied = rows[:2] + [dict(rows[2], entities=[
+        {"label": "PROD", "start_char": decision["insert_start"],
+         "end_char": decision["insert_end"], "text": decision["insert_surface"]}])]
+    _, stats = apply_axis1_decisions(occupied, [decision], ["마라톤"])
+    assert stats == {"insert_clash": 1}
+
+
+def test_ledger_gold_sha_reports_every_distinct_fingerprint():
+    """서로 다른 gold 를 본 판정이 한 원장에 섞이면 드러나야 한다."""
+    assert ledger_gold_sha([{"gold_sha256_before": "aa"},
+                            {"gold_sha256_before": "aa"}]) == ("aa",)
+    assert len(ledger_gold_sha([{"gold_sha256_before": "aa"},
+                                {"gold_sha256_before": "bb"}])) == 2
+
+
+def test_committed_apply_provenance_matches_the_ledger():
+    """gold 는 버전 관리 밖이라 이 원장이 회수의 유일한 감사 흔적이다."""
+    base = pathlib.Path(__file__).resolve().parents[3] / "src/ner/labelers/ko/data"
+    prov = json.loads((base / "evt_axis1_apply.json").read_text(encoding="utf-8"))
+    ledger = [json.loads(line) for line
+              in (base / "evt_axis1_judgements.jsonl").read_text(
+                  encoding="utf-8").splitlines() if line.strip()]
+    verdicts = collections.Counter(r["verdict"] for r in ledger)
+    assert prov["stats"]["recovered"] == verdicts["EVT"]
+    assert prov["stats"]["skipped_not"] == verdicts["NOT"]
+    assert not [k for k in ("site_missing", "insert_span_drift",
+                            "surface_mismatch", "insert_clash")
+                if prov["stats"].get(k)]
+    assert prov["checks"]["frozen_types_identical"]
+    assert prov["checks"]["span_text_mismatch"] == 0
+    assert prov["checks"]["entity_overlap"] == 0
+    assert prov["checks"]["evt_after"] - prov["checks"]["evt_before"] == verdicts["EVT"]
+    # 판정 당시의 gold 에 적용됐나 — 전 지문이 원장의 것과 같아야 한다
+    assert prov["gold_sha256"]["before"] == ledger_gold_sha(ledger)[0]
+    assert prov["gold_sha256"]["after"] != prov["gold_sha256"]["before"]
+    # 적용 뒤에도 자리가 전부 분류돼 있나
+    assert prov["gate_after"]["unclassified"] == 0
+    assert prov["heads_sha256"] == heads_sha256(AXIS1_HEADS)
+
+
 def test_committed_gate_report_is_closed_and_matches_the_ledger():
     """커밋된 게이트 산출물이 원장과 어긋나면 실패해야 한다 — 둘 다 잠금 밖이다."""
     base = pathlib.Path(__file__).resolve().parents[3] / "src/ner/labelers/ko/data"
@@ -451,6 +578,10 @@ def test_committed_gate_report_is_closed_and_matches_the_ledger():
               in (base / "evt_axis1_judgements.jsonl").read_text(
                   encoding="utf-8").splitlines() if line.strip()]
     assert report["unclassified"] == []
+    # 이 보고는 **판정 시점**(적용 전) gold 의 종결이다. 적용 뒤에는 회수 14 건이
+    # `already_evt` 로 접혀 같은 명령이 다른 표를 낸다 — 어느 gold 를 잰 표인지
+    # 지문으로 못 박아 두지 않으면 낡음과 어긋남이 구별되지 않는다.
+    assert report["params"]["gold_sha256"] == ledger_gold_sha(ledger)[0]
     verdicts = collections.Counter(r["verdict"] for r in ledger)
     assert report["recovered"] == verdicts["EVT"]
     assert report["status_counts"]["judged_not"] == verdicts["NOT"]
