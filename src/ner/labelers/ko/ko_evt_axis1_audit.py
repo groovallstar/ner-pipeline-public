@@ -813,6 +813,161 @@ def check_axis1_gate(
     }
 
 
+# ── 모델 FP 사각 진단 ──────────────────────────────────────────────────
+
+
+def _fp_compound_shape(
+    text: str, start: int, end: int, row_proper: Sequence[str],
+    lexicon: Dict[str, float],
+) -> Optional[Tuple[str, str]]:
+    """FP span 이 `고유명 + 사건 head` 모양인가 → (고유명, head).
+
+    **head 목록을 쓰지 않는다.** 이 진단은 그 목록의 사각을 재는 것이라, 목록으로
+    모양을 판정하면 목록이 못 본 head 는 모양 판정에서부터 빠져 사각이 0 으로 나온다
+    — 자기 시야로 자기 시야를 재는 구조다. 그래서 head 는 열린 값으로 둔다: FP span
+    의 마지막 어절에서 조사를 뗀 것이면 무엇이든 head 후보다.
+    """
+    inner = [(m.group(), start + m.start())
+             for m in _TOKEN.finditer(text[start:end])]
+    if not inner:
+        return None
+    tail = _EDGE.sub("", inner[-1][0])
+    head = _strip_particle(tail) or tail
+    if len(head) < MIN_HEAD_LEN or head in lexicon or head in row_proper:
+        return None
+    if len(inner) > 1:
+        prefix = _EDGE.sub("", inner[-2][0])
+    else:
+        # 한 어절이면 그 안에서 갈린다 — `서울월드컵` 형
+        prefix = ""
+        for cut in range(len(head) - MIN_HEAD_LEN, MIN_HEAD_LEN - 1, -1):
+            if head[:cut] in row_proper or head[:cut] in lexicon:
+                prefix, head = head[:cut], head[cut:]
+                break
+    if not prefix or (prefix not in row_proper and prefix not in lexicon):
+        return None
+    return prefix, head
+
+
+def diagnose_fp_blindspot(
+    rows: Sequence[dict],
+    predictions: Sequence[dict],
+    heads: Sequence[str] = AXIS1_HEADS,
+    min_len: int = DEFAULT_MIN_PROPER_LEN,
+    min_ratio: float = DEFAULT_MIN_PROPER_RATIO,
+) -> dict:
+    """모델 EVT FP 중 복합 named 모양이 **자리 스캔 모집단에 없는 수**를 센다.
+
+    모델 예측은 head 후보의 출처가 아니다(선택 편향 — gold 가 모델이 이미 발화한
+    자리에서만 늘어 recall 상승이 구조적으로 보장된다). 여기서의 쓰임은 진단뿐이다:
+    규칙이 못 본 형태가 무엇인지 이름을 얻는다. 넓히는 것은 F1 관측 **전에만**
+    허용되고, 그 순서는 산출물에 박히는 해시가 집행한다.
+    """
+    lexicon = proper_noun_lexicon(rows, min_len=min_len, min_ratio=min_ratio)
+    nouns = extract_noun_candidates(rows)
+    by_id = {str(row.get("id")): (index, row) for index, row in enumerate(rows)}
+    population: Dict[int, List[Tuple[int, int]]] = collections.defaultdict(list)
+    for site in find_axis1_sites(rows, heads, min_len=min_len, min_ratio=min_ratio):
+        population[site.row_index].append((site.start, site.end))
+    excluded = {f for forms in AXIS1_EXCLUDE.values() for f in forms}
+
+    seen: Set[Tuple[str, int, int]] = set()
+    stats: collections.Counter = collections.Counter()
+    items: List[dict] = []
+    for pred in predictions:
+        found = by_id.get(str(pred.get("id")))
+        if found is None:
+            stats["row_id_not_in_gold"] += 1
+            continue
+        index, row = found
+        gold = {(int(s["start"]), int(s["end"])) for s in pred.get("gold_spans", [])
+                if s.get("type") == EVT}
+        text = row["text"]
+        row_proper = [
+            str(e.get("text", "")) for e in row.get("entities", [])
+            if e.get("label") in PROPER_LABELS
+            and len(str(e.get("text", ""))) >= min_len
+        ]
+        for span in pred.get("pred_spans", []):
+            if span.get("type") != EVT:
+                continue
+            start, end = int(span["start"]), int(span["end"])
+            if (start, end) in gold:
+                continue
+            stats["evt_fp"] += 1
+            key = (str(pred.get("id")), start, end)
+            if key in seen:
+                stats["duplicate_fp"] += 1
+                continue
+            seen.add(key)
+            shape = _fp_compound_shape(text, start, end, row_proper, lexicon)
+            if shape is None:
+                continue
+            proper, head = shape
+            stats["compound_fp"] += 1
+            covered = any(s < end and start < e for s, e in population[index])
+            if covered:
+                stats["in_population"] += 1
+                continue
+            stats["absent_from_population"] += 1
+            items.append({
+                "row_index": index, "row_id": row.get("id"),
+                "span": [start, end], "surface": text[start:end],
+                "proper": proper, "head": head,
+                "head_in_list": head in heads or any(head.endswith(h) for h in heads),
+                "head_excluded": head in excluded,
+                # 모델 span 이 낱말을 자르면 head 도 조각이 된다(`(EAS`·`원회`·`+3`).
+                # 조각은 사각의 이름이 아니라 경계 오류라, 세되 갈라 둔다 — 판별은
+                # 자리 스캔의 head 후보와 같은 기준(코퍼스 단독 명사)으로 한다.
+                "head_is_corpus_noun": head in nouns,
+                "context": text[max(0, start - 30):end + 30],
+            })
+    absent_heads = collections.Counter(i["head"] for i in items)
+    return {
+        "params": {
+            "heads_sha256": heads_sha256(heads),
+            "min_proper_len": min_len,
+            "min_proper_ratio": min_ratio,
+        },
+        "predictions": len(predictions),
+        "stats": dict(stats.most_common()),
+        # 사각의 이름 — 이 head 들이 목록에 없어서 모집단이 그 자리를 못 만들었다
+        "absent_by_head": dict(absent_heads.most_common()),
+        # 목록에 있는데도 모집단 밖이면 head 가 아니라 가드·부착 조건이 걸렀다는 뜻
+        "absent_though_head_listed": sum(1 for i in items if i["head_in_list"]),
+        "absent_head_excluded_by_code": sum(1 for i in items if i["head_excluded"]),
+        "absent_head_not_a_corpus_noun": sum(
+            1 for i in items if not i["head_is_corpus_noun"]),
+        "items": items,
+    }
+
+
+def cmd_fp_blindspot(args: argparse.Namespace) -> None:
+    rows = load_gold(args.gold)
+    predictions: List[dict] = []
+    for path in args.predictions:
+        predictions.extend(json.loads(
+            pathlib.Path(path).read_text(encoding="utf-8")))
+    report = diagnose_fp_blindspot(rows, predictions)
+    # 사전등록 — 이 산출물이 head 팔 학습보다 **먼저** 커밋됐음을 지문으로 남긴다.
+    # 나중에 F1 을 보고 head 를 넓히면 해시가 어긋나 산출물 자체가 반박한다.
+    report["prereg"] = {
+        "gold_sha256": file_sha256(args.gold),
+        "canonical_sha256": file_sha256(CANONICAL_PATH),
+        "heads_sha256": heads_sha256(AXIS1_HEADS),
+        "prediction_sha256": {p: file_sha256(p) for p in args.predictions},
+    }
+    logger.info("EVT FP %d — compound-shaped %d, absent from population %d %s",
+                report["stats"].get("evt_fp", 0),
+                report["stats"].get("compound_fp", 0),
+                report["stats"].get("absent_from_population", 0),
+                report["absent_by_head"])
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fp:
+            json.dump(report, fp, ensure_ascii=False, indent=2)
+        logger.info("wrote %s", args.out)
+
+
 # ── 잔여 불일치 계수기 ─────────────────────────────────────────────────
 
 # 583(최대-span) 위반 — 인접 고유명이 그 행에서 무라벨인데 EVT span 이 안 품었다.
@@ -1171,6 +1326,15 @@ def main() -> None:
     p_ga.add_argument("--ledger", help="per-site judgement ledger JSONL")
     p_ga.add_argument("--out", help="write gate report JSON here")
     p_ga.set_defaults(func=cmd_gate)
+
+    p_fp = sub.add_parser(
+        "fp-blindspot",
+        help="diagnose which compound-named EVT false positives the head list misses")
+    p_fp.add_argument("--gold", required=True)
+    p_fp.add_argument("--predictions", nargs="+", required=True,
+                      help="fold test_predictions.json files")
+    p_fp.add_argument("--out", help="write blind-spot report JSON here")
+    p_fp.set_defaults(func=cmd_fp_blindspot)
 
     p_re = sub.add_parser(
         "residue",

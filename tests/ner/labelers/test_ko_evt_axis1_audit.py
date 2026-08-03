@@ -7,6 +7,7 @@
 """
 
 import collections
+import hashlib
 import json
 import pathlib
 
@@ -23,6 +24,7 @@ from ner.labelers.ko.ko_evt_axis1_audit import (
     apply_axis1_decisions,
     assign_codes,
     check_axis1_gate,
+    diagnose_fp_blindspot,
     evt_span_words,
     find_boundary_residue,
     ledger_gold_sha,
@@ -444,6 +446,75 @@ def test_boundary_condition_trims_only_the_labeled_proper_noun():
     assert sites[1].boundary_reason.startswith("head 만")
     assert rows[2]["text"][sites[2].insert_start:sites[2].insert_end] == "보스턴 마라톤"
     assert sites[2].boundary_reason.startswith("고유명 포함")
+
+
+def _pred(row, *spans, gold=()):
+    return {"id": row["id"],
+            "gold_spans": [{"type": t, "start": s, "end": e} for t, s, e in gold],
+            "pred_spans": [{"type": t, "start": s, "end": e} for t, s, e in spans]}
+
+
+def test_fp_shape_detector_does_not_consult_the_head_list():
+    """목록으로 모양을 판정하면 목록이 못 본 head 는 사각 계산에서부터 빠진다."""
+    rows = _residue_rows([_row(3, "보스턴 패션쇼 취재", [])])
+    assert "패션쇼" not in AXIS1_HEADS
+    report = diagnose_fp_blindspot(
+        rows, [_pred(rows[2], ("EVT", 0, 7))], AXIS1_HEADS)
+    assert report["stats"]["compound_fp"] == 1
+    assert report["stats"]["absent_from_population"] == 1
+    assert report["absent_by_head"] == {"패션쇼": 1}
+    assert report["items"][0]["proper"] == "보스턴"
+
+
+def test_fp_inside_the_population_is_not_a_blind_spot():
+    rows = _residue_rows([_row(3, "보스턴 마라톤 취재", [])])
+    report = diagnose_fp_blindspot(
+        rows, [_pred(rows[2], ("EVT", 0, 7))], ["마라톤"])
+    assert report["stats"]["in_population"] == 1
+    assert report["items"] == []
+
+
+def test_fp_matching_gold_exactly_is_not_counted():
+    rows = _residue_rows([_row(3, "보스턴 패션쇼 취재", [])])
+    report = diagnose_fp_blindspot(
+        rows, [_pred(rows[2], ("EVT", 0, 7), gold=[("EVT", 0, 7)])], AXIS1_HEADS)
+    assert report["stats"].get("evt_fp", 0) == 0
+
+
+def test_fp_without_a_proper_noun_is_not_compound_shaped():
+    rows = _residue_rows([_row(3, "정기 총회 개최", [])])
+    report = diagnose_fp_blindspot(
+        rows, [_pred(rows[2], ("EVT", 0, 5))], AXIS1_HEADS)
+    assert report["stats"]["evt_fp"] == 1
+    assert report["stats"].get("compound_fp", 0) == 0
+
+
+def test_fp_head_that_is_a_word_fragment_is_split_out():
+    """경계가 낱말을 자르면 head 가 조각이 된다 — 사각의 이름이 아니라 경계 오류다."""
+    rows = _residue_rows([_row(3, "보스턴 패션쇼장 취재", [])])
+    report = diagnose_fp_blindspot(
+        rows, [_pred(rows[2], ("EVT", 0, 7))], AXIS1_HEADS)
+    assert report["items"][0]["head"] == "패션쇼"
+    assert not report["items"][0]["head_is_corpus_noun"]
+    assert report["absent_head_not_a_corpus_noun"] == 1
+
+
+def test_committed_blindspot_report_prereqisters_the_inputs():
+    """head 팔 학습 **전에** 무엇이 확정돼 있었나 — 나중에 넓히면 해시가 어긋난다."""
+    base = pathlib.Path(__file__).resolve().parents[3] / "src/ner/labelers/ko/data"
+    report = json.loads(
+        (base / "evt_axis1_fp_blindspot.json").read_text(encoding="utf-8"))
+    prov = json.loads((base / "evt_axis1_apply.json").read_text(encoding="utf-8"))
+    prereg = report["prereg"]
+    assert prereg["heads_sha256"] == heads_sha256(AXIS1_HEADS)
+    assert prereg["gold_sha256"] == prov["gold_sha256"]["after"]
+    canonical = pathlib.Path(__file__).resolve().parents[3] / \
+        "docs/manual/data/canonical-entity-schema.md"
+    digest = hashlib.sha256(canonical.read_bytes()).hexdigest()
+    assert prereg["canonical_sha256"] == digest
+    # 진단은 게이트가 아니라 보고다 — 항목마다 사람이 읽을 근거가 있어야 한다
+    assert all(i["context"] and i["surface"] for i in report["items"])
+    assert len(report["items"]) == report["stats"]["absent_from_population"]
 
 
 def _residue_rows(extra=()):
