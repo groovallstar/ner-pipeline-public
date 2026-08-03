@@ -6,6 +6,7 @@
 고정한다.
 """
 
+import collections
 import json
 import pathlib
 
@@ -440,3 +441,21 @@ def test_boundary_condition_trims_only_the_labeled_proper_noun():
     assert sites[1].boundary_reason.startswith("head 만")
     assert rows[2]["text"][sites[2].insert_start:sites[2].insert_end] == "보스턴 마라톤"
     assert sites[2].boundary_reason.startswith("고유명 포함")
+
+
+def test_committed_gate_report_is_closed_and_matches_the_ledger():
+    """커밋된 게이트 산출물이 원장과 어긋나면 실패해야 한다 — 둘 다 잠금 밖이다."""
+    base = pathlib.Path(__file__).resolve().parents[3] / "src/ner/labelers/ko/data"
+    report = json.loads((base / "evt_axis1_gate.json").read_text(encoding="utf-8"))
+    ledger = [json.loads(line) for line
+              in (base / "evt_axis1_judgements.jsonl").read_text(
+                  encoding="utf-8").splitlines() if line.strip()]
+    assert report["unclassified"] == []
+    verdicts = collections.Counter(r["verdict"] for r in ledger)
+    assert report["recovered"] == verdicts["EVT"]
+    assert report["status_counts"]["judged_not"] == verdicts["NOT"]
+    # 판정은 사람이 확정한다 — 초안 모델은 판정 권한이 없다
+    assert {r["judged_by"] for r in ledger} == {"human"}
+    # 자리마다 사유가 있어야 한다. 없으면 규칙 일괄 적용과 구별되지 않는다
+    assert all(r["verdict_reason"].strip() for r in ledger)
+    assert len({(r["row_index"], r["start"], r["end"]) for r in ledger}) == len(ledger)
