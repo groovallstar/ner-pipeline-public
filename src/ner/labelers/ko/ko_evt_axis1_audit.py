@@ -813,6 +813,140 @@ def check_axis1_gate(
     }
 
 
+# ── 비순환 재채점 ──────────────────────────────────────────────────────
+
+
+def load_pred_spans(paths: Sequence[str]) -> List[Tuple[str, Dict[str, List[dict]]]]:
+    """보존된 예측 span 을 fold 별로 읽는다 → [(fold 이름, {row id: [span]})]."""
+    out: List[Tuple[str, Dict[str, List[dict]]]] = []
+    for path in paths:
+        raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+        name = pathlib.Path(path).parent.name
+        out.append((name, {
+            str(row_id): [{"type": t, "start": int(s), "end": int(e)}
+                          for t, s, e in spans]
+            for row_id, spans in raw.items()
+        }))
+    return out
+
+
+def _gold_spans(row: dict) -> List[dict]:
+    return [{"type": str(e["label"]), "start": int(e["start_char"]),
+             "end": int(e["end_char"])} for e in row.get("entities", [])]
+
+
+def _score(gold: Sequence[List[dict]], pred: Sequence[List[dict]]) -> dict:
+    from ner.metrics.span_metrics import compute_offset_span_f1
+    return compute_offset_span_f1(list(gold), list(pred))
+
+
+def rescore_arms(
+    rows: Sequence[dict],
+    base_folds: Sequence[Tuple[str, Dict[str, List[dict]]]],
+    head_folds: Sequence[Tuple[str, Dict[str, List[dict]]]],
+    skip_ids: Sequence[str] = (),
+) -> dict:
+    """두 팔의 예측을 **같은 gold** 로 다시 채점한다.
+
+    base 팔은 옛 gold 로 학습·채점됐다. 그 수치를 신 gold 수치와 나란히 놓으면 자가
+    둘이라 비교가 성립하지 않는다 — 회수가 EVT 분모(support)를 바꿨기 때문이다.
+    그래서 예측은 그대로 두고 채점만 신 gold 로 다시 한다.
+
+    ``skip_ids`` 는 회수가 손댄 행이다. 그 행을 뺀 부분집합의 Δ 가 **회수 무관 Δ** 로,
+    "gold 에 답을 넣어 준 자리" 밖에서도 나아졌나를 본다.
+    """
+    by_id = {str(row.get("id")): row for row in rows}
+    skip = {str(i) for i in skip_ids}
+    base_ids = {i for _, fold in base_folds for i in fold}
+    head_ids = {i for _, fold in head_folds for i in fold}
+    if base_ids != head_ids:
+        raise SystemExit(
+            f"FAIL: arms cover different rows (base {len(base_ids)}, head {len(head_ids)})")
+    per_fold: Dict[str, Dict[str, float]] = {}
+    pooled_gold: List[List[dict]] = []
+    pooled: Dict[str, List[List[dict]]] = {"base": [], "head": []}
+    head_by_name = dict(head_folds)
+    for name, fold in base_folds:
+        other = head_by_name.get(name)
+        if other is None or set(other) != set(fold):
+            raise SystemExit(f"FAIL: fold {name} partitions differ between arms")
+        ids = [i for i in sorted(fold) if i in by_id and i not in skip]
+        gold = [_gold_spans(by_id[i]) for i in ids]
+        base = [fold[i] for i in ids]
+        head = [other[i] for i in ids]
+        pooled_gold.extend(gold)
+        pooled["base"].extend(base)
+        pooled["head"].extend(head)
+        per_fold[name] = {
+            "base": _score(gold, base)["per_entity"].get(EVT, {}).get("f1", 0.0),
+            "head": _score(gold, head)["per_entity"].get(EVT, {}).get("f1", 0.0),
+        }
+    scores = {arm: _score(pooled_gold, preds) for arm, preds in pooled.items()}
+    types = sorted(set(scores["base"]["per_entity"]) | set(scores["head"]["per_entity"]))
+    per_entity = {}
+    for label in types + ["overall"]:
+        def pick(arm: str) -> dict:
+            block = scores[arm]
+            return block["overall"] if label == "overall" else \
+                block["per_entity"].get(label, {})
+        base_f1 = round(pick("base").get("f1", 0.0), 4)
+        head_f1 = round(pick("head").get("f1", 0.0), 4)
+        per_entity[label] = {
+            "base": base_f1, "head": head_f1,
+            "delta": round(head_f1 - base_f1, 4),
+            "support": pick("head").get("support", 0),
+        }
+    deltas = [v["head"] - v["base"] for v in per_fold.values()]
+    mean = sum(deltas) / len(deltas) if deltas else 0.0
+    spread = (sum((d - mean) ** 2 for d in deltas) / (len(deltas) - 1)) ** 0.5 \
+        if len(deltas) > 1 else 0.0
+    return {
+        "rows_scored": len(pooled_gold),
+        "per_entity": per_entity,
+        "paired_evt": {
+            "mean": round(mean, 4), "stdev": round(spread, 4),
+            "wins": sum(1 for d in deltas if d > 0),
+            "losses": sum(1 for d in deltas if d < 0),
+            "per_fold": {k: {a: round(v, 4) for a, v in vals.items()}
+                         for k, vals in sorted(per_fold.items())},
+        },
+    }
+
+
+def cmd_rescore(args: argparse.Namespace) -> None:
+    rows = load_gold(args.gold)
+    ledger = _load_jsonl(args.ledger) if args.ledger else []
+    recovered = [str(rec.get("row_id")) for rec in ledger
+                 if str(rec.get("verdict", "")).upper() == EVT]
+    base = load_pred_spans(args.base_preds)
+    head = load_pred_spans(args.head_preds)
+    sigma = json.loads(pathlib.Path(args.sigma).read_text(encoding="utf-8")) \
+        if args.sigma else {}
+    report = {
+        "method": "base 팔 예측을 회수 후 gold 로 재채점해 head 팔과 같은 자로 비교한다. "
+                  "구 gold 기준 수치와는 나란히 놓지 않는다.",
+        "sigma_source": args.sigma,
+        "gold_sha256": file_sha256(args.gold),
+        "full": rescore_arms(rows, base, head),
+        # 회수가 손댄 행을 뺀다 — gold 에 답을 넣어 준 자리 밖에서도 나아졌나
+        "recovery_free_subset": rescore_arms(rows, base, head, skip_ids=recovered),
+        "recovered_sites": len(recovered),
+    }
+    for block in ("full", "recovery_free_subset"):
+        for label, values in report[block]["per_entity"].items():
+            std = sigma.get(label, {}).get("std")
+            if std is not None:
+                values["sigma_pre"] = std
+    logger.info("EVT delta full %+.4f / recovery-free %+.4f (sigma_pre %.4f)",
+                report["full"]["per_entity"][EVT]["delta"],
+                report["recovery_free_subset"]["per_entity"][EVT]["delta"],
+                sigma.get(EVT, {}).get("std", 0.0))
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fp:
+            json.dump(report, fp, ensure_ascii=False, indent=2)
+        logger.info("wrote %s", args.out)
+
+
 # ── 모델 FP 사각 진단 ──────────────────────────────────────────────────
 
 
@@ -1326,6 +1460,20 @@ def main() -> None:
     p_ga.add_argument("--ledger", help="per-site judgement ledger JSONL")
     p_ga.add_argument("--out", help="write gate report JSON here")
     p_ga.set_defaults(func=cmd_gate)
+
+    p_rs = sub.add_parser(
+        "rescore",
+        help="re-score both arms against the same gold and report the "
+             "recovery-free subset delta")
+    p_rs.add_argument("--gold", required=True)
+    p_rs.add_argument("--base-preds", nargs="+", required=True,
+                      help="preserved base-arm fold*/pred_spans.json")
+    p_rs.add_argument("--head-preds", nargs="+", required=True,
+                      help="preserved head-arm fold*/pred_spans.json")
+    p_rs.add_argument("--ledger", help="per-site judgement ledger JSONL")
+    p_rs.add_argument("--sigma", help="pre-registered fold_sigma.json")
+    p_rs.add_argument("--out", help="write the non-circular report JSON here")
+    p_rs.set_defaults(func=cmd_rescore)
 
     p_fp = sub.add_parser(
         "fp-blindspot",

@@ -11,6 +11,8 @@ import hashlib
 import json
 import pathlib
 
+import pytest
+
 from ner.labelers.ko.ko_evt_axis1_audit import (
     AXIS1_EXCLUDE,
     AXIS1_HEADS,
@@ -32,6 +34,7 @@ from ner.labelers.ko.ko_evt_axis1_audit import (
     parse_canonical_axis1,
     find_axis1_sites,
     proper_noun_lexicon,
+    rescore_arms,
     sites_report,
     survey_head_candidates,
     survey_report,
@@ -515,6 +518,66 @@ def test_committed_blindspot_report_prereqisters_the_inputs():
     # 진단은 게이트가 아니라 보고다 — 항목마다 사람이 읽을 근거가 있어야 한다
     assert all(i["context"] and i["surface"] for i in report["items"])
     assert len(report["items"]) == report["stats"]["absent_from_population"]
+
+
+def _arm(*folds):
+    """[(fold 이름, {row id: [span]})] — span 은 (type, start, end)."""
+    return [(f"fold{n}", {str(i): [{"type": t, "start": s, "end": e}
+                                   for t, s, e in spans]
+                          for i, spans in fold.items()})
+            for n, fold in enumerate(folds)]
+
+
+def _score_rows():
+    return [_row(1, "보스턴 마라톤 중계", [("EVT", 0, 7)]),
+            _row(2, "런던 올림픽 개막", [("EVT", 0, 6)])]
+
+
+def test_rescore_of_identical_arms_has_zero_delta():
+    rows = _score_rows()
+    arm = _arm({1: [("EVT", 0, 7)]}, {2: [("EVT", 0, 6)]})
+    report = rescore_arms(rows, arm, arm)
+    assert report["rows_scored"] == 2
+    assert all(v["delta"] == 0.0 for v in report["per_entity"].values())
+    assert report["paired_evt"]["wins"] == report["paired_evt"]["losses"] == 0
+
+
+def test_rescore_skips_the_rows_the_recovery_touched():
+    """회수가 답을 넣어 준 자리를 빼야 '그 밖에서도 나아졌나' 가 나온다."""
+    rows = _score_rows()
+    base = _arm({1: []}, {2: [("EVT", 0, 6)]})
+    head = _arm({1: [("EVT", 0, 7)]}, {2: [("EVT", 0, 6)]})
+    full = rescore_arms(rows, base, head)
+    subset = rescore_arms(rows, base, head, skip_ids=["1"])
+    assert full["per_entity"]["EVT"]["delta"] > 0
+    assert subset["rows_scored"] == 1
+    assert subset["per_entity"]["EVT"]["delta"] == 0.0
+
+
+def test_rescore_refuses_arms_that_cover_different_rows():
+    rows = _score_rows()
+    base = _arm({1: [("EVT", 0, 7)]}, {2: [("EVT", 0, 6)]})
+    head = _arm({1: [("EVT", 0, 7)]}, {})
+    with pytest.raises(SystemExit):
+        rescore_arms(rows, base, head)
+
+
+def test_rescore_refuses_a_different_fold_partition():
+    """분할이 다르면 fold 짝짓기가 성립하지 않아 paired Δ 가 의미를 잃는다."""
+    rows = _score_rows()
+    base = _arm({1: [("EVT", 0, 7)]}, {2: [("EVT", 0, 6)]})
+    head = _arm({2: [("EVT", 0, 6)]}, {1: [("EVT", 0, 7)]})
+    with pytest.raises(SystemExit):
+        rescore_arms(rows, base, head)
+
+
+def test_rescore_counts_paired_fold_wins_and_losses():
+    rows = _score_rows()
+    base = _arm({1: []}, {2: [("EVT", 0, 6)]})
+    head = _arm({1: [("EVT", 0, 7)]}, {2: []})
+    paired = rescore_arms(rows, base, head)["paired_evt"]
+    assert paired["wins"] == 1 and paired["losses"] == 1
+    assert set(paired["per_fold"]) == {"fold0", "fold1"}
 
 
 def test_prereg_pins_every_input_that_could_move_after_the_numbers_land():
