@@ -862,6 +862,13 @@ def rescore_arms(
     if base_ids != head_ids:
         raise SystemExit(
             f"FAIL: arms cover different rows (base {len(base_ids)}, head {len(head_ids)})")
+    # gold 에 없는 행을 조용히 빼면 분모가 줄어든 채로 F1 이 나온다 — 값은 그럴듯하고
+    # 무엇이 빠졌는지는 어디에도 안 남는다.
+    missing = base_ids - set(by_id)
+    if missing:
+        raise SystemExit(
+            f"FAIL: {len(missing)} predicted rows are absent from gold "
+            f"(e.g. {sorted(missing)[:3]})")
     per_fold: Dict[str, Dict[str, float]] = {}
     pooled_gold: List[List[dict]] = []
     pooled: Dict[str, List[List[dict]]] = {"base": [], "head": []}

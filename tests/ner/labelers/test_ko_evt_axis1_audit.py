@@ -562,6 +562,14 @@ def test_rescore_refuses_arms_that_cover_different_rows():
         rescore_arms(rows, base, head)
 
 
+def test_rescore_refuses_predictions_for_rows_gold_does_not_have():
+    """조용히 빼면 분모가 줄어든 채 그럴듯한 F1 이 나온다."""
+    rows = _score_rows()
+    arm = _arm({1: [("EVT", 0, 7)]}, {99: []})
+    with pytest.raises(SystemExit):
+        rescore_arms(rows, arm, arm)
+
+
 def test_rescore_refuses_a_different_fold_partition():
     """분할이 다르면 fold 짝짓기가 성립하지 않아 paired Δ 가 의미를 잃는다."""
     rows = _score_rows()
