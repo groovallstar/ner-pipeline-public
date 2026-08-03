@@ -10,13 +10,19 @@ import json
 import pathlib
 
 from ner.labelers.ko.ko_evt_axis1_audit import (
+    AXIS1_EXCLUDE,
     AXIS1_HEADS,
     CODE_ADOPTED,
+    DEFAULT_MIN_PROPER_LEN,
+    DEFAULT_MIN_PROPER_RATIO,
+    PROPER_LABELS,
     CODE_COVERED,
     HeadCandidate,
     MIN_HEAD_LEN,
     assign_codes,
     evt_span_words,
+    heads_sha256,
+    parse_canonical_axis1,
     find_axis1_sites,
     proper_noun_lexicon,
     sites_report,
@@ -334,3 +340,37 @@ def test_committed_ledger_covers_every_candidate_and_matches_constants():
     adopted = {h for h, v in ledger["codes"].items() if v["code"] == CODE_ADOPTED}
     assert adopted == set(AXIS1_HEADS)
     assert all(v["code"] for v in ledger["codes"].values())
+
+
+def test_canonical_head_list_is_the_single_source():
+    """규칙은 잠긴 canonical 에 있고 이 모듈은 잠금 밖이다 — 어긋나면 실패해야 한다."""
+    parsed = parse_canonical_axis1()
+    assert tuple(parsed["heads"]) == AXIS1_HEADS
+
+
+def test_canonical_population_guards_match_module_constants():
+    """head 만 잠그면 모자란다 — 고유명 타입·가드 임계도 모집단을 바꾼다."""
+    parsed = parse_canonical_axis1()
+    assert tuple(parsed["proper_labels"]) == PROPER_LABELS
+    assert parsed["min_proper_len"] == DEFAULT_MIN_PROPER_LEN
+    assert parsed["min_proper_ratio"] == DEFAULT_MIN_PROPER_RATIO
+
+
+def test_canonical_exclude_codes_match_module():
+    """canonical 이 선언한 사유코드 집합과 모듈이 집행하는 집합이 같아야 한다.
+
+    `상위head포함` 만 예외다 — canonical 이 코드로 선언하되 멤버를 열거하지 않고,
+    모듈이 `covered_by` 에서 기계적으로 배정한다.
+    """
+    parsed = parse_canonical_axis1()
+    assert set(parsed["exclude_codes"]) == set(AXIS1_EXCLUDE) | {CODE_COVERED}
+
+
+def test_sites_report_fingerprints_head_list_and_gold():
+    """모집단이 왜 달라졌는지가 값으로 갈려야 한다 — head 가 움직였나 gold 가 움직였나."""
+    rows = [_row(1, "보스턴 테러 가 났다", [("LOC", 0, 3)])]
+    one = sites_report(rows, ["테러"])
+    two = sites_report(rows, ["테러", "사고"])
+    assert one["params"]["heads_sha256"] != two["params"]["heads_sha256"]
+    assert one["params"]["gold_sha256"] is None          # 경로를 안 주면 없다
+    assert heads_sha256(["사고", "테러"]) == heads_sha256(["테러", "사고"])

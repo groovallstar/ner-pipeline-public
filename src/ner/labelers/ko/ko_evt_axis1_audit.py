@@ -39,17 +39,21 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import hashlib
 import logging
+import pathlib
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 # 조사 처리는 R2 감사의 구현을 그대로 쓴다. 어절에서 조사를 어떻게 떼는지가 두 벌이
 # 되면 같은 자리를 두 모듈이 다르게 읽어, 한쪽 게이트가 통과시킨 것을 다른 쪽이
 # 못 보게 된다 — 자가 둘이 되는 것과 같다.
 from ner.labelers.ko.ko_evt_r2_audit import (
+    CANONICAL_PATH,
     _strip_particle,
     extract_noun_candidates,
+    file_sha256,
     load_gold,
 )
 
@@ -130,6 +134,54 @@ AXIS1_EXCLUDE: Dict[str, Tuple[str, ...]] = {
 
 CODE_ADOPTED = "채택"
 CODE_COVERED = "상위head포함"
+
+_BACKTICK = re.compile(r"`([^`]+)`")
+_AXIS1_HEAD_MARKER = re.compile(r"\*\*축1 head[^*]*\*\*:\s*(.+)$")
+_AXIS1_EXCLUDE_MARKER = re.compile(r"축1-복합 제외 `([^`]+)`")
+_PROPER_MARKER = re.compile(r"\*\*고유명 판정\*\*.*?`([A-Z/]+)`")
+_GUARD_MARKER = re.compile(r"길이 ≥(\d+)\s*·\s*고유명 라벨 비율 ≥([\d.]+)")
+
+
+def parse_canonical_axis1(path: str = CANONICAL_PATH) -> Dict[str, object]:
+    """canonical §5.3 에서 **모집단을 정하는 파라미터 전부**를 읽어 온다.
+
+    head 목록만 읽으면 부족하다 — 고유명으로 볼 타입, 전역 이력을 쓸 때의 길이·비율
+    가드, 사유코드의 이름이 모두 모집단을 바꾸는데 그것들이 잠금 밖에 남으면 조용히
+    좁힐 수 있다. 규칙은 기준 파일(사람 승인·반박자를 타는 곳)에 있고 그것을 세는 이
+    모듈은 잠금 밖이라, 테스트가 이 결과와 모듈 상수를 대조해 어긋남을 실패로 만든다.
+    """
+    heads: Tuple[str, ...] = ()
+    proper_labels: Tuple[str, ...] = ()
+    codes: List[str] = []
+    min_len = 0
+    min_ratio = 0.0
+    in_ko_table = False
+    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
+        if line.startswith("### 5.3"):
+            in_ko_table = True
+            continue
+        if in_ko_table and line.startswith("## "):
+            break
+        if not in_ko_table or not line.startswith("|"):
+            continue
+        marker = _AXIS1_HEAD_MARKER.search(line)
+        if marker:
+            heads = tuple(_BACKTICK.findall(marker.group(1)))
+        proper = _PROPER_MARKER.search(line)
+        if proper:
+            proper_labels = tuple(proper.group(1).split("/"))
+        guard = _GUARD_MARKER.search(line)
+        if guard:
+            min_len = int(guard.group(1))
+            min_ratio = float(guard.group(2))
+        codes.extend(_AXIS1_EXCLUDE_MARKER.findall(line))
+    return {
+        "heads": heads,
+        "proper_labels": proper_labels,
+        "min_proper_len": min_len,
+        "min_proper_ratio": min_ratio,
+        "exclude_codes": tuple(dict.fromkeys(codes)),
+    }
 
 
 @dataclass
@@ -455,16 +507,24 @@ def find_axis1_sites(
     return out
 
 
+def heads_sha256(heads: Sequence[str]) -> str:
+    """head 목록의 지문. 목록이 한 종만 달라져도 값이 바뀐다."""
+    joined = "\n".join(sorted(heads))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
 def sites_report(
     rows: Sequence[dict],
     heads: Sequence[str],
     min_len: int = DEFAULT_MIN_PROPER_LEN,
     min_ratio: float = DEFAULT_MIN_PROPER_RATIO,
+    gold_path: Optional[str] = None,
 ) -> dict:
     """모집단 산출물 — **재현 파라미터를 값과 함께 남긴다.**
 
-    head 목록·가드 임계가 모집단을 정하므로, 값만 커밋하면 다음 사람이 모집단이 왜
-    달라졌는지 판단할 수 없고 좁히기가 사고와 구별되지 않는다.
+    head 목록·가드 임계·gold 가 모집단을 정하므로, 값만 커밋하면 다음 사람이 모집단이
+    왜 달라졌는지 판단할 수 없고 좁히기가 사고와 구별되지 않는다. head 지문과 gold
+    지문을 함께 남기는 이유가 이것이다 — 둘 중 무엇이 움직였는지 값으로 갈린다.
     """
     sites = find_axis1_sites(rows, heads, min_len=min_len, min_ratio=min_ratio)
     buckets: collections.Counter = collections.Counter(
@@ -473,6 +533,8 @@ def sites_report(
     return {
         "params": {
             "heads": sorted(heads),
+            "heads_sha256": heads_sha256(heads),
+            "gold_sha256": file_sha256(gold_path) if gold_path else None,
             "proper_labels": list(PROPER_LABELS),
             "min_proper_len": min_len,
             "min_proper_ratio": min_ratio,
@@ -594,7 +656,7 @@ def cmd_sites(args: argparse.Namespace) -> None:
     rows = load_gold(args.gold)
     heads = [h.strip() for h in args.heads.split(",") if h.strip()]
     report = sites_report(rows, heads, min_len=args.min_proper_len,
-                          min_ratio=args.min_proper_ratio)
+                          min_ratio=args.min_proper_ratio, gold_path=args.gold)
     logger.info("axis-1 sites: %d (population without gold EVT overlap: %d)",
                 report["sites"], report["population"])
     if args.out:

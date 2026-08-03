@@ -42,7 +42,9 @@ tests/ner/
 │   │                  # 열거의 결정성(span 중간에 묻힌 head 포착·빈도 문턱·
 │   │                  # 고유명 이력으로 수식부 제외·재현 파라미터),
 │   │                  # 고유명 가드(1글자 성씨·저비율 제외·조사 붙은 선행어절
-│   │                  # 제외), gold EVT 겹침을 버리지 않고 분류
+│   │                  # 제외), gold EVT 겹침을 버리지 않고 분류,
+│   │                  # canonical 파싱 ↔ 모듈 상수 동기(head·고유명 타입·가드
+│   │                  # 임계·사유코드), 배정 원장 전수 커버
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
 └── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,
