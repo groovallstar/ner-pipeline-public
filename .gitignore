@@ -91,4 +91,5 @@ docker/dev/config/.env
 
 # 실험 산출물 scratch (휘발). 채택분 metric JSON 만 certified/ 로 복사·커밋.
 results/
-/data/
+# 슬래시 없이 — 워크트리는 data 를 심링크로 두고, `/data/` 는 디렉토리만 잡는다
+/data

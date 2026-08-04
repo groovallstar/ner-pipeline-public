@@ -1,0 +1,21 @@
+{
+  "run": "nllb-1.3b-sentinel-ascii-2080ti",
+  "model": "facebook/nllb-200-distilled-1.3B",
+  "question": "does the production sentinel survive NLLB when moved to ASCII brackets, nonce included?",
+  "sentinel_format": "[PII{nonce}_{i}]  (nonce = 6 hex chars, per process)",
+  "eval_set": {
+    "builder": "server.scripts.translate_bench.build_eval_set --per-lang 100",
+    "sha256_16": "7ecac9e352a3d211",
+    "n_pii_records": 100,
+    "n_pii_spans": 186
+  },
+  "tokenizer_roundtrip_survived": "186/186",
+  "generated_survived": 186,
+  "restored": 186,
+  "dropped": 0,
+  "leftover_sentinels": 0,
+  "pii_verbatim_in_output": 186,
+  "pii_absent_from_output": 0,
+  "verdict": "PASS",
+  "contrast": "the shipping lenticular-bracket format scores 0/186 on the same model: NLLB tokenizes both brackets to <unk>"
+}

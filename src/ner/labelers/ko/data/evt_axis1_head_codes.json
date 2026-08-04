@@ -1,0 +1,1305 @@
+{
+  "params": {
+    "min_count": 3,
+    "min_types": 3
+  },
+  "candidates": 192,
+  "assigned": 192,
+  "unassigned": [],
+  "not_in_candidates": [],
+  "summary": {
+    "수식어": 38,
+    "타규칙(축2)": 31,
+    "채택": 30,
+    "타규칙(R2)": 22,
+    "상위head포함": 20,
+    "개별사건명": 13,
+    "타규칙(R2c)": 10,
+    "타규칙(리그)": 6,
+    "고유명": 6,
+    "타규칙(R3)": 5,
+    "비사건행위": 4,
+    "어휘경계": 4,
+    "비1회성": 2,
+    "수치토큰": 1
+  },
+  "codes": {
+    "월드컵": {
+      "code": "채택",
+      "span_count": 75,
+      "last_count": 65,
+      "covered_by": []
+    },
+    "기자회견": {
+      "code": "타규칙(R2)",
+      "span_count": 66,
+      "last_count": 66,
+      "covered_by": []
+    },
+    "대선": {
+      "code": "타규칙(축2)",
+      "span_count": 63,
+      "last_count": 63,
+      "covered_by": []
+    },
+    "사건": {
+      "code": "채택",
+      "span_count": 54,
+      "last_count": 54,
+      "covered_by": []
+    },
+    "사고": {
+      "code": "채택",
+      "span_count": 42,
+      "last_count": 42,
+      "covered_by": []
+    },
+    "참사": {
+      "code": "채택",
+      "span_count": 41,
+      "last_count": 41,
+      "covered_by": []
+    },
+    "올림픽": {
+      "code": "채택",
+      "span_count": 32,
+      "last_count": 31,
+      "covered_by": []
+    },
+    "정상회담": {
+      "code": "타규칙(R2)",
+      "span_count": 31,
+      "last_count": 31,
+      "covered_by": [
+        "회담"
+      ]
+    },
+    "수능": {
+      "code": "타규칙(축2)",
+      "span_count": 26,
+      "last_count": 26,
+      "covered_by": []
+    },
+    "총선": {
+      "code": "타규칙(축2)",
+      "span_count": 24,
+      "last_count": 24,
+      "covered_by": []
+    },
+    "2013": {
+      "code": "수치토큰",
+      "span_count": 22,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "여론조사": {
+      "code": "타규칙(축2)",
+      "span_count": 20,
+      "last_count": 20,
+      "covered_by": [
+        "조사"
+      ]
+    },
+    "지방선거": {
+      "code": "타규칙(축2)",
+      "span_count": 20,
+      "last_count": 20,
+      "covered_by": [
+        "선거"
+      ]
+    },
+    "청문회": {
+      "code": "타규칙(R2)",
+      "span_count": 20,
+      "last_count": 20,
+      "covered_by": []
+    },
+    "국정조사": {
+      "code": "타규칙(축2)",
+      "span_count": 18,
+      "last_count": 18,
+      "covered_by": [
+        "조사"
+      ]
+    },
+    "남북정상회담": {
+      "code": "타규칙(R2)",
+      "span_count": 17,
+      "last_count": 17,
+      "covered_by": [
+        "정상회담",
+        "회담"
+      ]
+    },
+    "시상식": {
+      "code": "타규칙(R2c)",
+      "span_count": 17,
+      "last_count": 17,
+      "covered_by": []
+    },
+    "대회": {
+      "code": "타규칙(축2)",
+      "span_count": 16,
+      "last_count": 15,
+      "covered_by": []
+    },
+    "설문조사": {
+      "code": "타규칙(축2)",
+      "span_count": 15,
+      "last_count": 15,
+      "covered_by": [
+        "조사"
+      ]
+    },
+    "동계올림픽": {
+      "code": "상위head포함",
+      "span_count": 14,
+      "last_count": 13,
+      "covered_by": [
+        "올림픽"
+      ]
+    },
+    "상봉": {
+      "code": "타규칙(축2)",
+      "span_count": 14,
+      "last_count": 10,
+      "covered_by": []
+    },
+    "이산가족": {
+      "code": "수식어",
+      "span_count": 14,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "테러": {
+      "code": "채택",
+      "span_count": 14,
+      "last_count": 11,
+      "covered_by": []
+    },
+    "사태": {
+      "code": "채택",
+      "span_count": 13,
+      "last_count": 13,
+      "covered_by": []
+    },
+    "선거": {
+      "code": "타규칙(축2)",
+      "span_count": 13,
+      "last_count": 13,
+      "covered_by": []
+    },
+    "국정감사": {
+      "code": "타규칙(축2)",
+      "span_count": 11,
+      "last_count": 11,
+      "covered_by": []
+    },
+    "챔피언스리그": {
+      "code": "타규칙(리그)",
+      "span_count": 11,
+      "last_count": 9,
+      "covered_by": [
+        "리그"
+      ]
+    },
+    "한국시리즈": {
+      "code": "타규칙(리그)",
+      "span_count": 11,
+      "last_count": 11,
+      "covered_by": [
+        "시리즈"
+      ]
+    },
+    "회담": {
+      "code": "타규칙(R2)",
+      "span_count": 11,
+      "last_count": 11,
+      "covered_by": []
+    },
+    "소치": {
+      "code": "고유명",
+      "span_count": 10,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "개막식": {
+      "code": "타규칙(R2c)",
+      "span_count": 9,
+      "last_count": 9,
+      "covered_by": []
+    },
+    "대학수학능력시험": {
+      "code": "타규칙(축2)",
+      "span_count": 9,
+      "last_count": 9,
+      "covered_by": [
+        "시험"
+      ]
+    },
+    "소치올림픽": {
+      "code": "상위head포함",
+      "span_count": 9,
+      "last_count": 8,
+      "covered_by": [
+        "올림픽"
+      ]
+    },
+    "실무접촉": {
+      "code": "타규칙(R2)",
+      "span_count": 9,
+      "last_count": 9,
+      "covered_by": [
+        "접촉"
+      ]
+    },
+    "아시안게임": {
+      "code": "채택",
+      "span_count": 9,
+      "last_count": 9,
+      "covered_by": []
+    },
+    "인사청문회": {
+      "code": "타규칙(R2)",
+      "span_count": 9,
+      "last_count": 9,
+      "covered_by": [
+        "청문회"
+      ]
+    },
+    "침몰": {
+      "code": "채택",
+      "span_count": 9,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "토론회": {
+      "code": "타규칙(R2)",
+      "span_count": 9,
+      "last_count": 9,
+      "covered_by": []
+    },
+    "금융위기": {
+      "code": "상위head포함",
+      "span_count": 8,
+      "last_count": 8,
+      "covered_by": [
+        "위기"
+      ]
+    },
+    "기자간담회": {
+      "code": "타규칙(R2)",
+      "span_count": 8,
+      "last_count": 8,
+      "covered_by": [
+        "간담회"
+      ]
+    },
+    "남북": {
+      "code": "수식어",
+      "span_count": 8,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "재보선": {
+      "code": "타규칙(축2)",
+      "span_count": 8,
+      "last_count": 8,
+      "covered_by": [
+        "보선"
+      ]
+    },
+    "미스코리아": {
+      "code": "개별사건명",
+      "span_count": 7,
+      "last_count": 2,
+      "covered_by": [
+        "코리아"
+      ]
+    },
+    "산청엑스포": {
+      "code": "개별사건명",
+      "span_count": 7,
+      "last_count": 7,
+      "covered_by": [
+        "스포"
+      ]
+    },
+    "살인사건": {
+      "code": "상위head포함",
+      "span_count": 7,
+      "last_count": 7,
+      "covered_by": [
+        "사건"
+      ]
+    },
+    "정기국회": {
+      "code": "타규칙(축2)",
+      "span_count": 7,
+      "last_count": 7,
+      "covered_by": []
+    },
+    "챔피언십": {
+      "code": "채택",
+      "span_count": 7,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "촛불집회": {
+      "code": "개별사건명",
+      "span_count": 7,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "침몰사고": {
+      "code": "상위head포함",
+      "span_count": 7,
+      "last_count": 7,
+      "covered_by": [
+        "사고"
+      ]
+    },
+    "하이옌": {
+      "code": "개별사건명",
+      "span_count": 7,
+      "last_count": 7,
+      "covered_by": []
+    },
+    "행사": {
+      "code": "어휘경계",
+      "span_count": 7,
+      "last_count": 7,
+      "covered_by": []
+    },
+    "대지진": {
+      "code": "채택",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "런던올림픽": {
+      "code": "상위head포함",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": [
+        "올림픽"
+      ]
+    },
+    "보궐선거": {
+      "code": "타규칙(축2)",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": [
+        "선거"
+      ]
+    },
+    "세계대전": {
+      "code": "개별사건명",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "소치동계올림픽": {
+      "code": "상위head포함",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": [
+        "동계올림픽",
+        "올림픽"
+      ]
+    },
+    "슈퍼볼": {
+      "code": "타규칙(축2)",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "실무회담": {
+      "code": "타규칙(R2)",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": [
+        "회담"
+      ]
+    },
+    "영결식": {
+      "code": "타규칙(R2c)",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "영화제": {
+      "code": "채택",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": [
+        "화제"
+      ]
+    },
+    "페스티벌": {
+      "code": "채택",
+      "span_count": 6,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "포럼": {
+      "code": "타규칙(R2)",
+      "span_count": 6,
+      "last_count": 6,
+      "covered_by": []
+    },
+    "개성공단": {
+      "code": "고유명",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "골든": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "광주민주화운동": {
+      "code": "상위head포함",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": [
+        "민주화운동",
+        "운동"
+      ]
+    },
+    "국회의원": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": [
+        "의원"
+      ]
+    },
+    "땅콩": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "부산국제영화제": {
+      "code": "상위head포함",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": [
+        "국제영화제",
+        "영화제",
+        "화제"
+      ]
+    },
+    "붕괴": {
+      "code": "채택",
+      "span_count": 5,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "브라질월드컵": {
+      "code": "상위head포함",
+      "span_count": 5,
+      "last_count": 4,
+      "covered_by": [
+        "월드컵"
+      ]
+    },
+    "사법시험": {
+      "code": "타규칙(축2)",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": [
+        "시험"
+      ]
+    },
+    "세미": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "스핀": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "연기대상": {
+      "code": "타규칙(R2c)",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": [
+        "대상"
+      ]
+    },
+    "오브": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "유로파리그": {
+      "code": "타규칙(리그)",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": [
+        "리그"
+      ]
+    },
+    "의원총회": {
+      "code": "타규칙(R2)",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": [
+        "총회"
+      ]
+    },
+    "자그레브": {
+      "code": "고유명",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "전쟁": {
+      "code": "채택",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "추모식": {
+      "code": "타규칙(R2c)",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "콩쿠르": {
+      "code": "채택",
+      "span_count": 5,
+      "last_count": 5,
+      "covered_by": []
+    },
+    "판교": {
+      "code": "고유명",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "환풍구": {
+      "code": "수식어",
+      "span_count": 5,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "회항": {
+      "code": "비사건행위",
+      "span_count": 5,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "갈라쇼": {
+      "code": "타규칙(R2c)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "글로벌": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "대통령": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "마라톤": {
+      "code": "채택",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "설명회": {
+      "code": "타규칙(R2)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "아시안컵": {
+      "code": "채택",
+      "span_count": 4,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "언팩": {
+      "code": "채택",
+      "span_count": 4,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "여객선": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "여대생": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "연예대상": {
+      "code": "타규칙(R2c)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": [
+        "대상"
+      ]
+    },
+    "영장실질심사": {
+      "code": "타규칙(축2)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "외환위기": {
+      "code": "상위head포함",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": [
+        "위기"
+      ]
+    },
+    "원전": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "임시국회": {
+      "code": "타규칙(축2)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "재보궐선거": {
+      "code": "타규칙(축2)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": [
+        "보궐선거",
+        "선거"
+      ]
+    },
+    "제작발표회": {
+      "code": "타규칙(R2)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": [
+        "발표회"
+      ]
+    },
+    "조별리그": {
+      "code": "타규칙(리그)",
+      "span_count": 4,
+      "last_count": 2,
+      "covered_by": [
+        "리그"
+      ]
+    },
+    "지뢰도발": {
+      "code": "개별사건명",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "철도파업": {
+      "code": "개별사건명",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "충돌": {
+      "code": "채택",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "취임식": {
+      "code": "타규칙(R2c)",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "콘서트": {
+      "code": "채택",
+      "span_count": 4,
+      "last_count": 4,
+      "covered_by": []
+    },
+    "폭발": {
+      "code": "채택",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "폭탄": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "한일": {
+      "code": "수식어",
+      "span_count": 4,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "가나전": {
+      "code": "개별사건명",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "간담회": {
+      "code": "타규칙(R2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "경기": {
+      "code": "타규칙(R3)",
+      "span_count": 3,
+      "last_count": 2,
+      "covered_by": []
+    },
+    "공청회": {
+      "code": "타규칙(R2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "국가대표": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "국제영화제": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "영화제",
+        "화제"
+      ]
+    },
+    "규탄": {
+      "code": "비사건행위",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "기념": {
+      "code": "비사건행위",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "기념식": {
+      "code": "타규칙(R2c)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "나이트": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "당국회담": {
+      "code": "타규칙(R2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "회담"
+      ]
+    },
+    "대구역": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "대정부질문": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "대종상": {
+      "code": "개별사건명",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "대통령선거": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "선거"
+      ]
+    },
+    "동아시안컵": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "아시안컵"
+      ]
+    },
+    "모자": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "민중총궐기": {
+      "code": "개별사건명",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "발롱도르": {
+      "code": "개별사건명",
+      "span_count": 3,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "발표회": {
+      "code": "타규칙(R2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "방송연예대상": {
+      "code": "타규칙(R2c)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "대상",
+        "연예대상"
+      ]
+    },
+    "부림사건": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "사건"
+      ]
+    },
+    "삼성": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "선댄스": {
+      "code": "고유명",
+      "span_count": 3,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "선발대회": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "대회"
+      ]
+    },
+    "세계선수권": {
+      "code": "채택",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "여객기": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "연고전": {
+      "code": "개별사건명",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "열차사고": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "사고"
+      ]
+    },
+    "예선": {
+      "code": "타규칙(R3)",
+      "span_count": 3,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "용산참사": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "참사"
+      ]
+    },
+    "월드디제이페스티벌": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "페스티벌"
+      ]
+    },
+    "적십자": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "전국동시지방선거": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "선거",
+        "지방선거"
+      ]
+    },
+    "전당대회": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "대회"
+      ]
+    },
+    "주민투표": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "투표"
+      ]
+    },
+    "준플레이오프": {
+      "code": "타규칙(R3)",
+      "span_count": 3,
+      "last_count": 2,
+      "covered_by": [
+        "플레이오프"
+      ]
+    },
+    "청소년": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "최종예선": {
+      "code": "타규칙(R3)",
+      "span_count": 3,
+      "last_count": 2,
+      "covered_by": [
+        "예선"
+      ]
+    },
+    "추락사고": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "사고"
+      ]
+    },
+    "출구조사": {
+      "code": "타규칙(축2)",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "조사"
+      ]
+    },
+    "테크노밸리": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "파이트": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "평창": {
+      "code": "고유명",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "폭탄테러": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "테러"
+      ]
+    },
+    "플레이오프": {
+      "code": "타규칙(R3)",
+      "span_count": 3,
+      "last_count": 2,
+      "covered_by": []
+    },
+    "한국전": {
+      "code": "개별사건명",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "한국전쟁": {
+      "code": "상위head포함",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": [
+        "전쟁"
+      ]
+    },
+    "한중": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "합의": {
+      "code": "비사건행위",
+      "span_count": 3,
+      "last_count": 3,
+      "covered_by": []
+    },
+    "해병대캠프": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "헬기": {
+      "code": "수식어",
+      "span_count": 3,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "화재": {
+      "code": "채택",
+      "span_count": 3,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "조사": {
+      "code": "타규칙(축2)",
+      "span_count": 2,
+      "last_count": 2,
+      "covered_by": []
+    },
+    "축제": {
+      "code": "채택",
+      "span_count": 2,
+      "last_count": 2,
+      "covered_by": []
+    },
+    "코리아": {
+      "code": "수식어",
+      "span_count": 2,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "대상": {
+      "code": "어휘경계",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "레이스": {
+      "code": "수식어",
+      "span_count": 1,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "모터쇼": {
+      "code": "채택",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "박람회": {
+      "code": "채택",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "보선": {
+      "code": "타규칙(축2)",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "시리즈": {
+      "code": "타규칙(리그)",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "시험": {
+      "code": "타규칙(축2)",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "오픈": {
+      "code": "수식어",
+      "span_count": 1,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "위기": {
+      "code": "채택",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "접촉": {
+      "code": "타규칙(R2)",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "총회": {
+      "code": "타규칙(R2)",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "항공": {
+      "code": "수식어",
+      "span_count": 1,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "훈련": {
+      "code": "비1회성",
+      "span_count": 1,
+      "last_count": 1,
+      "covered_by": []
+    },
+    "대교": {
+      "code": "수식어",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "리그": {
+      "code": "타규칙(리그)",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "민주화운동": {
+      "code": "채택",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": [
+        "운동"
+      ]
+    },
+    "버스": {
+      "code": "수식어",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "스포": {
+      "code": "어휘경계",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "운동": {
+      "code": "비1회성",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "월드": {
+      "code": "수식어",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "위원회": {
+      "code": "타규칙(R2)",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "의원": {
+      "code": "수식어",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "주년": {
+      "code": "수식어",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "투표": {
+      "code": "타규칙(축2)",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "학회": {
+      "code": "타규칙(R2)",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "해전": {
+      "code": "채택",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    },
+    "화제": {
+      "code": "어휘경계",
+      "span_count": 0,
+      "last_count": 0,
+      "covered_by": []
+    }
+  }
+}

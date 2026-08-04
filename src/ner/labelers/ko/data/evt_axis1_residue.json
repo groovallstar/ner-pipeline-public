@@ -1,0 +1,129 @@
+{
+  "params": {
+    "gold_sha256": "30bd861af51bea506f04097762be7d9a36930dd1b2d034805518d3cb9cd9788e",
+    "min_proper_len": 2,
+    "min_proper_ratio": 0.3
+  },
+  "evt_spans": 1731,
+  "evt_spans_multiword": 731,
+  "residue": 8,
+  "by_kind": {
+    "과축소": 8
+  },
+  "by_candidate": {
+    "레이": 1,
+    "국회": 1,
+    "국가정보원": 1,
+    "인도": 1,
+    "라스베이거스": 1,
+    "크림": 1,
+    "상원": 1,
+    "워싱턴": 1
+  },
+  "items": [
+    {
+      "row_index": 1469,
+      "row_id": "1471",
+      "kind": "과축소",
+      "span": [
+        11,
+        17
+      ],
+      "surface": "스페인국왕컵",
+      "candidate": "레이",
+      "labels": [],
+      "expected": "레이(스페인국왕컵"
+    },
+    {
+      "row_index": 3885,
+      "row_id": "3889",
+      "kind": "과축소",
+      "span": [
+        91,
+        96
+      ],
+      "surface": "인사청문회",
+      "candidate": "국회",
+      "labels": [],
+      "expected": "국회 인사청문회"
+    },
+    {
+      "row_index": 6637,
+      "row_id": "6643",
+      "kind": "과축소",
+      "span": [
+        10,
+        14
+      ],
+      "surface": "댓글사건",
+      "candidate": "국가정보원",
+      "labels": [],
+      "expected": "국가정보원 댓글사건"
+    },
+    {
+      "row_index": 8958,
+      "row_id": "8964",
+      "kind": "과축소",
+      "span": [
+        86,
+        90
+      ],
+      "surface": "훌리축제",
+      "candidate": "인도",
+      "labels": [],
+      "expected": "인도 훌리축제"
+    },
+    {
+      "row_index": 9667,
+      "row_id": "9674",
+      "kind": "과축소",
+      "span": [
+        24,
+        33
+      ],
+      "surface": "북미무선통신박람회",
+      "candidate": "라스베이거스",
+      "labels": [],
+      "expected": "라스베이거스 북미무선통신박람회"
+    },
+    {
+      "row_index": 15116,
+      "row_id": "15129",
+      "kind": "과축소",
+      "span": [
+        61,
+        65
+      ],
+      "surface": "주민투표",
+      "candidate": "크림",
+      "labels": [],
+      "expected": "크림 주민투표"
+    },
+    {
+      "row_index": 16300,
+      "row_id": "16315",
+      "kind": "과축소",
+      "span": [
+        52,
+        56
+      ],
+      "surface": "전체회의",
+      "candidate": "상원",
+      "labels": [],
+      "expected": "상원 전체회의"
+    },
+    {
+      "row_index": 22606,
+      "row_id": "22623",
+      "kind": "과축소",
+      "span": [
+        13,
+        20
+      ],
+      "surface": "핵안보정상회의",
+      "candidate": "워싱턴",
+      "labels": [],
+      "expected": "워싱턴 핵안보정상회의"
+    }
+  ]
+}

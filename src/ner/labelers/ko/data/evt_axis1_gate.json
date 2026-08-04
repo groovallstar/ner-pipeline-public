@@ -1,0 +1,223 @@
+{
+  "params": {
+    "heads_sha256": "480a333cbb64e196b0eed3ace2cfc915ab346683656994f4e478aa84c67b9206",
+    "gold_sha256": "2645d26b17f0b845d21365c5ea445fcb6d416a53c726e916afc3dd22d801d0c8",
+    "min_proper_len": 2,
+    "min_proper_ratio": 0.3
+  },
+  "sites": 186,
+  "status_counts": {
+    "already_evt": 118,
+    "covered_by_longer_evt": 41,
+    "recovered": 14,
+    "judged_not": 8,
+    "type_clash_recorded": 5
+  },
+  "unclassified": [],
+  "recovered": 14,
+  "judged": 22,
+  "covered_ratio": 0.22043010752688172,
+  "covered_by_longer_evt": [
+    {
+      "row_index": 192,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 615,
+      "surface": "브라질월드컵"
+    },
+    {
+      "row_index": 3003,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 3207,
+      "surface": "세월호 침몰"
+    },
+    {
+      "row_index": 4015,
+      "surface": "보스턴 마라톤"
+    },
+    {
+      "row_index": 4666,
+      "surface": "뉴욕 페스티벌"
+    },
+    {
+      "row_index": 5106,
+      "surface": "런던올림픽"
+    },
+    {
+      "row_index": 5143,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 6821,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 7088,
+      "surface": "남아공 월드컵"
+    },
+    {
+      "row_index": 7532,
+      "surface": "브라질월드컵"
+    },
+    {
+      "row_index": 9920,
+      "surface": "쿠르디 사건"
+    },
+    {
+      "row_index": 10057,
+      "surface": "한국전쟁"
+    },
+    {
+      "row_index": 11341,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 12547,
+      "surface": "브라질월드컵"
+    },
+    {
+      "row_index": 13116,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 13896,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 14132,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 15152,
+      "surface": "소요사태"
+    },
+    {
+      "row_index": 15415,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 15486,
+      "surface": "중국영화제"
+    },
+    {
+      "row_index": 15496,
+      "surface": "보스턴 마라톤"
+    },
+    {
+      "row_index": 15763,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 16700,
+      "surface": "암살사건"
+    },
+    {
+      "row_index": 17677,
+      "surface": "세월호 침몰"
+    },
+    {
+      "row_index": 17733,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 18070,
+      "surface": "X파일사건"
+    },
+    {
+      "row_index": 18432,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 19810,
+      "surface": "러시아 월드컵"
+    },
+    {
+      "row_index": 19963,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 20151,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 20199,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 20499,
+      "surface": "브라질월드컵"
+    },
+    {
+      "row_index": 20555,
+      "surface": "세월호 참사"
+    },
+    {
+      "row_index": 20666,
+      "surface": "세월호 침몰"
+    },
+    {
+      "row_index": 22646,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 23957,
+      "surface": "광주민주화운동"
+    },
+    {
+      "row_index": 24386,
+      "surface": "서울모터쇼"
+    },
+    {
+      "row_index": 24393,
+      "surface": "브라질 월드컵"
+    },
+    {
+      "row_index": 24989,
+      "surface": "수영축제"
+    },
+    {
+      "row_index": 25304,
+      "surface": "세월호 침몰"
+    }
+  ],
+  "type_clash_recorded": [
+    {
+      "row_index": 1144,
+      "surface": "세월호 참사",
+      "labels": [
+        "ORG"
+      ]
+    },
+    {
+      "row_index": 9355,
+      "surface": "세월호 사고",
+      "labels": [
+        "ORG"
+      ]
+    },
+    {
+      "row_index": 19024,
+      "surface": "남아공월드컵",
+      "labels": [
+        "DAT"
+      ]
+    },
+    {
+      "row_index": 20645,
+      "surface": "일본침몰",
+      "labels": [
+        "PROD"
+      ]
+    },
+    {
+      "row_index": 23630,
+      "surface": "브라질 월드컵",
+      "labels": [
+        "DAT"
+      ]
+    }
+  ]
+}
