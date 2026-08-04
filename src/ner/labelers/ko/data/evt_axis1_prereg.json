@@ -3,7 +3,8 @@
   "rule": {
     "canonical_sha256": "c7972c1e8ece1341ad19fa6f5352da83c6ffba7faa16d81010b9d71a88368134",
     "heads_sha256": "480a333cbb64e196b0eed3ace2cfc915ab346683656994f4e478aa84c67b9206",
-    "judgements_sha256": "b9768f7e9dc179bc2233a5439748dc5b169af1ba30314d51227c57958b5785bb"
+    "judgements_sha256": "b9768f7e9dc179bc2233a5439748dc5b169af1ba30314d51227c57958b5785bb",
+    "canonical_rule_sha256": "ad01a8381f1dac15ab8b559416e2c1676ef251f84cfb28dde8648ec00ab91909"
   },
   "base_arm": {
     "run": "issue202-axis1-base",

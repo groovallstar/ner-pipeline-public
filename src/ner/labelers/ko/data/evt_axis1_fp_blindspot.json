@@ -589,6 +589,7 @@
       "results/classifier/ko/issue202-axis1-base/fold7/test_predictions.json": "eda07f271347490106fc66c53804c505695bde57f3b3f9e06cd3e92c53ecdfa1",
       "results/classifier/ko/issue202-axis1-base/fold8/test_predictions.json": "4ac15b99860ba96b4e58fa6852f74e95061e02820df1ffab2d202ad3b99968d6",
       "results/classifier/ko/issue202-axis1-base/fold9/test_predictions.json": "d1273d303f6f1571384bd7cbc6b3d40eeadb5b35071c4b831fee16a1d7fbe4bf"
-    }
+    },
+    "canonical_rule_sha256": "ad01a8381f1dac15ab8b559416e2c1676ef251f84cfb28dde8648ec00ab91909"
   }
 }
