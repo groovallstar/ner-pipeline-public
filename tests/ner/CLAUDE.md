@@ -38,6 +38,19 @@ tests/ner/
 │   ├── test_ko_evt_r2_audit.py  # KO EVT canonical 규칙 감사·R2 회수 —
 │   │                  # 형태소 경계, 위반 탐지(축2·축3 트림·R1)와 겹침 가드,
 │   │                  # 회수 삽입·불변 타입 byte-identical, 보고 전용 bare 비대칭
+│   ├── test_ko_evt_axis1_audit.py  # KO EVT 축1-복합 head 열거·자리 스캔·회수 —
+│   │                  # 열거의 결정성(span 중간에 묻힌 head 포착·빈도 문턱·
+│   │                  # 고유명 이력으로 수식부 제외·재현 파라미터),
+│   │                  # 고유명 가드(1글자 성씨·저비율 제외·조사 붙은 선행어절
+│   │                  # 제외), gold EVT 겹침을 버리지 않고 분류,
+│   │                  # canonical 파싱 ↔ 모듈 상수 동기(head·고유명 타입·가드
+│   │                  # 임계·사유코드), 배정 원장 전수 커버,
+│   │                  # 적용(원장↔현 규칙 경계 합의·row_id 해석·기존 span 위 삽입
+│   │                  # 거부·불변 타입 무영향), 경계 잔여 계수기(과축소 검출 ·
+│   │                  # 라벨된 고유명은 위반 아님 · head 목록과 무관한 모집단),
+│   │                  # FP 사각 진단(모양 판정이 head 목록을 안 쓴다·낱말 조각 분리),
+│   │                  # 비순환 재채점(동일 팔 Δ 0·회수 행 제외·행/분할 불일치 거부),
+│   │                  # 커밋된 산출물 4종의 지문 대조(사전등록이 순서를 집행한다)
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
 └── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,

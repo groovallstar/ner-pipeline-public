@@ -1,0 +1,251 @@
+{
+  "method": "base 팔 예측을 회수 후 gold 로 재채점해 head 팔과 같은 자로 비교한다. 구 gold 기준 수치와는 나란히 놓지 않는다.",
+  "sigma_source": "certified/classifier/ko/issue202-axis1-base/fold_sigma.json",
+  "gold_sha256": "30bd861af51bea506f04097762be7d9a36930dd1b2d034805518d3cb9cd9788e",
+  "sigma_sha256": "39b95ab83537e00d929b71dcdaf4c351267cf436e42fc8355df72336d40174f3",
+  "pred_sha256": {
+    "base": [
+      "35e1b538fa67d880300155aab60b59b884013fde10d199807a6f96a0c87d26e4",
+      "37abbaf3a9131b227cac8ff44678f9802ee35f8f1f8405751fbe17b0134f2c0b",
+      "9151f876d4b53e13d5ad9fb3f98e23f11e4d9047c6b9dc48e4a077536b8fe5c9",
+      "5fb68c594d367cb672ef1baf97427bd0a306a7417f50217a1fd00c090ca9b7eb",
+      "c76906fdbfe32c9adcbd2c8dc2c0160f96052831caf02b4484abfb7e1570db5b",
+      "3d5512f6401899d01646ac1cd3f4c4b285aff348b33e398eb21603ddeb74c827",
+      "884d35736b45ec3ea6e2c27274fd222f3c439b3ea67b5d73c9d993885c646642",
+      "9f75babc4a52f838e2101a87384867c28437a6ea0c709b04bb826b77ff14e435",
+      "4309a284a88a3a5ed7a345145168a4b76563afd804130ff71f59f1ac28b1d2ab",
+      "258b4080a1cb2b584ce8dc070b0a0af1698f6aa838962b707b46b60781cc6370"
+    ],
+    "head": [
+      "26114e4334ba4520ca3708f7f07d4b4b9539cbca1896cf69efdd777ba1b3c1c8",
+      "d2537057086e24c6bd18e10e3dd63c39d43f8c8e39fa4168f694f6f930472da5",
+      "37f79d3f4080913353b76a5fd6dbb3710a8101c3b950d4edc38971f554897769",
+      "07c5d3d5d1a8626b90ac90ac2150da4fa760bf44bc2613d17b047e20152e9f02",
+      "c3122a06e3e909cae133485f231aa9834d4bffc57e7b2696ef91de643b3fded3",
+      "8e1c8624c63b6a15221ae1bd37ba4b2d1b04d0eb533b48d56821b0125b47089c",
+      "f0f9c8a77f8c396099960c977110797ac8d233ba6eb28c37e3aae560f2dd1170",
+      "33c5ba3dbf671675242959be2a382cf6efbbddeff36e917c3ebbc1b8816e099a",
+      "029999c8ab72469d09659df1e2b4b71e92b16b610bf19ffa8911777b84b8c0ea",
+      "322066e7a0835e3f7ce8bbf6b96c5a76c54e80acd93b3faf771b545a5f4d274f"
+    ]
+  },
+  "full": {
+    "rows_scored": 25989,
+    "per_entity": {
+      "CREDIT_CARD": {
+        "base": 0.9971,
+        "head": 0.9978,
+        "delta": 0.0007,
+        "abs_delta": 0.0007,
+        "support": 8580,
+        "sigma_pre": 0.002619452132892003,
+        "sigma_ratio": 0.27
+      },
+      "DAT": {
+        "base": 0.8411,
+        "head": 0.8509,
+        "delta": 0.0098,
+        "abs_delta": 0.0098,
+        "support": 9934,
+        "sigma_pre": 0.022139850108138487,
+        "sigma_ratio": 0.44
+      },
+      "EMAIL": {
+        "base": 0.9995,
+        "head": 0.9998,
+        "delta": 0.0003,
+        "abs_delta": 0.0003,
+        "support": 8322,
+        "sigma_pre": 0.00048605087930813826,
+        "sigma_ratio": 0.62
+      },
+      "EVT": {
+        "base": 0.7049,
+        "head": 0.7141,
+        "delta": 0.0092,
+        "abs_delta": 0.0092,
+        "support": 1731,
+        "sigma_pre": 0.04622813497765037,
+        "sigma_ratio": 0.2
+      },
+      "ID_NUM": {
+        "base": 0.9963,
+        "head": 0.997,
+        "delta": 0.0007,
+        "abs_delta": 0.0007,
+        "support": 8467,
+        "sigma_pre": 0.0018401436944874801,
+        "sigma_ratio": 0.38
+      },
+      "LOC": {
+        "base": 0.8565,
+        "head": 0.8571,
+        "delta": 0.0006,
+        "abs_delta": 0.0006,
+        "support": 7499,
+        "sigma_pre": 0.014617453351957983,
+        "sigma_ratio": 0.04
+      },
+      "ORG": {
+        "base": 0.8502,
+        "head": 0.8485,
+        "delta": -0.0017,
+        "abs_delta": 0.0017,
+        "support": 2797,
+        "sigma_pre": 0.015351612141861079,
+        "sigma_ratio": 0.11
+      },
+      "PER": {
+        "base": 0.9186,
+        "head": 0.9185,
+        "delta": -0.0001,
+        "abs_delta": 0.0001,
+        "support": 18131,
+        "sigma_pre": 0.006561270531833744,
+        "sigma_ratio": 0.02
+      },
+      "PHONE": {
+        "base": 0.9982,
+        "head": 0.9979,
+        "delta": -0.0003,
+        "abs_delta": 0.0003,
+        "support": 8448,
+        "sigma_pre": 0.000714770358150768,
+        "sigma_ratio": 0.42
+      },
+      "PROD": {
+        "base": 0.71,
+        "head": 0.7006,
+        "delta": -0.0094,
+        "abs_delta": 0.0094,
+        "support": 3554,
+        "sigma_pre": 0.03108056740242793,
+        "sigma_ratio": 0.3
+      },
+      "overall": {
+        "base": 0.9192,
+        "head": 0.9203,
+        "delta": 0.0011,
+        "abs_delta": 0.0011,
+        "support": 77463,
+        "sigma_pre": 0.006002861533922678,
+        "sigma_ratio": 0.18
+      }
+    },
+    "paired_evt": {
+      "available": false,
+      "reason": "fold partitions do not correspond between the arms — the stratified split moved when gold changed",
+      "mean_fold_overlap": 0.0954
+    }
+  },
+  "recovery_free_subset": {
+    "rows_scored": 25975,
+    "per_entity": {
+      "CREDIT_CARD": {
+        "base": 0.9971,
+        "head": 0.9978,
+        "delta": 0.0007,
+        "abs_delta": 0.0007,
+        "support": 8574,
+        "sigma_pre": 0.002619452132892003,
+        "sigma_ratio": 0.27
+      },
+      "DAT": {
+        "base": 0.8413,
+        "head": 0.8509,
+        "delta": 0.0096,
+        "abs_delta": 0.0096,
+        "support": 9925,
+        "sigma_pre": 0.022139850108138487,
+        "sigma_ratio": 0.43
+      },
+      "EMAIL": {
+        "base": 0.9995,
+        "head": 0.9998,
+        "delta": 0.0003,
+        "abs_delta": 0.0003,
+        "support": 8315,
+        "sigma_pre": 0.00048605087930813826,
+        "sigma_ratio": 0.62
+      },
+      "EVT": {
+        "base": 0.7089,
+        "head": 0.7185,
+        "delta": 0.0096,
+        "abs_delta": 0.0096,
+        "support": 1714,
+        "sigma_pre": 0.04622813497765037,
+        "sigma_ratio": 0.21
+      },
+      "ID_NUM": {
+        "base": 0.9963,
+        "head": 0.997,
+        "delta": 0.0007,
+        "abs_delta": 0.0007,
+        "support": 8461,
+        "sigma_pre": 0.0018401436944874801,
+        "sigma_ratio": 0.38
+      },
+      "LOC": {
+        "base": 0.857,
+        "head": 0.8575,
+        "delta": 0.0005,
+        "abs_delta": 0.0005,
+        "support": 7484,
+        "sigma_pre": 0.014617453351957983,
+        "sigma_ratio": 0.03
+      },
+      "ORG": {
+        "base": 0.8503,
+        "head": 0.8486,
+        "delta": -0.0017,
+        "abs_delta": 0.0017,
+        "support": 2796,
+        "sigma_pre": 0.015351612141861079,
+        "sigma_ratio": 0.11
+      },
+      "PER": {
+        "base": 0.9186,
+        "head": 0.9184,
+        "delta": -0.0002,
+        "abs_delta": 0.0002,
+        "support": 18123,
+        "sigma_pre": 0.006561270531833744,
+        "sigma_ratio": 0.03
+      },
+      "PHONE": {
+        "base": 0.9982,
+        "head": 0.9979,
+        "delta": -0.0003,
+        "abs_delta": 0.0003,
+        "support": 8444,
+        "sigma_pre": 0.000714770358150768,
+        "sigma_ratio": 0.42
+      },
+      "PROD": {
+        "base": 0.7104,
+        "head": 0.7008,
+        "delta": -0.0096,
+        "abs_delta": 0.0096,
+        "support": 3549,
+        "sigma_pre": 0.03108056740242793,
+        "sigma_ratio": 0.31
+      },
+      "overall": {
+        "base": 0.9195,
+        "head": 0.9205,
+        "delta": 0.001,
+        "abs_delta": 0.001,
+        "support": 77385,
+        "sigma_pre": 0.006002861533922678,
+        "sigma_ratio": 0.17
+      }
+    },
+    "paired_evt": {
+      "available": false,
+      "reason": "fold partitions do not correspond between the arms — the stratified split moved when gold changed",
+      "mean_fold_overlap": 0.0954
+    }
+  },
+  "recovered_sites": 14
+}
