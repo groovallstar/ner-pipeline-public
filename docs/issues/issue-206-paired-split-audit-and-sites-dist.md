@@ -1,6 +1,7 @@
 # issue-206: #201 paired 통계 분할 어긋남 감사 + canonical 기준 시점 + sites 부착 분포
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/206
+- PR: https://github.com/groovallstar/ner-pipeline/pull/207
 - 브랜치: `feat/issue-206-paired-split-audit-and-sites-dist`
 - 승인일: 2026-08-04
 
@@ -205,4 +206,7 @@ fold 대응과 무관하므로 P/R/F1 은 이 이슈로 바뀌지 않는다.
 
 ## 관련 커밋
 
-- (PR 머지 후 채움)
+- `5b564ac`: 분할 대응 감사 모듈·산출물 승격 · RULER 승격 · canonical 기준 시점 ·
+  사전등록을 규칙 내용 지문으로 · sites 부착 분포 (기준 파일 2 종을 건드려 사람 승인 +
+  결과-시점 반박자 PASS 를 탔다)
+- `ed7784c`: 승격으로 낡은 섹션 제목 정정 + 원장 무변경 검증 기록
