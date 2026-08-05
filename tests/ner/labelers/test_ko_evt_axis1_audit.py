@@ -25,6 +25,7 @@ from ner.labelers.ko.ko_evt_axis1_audit import (
     MIN_HEAD_LEN,
     apply_axis1_decisions,
     assign_codes,
+    canonical_rule_sha256,
     check_axis1_gate,
     diagnose_fp_blindspot,
     evt_span_words,
@@ -503,7 +504,12 @@ def test_fp_head_that_is_a_word_fragment_is_split_out():
 
 
 def test_committed_blindspot_report_prereqisters_the_inputs():
-    """head 팔 학습 **전에** 무엇이 확정돼 있었나 — 나중에 넓히면 해시가 어긋난다."""
+    """head 팔 학습 **전에** 무엇이 확정돼 있었나.
+
+    나중에 head 목록·고유명 타입·가드 임계·사유코드를 넓히면 여기서 어긋난다.
+    **§5.3 산문 조항(인접 조건·head 매칭 방식·축3 경계 조건절 등)을 완화하는 것은
+    안 걸린다** — 규칙 내용 지문이 그 넷만 재기 때문이다(#206 §후속 작업).
+    """
     base = pathlib.Path(__file__).resolve().parents[3] / "src/ner/labelers/ko/data"
     report = json.loads(
         (base / "evt_axis1_fp_blindspot.json").read_text(encoding="utf-8"))
@@ -511,10 +517,9 @@ def test_committed_blindspot_report_prereqisters_the_inputs():
     prereg = report["prereg"]
     assert prereg["heads_sha256"] == heads_sha256(AXIS1_HEADS)
     assert prereg["gold_sha256"] == prov["gold_sha256"]["after"]
-    canonical = pathlib.Path(__file__).resolve().parents[3] / \
-        "docs/manual/data/canonical-entity-schema.md"
-    digest = hashlib.sha256(canonical.read_bytes()).hexdigest()
-    assert prereg["canonical_sha256"] == digest
+    # 규칙 **내용**으로 잰다 — 파일 전체 해시는 head 를 넓히는 것과 실측 주석
+    # 한 줄을 같은 신호로 만들어, 문서를 정당하게 손볼 때마다 깨진다.
+    assert prereg["canonical_rule_sha256"] == canonical_rule_sha256()
     # 진단은 게이트가 아니라 보고다 — 항목마다 사람이 읽을 근거가 있어야 한다
     assert all(i["context"] and i["surface"] for i in report["items"])
     assert len(report["items"]) == report["stats"]["absent_from_population"]
@@ -625,11 +630,22 @@ def test_certified_noncircular_is_anchored_to_the_preregistered_inputs():
         assert paired["available"] or (paired["reason"] and "mean" not in paired)
 
 
-def test_prereg_pins_every_input_that_could_move_after_the_numbers_land():
-    """head 팔 학습 전 상태의 사전등록 — 나중에 규칙을 손대면 여기서 어긋난다.
+def test_prereg_pins_the_four_parsed_rule_parameters_and_the_run_inputs():
+    """head 팔 학습 전 상태의 사전등록 — 지문을 다시 계산해 대조한다.
 
     "커밋 diff 로 본다" 는 집행이 아니다. 실행 순서는 diff 에 남지 않고 `results/`
     는 휘발이라, 지문을 다시 계산해 대조하는 것만이 순서를 되짚을 수 있다.
+
+    **무엇이 걸리고 무엇이 안 걸리나.** 측정 입력(판정 원장·σ·base 예측)은 파일
+    지문이라 한 바이트만 달라도 걸리고, head 목록은 모듈 상수의 지문이다. canonical 은
+    규칙 **내용** 지문이라 그 넷(head 목록·고유명 타입·가드 임계·사유코드)이 움직일
+    때만 걸린다.
+
+    **§5.3 이 산문으로 정하는 조항을 바꾸는 것은 여기서 안 걸린다** — 인접 조건·head
+    매칭 방식·고유명 판정 근거의 구성(`동행 라벨 ∪ 전역 이력`)·축3 경계 조건절·제외
+    어휘 목록이 그 예이고 **닫힌 목록이 아니다**(산문이라 조항 수가 열려 있다). 파일
+    전체 해시였다면 걸렸겠지만 그것은 실측 주석 한 줄에도 깨져 갱신을 강요했다 — 그
+    교환의 대가가 이 범위 제한이고, 잠글 수단은 따로 만들어야 한다(#206 §후속 작업).
     """
     root = pathlib.Path(__file__).resolve().parents[3]
     base = root / "src/ner/labelers/ko/data"
@@ -638,8 +654,11 @@ def test_prereg_pins_every_input_that_could_move_after_the_numbers_land():
     def sha(path):
         return hashlib.sha256((root / path).read_bytes()).hexdigest()
 
-    assert prereg["rule"]["canonical_sha256"] == \
-        sha("docs/manual/data/canonical-entity-schema.md")
+    # canonical 은 규칙 **내용** 으로 잰다. 파일 전체 해시(`canonical_sha256`)는
+    # 그때 문서가 어땠는지의 기록으로 남기되 대조하지 않는다 — 그것으로 잠그면
+    # 실측 주석 하나에도 깨져, 푸는 유일한 길이 지문 갱신이 되고 그 순간
+    # 사전등록은 집행이 아니라 장식이 된다.
+    assert prereg["rule"]["canonical_rule_sha256"] == canonical_rule_sha256()
     assert prereg["rule"]["heads_sha256"] == heads_sha256(AXIS1_HEADS)
     assert prereg["rule"]["judgements_sha256"] == \
         sha("src/ner/labelers/ko/data/evt_axis1_judgements.jsonl")
@@ -864,3 +883,86 @@ def test_committed_gate_report_is_closed_and_matches_the_ledger():
     # 자리마다 사유가 있어야 한다. 없으면 규칙 일괄 적용과 구별되지 않는다
     assert all(r["verdict_reason"].strip() for r in ledger)
     assert len({(r["row_index"], r["start"], r["end"]) for r in ledger}) == len(ledger)
+
+
+def _lexicon_rows(surface, label="LOC"):
+    """그 표면형을 코퍼스 전역 고유명 어휘에 올리는 최소 배경 행."""
+    return [_row(90 + i, f"{surface} 은 여기 다", [(label, 0, len(surface))])
+            for i in range(3)]
+
+
+def test_sites_report_cross_tabulates_attachment_and_basis():
+    """부착 형태 × 고유명 판정 근거의 **셀 값**을 본다.
+
+    합계만 검사하면 모든 자리를 틀린 칸에 넣어도 통과한다 — 합은 자리 수라
+    구성상 항상 맞기 때문이다. 이 분포의 쓸모는 "인접 정의를 완화하면 어떻게
+    되나" 를 재는 것이고, 그 판단을 망칠 유일한 실패가 오분류다.
+    """
+    rows = _lexicon_rows("보스턴") + _lexicon_rows("서울") + [
+        # 선행어절 × 동행라벨 — 앞 어절이 그 행에서 LOC 로 라벨돼 있다
+        _row(1, "보스턴 테러 소식", [("LOC", 0, 3)]),
+        # 선행어절 × 전역이력 — 그 행엔 라벨이 없고 코퍼스 이력으로만 안다
+        _row(2, "보스턴 테러 소식", []),
+        # 어절내 × 동행라벨 — 한 어절 안인데 gold 가 앞부분만 잡아 뒀다
+        _row(3, "서울월드컵 개최", [("LOC", 0, 2)]),
+        # 어절내 × 전역이력
+        _row(4, "서울월드컵 개최", []),
+    ]
+    report = sites_report(rows, ["테러", "월드컵"])
+    assert report["attachment_x_basis"] == {
+        "선행어절×동행라벨": 1,
+        "선행어절×전역이력": 1,
+        "어절내×동행라벨": 1,
+        "어절내×전역이력": 1,
+    }
+    assert sum(report["attachment_x_basis"].values()) == report["sites"]
+
+
+def test_cross_tab_moves_when_a_site_changes_category():
+    """분류가 바뀌면 셀이 따라 움직여야 한다 — 고정된 표는 검사가 아니다."""
+    background = _lexicon_rows("보스턴")
+    labeled = sites_report(
+        background + [_row(1, "보스턴 테러 소식", [("LOC", 0, 3)])], ["테러"])
+    unlabeled = sites_report(
+        background + [_row(1, "보스턴 테러 소식", [])], ["테러"])
+    assert labeled["attachment_x_basis"] == {"선행어절×동행라벨": 1}
+    assert unlabeled["attachment_x_basis"] == {"선행어절×전역이력": 1}
+
+
+def test_committed_sites_artifact_agrees_with_the_judgement_ledger():
+    """원장이 자리마다 적어 둔 부착 형태와 산출물이 어긋나면 안 된다.
+
+    원장은 사람이 판정할 때 본 값이고 산출물은 지금 스캔이 내는 값이다. 둘이
+    갈라지면 그 사이에 규칙이 움직인 것이라, 원장의 판정 근거가 더는 현 규칙을
+    설명하지 못한다.
+    """
+    root = pathlib.Path(__file__).resolve().parents[3]
+    base = root / "src/ner/labelers/ko/data"
+    sites = json.loads(
+        (base / "evt_axis1_sites.json").read_text(encoding="utf-8"))
+    ledger = [json.loads(line) for line
+              in (base / "evt_axis1_judgements.jsonl").read_text(
+                  encoding="utf-8").splitlines() if line.strip()]
+
+    by_key = {(it["row_index"], it["start"], it["end"]): it
+              for it in sites["items"]}
+    checked = 0
+    for rec in ledger:
+        key = (rec["row_index"], rec["start"], rec["end"])
+        item = by_key.get(key)
+        assert item is not None, f"ledger site missing from the scan: {key}"
+        assert item["attachment"] == rec["attachment"], key
+        assert item["proper_basis"] == rec["proper_basis"], key
+        checked += 1
+    assert checked == len(ledger)
+
+
+def test_committed_sites_artifact_cross_tab_sums_to_the_site_count():
+    root = pathlib.Path(__file__).resolve().parents[3]
+    sites = json.loads(
+        (root / "src/ner/labelers/ko/data/evt_axis1_sites.json").read_text(
+            encoding="utf-8"))
+    assert sum(sites["attachment_x_basis"].values()) == sites["sites"]
+    assert set(sites["attachment_x_basis"]) <= {
+        "어절내×동행라벨", "어절내×전역이력",
+        "선행어절×동행라벨", "선행어절×전역이력"}

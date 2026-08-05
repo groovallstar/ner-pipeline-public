@@ -1,0 +1,92 @@
+{
+  "params": {
+    "seed": 42,
+    "n_folds": 10,
+    "group_key": "id",
+    "strat_labels": [
+      "PROD",
+      "EVT"
+    ],
+    "overlap_metric": "intersection / |base fold|",
+    "thresholds": {
+      "broken_below": 0.2,
+      "matched_at_or_above": 0.9
+    }
+  },
+  "arms": {
+    "base": {
+      "gold_sha256": "9bf6335af7eb1a4eb3330eb59f9fb83b69932e29744f8705e413a07bd225d28f",
+      "evt_spans": 1644,
+      "stratify": false,
+      "basis": "docs/issues/issue-198-ko-evt-r2-canonical-recovery.md:126"
+    },
+    "head": {
+      "gold_sha256": "2645d26b17f0b845d21365c5ea445fcb6d416a53c726e916afc3dd22d801d0c8",
+      "evt_spans": 1717,
+      "stratify": null,
+      "basis": null
+    }
+  },
+  "gold_reconstruction": {
+    "expected": {
+      "base": "9bf6335af7eb1a4eb3330eb59f9fb83b69932e29744f8705e413a07bd225d28f",
+      "head": "2645d26b17f0b845d21365c5ea445fcb6d416a53c726e916afc3dd22d801d0c8"
+    },
+    "match": true,
+    "mismatch": {}
+  },
+  "positive_control": {
+    "issue202-axis1-base": {
+      "stratify": true,
+      "exact_folds": 10,
+      "n_folds": 10
+    },
+    "issue202-axis1-head": {
+      "stratify": true,
+      "exact_folds": 10,
+      "n_folds": 10
+    }
+  },
+  "scenarios": {
+    "head_no_stratify": {
+      "exact_folds": 10,
+      "n_folds": 10,
+      "mean_fold_overlap": 1.0,
+      "per_fold_overlap": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "stratify": false,
+      "verdict": "valid"
+    },
+    "head_stratify": {
+      "exact_folds": 0,
+      "n_folds": 10,
+      "mean_fold_overlap": 0.1012,
+      "per_fold_overlap": [
+        0.1077,
+        0.1085,
+        0.1047,
+        0.0973,
+        0.0947,
+        0.1012,
+        0.1016,
+        0.0973,
+        0.0908,
+        0.1082
+      ],
+      "stratify": true,
+      "verdict": "invalid"
+    }
+  },
+  "verdict": "undecidable",
+  "verdict_reason": "scenarios disagree and the head arm split setting is not recorded in any document, commit, or surviving artifact"
+}

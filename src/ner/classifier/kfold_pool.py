@@ -18,6 +18,42 @@ from ner.metrics.span_metrics import (
     compute_offset_span_f1,
     compute_offset_span_f1_relaxed,
 )
+from ner.validity.comparability import RULER_FIELDS
+
+
+def _run_ruler(fold_dirs: List[str]) -> Optional[dict]:
+    """이 실행이 어떤 자로 쟀는지를 metrics.json 이 있는 첫 fold 에서 읽는다.
+
+    **왜 pooled 로 옮겨 싣나.** 자(seed·stratify·데이터 지문)는 fold 별
+    metrics.json 에만 적히는데 그 폴더는 휘발 scratch 라, 실행이 정리되면 나중에
+    "이 두 실험이 같은 자로 쟀나" 를 물을 수단이 사라진다. 실제로 그렇게 잃은
+    적이 있고, 그때 사후 감사가 두 시나리오를 병기하는 것으로 끝났다 — 어느
+    쪽인지 고를 근거가 없었다. pooled 는 인용 근거로 승격되므로 여기 실으면
+    자가 값과 함께 남는다.
+
+    RULER_FIELDS 를 `validity` 에서 가져오는 이유는 자의 정의가 두 곳으로
+    갈리지 않게 하기 위해서다 — 판정하는 쪽이 정본이다. 다만 판정은 여전히
+    `fold*/metrics.json` 을 읽으므로(`validity.comparability.run_config`), 여기
+    실리는 값은 **기록**이지 아직 판정 경로가 아니다.
+
+    옛 실행에는 metrics.json 이 없거나 필드가 빠져 있을 수 있다. 하나도 못 읽으면
+    None 이고, 일부만 있으면 **있는 것만** 싣는다 — 없는 것을 0 이나 기본값으로
+    채우면 자를 모르는 실행이 아는 실행처럼 보인다. 그래서 **non-null 이라고 자를 다
+    아는 것은 아니다**: `stratify` 나 `data_fingerprint` 가 빠진 부분 기록도 non-null
+    이고, 하필 그 둘의 부재가 이 승격을 하게 만든 사건이다. 읽는 쪽은 값의 유무가
+    아니라 필요한 키가 있는지를 봐야 한다.
+    """
+    # `metrics.json` 이 있는 첫 fold 를 대표로 쓴다 — RULER 는 run 전체에서
+    # 상수라 어느 fold 든 같고, 없는 fold 는 건너뛴다.
+    for fold_dir in fold_dirs:
+        path = os.path.join(fold_dir, 'metrics.json')
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding='utf-8') as fp:
+            cfg = json.load(fp)
+        present = {f: cfg[f] for f in RULER_FIELDS if f in cfg}
+        return present or None
+    return None
 
 
 def _leak_mode(rec: dict, group_key: Optional[str]) -> str:
@@ -89,7 +125,9 @@ def pool_fold_predictions(fold_dirs: List[str],
         {"strict", "relaxed", "n_sentences", "n_folds",
          "group_key": str|None, "leak_check_basis": "group"|"orig"|"text"|"none",
          "cross_fold_group_dups": int|None,
-         "cross_fold_orig_dups": int|None}   # 구 키 (하위호환, 같은 값)
+         "cross_fold_orig_dups": int|None,   # 구 키 (하위호환, 같은 값)
+         "ruler": dict|None}   # fold*/metrics.json 의 RULER_FIELDS 사본.
+                               # 기록이 없는 옛 실행은 None (§_run_ruler)
     """
     gold_spans_list: List[List[dict]] = []
     pred_spans_list: List[List[dict]] = []
@@ -147,6 +185,8 @@ def pool_fold_predictions(fold_dirs: List[str],
         'leak_check_basis': basis,
         'cross_fold_group_dups': dups if measured else None,
         'cross_fold_orig_dups': dups if measured else None,
+        # 비교 가능성 지문 — fold 폴더가 지워져도 자가 값과 함께 남는다.
+        'ruler': _run_ruler(fold_dirs),
     }
 
 

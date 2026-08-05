@@ -51,6 +51,12 @@ tests/ner/
 │   │                  # FP 사각 진단(모양 판정이 head 목록을 안 쓴다·낱말 조각 분리),
 │   │                  # 비순환 재채점(동일 팔 Δ 0·회수 행 제외·행/분할 불일치 거부),
 │   │                  # 커밋된 산출물 4종의 지문 대조(사전등록이 순서를 집행한다)
+│   ├── test_ko_split_audit.py  # 옛 두 팔의 fold 대응 사후 감사 —
+│   │                  # 회수 역적용(좌표 일치분만·판정별 필드명 분기),
+│   │                  # 겹침의 자가 Jaccard 가 아님, 문턱이 실측 전에 고정됨,
+│   │                  # 근거 없이 갈리는 시나리오에서 판정 거부(추측을 결정으로
+│   │                  # 굳히지 않는다), 양성 대조·역산 지문 실패 검출,
+│   │                  # 커밋된 산출물의 자기 정합성
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
 └── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,

@@ -18,7 +18,7 @@ span F1 을 측정한다.
 | `train_eval.py` | HF Trainer 래퍼 (`fine_tune`) + best 모델 로드 후 평가 (`evaluate_model`, strict + relaxed span F1 동시 산출, `capture_scores=True` 시 토큰 softmax 신뢰도 포착, `capture_timing=True` 시 `load_seconds`·`infer_seconds` 반환 — 배포 추론 스크립트가 쓴다). **평가는 학습 `--precision` 과 무관하게 항상 float32** 로 모델을 로드한다 (DeBERTa-v3 계열의 fp16 NaN underflow 회피) |
 | `confidence_threshold.py` | per-class 신뢰도 임계값(confidence threshold) 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
-| `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 그룹 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만) + 판정 근거(`leak_check_basis`) 기록. CLI: `python -m ner.classifier.kfold_pool` |
+| `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 그룹 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만) + 판정 근거(`leak_check_basis`) 기록 + 비교 가능성 지문(`ruler`) 승격. CLI: `python -m ner.classifier.kfold_pool` |
 | `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko}` |
 
 ## CLI
@@ -286,7 +286,7 @@ python -m pytest tests/ner/classifier/ -q
 - `test_encode.py` — 실제 토크나이저(JA·VI·DeBERTa-V3·PhoBERT)로 round-trip 검증
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링
 - `test_boundary_weights.py` — B-/I- per-token loss 가중 텐서의 shape·값·기본값(1.0 = 무효과)
-- `test_kfold_pool.py` — pooled F1 손계산 일치 / 그룹 단위 cross-fold 누출 검출(`ValueError`)·`--allow-cross-fold-leak` 카운트 / 재작성 문장에서도 group 근거로 검출 / `none` → 카운터 `null`(미측정) / 레거시 orig→text fallback·근거 기록 / 섞인 근거는 가장 약한 것으로 보고
+- `test_kfold_pool.py` — pooled F1 손계산 일치 / 그룹 단위 cross-fold 누출 검출(`ValueError`)·`--allow-cross-fold-leak` 카운트 / 재작성 문장에서도 group 근거로 검출 / `none` → 카운터 `null`(미측정) / 레거시 orig→text fallback·근거 기록 / 섞인 근거는 가장 약한 것으로 보고 / **자(`ruler`) 승격** — `seed`·`stratify`·`data_fingerprint` 는 `fold*/metrics.json` 에만 적히는데 그 폴더가 휘발이라, 실행이 정리되면 "두 실험이 같은 자로 쟀나" 를 물을 수단이 사라진다(실제로 그렇게 잃어 사후 감사가 두 시나리오 병기로 끝났다). `RULER_FIELDS` 를 `validity` 에서 가져와 정의가 갈리지 않게 하고, 필드가 없는 옛 산출물은 `null`·부분 기록으로 남긴다 — 없는 것을 기본값으로 채우면 자를 모르는 실행이 아는 실행처럼 보인다
 - `test_confidence_threshold.py` — scored decode(conf_mean)·apply·fit(greedy P·R≥target)·save/load 라운드트립
 
 ## 주의
