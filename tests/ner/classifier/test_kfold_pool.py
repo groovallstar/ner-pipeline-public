@@ -240,3 +240,64 @@ def test_mixed_basis_reports_weakest(tmp_path):
     _write_fold(fold1, [_rec('b', 'two', group_key='orig')])  # group 값 없음
     result = pool_fold_predictions([fold0, fold1])
     assert result['leak_check_basis'] == 'text'
+
+
+def _write_metrics(fold_dir: str, cfg: dict) -> None:
+    """fold dir 에 metrics.json 작성 — 학습이 남기는 자(ruler) 기록."""
+    os.makedirs(fold_dir, exist_ok=True)
+    with open(os.path.join(fold_dir, 'metrics.json'), 'w',
+              encoding='utf-8') as f:
+        json.dump(cfg, f)
+
+
+RULER_CFG = {
+    'lang': 'ko', 'data_fingerprint': 'abc123', 'kfold': 10,
+    'group_key': 'id', 'seed': 42, 'stratify': True,
+    'fold_index': 0, 'train_seed': None,
+}
+
+
+def test_pooled_carries_the_ruler_so_it_survives_scratch_cleanup(tmp_path):
+    """자는 fold metrics.json 에만 있고 그 폴더는 휘발한다 — pooled 가 진다.
+
+    실제로 그렇게 잃은 적이 있어 사후 감사가 두 시나리오 병기로 끝났다. 자가
+    없으면 나중에 "같은 자로 쟀나" 를 물을 수단 자체가 사라진다.
+    """
+    fold0, fold1 = str(tmp_path / 'fold0'), str(tmp_path / 'fold1')
+    _write_fold(fold0, [_rec('a', 'one')])
+    _write_fold(fold1, [_rec('b', 'two')])
+    _write_metrics(fold0, RULER_CFG)
+
+    result = pool_fold_predictions([fold0, fold1])
+    assert result['ruler'] == {
+        'lang': 'ko', 'data_fingerprint': 'abc123', 'kfold': 10,
+        'group_key': 'id', 'seed': 42, 'stratify': True,
+    }
+    # fold 축·학습 재현 축은 자가 아니다 — fold 마다 달라진다.
+    assert 'fold_index' not in result['ruler']
+    assert 'train_seed' not in result['ruler']
+
+
+def test_ruler_matches_the_field_list_validity_judges_with():
+    """자의 정의가 두 곳으로 갈리면 한쪽이 조용히 낡는다."""
+    from ner.validity.comparability import RULER_FIELDS
+    assert set(RULER_FIELDS) <= set(RULER_CFG)
+
+
+def test_old_runs_without_metrics_report_no_ruler(tmp_path):
+    """자를 모르는 실행을 아는 실행처럼 보이게 하지 않는다."""
+    fold0, fold1 = str(tmp_path / 'fold0'), str(tmp_path / 'fold1')
+    _write_fold(fold0, [_rec('a', 'one')])
+    _write_fold(fold1, [_rec('b', 'two')])
+    result = pool_fold_predictions([fold0, fold1])
+    assert result['ruler'] is None
+
+
+def test_partial_ruler_keeps_only_what_was_recorded(tmp_path):
+    """옛 산출물은 필드가 덜 찼을 수 있다 — 없는 것을 기본값으로 채우지 않는다."""
+    fold0, fold1 = str(tmp_path / 'fold0'), str(tmp_path / 'fold1')
+    _write_fold(fold0, [_rec('a', 'one')])
+    _write_fold(fold1, [_rec('b', 'two')])
+    _write_metrics(fold0, {'lang': 'ko', 'seed': 42, 'fold_index': 0})
+    result = pool_fold_predictions([fold0, fold1])
+    assert result['ruler'] == {'lang': 'ko', 'seed': 42}

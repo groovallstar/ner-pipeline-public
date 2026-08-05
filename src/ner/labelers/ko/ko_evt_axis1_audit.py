@@ -149,12 +149,17 @@ _GUARD_MARKER = re.compile(r"길이 ≥(\d+)\s*·\s*고유명 라벨 비율 ≥(
 
 
 def parse_canonical_axis1(path: str = CANONICAL_PATH) -> Dict[str, object]:
-    """canonical §5.3 에서 **모집단을 정하는 파라미터 전부**를 읽어 온다.
+    """canonical §5.3 에서 모집단 파라미터 **넷**을 읽어 온다.
 
     head 목록만 읽으면 부족하다 — 고유명으로 볼 타입, 전역 이력을 쓸 때의 길이·비율
     가드, 사유코드의 이름이 모두 모집단을 바꾸는데 그것들이 잠금 밖에 남으면 조용히
     좁힐 수 있다. 규칙은 기준 파일(사람 승인·반박자를 타는 곳)에 있고 그것을 세는 이
     모듈은 잠금 밖이라, 테스트가 이 결과와 모듈 상수를 대조해 어긋남을 실패로 만든다.
+
+    **읽는 것은 이 넷뿐이다** — head 목록·고유명 타입·길이/비율 가드·사유코드 이름.
+    §5.3 이 산문으로 정하는 나머지(head 매칭 방식·고유명 판정 근거의 구성·인접
+    조건·축3 경계 조건절·제외 어휘 목록)는 이 모듈이 코드로 집행하며 여기서 안 읽는다.
+    `canonical_rule_sha256()` 이 그 사실을 그대로 물려받으므로 그쪽 설명을 함께 볼 것.
     """
     heads: Tuple[str, ...] = ()
     proper_labels: Tuple[str, ...] = ()
@@ -553,6 +558,40 @@ def heads_sha256(heads: Sequence[str]) -> str:
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 
+def canonical_rule_sha256(path: str = CANONICAL_PATH) -> str:
+    """canonical §5.3 이 정하는 **규칙 내용**의 지문.
+
+    **왜 파일 전체 해시로는 부족한가.** 사전등록이 잡아야 할 것은 head 를
+    넓히거나 가드를 푸는 일인데, 파일 해시는 그것과 실측 주석 한 줄 추가를 같은
+    신호로 만든다. 그러면 문서를 정당하게 손볼 때마다 사전등록이 깨지고, 깨진
+    것을 푸는 유일한 길이 지문 갱신이라 결국 "언제든 갱신 가능한 값" 이 된다 —
+    집행하려던 것이 사라진다.
+
+    그래서 `parse_canonical_axis1()` 이 읽는 것만 정규화해 잰다.
+
+    **이 지문이 재는 것은 정확히 넷이다** — head 목록 · 고유명으로 볼 라벨 타입 ·
+    전역 이력 가드의 길이/비율 임계 · 사유코드 이름. 정확히는 그 넷의 **파싱된
+    형태**라, 파서가 알아보는 문구로 적힌 것만 잰다 — 같은 내용을 파서가 못 읽는
+    형태로 옮기면 값이 안 움직인다(그쪽은 파싱↔모듈 상수 동기 테스트가 잡는다).
+
+    **그 밖의 §5.3 규칙은 이 값이 재지 않는다.** 못 보는 것을 목록으로 적으면 그
+    목록을 다 닫았을 때 "이제 안전하다" 로 읽히는데, §5.3 은 산문이라 규칙이 몇
+    가지인지 자체가 열려 있다. 실제로 head 매칭 방식(`끝나는` ↔ `포함하는`)·고유명
+    판정 근거의 구성(동행 라벨 ∪ 전역 이력)·인접 조건(조사 배제·수식어 개재)·축3
+    경계 조건절·제외 어휘 목록을 바꿔도 이 값은 안 움직인다. 확인된 것만 다섯이고
+    닫힌 목록이 아니다.
+
+    **그러므로 이 값의 불변은 "규칙이 안 바뀌었다" 의 증명이 아니다** — 위 넷이
+    그대로라는 뜻일 뿐이다. §5.3 의 다른 조항에 기대는 작업(예: #202 가 남긴 인접
+    정의 완화)은 이 지문으로 잠기지 않으므로 그때 잠글 수단을 따로 만들어야 한다.
+    옛 파일 전체 해시는 그것까지 잡았지만 실측 주석 한 줄에도 깨져 갱신을 강요했다 —
+    넓게 새는 쪽 대신 좁게 확실한 쪽을 골랐고, 그 대가가 이 범위 제한이다.
+    """
+    rule = parse_canonical_axis1(path)
+    payload = json.dumps(rule, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def sites_report(
     rows: Sequence[dict],
     heads: Sequence[str],
@@ -570,6 +609,13 @@ def sites_report(
     buckets: collections.Counter = collections.Counter(
         s.gold_evt_overlap for s in sites
     )
+    # 부착 형태 × 고유명 판정 근거의 교차 분포. 개별 자리에만 있고 집계가 없으면
+    # "인접 정의를 완화하면 정밀도가 어떻게 되나" 를 재려는 다음 사람이 매번 스캔을
+    # 다시 돌려야 하고, 그 수는 어디에도 커밋돼 있지 않아 비교 기준이 되지 못한다.
+    attachment_x_basis: Dict[str, int] = {}
+    for s in sites:
+        key = f"{s.attachment}×{s.proper_basis}"
+        attachment_x_basis[key] = attachment_x_basis.get(key, 0) + 1
     return {
         "params": {
             "heads": sorted(heads),
@@ -582,6 +628,7 @@ def sites_report(
         "gold_rows": len(rows),
         "sites": len(sites),
         "gold_evt_overlap": dict(buckets),
+        "attachment_x_basis": dict(sorted(attachment_x_basis.items())),
         "population": buckets.get("none", 0),
         "items": [
             {
