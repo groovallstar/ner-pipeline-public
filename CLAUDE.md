@@ -194,7 +194,7 @@ touch .omc/state/refuter/human-allow-<diff_hash>
 
 ## docs 운영
 
-- `docs/wiki/` 운영 규칙은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임.
+- `docs/wiki/` 운영 규칙은 `docwiki` 스킬과 `docs/wiki/schema.md`에 위임. **스킬 본체는 이 저장소가 아니라 전역(`~/.claude/skills/docwiki/SKILL.md`)에 한 벌만 둔다** — 위키 저장소를 `ocr-pipeline` 과 공유하므로, 저장소별 사본을 두면 한쪽만 고쳐진 사본이 같은 위키를 다른 규칙으로 운영하게 된다.
 - 코드 변경 후 `docs/manual/`(구현 맵)과 `docs/manual/data/`(데이터 스키마) 최신화 확인.
 - **문서 서술 기준과 mermaid 작성 규칙은 이 파일에 두지 않는다.** 저장소마다 같은 문장을 복제하면 사본이 갈라지므로 전역 output style `plain-docs`(`~/.claude/output-styles/plain-docs.md`)에 한 벌만 둔다 — 쉬운 말로 풀어쓰기와 그 판정 기준, 전문용어 첫 등장 풀이, 인과로 풀어쓰기와 형제 섹션 구조, mermaid 로 그리기·흐름도 칸 작성법·CJK 라벨 줄 길이, 터미널 답변에는 mermaid 를 쓰지 않기가 거기 있다.
 
