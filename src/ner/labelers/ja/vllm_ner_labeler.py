@@ -11,7 +11,7 @@ class VllmNERLabeler(BaseVllmLabeler):
         base_url: str = "http://localhost:8081/v1",
         model: str = "Qwen/Qwen3.5-27B",
         entity_types: Optional[List[str]] = None,
-        max_tokens: int = 4096,
+        max_tokens: int = 1024,
         concurrency: int = 32,
         thinking: bool = False,
     ) -> None:

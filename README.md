@@ -29,7 +29,7 @@ flowchart LR
 
 ## 백엔드
 
-vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
+vLLM (로컬 GPU), HuggingFace BERT baseline.
 
 ## 프로젝트 구조
 

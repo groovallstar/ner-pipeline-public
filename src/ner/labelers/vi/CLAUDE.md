@@ -2,7 +2,7 @@
 
 ## Purpose
 베트남어 NER 라벨러. WikiANN-vi 재라벨 덤프 기반, canonical 10종 평면
-(NER 5종 + PII 5종) 출력. vLLM·OpenAI 백엔드 2종 구현 + WikiANN-vi 전용
+(NER 5종 + PII 5종) 출력. vLLM 백엔드 + WikiANN-vi 전용
 데이터셋 로더 포함.
 라벨 스키마 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
@@ -10,11 +10,10 @@
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Re-exports prompts, VllmNERLabeler, OpenAINERLabeler |
-| `ner_prompts.py` | Vietnamese NER prompts — canonical 10종 평면 엔티티 타입 정의 및 disambiguation 규칙. 단일 문장용 `SINGLE_PROMPT_TEMPLATE` + OpenAI 배치용 `SYSTEM_PROMPT`/`USER_PROMPT_TEMPLATE` |
+| `__init__.py` | Re-exports prompts, VllmNERLabeler |
+| `ner_prompts.py` | Vietnamese NER prompts — canonical 10종 평면 엔티티 타입 정의 및 disambiguation 규칙. 단일 문장용 `SINGLE_PROMPT_TEMPLATE` 한 벌 |
 | `dataset_loader.py` | `VietnameseDatasetLoader` — WikiANN-vi 재라벨 덤프(`data/wikiann_vi/{train,valid,test}.jsonl`)를 읽음. `bio_to_offset_spans`·`offset_spans_to_bio` 유틸 포함 |
 | `vllm_ner_labeler.py` | Vietnamese vLLM labeler — `BaseVllmLabeler` 경량 서브클래스, `lang="vi"` 주입 |
-| `openai_ner_labeler.py` | Vietnamese OpenAI labeler — `BaseOpenAILabeler` 경량 서브클래스, `lang="vi"` 주입 |
 
 ## For AI Agents
 
@@ -60,7 +59,7 @@
 
 ### Internal
 - `ner.labelers.vi.ner_prompts`, `ner.labelers.vi.dataset_loader`
-- `ner.labelers.base_vllm_labeler`, `ner.labelers.base_openai_labeler`
+- `ner.labelers.base_vllm_labeler`
 - `ner.labelers.span_matcher` (공용 — base 라벨러 계층 경유)
 
 ### External

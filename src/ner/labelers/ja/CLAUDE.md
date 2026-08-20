@@ -2,7 +2,7 @@
 
 ## Purpose
 일본어 NER 라벨러. Stockmark NER Wikipedia 데이터셋 기반, canonical 10종 평면
-(NER 5종 + PII 5종) 출력. vLLM·OpenAI 백엔드 2종 구현 + 일본어 전용 데이터셋
+(NER 5종 + PII 5종) 출력. vLLM 백엔드 + 일본어 전용 데이터셋
 로더 + character-offset span matcher 포함.
 라벨 스키마 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
@@ -10,12 +10,11 @@
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, match_spans, OpenAINERLabeler, VllmNERLabeler |
+| `__init__.py` | Re-exports prompts, JapaneseDatasetLoader, match_spans, VllmNERLabeler |
 | `ner_prompts.py` | Japanese NER prompts — canonical 10종 평면 엔티티 타입 정의 및 disambiguation 규칙 |
 | `dataset_loader.py` | `JapaneseDatasetLoader` — reads canonical Stockmark JSONL dumps (`data/stockmark/{train,test}.jsonl`). No HF fetch, no label mapping — fails fast if dumps are missing |
 | ~~`span_matcher.py`~~ | 공용 위치로 이동: `ner.labelers.span_matcher`. `match_spans()` — LLM text spans을 문자 오프셋으로 변환 (longest-first, overlap prevention, Japanese particle stripping) |
 | `vllm_ner_labeler.py` | Japanese vLLM labeler — sentence splitting includes Japanese punctuation `。！？` |
-| `openai_ner_labeler.py` | Japanese OpenAI labeler |
 
 ## For AI Agents
 
@@ -41,6 +40,6 @@
 - `ner.labelers.ja.ner_prompts`, `ner.labelers.span_matcher` (공용), `ner.labelers.ja.dataset_loader`
 
 ### External
-- `openai` — `datasets` 는 쓰지 않는다. 로더는 pre-dumped canonical JSONL 만 읽고 HF 를 호출하지 않으므로(위 "No HF fetch"), 이 패키지에 HuggingFace 의존은 없다
+- `openai` — vLLM 이 OpenAI 호환 API 를 쓰므로 클라이언트로 필요하다. `datasets` 는 쓰지 않는다. 로더는 pre-dumped canonical JSONL 만 읽고 HF 를 호출하지 않으므로(위 "No HF fetch"), 이 패키지에 HuggingFace 의존은 없다
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
