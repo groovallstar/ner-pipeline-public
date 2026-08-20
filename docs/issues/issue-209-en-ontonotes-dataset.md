@@ -1,7 +1,7 @@
 # issue-209: 영문(en) NER 학습 데이터셋 — OntoNotes5 → canonical 10종 평면
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/209
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/212
 - 브랜치: `feat/issue-209-en-ontonotes-dataset`
 - 승인일: 2026-08-18
 
