@@ -29,7 +29,7 @@ flowchart LR
 
 ## 백엔드
 
-vLLM (로컬 GPU), OpenAI, HuggingFace BERT baseline.
+vLLM (로컬 GPU), HuggingFace BERT baseline.
 
 ## 프로젝트 구조
 
@@ -46,7 +46,6 @@ src/server/                # ja·vi NER REST API 서비스 (FastAPI)
 docker/{server,vllm}/      # REST API 배포 + vLLM
 results/                   # 벤치마크 산출물 scratch (gitignore·휘발)
 certified/                 # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
-preserved/                 # 다시 만들 수 없는 산출물 (fold 예측 span 등) — 인용 근거는 아니다
 tests/{ner,server,hooks}/  # pytest 테스트 (hooks 는 커밋 게이트 자체의 회귀 안전망)
 docs/                      # manual·reports·issues·wiki·specs
 ```
@@ -61,22 +60,28 @@ uv sync                # 또는: uv pip install -e .
 
 ## REST API 서비스
 
-ja·vi NER 추론을 FastAPI 로 서빙한다 — `POST /v1/ner` 단일·배치, `GET /health`,
-`GET /` 웹 데모 UI, 그리고 데모 전용 `POST /v1/translate`·
-`GET /v1/translate/status`. 언어 자동감지(가나→ja, vi 전용 결합부호→vi,
-그 외 unsupported), 동시성 세마포어(과부하 429), fp32 배치 추론을 지원한다 —
-fp32 고정이라 배치화가 단건 결과를 바꾸지 않는다. 모든 에러는 구조화 봉투
-(`{error:{status,message}}`) 하나로 통일돼 있어 소비자는 파싱 경로를 하나만
-둔다. 한국어 번역 글로스는 웹 데모 전용이라 외부 소비자용 OpenAPI 명세
-(=`/v1/ner`)에 노출되지 않고, 기본 비활성이라 켜지 않으면 503 이다 — PII 는
-마스킹-복원으로 원문 보존, 고유명사는 한글 음차.
+학습된 ja·vi 분류기를 FastAPI 로 감싸 HTTP 추론을 제공한다.
 
 ```bash
-python -m server   # uvicorn 기동
+python -m server   # uvicorn 기동 (기본 0.0.0.0:8008)
 ```
 
-컨테이너 배포는 `docker/server/`, 상세는
-[`src/server/CLAUDE.md`](src/server/CLAUDE.md) 참조.
+| 엔드포인트 | 하는 일 |
+|---|---|
+| `POST /v1/ner` | 단일 `{text}` · 배치 `{texts:[...]}` 추론 |
+| `GET /health` | 언어별 모델 로드 상태 |
+| `GET /` | 웹 데모 UI |
+| `POST /v1/translate` · `GET /v1/translate/status` | 데모 전용 한국어 번역 (기본 비활성) |
+
+`lang` 을 안 주면 텍스트마다 자동감지하고, ja·vi 신호가 없으면 에러가 아니라
+빈 결과를 준다 — 배치에 다른 언어가 섞여도 나머지가 처리되게 하려는 것이다.
+데모 전용 둘은 소비자 계약을 `/v1/ner` 하나로 좁히려고 OpenAPI 에 안 내놓는다.
+
+스키마·상태코드는 [`docs/manual/rest-api-spec.md`](docs/manual/rest-api-spec.md),
+연동 절차는
+[`rest-api-integration-guide.md`](docs/manual/rest-api-integration-guide.md),
+환경변수·모듈 구조는 [`src/server/CLAUDE.md`](src/server/CLAUDE.md), 컨테이너
+배포는 `docker/server/`.
 
 ## 테스트
 

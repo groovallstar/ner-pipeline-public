@@ -35,11 +35,11 @@
 ### Testing Requirements
 - `TagAligner.spans_to_syllable_bio()` — 공백 토큰 포함 KLUE 음절 토큰으로 테스트
 - `compute_span_match()` relaxed matching 테스트
-- 벤치마크는 실행 중인 LLM 서버 또는 OpenAI API 키 필요
+- 벤치마크는 실행 중인 vLLM 서버 필요
 
 ### Common Patterns
 - CLI: `python -m ner.llm_eval --lang ko|ja|vi --models "backend:model" --max-samples N`
-- 모델 스펙: `backend:model_name` (예: `vllm:Qwen/Qwen3.5-27B`, `openai:gpt-4o-mini`)
+- 모델 스펙: `backend:model_name` (예: `vllm:Qwen/Qwen3.5-27B`, `hf:soddokayo/klue-roberta-large-klue-ner`)
 - 최신 벤치마크 수치: `docs/reports/japanese-ner-benchmark.md` 등 참조
 
 ## Dependencies

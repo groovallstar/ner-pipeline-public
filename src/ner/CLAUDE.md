@@ -14,9 +14,10 @@
 | `dataset_loader.py` | HuggingFace datasets 로딩 (`NERRecord` 반환) |
 | `tag_aligner.py` | BIO 태그 정렬·정규화·span 추출 유틸리티 |
 | `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
-| `ko/` | 한국어 NER 라벨러 (vllm, openai) — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분) |
-| `ja/` | 일본어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
-| `vi/` | 베트남어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
+| `ko/` | 한국어 NER 라벨러 (vllm) — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분) |
+| `ja/` | 일본어 NER 라벨러 (vllm) — canonical 10종 평면 |
+| `vi/` | 베트남어 NER 라벨러 (vllm) — canonical 10종 평면 |
+| `en/` | 영어 NER 라벨러 (vllm) — canonical 10종 평면. 용도가 하나다: PII 주입 결과의 교차 검증. 원천 OntoNotes5 가 사람 gold 라 재라벨할 대상이 없어 ja·vi 가 가진 `dataset_loader` 는 두지 않는다 |
 
 ### llm_eval/
 
@@ -40,6 +41,7 @@
 |---------|------|
 | `pii/` | 합성 PII 주입기 (suffix/llm 모드, vLLM 교차 검증). CLI: `python -m ner.augmenters.pii` |
 | `wikiann_vi/` | WikiANN-vi(3종 BIO) → canonical **NER 5종** 재라벨 + Wikidata 검증 (PII 5종은 `pii/` 가 별도 주입해 10종 평면이 된다). CLI: `python -m ner.augmenters.wikiann_vi` |
+| `ontonotes_en/` | OntoNotes5(영문 18종 BIO) → canonical **NER 5종 + DAT** 변환. 재라벨이 없다 — 원천이 `PRODUCT`·`WORK_OF_ART`·`EVENT` 를 이미 갖고 있다. 자연문 복원 + 매핑 전수성 게이트 + 엔티티↔원본 토큰 대조. CLI: `python -m ner.augmenters.ontonotes_en` |
 
 ### classifier/
 
@@ -87,6 +89,7 @@ K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`�
 
 - **KO·JA·VI 공통**: canonical 10종 평면 = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
 - **KO**: NER 5종 + `DAT` 은 KLUE 유래(`PROD/EVT` 는 LLM 재라벨 증분, TI/QT 드롭), PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 주입
+- **EN**: NER 5종 + `DAT` 은 OntoNotes5 유래(재라벨 없음 — 원천이 `PRODUCT`·`WORK_OF_ART`·`EVENT` 를 이미 갖고 있다. 18종 중 9종 드롭), PII 4종은 합성 주입 — KO 와 같은 구조다. LOC/ORG 경계는 JA·VI 관례(`FAC`→`ORG`)를 따르고 PII 는 미국 단일 체계다
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 코딩 컨벤션

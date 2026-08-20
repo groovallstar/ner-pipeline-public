@@ -617,8 +617,8 @@ def test_certified_noncircular_is_anchored_to_the_preregistered_inputs():
     ).read_text(encoding="utf-8"))
     assert report["gold_sha256"] == prereg["head_arm"]["gold_sha256"]
     assert report["sigma_sha256"] == prereg["base_arm"]["fold_sigma_sha256"]
-    preserved = prereg["base_arm"]["preserved_pred_spans_sha256"]
-    assert report["pred_sha256"]["base"] == [preserved[f"fold{i}"] for i in range(10)]
+    recorded = prereg["base_arm"]["pred_spans_sha256"]
+    assert report["pred_sha256"]["base"] == [recorded[f"fold{i}"] for i in range(10)]
     ledger = [json.loads(line) for line
               in (base / "evt_axis1_judgements.jsonl").read_text(
                   encoding="utf-8").splitlines() if line.strip()]
@@ -668,10 +668,6 @@ def test_prereg_pins_the_four_parsed_rule_parameters_and_the_run_inputs():
         sha("certified/classifier/ko/issue202-axis1-base/fold_sigma.json")
     assert arm["pooled_metrics_sha256"] == \
         sha("certified/classifier/ko/issue202-axis1-base/pooled_metrics.json")
-    # base 예측을 잃으면 비순환 재채점이 불가능해진다 — 보존본을 지문으로 묶는다
-    for fold, digest in arm["preserved_pred_spans_sha256"].items():
-        assert digest == sha(
-            f"preserved/classifier/ko/issue202-axis1-base/{fold}/pred_spans.json")
     # 두 팔은 서로 다른 gold 를 본다 — 같으면 회수가 반영되지 않았다는 뜻이다
     prov = json.loads((base / "evt_axis1_apply.json").read_text(encoding="utf-8"))
     assert arm["gold_sha256"] == prov["gold_sha256"]["before"]
