@@ -617,8 +617,8 @@ def test_certified_noncircular_is_anchored_to_the_preregistered_inputs():
     ).read_text(encoding="utf-8"))
     assert report["gold_sha256"] == prereg["head_arm"]["gold_sha256"]
     assert report["sigma_sha256"] == prereg["base_arm"]["fold_sigma_sha256"]
-    preserved = prereg["base_arm"]["preserved_pred_spans_sha256"]
-    assert report["pred_sha256"]["base"] == [preserved[f"fold{i}"] for i in range(10)]
+    recorded = prereg["base_arm"]["pred_spans_sha256"]
+    assert report["pred_sha256"]["base"] == [recorded[f"fold{i}"] for i in range(10)]
     ledger = [json.loads(line) for line
               in (base / "evt_axis1_judgements.jsonl").read_text(
                   encoding="utf-8").splitlines() if line.strip()]

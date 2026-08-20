@@ -1553,9 +1553,9 @@ def main() -> None:
              "recovery-free subset delta")
     p_rs.add_argument("--gold", required=True)
     p_rs.add_argument("--base-preds", nargs="+", required=True,
-                      help="preserved base-arm fold*/pred_spans.json")
+                      help="base-arm fold*/pred_spans.json dump")
     p_rs.add_argument("--head-preds", nargs="+", required=True,
-                      help="preserved head-arm fold*/pred_spans.json")
+                      help="head-arm fold*/pred_spans.json dump")
     p_rs.add_argument("--ledger", help="per-site judgement ledger JSONL")
     p_rs.add_argument("--sigma", help="pre-registered fold_sigma.json")
     p_rs.add_argument("--out", help="write the non-circular report JSON here")
