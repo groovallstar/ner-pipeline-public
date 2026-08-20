@@ -106,10 +106,34 @@ _INJECTION_PROMPT_KO = """\
 
 ## 출력"""
 
+_INJECTION_PROMPT_EN = """\
+You are an expert English sentence editor.
+
+## Task
+Weave the given [PII] naturally into the [Original] sentence.
+
+## Rules
+1. Copy each PII value **character for character**. Do not reformat it.
+2. Preserve the original named entities (people, places, organizations, works, events) as much as possible.
+3. Blend the PII into the flow of the sentence. Do not append it at the end as a list; place it where it reads naturally (e.g. "reach her at ...", "who lives at ...", "filed by ...").
+4. **Forbidden**: placing a PII value right after a rigid label such as "Contact:", "Phone:", "Tel:", "Email:", "Address:", "SSN:", "Card:", "DOB:". Write it as prose instead (e.g. "email him at j.reyes@example.com", NOT "Email: j.reyes@example.com").
+5. **Forbidden**: printing the label names themselves ("NAME", "PHONE", "EMAIL", "ID_NUM", "ID_NUMBER", "CREDIT_CARD", "DAT", "ADDRESS") in the output. Use only the values.
+6. Output **only the edited sentence**. No explanation, no commentary, no markdown or quotation wrapping.
+
+## Original
+{original_text}
+
+## PII (for reference; never print the label names)
+{pii_list}
+
+## Output"""
+
+
 _INJECTION_PROMPTS: dict[str, str] = {
     'ja': _INJECTION_PROMPT_JA,
     'vi': _INJECTION_PROMPT_VI,
     'ko': _INJECTION_PROMPT_KO,
+    'en': _INJECTION_PROMPT_EN,
 }
 
 # 기존 호환용 별칭 (JA 기본 템플릿).
@@ -119,6 +143,7 @@ _EMPTY_PII_LIST: dict[str, str] = {
     'ja': '（なし）',
     'vi': '(không có)',
     'ko': '(없음)',
+    'en': '(none)',
 }
 
 
@@ -127,12 +152,23 @@ def build_injection_prompt(
     pii_values: dict[str, str],
     lang: str = 'ja',
 ) -> str:
-    """LLM 에 전달할 PII 주입 프롬프트를 언어별로 조립한다."""
-    template = _INJECTION_PROMPTS.get(lang, _INJECTION_PROMPT_JA)
+    """LLM 에 전달할 PII 주입 프롬프트를 언어별로 조립한다.
+
+    미지원 lang 은 `ValueError` 다. 예전에는 JA 템플릿으로 조용히 떨어졌는데,
+    그러면 영문 문장에 일본어 지시문이 붙은 채 주입이 돌아가고 산출물만 보면
+    무엇이 잘못됐는지 알 수 없다.
+    """
+    try:
+        template = _INJECTION_PROMPTS[lang]
+    except KeyError:
+        raise ValueError(
+            f'no injection prompt for lang {lang!r}; '
+            f'available: {sorted(_INJECTION_PROMPTS)}'
+        ) from None
     if not pii_values:
         return template.format(
             original_text=original_text,
-            pii_list=_EMPTY_PII_LIST.get(lang, _EMPTY_PII_LIST['ja']),
+            pii_list=_EMPTY_PII_LIST[lang],
         )
     lines = [f'- {label}: {value}' for label, value in pii_values.items()]
     return template.format(

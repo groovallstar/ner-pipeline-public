@@ -4,7 +4,7 @@
 다국어 NER 라벨링 패키지. HuggingFace 데이터셋 로더와 LLM 기반 라벨러를 제공한다.
 vLLM 백엔드를 호출하여 텍스트에서 named entity를 추출하고,
 LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
-한국어(KO), 일본어(JA), 베트남어(VI) 서브패키지 포함.
+한국어(KO), 일본어(JA), 베트남어(VI), 영어(EN) 서브패키지 포함.
 
 ## Key Files
 
@@ -28,6 +28,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 | `ko/` | 한국어 NER 라벨러 — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분; PII는 augmenters에서 합성 주입). **LOC/ORG 는 narrow-ORG 재정의를 따라 JA·VI 와 외연이 다르다** — ORG=정부·행정·공공·정치 기관만이고 인공 시설·민간조직은 비-entity (see `ko/CLAUDE.md`) |
 | `ja/` | 일본어 NER 라벨러 — canonical 10종 평면; pre-dumped Stockmark JSONL 전용 (see `ja/CLAUDE.md`) |
 | `vi/` | 베트남어 NER 라벨러 — canonical 10종 평면; canonical WikiANN-vi JSONL 덤프 전용 |
+| `en/` | 영어 NER 라벨러 — canonical 10종 평면. LOC/ORG 는 JA·VI 관례(인공 시설=ORG)를 따른다. 용도가 하나다: `augmenters/pii` 의 주입 결과를 LLM 이 독립적으로 다시 뽑아 대조하는 교차 검증. 원천 OntoNotes5 가 사람 gold 라 재라벨 대상이 없어 ja·vi 가 가진 `dataset_loader` 는 두지 않았다 |
 
 라벨 스키마 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 

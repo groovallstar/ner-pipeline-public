@@ -43,9 +43,15 @@ def random_credit_card_number(rng: random.Random | None = None) -> str:
 
 
 def random_email(
-    name_hint: str, rng: random.Random | None = None
+    name_hint: str, rng: random.Random | None = None,
+    domains: list[str] | None = None,
 ) -> str:
-    """이름 힌트 기반 이메일 생성."""
+    """이름 힌트 기반 이메일 생성.
+
+    `domains` 를 주면 그 목록에서만 고른다. 기본값은 전 언어 공용
+    `EMAIL_DOMAINS` 이라 기존 호출은 그대로 동작한다 — 로케일별 목록을
+    선언한 생성기만 자기 목록을 쓴다(`generate_pii` 참조).
+    """
     r = rng or random
     allowed = set(string.ascii_letters + string.digits + ALLOWED_EMAIL_SPECIALS)
 
@@ -68,7 +74,7 @@ def random_email(
         local = normalize(local + random_digits(r.randint(1, 3), r))
     else:
         local = normalize(random_digits(r.randint(1, 2), r) + local)
-    domain = r.choice(EMAIL_DOMAINS)
+    domain = r.choice(domains or EMAIL_DOMAINS)
     return f'{local}@{domain}'
 
 
@@ -82,6 +88,8 @@ def generate_pii(
         from ner.augmenters.pii.generators import vi as mod
     elif lang == 'ko':
         from ner.augmenters.pii.generators import ko as mod
+    elif lang == 'en':
+        from ner.augmenters.pii.generators import en as mod
     else:
         raise ValueError(f'Unsupported language: {lang}')
 
@@ -97,9 +105,14 @@ def generate_pii(
         return mod.generate_id_number(rng)
     if label == 'EMAIL':
         hint = mod.generate_name(rng)
-        if lang == 'vi':
+        if lang in ('vi', 'en'):
+            # 공백 구분 이름은 그대로 두면 붙어버린다 — 점으로 바꿔
+            # `john.smith@...` 형태를 얻는다.
             hint = hint.replace(' ', '.')
-        return random_email(hint, rng)
+        # 로케일 모듈이 자기 도메인 목록을 선언했으면 그것을 쓴다. 공용
+        # 목록은 ja·vi·ko 도메인이 섞여 있어 영문 문장에 `docomo.ne.jp` 가
+        # 붙는다. 선언하지 않은 로케일은 기존 동작 그대로다.
+        return random_email(hint, rng, getattr(mod, 'EMAIL_DOMAINS', None))
     if label == 'CREDIT_CARD':
         return random_credit_card_number(rng)
     raise ValueError(f'Unsupported PII label: {label}')

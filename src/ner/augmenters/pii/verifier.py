@@ -49,6 +49,9 @@ class VerifyResult:
     missed: list[Entity] = field(default_factory=list)
     conflicts: list[tuple[Entity, str]] = field(default_factory=list)
     dropped: bool = False
+    # `verify_labels` 밖이라 판정 대상이 아니었던 엔티티. 정책이 건드리지
+    # 않고 그대로 통과한다.
+    exempt: list[Entity] = field(default_factory=list)
 
 
 # ── 매칭 헬퍼 ────────────────────────────────────────────────────────────
@@ -98,9 +101,28 @@ class PIIVerifier:
         self,
         labeler: SpanLabeler,
         policy: VerifyPolicy = VerifyPolicy.DROP_SPAN,
+        verify_labels: Iterable[str] | None = None,
     ) -> None:
+        """
+        Args:
+            verify_labels: 판정 대상으로 삼을 라벨. `None`(기본)이면 레코드의
+                모든 엔티티가 대상이라 기존 동작과 같다. 값을 주면 그 라벨만
+                정책이 버릴 수 있고 나머지는 무조건 통과한다.
+
+        **주입한 PII 와 원본 gold 는 증거의 성격이 다르다.** 주입값은 우리가
+        무엇을 어디에 넣었는지 알고 있어 "LLM 이 못 찾았다" 가 곧 "주입이
+        어긋났다" 는 신호다. 반면 원본 gold 는 사람이 붙인 정답이라 LLM 이
+        못 찾은 것은 **LLM 에 대한 증거**지 gold 에 대한 증거가 아니다.
+        구분 없이 `drop_span` 을 걸면 검증 모델의 recall 부족이 사람 주석을
+        지운다 — 이 인자를 만들게 한 EN 실측에서 gold NER 8,199 span 중
+        2,199 개(27%)가 그렇게 사라졌고 `DAT` 은 54% 가 날아갔다(그 실행의
+        값이며 현 산출물로는 재현되지 않는다).
+        """
         self._labeler = labeler
         self.policy = policy
+        self.verify_labels = (
+            frozenset(verify_labels) if verify_labels is not None else None
+        )
 
     def _call_labeler(self, text: str) -> list[dict]:
         """split=False로 호출하되, 미지원 라벨러는 단순 호출로 fallback."""
@@ -126,22 +148,33 @@ class PIIVerifier:
         confirmed: list[Entity] = []
         missed: list[Entity] = []
         conflicts: list[tuple[Entity, str]] = []
+        exempt: list[Entity] = []
         used: set[int] = set()
 
         for gold_ent in record.entities:
+            # 범위 밖 엔티티도 매칭은 돌려 예측을 소비시킨다 — 안 그러면
+            # 남은 예측이 범위 안 엔티티에 잘못 붙을 수 있다.
             match = _find_pred(gold_ent, preds, used)
+            if match is not None:
+                used.add(match[0])
+            if (
+                self.verify_labels is not None
+                and gold_ent.label not in self.verify_labels
+            ):
+                exempt.append(gold_ent)
+                continue
             if match is None:
                 missed.append(gold_ent)
                 continue
-            idx, pred = match
-            used.add(idx)
-            pred_type = pred.get('type', '')
+            pred_type = match[1].get('type', '')
             if pred_type == gold_ent.label:
                 confirmed.append(gold_ent)
             else:
                 conflicts.append((gold_ent, pred_type))
 
-        return self._apply_policy(record, confirmed, missed, conflicts)
+        return self._apply_policy(
+            record, confirmed, missed, conflicts, exempt,
+        )
 
     def verify(self, record: Record) -> VerifyResult:
         """단일 레코드를 검증한다. 문맥 보존을 위해 split=False 선호."""
@@ -203,6 +236,7 @@ class PIIVerifier:
         missed_count = 0
         conflict_count = 0
         dropped_count = 0
+        exempt_count = 0
         per_label: dict[str, dict[str, int]] = {}
         conflict_details: list[dict[str, Any]] = []
         missed_details: list[dict[str, Any]] = []
@@ -211,12 +245,15 @@ class PIIVerifier:
             confirmed_count += len(result.confirmed)
             missed_count += len(result.missed)
             conflict_count += len(result.conflicts)
+            exempt_count += len(result.exempt)
             if result.dropped:
                 dropped_count += 1
             else:
                 kept.append(result.record)
             for ent in result.confirmed:
                 _inc(per_label, ent.label, 'confirmed')
+            for ent in result.exempt:
+                _inc(per_label, ent.label, 'exempt')
             for ent in result.missed:
                 _inc(per_label, ent.label, 'missed')
                 missed_details.append({
@@ -243,6 +280,13 @@ class PIIVerifier:
             'missed_count': missed_count,
             'conflict_count': conflict_count,
             'dropped_count': dropped_count,
+            # 판정 범위 밖이라 정책이 건드리지 않은 엔티티 수.
+            # `verify_labels` 를 안 주면 항상 0 이다.
+            'exempt_count': exempt_count,
+            'verify_labels': (
+                sorted(self.verify_labels)
+                if self.verify_labels is not None else None
+            ),
             'kept_count': len(kept),
             'per_label': dict(per_label),
             'conflict_details': conflict_details,
@@ -256,7 +300,9 @@ class PIIVerifier:
         confirmed: list[Entity],
         missed: list[Entity],
         conflicts: list[tuple[Entity, str]],
+        exempt: list[Entity] | None = None,
     ) -> VerifyResult:
+        exempt = exempt or []
         has_issues = bool(missed or conflicts)
 
         if self.policy == VerifyPolicy.DROP_RECORD and has_issues:
@@ -266,17 +312,17 @@ class PIIVerifier:
                 missed=missed,
                 conflicts=conflicts,
                 dropped=True,
+                exempt=exempt,
             )
 
         if self.policy == VerifyPolicy.DROP_SPAN and has_issues:
-            confirmed_keys = {
+            keep_keys = {
                 (e.label, e.start_char, e.end_char, e.text)
-                for e in confirmed
+                for e in (*confirmed, *exempt)
             }
             kept_entities = [
                 e for e in record.entities
-                if (e.label, e.start_char, e.end_char, e.text)
-                in confirmed_keys
+                if (e.label, e.start_char, e.end_char, e.text) in keep_keys
             ]
             new_record = Record(
                 text=record.text,
@@ -289,6 +335,7 @@ class PIIVerifier:
                 missed=missed,
                 conflicts=conflicts,
                 dropped=False,
+                exempt=exempt,
             )
 
         return VerifyResult(
@@ -297,6 +344,7 @@ class PIIVerifier:
             missed=missed,
             conflicts=conflicts,
             dropped=False,
+            exempt=exempt,
         )
 
 

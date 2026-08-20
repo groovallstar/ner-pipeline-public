@@ -15,6 +15,81 @@ ORG 를 정부·행정·공공·정치 기관으로 좁히고 인공 시설·민
 
 ## 서브 모듈
 
+### ontonotes_en/
+OntoNotes5(영문) → canonical 10 종 평면 변환. 원본은 사전 토큰화된 18 타입
+BIO 라, 자연문을 먼저 복원해야 이 저장소의 공용 통화인 char-offset span 이
+나온다. **EN 은 원천이 넘치는 유일한 언어다** — ja·vi·ko 는 원천이 빈약해
+LLM 재라벨로 부족한 타입을 만들어냈지만, OntoNotes 는 `PRODUCT`·
+`WORK_OF_ART`·`EVENT` 를 이미 갖고 있어 재라벨할 대상이 없다. 그래서 이
+모듈은 "지어내기" 가 아니라 "골라내고 옮기기" 다.
+
+#### 주요 파일
+
+| 파일 | 역할 |
+|------|------|
+| `mapping.py` | 원본 18 타입 → canonical 매핑표 + **전수성 게이트**. 선언되지 않은 타입을 만나면 `UndeclaredTypeError` 로 즉시 중단한다 — 조용히 드롭하면 그 타입이 통째로 빠진 것을 아무도 못 본다 |
+| `detokenize.py` | 토큰 배열 → 자연문 복원 + 토큰별 char-offset. 규칙은 코퍼스 76,714 문장 전수 측정에서 나왔다(`-` 는 97.6% 가 단어 사이라 붙이고, `&` 는 `Fleet & Leasing` 이라 띄운다) |
+| `convert.py` | BIO 디코드 · 레코드 변환 · **엔티티↔원본 토큰 대조** · 문장 동일 행의 `orig` 묶기 |
+| `restore_groups.py` | 주입이 버린 `orig`·`split` 되돌리기 — 아래 |
+| `__main__.py` | CLI (`python -m ner.augmenters.ontonotes_en`). split 별로 파일을 갈라 쓴다 |
+
+#### LOC/ORG 경계 — EN 은 JA·VI 관례
+`FAC`(공항·역·경기장·다리·고속도로)를 `ORG` 로 흡수한다. KO 의 narrow-ORG
+(인공 시설을 아예 버림)를 따르지 않는다. 물려받은 기본값이 아니라 선택이므로
+`mapping.py` 모듈 docstring 에 선언해 둔다.
+
+#### 수식 위치 GPE 는 빼지 않는다 — 검토했다가 접은 안
+
+`U.S. troops` 의 `U.S.` 를 §2.3 "국적·소속 수식 명사구 → 비-LOC" 로 보고
+제거하는 안을 구현했다가 **표본 검수에서 반박돼 되돌렸다.** 규정 원문만 받은
+독립 판정에서 제거 대상 70 건 중 비-entity 판정이 **0 건**이었고(69 LOC·1 ORG),
+같은 판정자가 `NORP`·`LANGUAGE`(`Latin American`·`German`) 60 건은 **97%** 를
+비-entity 로 봤다. §2.3 이 배제하는 것은 지명에 접미가 붙은 파생어이고 지명의
+수식 용법은 다르다는 뜻이다.
+
+JA 실데이터도 같은 방향을 가리킨다 — `data/stockmark/origin.jsonl` 의 LOC
+2,899 건 중 국적수식 복합 형태는 **0 건**이다. 일본어는 `日本企業` 가 한
+토큰이라 애초에 span 이 안 생긴다. 즉 이 필터를 EN 에만 걸면 "JA 와 일관" 이
+아니라 **EN 만 JA 실데이터보다 엄격**해진다.
+
+관련 원칙이 하나 더 있다 — 이슈 #82 는 "장소 자체를 지칭하는 단독·조사
+결합만 LOC" 이라고 적었고, 그것만 보면 필터가 맞다. **어느 쪽이든 기존 규칙의
+자동 귀결이 아니라 새 결정이며**, 이 저장소는 빼지 않는 쪽으로 정했다.
+
+#### 주입 뒤에는 `orig` 를 되돌려야 한다
+
+`pii/schema.py` 의 `Record` 는 `text`·`entities`·`id` 세 필드만 담는다. 그래서
+주입을 지나면 변환이 심어둔 `orig`(형제 묶음 키)와 `split` 이 **사라진다.**
+JA 는 `--group-key id` 를 써서 겪지 않는 문제지만 EN 은 `orig` 를 쓴다 —
+OntoNotes 가 같은 문장을 여러 번 담기 때문이다.
+
+주입은 한 입력에서 최대 한 행을 내므로 `id` 가 산출물에서 그대로 유일하고,
+`restore_groups` 가 그것으로 이어 붙인다. 주입이 문장을 다시 써서 `text` 는
+갈라지지만 `orig` 는 원문으로 묶으므로 그룹 보호가 유지된다. 실측 행 수는
+실행마다 달라지므로 여기 적지 않는다 — 최신 값은 `docs/issues/issue-209-*.md`
+§현 상태 에 둔다.
+
+```bash
+python -m ner.augmenters.ontonotes_en.restore_groups \
+    --source-dir data/ontonotes_en --injected-dir data/ontonotes_en/pii
+```
+
+이 단계를 빠뜨리면 후속 학습에서 `--group-key` 를 줄 수단이 없다. 전량
+불변식 테스트가 산출물에 `orig`·`split` 이 있는지와 `validate_group_key`
+통과를 함께 본다.
+
+#### 물려받은 중복 문장
+OntoNotes 공식 split 은 같은 문장을 여러 번 담는다(train 59,924 행 중 고유
+55,154). 방송·전화 대화의 `yeah`·`Uh-huh.` 같은 짧은 발화가 대부분이라 외울
+엔티티가 없지만, split 을 가로지르는 것 중 엔티티를 가진 것이 있다 — test
+span 8,244 중 **67 개(0.81%)** 가 train 에도 나타난다. 제거하지 않되, **근거를 정정한다.** 처음에는 "제거하면 외부 공개 수치와
+비교가 깨진다" 를 이유로 들었으나 그 비교 가능성은 이미 없다 — 18 종을 6 종으로
+줄인 시점에 라벨 공간이 달라져 published OntoNotes NER F1 과 나란히 놓을 수
+없다. 남은 이유는 둘이다: ① 공식 split 을 그대로 쓰는 것이 재현·인용에
+유리하고, ② 노출 규모가 test span 의 0.81% 로 작다. **규모가
+고정된 것과 유지 근거가 유효한 것은 다른 문제이므로**, 이 수치가 커지면 유지
+결정을 다시 봐야 한다. 테스트가 못 박는 것은 규모뿐이다.
+
 ### pii/
 합성 PII 주입(injector). 기존 NER 데이터셋(Stockmark, JSONL, HF Hub)의
 각 문장에 자연스러운 위치로 합성 PII(전화/주소/생년월일/ID/이메일/카드)를
@@ -36,6 +111,7 @@ ORG 를 정부·행정·공공·정치 기관으로 좁히고 인공 시설·민
 | `generators/ja.py` | 일본어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
 | `generators/vi.py` | 베트남어 PII 생성기 (이름/전화/주소/날짜(`generate_dat`)/ID/이메일) |
 | `generators/ko.py` | 한국어 PII 생성기 (이름/전화(`010`/`02`/지역)/주소/날짜/주민등록번호 — 체크섬 무효로 실유효 번호 비생성) |
+| `generators/en.py` | 영어(**미국 단일**) PII 생성기. SSN 은 미발급 지역번호(`000`·`666`·`900`–`999`), 전화는 NANP 예약 대역(`555-0100`~`555-0199`)만 써 실유효 번호를 만들지 않는다. 로케일 전용 `EMAIL_DOMAINS` 를 선언한다 |
 
 #### 라벨 스키마
 - **내부 PII 토큰**(생성·병합 전): `NAME`, `PHONE`, `ADDRESS`, `DAT`,
@@ -44,6 +120,23 @@ ORG 를 정부·행정·공공·정치 기관으로 좁히고 인공 시설·민
   (둘 다 무조건 병합). 학습 데이터에는 `NAME`·`ADDRESS` 라벨이 존재하지
   않는다
 - **최종 출력 라벨**: canonical 10종 평면 (NER 5종 `PER/LOC/ORG/PROD/EVT` + PII 5종 `DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
+
+#### 언어가 국가를 정하지 않는 경우 — EN
+ko·ja·vi 는 언어와 국가가 1:1 이라 전화·ID 체계가 자동으로 정해졌다. 영어는
+US·UK·AU 가 전부 달라 **미국 단일 체계로 못 박았다**(원천 OntoNotes5 가 미국
+뉴스·방송 중심이라 원문 도메인과도 맞는다). 다른 영어권을 쓰려면 생성기를
+새로 선언해야 하며, 조용히 섞으면 평가 해석이 흐려진다.
+
+#### EN 은 `DAT` 을 주입하지 않는다
+원본 OntoNotes `DATE` 가 gold 로 주기 때문이다. 주입 대상은 4 종
+(`EMAIL`·`PHONE`·`ID_NUM`·`CREDIT_CARD`)이며, KO 가 KLUE 에서 날짜를 받는
+것과 같은 구조다.
+
+#### 이메일 도메인은 로케일이 선언하면 그것을 쓴다
+공용 `base.EMAIL_DOMAINS` 는 ja·vi·ko 도메인이 섞여 있어 영문 문장에
+`docomo.ne.jp` 가 붙는다. 생성기 모듈이 `EMAIL_DOMAINS` 를 선언하면
+`generate_pii` 가 그것을 쓴다(additive — 선언하지 않은 ja·vi·ko 는 기존 동작
+그대로).
 
 #### 주입 밀도
 기본값 분포 `P(0)=0.2, P(1)=0.4, P(2)=0.3, P(3)=0.1` (문장당 PII 개수).
