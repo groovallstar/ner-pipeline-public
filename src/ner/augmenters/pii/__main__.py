@@ -31,7 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--hf-name', type=str, default=None,
                    help='HF dataset name (for --source hf)')
     p.add_argument('--hf-split', type=str, default='train')
-    p.add_argument('--lang', choices=['ja', 'vi', 'ko'], default='ja')
+    p.add_argument('--lang', choices=['ja', 'vi', 'ko', 'en'], default='ja')
     p.add_argument('--output', type=str, required=True,
                    help='Output JSONL path')
     p.add_argument('--n-samples', type=int, default=None,
@@ -63,6 +63,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         '--verify', choices=['off', 'vllm'], default='off',
         help='Cross-verify injected entities via LLM',
+    )
+    p.add_argument(
+        '--verify-labels', nargs='+', default=None,
+        help='Restrict which labels the verify policy may drop. Labels '
+             'outside this set always pass through. Default: every label '
+             'in the record (legacy behaviour). Use this to keep '
+             'human-annotated gold safe from the verifier model\'s recall '
+             'gaps, e.g. --verify-labels EMAIL PHONE ID_NUM CREDIT_CARD',
     )
     p.add_argument(
         '--verify-policy',
@@ -124,6 +132,8 @@ def _build_verify_labeler(
         from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler
     elif lang == 'vi':
         from ner.labelers.vi.vllm_ner_labeler import VllmNERLabeler
+    elif lang == 'en':
+        from ner.labelers.en.vllm_ner_labeler import VllmNERLabeler
     else:
         raise ValueError(f'unsupported lang for verify: {lang!r}')
     return VllmNERLabeler(
@@ -220,7 +230,9 @@ def main(argv: list[str] | None = None) -> int:
             concurrency=args.verify_concurrency,
         )
         policy = VerifyPolicy(args.verify_policy)
-        verifier = PIIVerifier(labeler, policy=policy)
+        verifier = PIIVerifier(
+            labeler, policy=policy, verify_labels=args.verify_labels,
+        )
         logger.info(
             'Verifying %d records (policy=%s, model=%s, url=%s)',
             len(injected), policy.value, verify_model, verify_url,
