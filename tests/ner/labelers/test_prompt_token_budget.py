@@ -84,6 +84,21 @@ def tokenizer():
     return AutoTokenizer.from_pretrained(TOKENIZER_MODEL, local_files_only=True)
 
 
+def test_every_labeler_reserves_the_same_output_room():
+    """예산은 베이스의 예약값으로 계산한다 — 서브클래스가 따로 들면 그 언어만 벗어난다.
+
+    ko·ja·vi 는 각자 `max_tokens` 기본값을 다시 적으므로, 한 곳만 올려도 베이스에서
+    읽은 예산은 그대로다. 그러면 이 파일의 검사가 그 언어에 대해서는 틀린 벽을 본다.
+    """
+    from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler as JA
+    from ner.labelers.ko.vllm_ner_labeler import VllmNERLabeler as KO
+    from ner.labelers.vi.vllm_ner_labeler import VllmNERLabeler as VI
+
+    for cls in (KO, JA, VI):
+        reserved = inspect.signature(cls.__init__).parameters["max_tokens"].default
+        assert reserved == RESERVED, f"{cls.__module__} 의 예약값 {reserved} ≠ 베이스 {RESERVED}"
+
+
 def test_the_budget_leaves_room_between_itself_and_the_wall():
     """예산이 벽과 같아지면 이 검사는 400 을 예고하지 못하고 사후 확인만 한다."""
     assert RESERVED > 0

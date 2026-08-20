@@ -95,7 +95,7 @@ flowchart TD
 
 ## 검증
 
-- **테스트**: `pytest tests/` → 798 passed / 3 skipped · `ruff check .` 통과
+- **테스트**: `pytest tests/` → 799 passed / 3 skipped · `ruff check .` 통과
 - **ko 20샘플**: gemma4·Qwen3.6 양쪽에서 `errors=0`. 400 이 나던 서버(gemma4)에서
   그대로 완주하는 것이 이 이슈의 핵심 확인이다. 부수 효과로 재시도가 20회 → 0회,
   샘플당 1.42s → 0.92s (Qwen3.6 기준)
