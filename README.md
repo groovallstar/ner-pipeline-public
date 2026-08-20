@@ -46,7 +46,6 @@ src/server/                # ja·vi NER REST API 서비스 (FastAPI)
 docker/{server,vllm}/      # REST API 배포 + vLLM
 results/                   # 벤치마크 산출물 scratch (gitignore·휘발)
 certified/                 # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
-preserved/                 # 다시 만들 수 없는 산출물 (fold 예측 span 등) — 인용 근거는 아니다
 tests/{ner,server,hooks}/  # pytest 테스트 (hooks 는 커밋 게이트 자체의 회귀 안전망)
 docs/                      # manual·reports·issues·wiki·specs
 ```

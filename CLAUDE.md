@@ -30,7 +30,6 @@
 | `tests/` | 테스트 (`hooks/` 는 검사 게이트 자체의 회귀 안전망) | `tests/ner/CLAUDE.md` · `tests/server/` · `tests/hooks/` |
 | `results/` | 벤치마크 산출물 scratch — gitignore·휘발 | §하네스 |
 | `certified/` | 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준) | §하네스 |
-| `preserved/` | 인용 대상은 아니지만 다시 만들 수 없는 산출물 (fold 예측 span 등) — 원장에 넣으면 숫자 검사가 무력해진다 | `preserved/README.md` |
 | `docs/wiki/` | 프로젝트 독립적 도메인 지식 | `docs/wiki/schema.md` |
 | `docs/specs/` | 개발 규약 | `docs/specs/coding-conventions.md` |
 | `docs/manual/` | 구현 레퍼런스 — `src/` 모듈 API·알고리즘 맵 | — |
