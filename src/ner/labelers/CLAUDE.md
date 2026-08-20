@@ -2,7 +2,7 @@
 
 ## Purpose
 다국어 NER 라벨링 패키지. HuggingFace 데이터셋 로더와 LLM 기반 라벨러를 제공한다.
-vLLM 또는 OpenAI API 백엔드를 호출하여 텍스트에서 named entity를 추출하고,
+vLLM 백엔드를 호출하여 텍스트에서 named entity를 추출하고,
 LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 한국어(KO), 일본어(JA), 베트남어(VI), 영어(EN) 서브패키지 포함.
 
@@ -13,7 +13,6 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 | `__init__.py` | 공개 API: DatasetLoader, DatasetNotFoundError, NERRecord 익스포트 |
 | `labeler_base.py` | 공용 `parse_json_response()` — think-tag·markdown fence·wrapped dict 처리 |
 | `base_vllm_labeler.py` | vLLM 백엔드 공용 베이스 (언어팩 주입 서브클래싱) |
-| `base_openai_labeler.py` | OpenAI 호환 배치 라벨러 공용 베이스 |
 | `dataset_loader.py` | `HFTokenDatasetLoader` (alias: `DatasetLoader`) — HuggingFace NER datasets (KLUE 등), ClassLabel 변환 |
 | `tag_aligner.py` | `TagAligner`: BIO 정렬·span 추출(`extract_spans_from_bio`), 태그 정규화(`normalize_tag`, PER→PS 등) |
 | `hf_ner_labeler.py` | `HFNERLabeler` — HuggingFace pipeline 기반 BERT NER 베이스라인 |
@@ -29,7 +28,7 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 | `ko/` | 한국어 NER 라벨러 — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분; PII는 augmenters에서 합성 주입). **LOC/ORG 는 narrow-ORG 재정의를 따라 JA·VI 와 외연이 다르다** — ORG=정부·행정·공공·정치 기관만이고 인공 시설·민간조직은 비-entity (see `ko/CLAUDE.md`) |
 | `ja/` | 일본어 NER 라벨러 — canonical 10종 평면; pre-dumped Stockmark JSONL 전용 (see `ja/CLAUDE.md`) |
 | `vi/` | 베트남어 NER 라벨러 — canonical 10종 평면; canonical WikiANN-vi JSONL 덤프 전용 |
-| `en/` | 영어 NER 라벨러 — canonical 10종 평면, **vllm 백엔드만**. LOC/ORG 는 JA·VI 관례(인공 시설=ORG)를 따른다. 용도가 하나다: `augmenters/pii` 의 주입 결과를 LLM 이 독립적으로 다시 뽑아 대조하는 교차 검증. 원천 OntoNotes5 가 사람 gold 라 재라벨 대상이 없어 `openai_ner_labeler`·`dataset_loader` 는 두지 않았다 |
+| `en/` | 영어 NER 라벨러 — canonical 10종 평면. LOC/ORG 는 JA·VI 관례(인공 시설=ORG)를 따른다. 용도가 하나다: `augmenters/pii` 의 주입 결과를 LLM 이 독립적으로 다시 뽑아 대조하는 교차 검증. 원천 OntoNotes5 가 사람 gold 라 재라벨 대상이 없어 ja·vi 가 가진 `dataset_loader` 는 두지 않았다 |
 
 라벨 스키마 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
@@ -52,9 +51,9 @@ LLM JSON span 출력을 BIO 태그 시퀀스로 변환한다.
 
 ### Common Patterns
 - 프롬프트 엔지니어링이 주요 품질 레버 — 언어별로 고도 튜닝됨
-- 클라이언트는 백엔드마다 다르다 — vLLM 베이스는 `AsyncOpenAI` 전용(전 문장 동시 발사),
-  OpenAI 베이스는 동기 `OpenAI` 와 `AsyncOpenAI` 를 둘 다 만들어 `label()` 은 동기 클라이언트로 간다
-- 모델 예시: vLLM 호환 OpenAI API 모델, OpenAI gpt 시리즈
+- 클라이언트는 `AsyncOpenAI` 한 벌이다 — vLLM 이 OpenAI 호환 API 를 서빙하므로 같은 SDK 로
+  붙고, 전 문장을 동시에 발사한다
+- 모델 예시: vLLM 이 서빙하는 로컬 모델(gemma·Qwen 계열 AWQ 양자화판)
 
 ## Dependencies
 

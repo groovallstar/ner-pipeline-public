@@ -28,10 +28,10 @@ List[NERRecord] {tokens, ner_tags, id, sentence?}
     ▼ split_sentences(text, lang='ko')              [labelers/llm_helpers.py]
 문장 리스트 → concurrency 단위 동시 호출
     │
-    ▼ ner_prompts.py (SINGLE / SYSTEM+USER 템플릿)
+    ▼ ner_prompts.py (SINGLE 템플릿)
 프롬프트 문자열                                       [labelers/ko/ner_prompts.py]
     │
-    ▼ vLLM(AsyncOpenAI) / OpenAI(temperature=0, JSON mode)
+    ▼ vLLM(AsyncOpenAI 호환, temperature=0, JSON mode)
 LLM JSON 응답
     │
     ▼ parse_spans(raw)                              [labelers/llm_helpers.py]
@@ -170,12 +170,22 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 ### 프롬프트 구조
 
-2종류의 프롬프트 템플릿이 존재한다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없음 — `augmenters/wikiann_vi/` 재라벨 파이프라인 전용):
+프롬프트 템플릿은 한 벌뿐이다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없음 —
+`augmenters/wikiann_vi/` 재라벨 파이프라인 전용):
 
 | 템플릿 | 변수명 | 용도 | 형식 |
 |--------|--------|------|------|
 | SINGLE | `SINGLE_PROMPT_TEMPLATE` | 단일 문장 라벨링 (vLLM) | `입력: {sentence}\n출력:` |
-| SYSTEM+USER | `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅 형식 (다문 묶음) | system/user 메시지 분리 |
+
+전에는 OpenAI 채팅 형식용 `SYSTEM_PROMPT`+`USER_PROMPT_TEMPLATE` 가 같은 규칙을 따로
+한 벌 더 들고 있었다. 그 경로를 실제로 돌린 기록이 없는데도 규칙이 바뀔 때마다 두 번씩
+고쳐야 했고, 그러고도 두 벌이 갈라졌으므로(같은 문장에 다른 라벨이 나올 수 있고 갈라짐을
+잡을 검사가 없었다) 라벨러와 함께 걷어냈다.
+
+**프롬프트 길이에는 상한이 있다.** vLLM 은 `프롬프트 + max_tokens(출력 예약)` 이
+`max-model-len` 을 넘으면 요청을 받자마자 400 으로 거절한다. 실패가 리포트에서는 "모델
+성능이 나쁘다" 로 보이므로, `tests/ner/labelers/test_prompt_token_budget.py` 가 고정
+지시문의 토큰 수를 재서 예산을 넘으면 커밋 전에 실패한다.
 
 ### Few-shot 예시의 설계 의도
 
@@ -201,10 +211,9 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 | 결정 | 이유 |
 |------|------|
-| 2종류 프롬프트 | 백엔드별 최적 형식이 다름: vLLM은 단일(SINGLE) 프롬프트, OpenAI는 system/user 분리 |
+| 프롬프트 한 벌 | 규칙을 두 곳에 적으면 한쪽만 고쳐져 갈라진다 — 쓰지 않는 두 번째 벌은 유지비만 남는다 |
 | 상세한 엔티티 정의 + 규칙 | LLM의 라벨링 일관성을 높이기 위함. 특히 조사 제외, 복합 개체명 묶기는 한국어 특유의 문제 |
 | 다수의 Few-shot 예시 | 각 예시가 서로 다른 엣지 케이스를 커버하여, LLM이 다양한 패턴을 학습 |
-| OpenAI USER 프롬프트의 인덱스 키 | 다중 문장 처리 시 문장-결과 매핑을 명확히 하기 위함 (`{"0": [...], "1": [...]}`) |
 
 ---
 
@@ -212,14 +221,18 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 ### 베이스 클래스 구조
 
-KO 라벨러는 공통 베이스(`src/ner/labelers/base_vllm_labeler.py`,
-`src/ner/labelers/base_openai_labeler.py`)의 얇은 서브클래스다. KO 별도 파일은
-프롬프트 템플릿·기본 모델명·`lang='ko'` 만 주입한다.
+KO 라벨러는 공통 베이스(`src/ner/labelers/base_vllm_labeler.py`)의 얇은 서브클래스다.
+KO 별도 파일은 프롬프트 템플릿·기본 모델명·`lang='ko'` 만 주입한다.
 
 | 파일 | 클래스 | 백엔드 | 동시성 |
 |------|--------|--------|--------|
 | `src/ner/labelers/ko/vllm_ner_labeler.py` | `VllmNERLabeler` | vLLM(AsyncOpenAI 호환) | `concurrency` (기본 32) |
-| `src/ner/labelers/ko/openai_ner_labeler.py` | `OpenAINERLabeler` | OpenAI SDK (system/user 채팅) | `concurrency` (기본 4) |
+
+**동기 API 는 라벨러 전용 이벤트 루프를 재사용한다.** `label()`·`label_spans()` 는
+비동기 경로의 동기 래퍼인데, 호출마다 루프를 새로 만들면 클라이언트의 연결 풀과 세마포어가
+첫 루프에 묶인 채 남아 두 번째 호출부터 깨진다(`Event loop is closed`,
+`bound to a different event loop`). 벤치마크는 라벨러 하나로 샘플을 순차 처리하므로 정확히
+이 경로를 탄다. 루프를 라벨러 수명 동안 하나로 유지하고, 정리는 `close()` 로 한다.
 
 ### 전체 흐름
 
@@ -229,9 +242,8 @@ KO 라벨러는 공통 베이스(`src/ner/labelers/base_vllm_labeler.py`,
     ▼ split_sentences(text, lang='ko')   (1) 문장 분리
 문장 리스트 (llm_helpers.py)
     │
-    ▼ 백엔드별 호출 단위 구성              (2) 분할
-    │   ├─ vLLM:    문장 단위 SINGLE × concurrency 동시 호출
-    │   └─ OpenAI:  max_tokens_per_batch 한도로 묶음 → SYSTEM+USER × concurrency 동시 호출
+    ▼ 호출 단위 구성                      (2) 분할
+    │   └─ 문장 단위 SINGLE × concurrency 동시 호출
     │
     ▼ LLM 호출                            (3) temperature=0, JSON mode
     │
@@ -257,21 +269,20 @@ KO 라벨러는 공통 베이스(`src/ner/labelers/base_vllm_labeler.py`,
 ### 4.2 호출 단위 구성
 
 - **vLLM**: `split_sentences()` 결과 문장 각각을 SINGLE 프롬프트로 1회씩 호출. `concurrency`(기본 32)로 동시 실행.
-- **OpenAI**: 문장을 `max_tokens_per_batch`(기본 1000) 토큰 한도로 묶어 USER 프롬프트의 `{sentences}`에 주입. 배치 단위를 `concurrency`(기본 4)로 동시 실행.
-- 빈 문장은 양쪽 모두 사전 필터링.
+- 빈 문장은 사전 필터링.
 
 ### 4.3 LLM 호출
 
 | 백엔드 | 클라이언트 | 동시성 | 핵심 옵션 |
 |--------|-----------|--------|----------|
 | vLLM | `AsyncOpenAI` (vLLM 호환 엔드포인트) | async (`concurrency`, 기본 32) | `temperature=0`, `<think>` 태그 strip (`thinking=False`) |
-| OpenAI | `OpenAI` + `AsyncOpenAI` | async (`concurrency`, 기본 4) | system+user 채팅, 토큰 기준 배치 분할(`max_tokens_per_batch`) |
 
 | 설정 | 값 | 이유 |
 |------|------|------|
 | `temperature` | 0 | NER은 정확성이 중요 — 창의적 변형 불필요 |
 | `response_format`/`format` | JSON | LLM이 반드시 유효한 JSON을 출력하도록 강제 |
 | `thinking` | False | thinking 토큰이 JSON 파싱을 방해하지 않도록 |
+| `max_tokens` | 1024 | 출력 예약분은 실제 사용량과 무관하게 컨텍스트에서 먼저 빠진다. 실측 출력이 77 토큰이라 1024 로도 넉넉하고, 남는 자리는 프롬프트가 쓴다 |
 
 ### 4.4 JSON 파싱
 
@@ -291,8 +302,6 @@ if isinstance(data, dict):
 # 정규식 폴백: 본문에서 [...] 추출
 match = re.search(r"\[.*?\]", raw, re.DOTALL)
 ```
-
-OpenAI 백엔드는 한 번에 다문(`{"0":[...], "1":[...]}`) 형태를 받으므로 인덱스별로 분리·복원하는 `_parse_batch_response`를 추가로 사용한다. 인덱스 누락·범위 초과는 빈 리스트로 채우고, 배치 호출이 실패하면 묶음을 더 작게 쪼개거나 개별 문장 단위로 재시도한다.
 
 ### 4.5 spans → BIO 변환
 

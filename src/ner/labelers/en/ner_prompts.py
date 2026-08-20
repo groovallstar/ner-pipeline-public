@@ -11,7 +11,7 @@ KO 의 narrow-ORG 를 따르지 않으며, 같은 선언이
 문장에서 span 을 독립적으로 다시 뽑아 gold 와 대조해야 주입기가 자기 결과를
 자기가 통과시키지 못한다. 벤치마크용 라벨링(`llm_eval`)은 아직 이 언어에
 붙어 있지 않다 — 원천 OntoNotes5 가 사람 gold 라 재라벨할 대상이 없기
-때문이며, 필요해지면 `openai_ner_labeler`·`dataset_loader` 를 더한다.
+때문이며, 필요해지면 ja·vi 처럼 `dataset_loader` 를 더한다.
 """
 
 DEFAULT_ENTITY_TYPES = [

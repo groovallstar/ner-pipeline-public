@@ -113,8 +113,8 @@ def regenerate_folds(rows: Sequence[dict], stratify: bool,
     return folds
 
 
-def load_preserved_folds(run_dir: str, n_folds: int = 10) -> List[Set[str]]:
-    """보존된 예측 덤프에서 fold 별 test 행 id 를 읽는다."""
+def load_dumped_folds(run_dir: str, n_folds: int = 10) -> List[Set[str]]:
+    """실행 덤프에서 fold 별 test 행 id 를 읽는다 — `fold{N}/pred_spans.json`."""
     base = pathlib.Path(run_dir)
     folds: List[Set[str]] = []
     for i in range(n_folds):
@@ -225,12 +225,11 @@ def audit_report(base_gold: Sequence[dict], head_gold: Sequence[dict],
     # 가설이 예상한 방향이라 조용히 지나간다.
     if positive_control:
         control = {}
-        for slug, gold_path in positive_control.items():
+        for run_dir, gold_path in positive_control.items():
             rows = load_gold(gold_path)
-            got_folds = load_preserved_folds(
-                f"preserved/classifier/ko/{slug}", n_folds)
+            got_folds = load_dumped_folds(run_dir, n_folds)
             regen = regenerate_folds(rows, True, group_key, seed, n_folds)
-            control[slug] = {
+            control[run_dir] = {
                 "stratify": True,
                 "exact_folds": sum(1 for a, b in zip(got_folds, regen)
                                    if a == b),
@@ -339,13 +338,19 @@ def cmd_audit(args: argparse.Namespace) -> None:
 
     control = None
     if args.positive_control:
-        # 보존된 두 실행 중 base 는 head 팔 gold 로, head 는 현 gold 로 돌았다.
+        if not (args.positive_control_base_run
+                and args.positive_control_head_run):
+            raise SystemExit(
+                "--positive-control needs --positive-control-base-run and "
+                "--positive-control-head-run: the run dirs it once defaulted "
+                "to are no longer committed")
+        # 대조할 두 실행 중 base 는 head 팔 gold 로, head 는 현 gold 로 돌았다.
         with tempfile.NamedTemporaryFile(suffix=".jsonl",
                                          delete=False) as fp:
             head_path = fp.name
         dump_gold(head_gold, head_path)
-        control = {args.positive_control_base_slug: head_path,
-                   args.positive_control_head_slug: args.gold}
+        control = {args.positive_control_base_run: head_path,
+                   args.positive_control_head_run: args.gold}
 
     try:
         report = audit_report(
@@ -403,11 +408,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="scenario key the head arm setting is documented as; "
                         "omit when no record survives")
     a.add_argument("--positive-control", action="store_true",
-                   help="check regenerated folds against preserved runs")
-    a.add_argument("--positive-control-base-slug",
-                   default="issue202-axis1-base")
-    a.add_argument("--positive-control-head-slug",
-                   default="issue202-axis1-head")
+                   help="check regenerated folds against a run whose "
+                        "fold*/pred_spans.json dumps are on disk")
+    a.add_argument("--positive-control-base-run",
+                   help="run dir holding the base arm fold*/pred_spans.json")
+    a.add_argument("--positive-control-head-run",
+                   help="run dir holding the head arm fold*/pred_spans.json")
     a.add_argument("--group-key", default="id")
     a.add_argument("--seed", type=int, default=42)
     a.add_argument("--n-folds", type=int, default=10)

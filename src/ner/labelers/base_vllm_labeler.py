@@ -20,7 +20,10 @@ class BaseVllmLabeler:
         base_url: vLLM 서버 URL (예: "http://localhost:8081/v1").
         model: vLLM 컨테이너에서 서빙하는 모델 이름.
         entity_types: NER 태그셋. 기본값은 언어 팩의 기본값을 사용한다.
-        max_tokens: 샘플당 최대 생성 토큰 수.
+        max_tokens: 샘플당 최대 생성 토큰 수. 실제로 쓴 양이 아니라 서버가 미리
+            잡아두는 자리라, 프롬프트 + 이 값이 max-model-len 을 넘으면 요청이
+            GPU 에 닿기도 전에 거절된다. NER 출력은 JSON 배열 한 줄이라 실측
+            77 토큰이었고, 1024 는 그 13배 여유다.
         concurrency: vLLM 서버에 대한 최대 동시 요청 수.
         thinking: vLLM 채팅 템플릿의 `enable_thinking` 플래그 활성화 여부.
         lang: 언어 코드("ko"/"ja") — 문장 분리기에 전달된다.
@@ -32,7 +35,7 @@ class BaseVllmLabeler:
         base_url: str = "http://localhost:8081/v1",
         model: str = "Qwen/Qwen3.5-27B",
         entity_types: Optional[List[str]] = None,
-        max_tokens: int = 4096,
+        max_tokens: int = 1024,
         concurrency: int = 32,
         thinking: bool = False,
         *,
@@ -49,6 +52,7 @@ class BaseVllmLabeler:
         self._single_prompt_template = single_prompt_template
         self._semaphore = asyncio.Semaphore(concurrency)
         self._client = AsyncOpenAI(base_url=base_url, api_key="none")
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         # 토큰 사용량 추적 (호출 누적, 소비자가 초기화한다)
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
@@ -59,10 +63,30 @@ class BaseVllmLabeler:
     # 공개 API
     # ------------------------------------------------------------------
 
+    def _run(self, coro):
+        """라벨러 전용 이벤트 루프에서 코루틴을 돌린다.
+
+        `asyncio.run` 은 호출마다 루프를 새로 만들고 닫는데, 클라이언트의 연결 풀과
+        세마포어는 **처음 쓴 루프에 묶인다**. 라벨러 하나로 동기 API 를 여러 번 부르면
+        (벤치마크가 샘플을 순차 처리하는 방식) 두 번째 호출부터 닫힌 루프의 연결을 잡아
+        `Event loop is closed` 가 나고, SDK 재시도가 대개 가려주지만 재시도가 소진되면
+        그 샘플이 통째로 실패한다. 루프를 라벨러 수명 동안 하나로 유지하면 그 어긋남이
+        생기지 않는다.
+        """
+        if self._loop is None or self._loop.is_closed():
+            self._loop = asyncio.new_event_loop()
+        return self._loop.run_until_complete(coro)
+
+    def close(self) -> None:
+        """전용 루프를 닫는다. 라벨러를 오래 살려두는 호출자를 위한 정리 훅이다."""
+        if self._loop is not None and not self._loop.is_closed():
+            self._loop.close()
+        self._loop = None
+
     def label(self, text: str) -> List[dict]:
         """텍스트를 라벨링한다. 문장당 하나의 NER 레코드 리스트를 반환한다."""
         sentences = split_sentences(text, lang=self.lang)
-        return asyncio.run(self._label_sentences(sentences, id_offset=0))
+        return self._run(self._label_sentences(sentences, id_offset=0))
 
     def label_spans(self, text: str, split: bool = True) -> List[dict]:
         """BIO 변환 없이 원시 엔티티 span을 반환한다 (동기 래퍼).
@@ -73,7 +97,7 @@ class BaseVllmLabeler:
                 (벤치마크 기본). False이면 전체 텍스트를 단일 프롬프트로
                 전달하여 문맥을 유지 (검증 용도 권장).
         """
-        return asyncio.run(self.alabel_spans(text, split=split))
+        return self._run(self.alabel_spans(text, split=split))
 
     async def alabel_spans(self, text: str, split: bool = True) -> List[dict]:
         """label_spans의 async 버전. 외부 event loop 내에서 호출 가능."""
@@ -110,7 +134,7 @@ class BaseVllmLabeler:
         if not all_sentences:
             return []
 
-        return asyncio.run(self._run_batch(all_sentences, meta))
+        return self._run(self._run_batch(all_sentences, meta))
 
     # ------------------------------------------------------------------
     # 내부 헬퍼
