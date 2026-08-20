@@ -1,7 +1,7 @@
 # issue-210: ko llm_eval 전건 400 수정 + ko 프롬프트 중복 정리·openai 경로 제거
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/210
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/211
 - 브랜치: `feat/issue-210-ko-prompt-token-budget`
 - 승인일: 2026-08-19
 
