@@ -57,6 +57,10 @@ tests/ner/
 │   │                  # 근거 없이 갈리는 시나리오에서 판정 거부(추측을 결정으로
 │   │                  # 굳히지 않는다), 양성 대조·역산 지문 실패 검출,
 │   │                  # 커밋된 산출물의 자기 정합성
+│   ├── test_prompt_token_budget.py  # ko·ja·vi 고정 지시문이 컨텍스트 예산
+│   │                  # 안인지 — 프롬프트 + 출력 예약이 max-model-len 을 넘으면
+│   │                  # vLLM 이 전건 400 으로 거절하고 리포트는 정상 생성돼
+│   │                  # 모델 성능 저하로 읽힌다. 토크나이저는 로컬 HF 캐시
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
 └── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,
@@ -79,9 +83,10 @@ tests/ner/
 
 ## 주의사항
 
-- LLM 백엔드(vLLM, OpenAI) 연동 테스트는 서버가 실행 중이어야 함
+- LLM 백엔드(vLLM) 연동 테스트는 서버가 실행 중이어야 함
 - 조건부 skip 은 GPU 유무가 아니라 **로컬 자원 부재**로 걸린다 — HF 캐시가 없으면
-  `pytest.skip`(`test_bio_dataset.py`), 선택적 패키지(`pyvi`·`fugashi` 등)가 없으면
+  `pytest.skip`(`test_bio_dataset.py`)·`skipif`(`labelers/test_prompt_token_budget.py`
+  — 토크나이저 캐시), 선택적 패키지(`pyvi`·`fugashi` 등)가 없으면
   `importorskip`(`classifier/test_encode.py`). CI 설정은 리포에 없어(호스트 실행 전제)
   "CI 에서 스킵" 이라는 경로 자체가 없다
 - 테스트는 `PYTHONPATH` 설정 없이 동작 (uv editable install 기준)

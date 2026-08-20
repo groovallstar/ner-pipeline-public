@@ -2,7 +2,7 @@
 
 사용 예:
     python -m ner.llm_eval.benchmark \
-        --models vllm:Qwen/Qwen3.5-9B hf:model-name openai:gpt-4o-mini \
+        --models vllm:Qwen/Qwen3.5-9B hf:model-name \
         --max-samples 100 \
         --output results/benchmark.json
 """
@@ -44,7 +44,6 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
     형식: backend:model_name
     예시:
         vllm:Qwen/Qwen3.5-9B
-        openai:gpt-5-mini
         hf:soddokayo/klue-roberta-large-klue-ner
     """
     parts = model_spec.split(":", 1)
@@ -66,14 +65,11 @@ def _create_labeler(model_spec: str, args, lang: str = "ko"):
             concurrency=args.concurrency,
             thinking=getattr(args, "thinking", False),
         )
-    elif backend == "openai":
-        from ner.labelers.ko.openai_ner_labeler import OpenAINERLabeler
-        return backend, OpenAINERLabeler(model=model_name)
     elif backend == "hf":
         from ner.labelers.hf_ner_labeler import HFNERLabeler
         return backend, HFNERLabeler(model_name=model_name, lang="ko")
     else:
-        raise ValueError(f"Unknown backend '{backend}'. Use: vllm, openai, hf")
+        raise ValueError(f"Unknown backend '{backend}'. Use: vllm, hf")
 
 
 def _create_labeler_ja(backend: str, model_name: str, args):
@@ -86,11 +82,8 @@ def _create_labeler_ja(backend: str, model_name: str, args):
             concurrency=args.concurrency,
             thinking=getattr(args, "thinking", False),
         )
-    elif backend == "openai":
-        from ner.labelers.ja.openai_ner_labeler import OpenAINERLabeler
-        return backend, OpenAINERLabeler(model=model_name)
     else:
-        raise ValueError(f"Unknown backend '{backend}' for Japanese. Use: vllm, openai")
+        raise ValueError(f"Unknown backend '{backend}' for Japanese. Use: vllm")
 
 
 def _create_labeler_vi(backend: str, model_name: str, args):
@@ -103,14 +96,11 @@ def _create_labeler_vi(backend: str, model_name: str, args):
             concurrency=args.concurrency,
             thinking=getattr(args, "thinking", False),
         )
-    elif backend == "openai":
-        from ner.labelers.vi.openai_ner_labeler import OpenAINERLabeler
-        return backend, OpenAINERLabeler(model=model_name)
     elif backend == "hf":
         from ner.labelers.hf_ner_labeler import HFNERLabeler
         return backend, HFNERLabeler(model_name=model_name, lang="vi")
     else:
-        raise ValueError(f"Unknown backend '{backend}' for Vietnamese. Use: vllm, openai, hf")
+        raise ValueError(f"Unknown backend '{backend}' for Vietnamese. Use: vllm, hf")
 
 
 def main():
@@ -122,7 +112,7 @@ def main():
     )
     parser.add_argument(
         "--models", nargs="+", required=True,
-        help="Model specs: 'backend:model' (e.g. vllm:Qwen/Qwen3.5-9B, openai:gpt-5-mini)",
+        help="Model specs: 'backend:model' (e.g. vllm:Qwen/Qwen3.5-9B, hf:model-name)",
     )
     parser.add_argument("--lang", default="ko", choices=["ko", "ja", "vi"], help="Language (default: ko)")
     parser.add_argument("--dataset", default=None, help="Dataset name (default: klue for ko, stockmark for ja)")

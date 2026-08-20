@@ -14,9 +14,9 @@
 | `dataset_loader.py` | HuggingFace datasets 로딩 (`NERRecord` 반환) |
 | `tag_aligner.py` | BIO 태그 정렬·정규화·span 추출 유틸리티 |
 | `hf_ner_labeler.py` | HuggingFace BERT 기반 NER 라벨러 (벤치마크 베이스라인) |
-| `ko/` | 한국어 NER 라벨러 (vllm, openai) — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분) |
-| `ja/` | 일본어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
-| `vi/` | 베트남어 NER 라벨러 (vllm, openai) — canonical 10종 평면 |
+| `ko/` | 한국어 NER 라벨러 (vllm) — canonical NER 5종 (PER/LOC/ORG/PROD/EVT) + DAT, KLUE 유래·TI/QT 드롭 (PROD/EVT는 LLM 재라벨 증분) |
+| `ja/` | 일본어 NER 라벨러 (vllm) — canonical 10종 평면 |
+| `vi/` | 베트남어 NER 라벨러 (vllm) — canonical 10종 평면 |
 
 ### llm_eval/
 

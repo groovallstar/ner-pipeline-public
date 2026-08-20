@@ -9,16 +9,15 @@ Consequently **KO's LOC/ORG extension differs from JA·VI** — JA·VI canonical
 
 PROD/EVT: continuously operating leagues and clubs ("프리미어리그", "메이저리그") are private sports organizations, so they are non-entity rather than ORG; only a specific edition of a competition or a specific match is EVT. Laws, era labels, multi-year states/processes (냉전, 산업혁명), and abstract disputes are non-entity too. The PII types remain unfilled (later increments).
 
-Two backend implementations (vLLM, OpenAI) encode the same rules in **two different templates** — vLLM uses `SINGLE_PROMPT_TEMPLATE` (many few-shot examples), OpenAI uses `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` (condensed, no examples). Editing the rules on one side only makes the two backends disagree. span-to-BIO conversion logic is shared.
+The rules live in **one template** — `SINGLE_PROMPT_TEMPLATE` (vLLM, few-shot). A second copy in OpenAI chat format (`SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE`) was removed: the OpenAI path was never actually run, yet every rule change had to be written twice, and the two copies had already drifted apart with no check to catch it. The prompt is also **length-bounded** — `tests/ner/labelers/test_prompt_token_budget.py` fails once the fixed instruction outgrows the server context budget, because prompt + reserved output tokens over `max-model-len` makes vLLM reject every request with a 400 that looks like poor model quality in the report.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `__init__.py` | Re-exports all prompts, helpers, and labeler classes |
-| `ner_prompts.py` | Korean NER prompt templates (6 types: PER/LOC/ORG/DAT/PROD/EVT) — Korean-specific rules (particle exclusion, compound place names) + the **narrow-ORG rubric** (government/political bodies only as ORG, with facilities and non-governmental organizations explicitly enumerated as non-entity) + PROD/EVT boundaries. Two templates: `SINGLE_PROMPT_TEMPLATE` (vLLM, few-shot) / `SYSTEM_PROMPT`+`USER_PROMPT_TEMPLATE` (OpenAI, condensed) |
+| `ner_prompts.py` | Korean NER prompt templates (6 types: PER/LOC/ORG/DAT/PROD/EVT) — Korean-specific rules (particle exclusion, compound place names) + the **narrow-ORG rubric** (government/political bodies only as ORG, with facilities and non-governmental organizations explicitly enumerated as non-entity) + PROD/EVT boundaries. One template: `SINGLE_PROMPT_TEMPLATE` (vLLM, few-shot) |
 | `vllm_ner_labeler.py` | `VllmNERLabeler` — async with configurable concurrency (default 32) via AsyncOpenAI against vLLM API |
-| `openai_ner_labeler.py` | `OpenAINERLabeler` — token-budget-based batching (max_tokens_per_batch=1000) with chat format |
 | `klue_to_canonical_gold.py` | KLUE BIO → canonical char-span gold JSONL conversion (CLI) |
 | `ko_prod_evt_relabel.py` | PROD/EVT LLM relabel incremental pipeline (CLI: relabel\|merge) |
 | `ko_evt_r2_audit.py` | EVT gold audit against the canonical §5.3 rules + R2 recovery (CLI: audit\|judge\|apply\|homomorph\|head-candidates). `audit` is a **re-runnable machine gate** — it reports the R2 coverage rate and rule violations and exits non-zero via `--gate-rate`/`--gate-violations`, so the same command verifies gold before and after a recovery. `judge` asks two independent LLMs per occurrence and keeps only unanimous verdicts; `apply` inserts them and fixes deterministic violations, asserting the other nine types stay byte-identical. `head-candidates` scans gold with the canonical R2 head list — **model predictions are never an input**, because a candidate pool drawn from model FPs grows gold only where the model already fired, which guarantees a recall gain by construction. `homomorph` is the issue #201 consistency gate: every head-homomorph surface with no gold EVT history must be recovered, excluded by a canonical reason code, or judged NOT — it exits non-zero on anything left unclassified |
@@ -39,26 +38,26 @@ Two backend implementations (vLLM, OpenAI) encode the same rules in **two differ
 - Prompt engineering is the primary quality lever — `ner_prompts.py` contains highly tuned Korean linguistic rules. Do not simplify
 - `spans_to_bio()` (public, defined in `llm_helpers.py` — shared across ko/ja/vi, not ko-local) uses 2-pass matching: exact token match first, then substring containment (handles Korean particles like "서울에서" matching "서울")
 - `split_sentences()` splits on `.!?` followed by whitespace, minimum 10-char buffer — defined once in `llm_helpers.py`, called via the shared base classes
-- vLLM sends all sentences concurrently; OpenAI uses token-budget batching
+- vLLM sends all sentences concurrently (`concurrency`, default 32)
 
 ### Testing Requirements
 - Test span-to-BIO alignment for Korean compound entities with particles
 - Mock `AsyncOpenAI.chat.completions.create()`
 
 ### Common Patterns
-- Both labelers import prompts from `ner_prompts.py`
+- The labeler imports prompts from `ner_prompts.py`
 - `DEFAULT_ENTITY_TYPES = ["PER", "LOC", "ORG", "DAT", "PROD", "EVT"]`
 
 ## Dependencies
 
 ### Internal
 - `ner.labelers.ko.ner_prompts`
-- `ner.labelers.base_vllm_labeler` / `ner.labelers.base_openai_labeler` — both labelers subclass these
+- `ner.labelers.base_vllm_labeler` — the labeler subclasses this
 - `ner.labelers.span_matcher` — used by `ko_prod_evt_relabel.py` for relabel span matching
 - `ner.labelers.dataset_loader` — used by `klue_to_canonical_gold.py` to load KLUE source
 
 ### External
-- `openai` (vllm + openai backends)
+- `openai` — the vLLM client speaks the OpenAI-compatible API
 - `datasets` — no direct import; pulled in transitively through `dataset_loader`, so it is required when running `klue_to_canonical_gold.py`
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

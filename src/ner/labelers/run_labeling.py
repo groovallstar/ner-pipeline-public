@@ -43,9 +43,6 @@ def _create_labeler(spec: str, lang: str, args):
             from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler
             return backend, VllmNERLabeler(base_url=args.vllm_url, model=model_name,
                                            concurrency=args.concurrency, thinking=args.thinking)
-        if backend == "openai":
-            from ner.labelers.ja.openai_ner_labeler import OpenAINERLabeler
-            return backend, OpenAINERLabeler(model=model_name)
     raise ValueError(f"Unsupported lang/backend: {lang}/{backend}")
 
 

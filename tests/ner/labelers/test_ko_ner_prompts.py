@@ -11,7 +11,7 @@ import json
 import re
 
 from ner.labelers.ko.ko_evt_axis1_audit import AXIS1_HEADS
-from ner.labelers.ko.ner_prompts import SINGLE_PROMPT_TEMPLATE, SYSTEM_PROMPT
+from ner.labelers.ko.ner_prompts import SINGLE_PROMPT_TEMPLATE
 
 _PAIR = re.compile(r"입력: (?P<text>.+)\n출력: (?P<spans>\[.*\])")
 _QUOTED = re.compile(r'"([^"]+)"')
@@ -94,15 +94,14 @@ def _taught_heads(template: str) -> set:
     return {head for group in groups for head in _QUOTED.findall(group)}
 
 
-def test_both_backends_teach_the_same_axis1_head_list():
-    """vLLM 과 OpenAI 는 템플릿이 두 벌이라 한쪽만 고치면 백엔드가 갈린다.
+def test_the_template_teaches_exactly_the_axis1_head_list():
+    """프롬프트가 가르치는 head 집합과 모듈 상수가 어긋나면 감사와 라벨러가 갈린다.
 
     존재 검사(`"사건 head" in template`)로는 부족하다 — 그 문자열은 PROD 절에도 있어서
-    **축1 절을 통째로 지워도 통과한다.** 두 템플릿 각각에서 head 집합을 실제로 뽑아
-    모듈 상수와 대조해야 좁힘·넓힘·한쪽만 수정이 전부 걸린다.
+    **축1 절을 통째로 지워도 통과한다.** 템플릿에서 head 집합을 실제로 뽑아 모듈
+    상수와 대조해야 좁힘·넓힘이 둘 다 걸린다.
     """
-    for template in (SINGLE_PROMPT_TEMPLATE, SYSTEM_PROMPT):
-        assert _taught_heads(template) == set(AXIS1_HEADS)
+    assert _taught_heads(SINGLE_PROMPT_TEMPLATE) == set(AXIS1_HEADS)
 
 
 def test_head_extraction_ignores_examples_and_other_rules():
@@ -119,11 +118,10 @@ def test_head_extraction_ignores_examples_and_other_rules():
     assert {"참사", "마라톤"} <= taught
 
 
-def test_axis1_rule_names_the_particle_exclusion_in_both_backends():
+def test_axis1_rule_names_the_particle_exclusion():
     """조사 붙은 선행 고유명 제외는 head 목록만큼 모집단을 바꾼다."""
-    for template in (SINGLE_PROMPT_TEMPLATE, SYSTEM_PROMPT):
-        assert "앞 고유명에 조사가 붙으면" in template
-        assert '"파리에서 테러"' in template
+    assert "앞 고유명에 조사가 붙으면" in SINGLE_PROMPT_TEMPLATE
+    assert '"파리에서 테러"' in SINGLE_PROMPT_TEMPLATE
 
 
 def test_particle_bearing_modifier_is_taught_as_out_of_span():

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BenchmarkResult:
     model_name: str
-    backend: str  # "vllm" | "openai" | "hf"
+    backend: str  # "vllm" | "hf"
     metrics: Dict = field(default_factory=dict)
     latency: Dict = field(default_factory=dict)
     num_samples: int = 0

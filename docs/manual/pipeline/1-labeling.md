@@ -1,6 +1,6 @@
 # 1. 라벨링 — LLM NER 라벨러 + 벤치마크 평가
 
-> **이 단계가 하는 일**: 원천 텍스트를 LLM(vLLM/OpenAI 호환 API)으로 NER
+> **이 단계가 하는 일**: 원천 텍스트를 LLM(vLLM 의 OpenAI 호환 API)으로 NER
 > 라벨링하고, gold와 비교해 span-level F1을 측정한다.
 > **대상 코드**: `src/ner/labelers/{ja,vi}`, `src/ner/llm_eval`,
 > `src/ner/metrics`
@@ -20,7 +20,7 @@ flowchart TD
     JA["JA · Stockmark<br/>사람이 만든 정답 5종"]
     VI["VI · WikiANN<br/>재라벨 silver 5종"]
     JA & VI --> LOAD["데이터를 읽어<br/>문장 + 정답 위치로<br/>만든다"]
-    LOAD --> LLM["문장을 나눠 LLM(vLLM/<br/>OpenAI)에<br/>넣고 엔티티를 뽑는다"]
+    LOAD --> LLM["문장을 나눠 vLLM 에<br/>넣고 엔티티를 뽑는다"]
     LLM --> RAW["LLM이 뽑은 엔티티<br/>(글자·종류만, 위치는<br/>없음)"]
     RAW --> MATCH["원문에서 그 글자를 찾아<br/>문자 위치(시작·끝)를<br/>채운다"]
     MATCH --> PRED["예측 엔티티<br/>(글자·종류·시작·끝)"]
@@ -33,7 +33,7 @@ flowchart TD
 
 1. **로딩** — `DatasetLoader`가 JSONL을 읽어 `{text, gold_spans}` 레코드로
    만든다(JA=사람 gold, VI=재라벨 silver).
-2. **라벨링** — 문장 분할 후 언어별 프롬프트로 vLLM/OpenAI를 호출해 위치
+2. **라벨링** — 문장 분할 후 언어별 프롬프트로 vLLM 을 호출해 위치
    없는 raw span `{text, type}`을 받는다(§1·§2).
 3. **매칭** — `match_spans`가 원문에서 문자 오프셋을 채워 pred span
    `{text,type,start,end}`으로 만든다(JA·VI 공용, §3).
@@ -53,21 +53,17 @@ flowchart TD
 
 ## 1. 공통 아키텍처 — 베이스 라벨러
 
-ko/ja/vi 라벨러는 백엔드별 추상 베이스 2종을 상속하고 **언어팩**
+ko/ja/vi 라벨러는 공통 베이스 하나를 상속하고 **언어팩**
 (`entity_types`, 프롬프트 템플릿, `lang`)만 주입한다. 서브클래스는
 `__init__`만 오버라이드해 `super().__init__(..., lang=<lang>)`을 호출한다.
 
 ```mermaid
 flowchart TD
-    subgraph base["백엔드별 공통 베이스<br/>(2종)"]
-        BV["vLLM 백엔드용 베이스"]
-        BO["OpenAI 백엔드용 베이스"]
-    end
-    BV --> JV["JA 라벨러 (vLLM)"]
-    BV --> VV["VI 라벨러 (vLLM)"]
-    BO --> JO["JA 라벨러 (OpenAI)"]
-    BO --> VO["VI 라벨러 (OpenAI)"]
-    LP(["언어팩<br/>엔티티 종류 · 프롬프트 ·<br/>언어코드"]) -. 주입 .-> JV & VV & JO & VO
+    BV["vLLM 백엔드용 베이스"]
+    BV --> JV["JA 라벨러"]
+    BV --> VV["VI 라벨러"]
+    BV --> KV["KO 라벨러"]
+    LP(["언어팩<br/>엔티티 종류 · 프롬프트 ·<br/>언어코드"]) -. 주입 .-> JV & VV & KV
 ```
 
 ### 공개 메서드 (JA·VI가 쓰는 것)
@@ -78,12 +74,13 @@ flowchart TD
 | `label(text)` | BIO 태그 레코드 | KO 경로 전용(문장 분할 후 BIO) |
 | `label_records(records)` | 배치 결과 | `text` 필드 다건 처리 |
 
-- OpenAI 베이스는 `label_spans`가 sync 래퍼이고 내부 `alabel_spans`가
-  async 처리를 맡는다(`asyncio.run`).
-- **백엔드 차이**: vLLM은 `SINGLE_PROMPT_TEMPLATE`로 문장마다 개별 호출
-  (`asyncio.Semaphore(concurrency)` 동시성 제한), OpenAI는 문장을 인덱스
-  키로 묶어 한 호출로 보내고 `{"0":[...],"1":[...]}` dict로 되받는다
-  (`_parse_batch_response`; 파싱 실패 시 문장 수만큼 빈 span 폴백).
+- `label_spans`는 sync 래퍼이고 내부 `alabel_spans`가 async 처리를 맡는다.
+  문장마다 `SINGLE_PROMPT_TEMPLATE`로 개별 호출하며 `asyncio.Semaphore(concurrency)`
+  로 동시성을 제한한다.
+- **동기 호출은 라벨러 전용 이벤트 루프를 재사용한다.** 호출마다 루프를 새로 만들면
+  클라이언트 연결 풀과 세마포어가 첫 루프에 묶인 채 남아, 같은 라벨러로 두 번째
+  호출부터 깨진다(`Event loop is closed`). KO 벤치마크가 라벨러 하나로 샘플을 순차
+  처리해 정확히 이 경로를 탄다. 정리는 `close()`.
 
 > **함정 — HF 베이스라인은 이 경로에 없다.** `labelers/hf_ner_labeler.py`
 > (`HFNERLabeler`)는 KO BIO 경로 베이스라인이라 `label_spans`가 없다. JA
@@ -101,12 +98,20 @@ flowchart TD
 `docs/manual/data/canonical-entity-schema.md` 단일 출처다. 라벨러는
 canonical **영문 약어**(`PER/LOC/ORG/PROD/EVT` + PII 5종)를 그대로 출력한다.
 
-### 프롬프트 템플릿 — 백엔드별 2종
+### 프롬프트 템플릿 — 한 벌
 
 | 템플릿 | 용도 | 사용 클래스 |
 |---|---|---|
 | `SINGLE_PROMPT_TEMPLATE` | 문장 단위 라벨링(다중 호출) | `VllmNERLabeler` |
-| `SYSTEM_PROMPT` + `USER_PROMPT_TEMPLATE` | OpenAI 채팅(다문 묶음) | `OpenAINERLabeler` |
+
+전에는 OpenAI 채팅 형식용 템플릿이 같은 규칙을 한 벌 더 들고 있었으나, 그 경로를 돌린
+기록이 없는데도 규칙이 바뀔 때마다 두 번씩 고쳐야 했고 그러고도 두 벌이 갈라져 걷어냈다.
+
+**프롬프트 길이에는 상한이 있다.** `프롬프트 + max_tokens(출력 예약)` 이 서버
+`max-model-len` 을 넘으면 vLLM 이 요청을 받자마자 400 으로 거절하는데, 벤치마크는 예외를
+세기만 하고 리포트를 정상 생성하므로 "모델 성능이 나쁘다" 로 읽힌다.
+`tests/ner/labelers/test_prompt_token_budget.py` 가 고정 지시문의 토큰 수를 재서 예산을
+넘으면 커밋 전에 실패한다.
 
 ### 공통 라벨링 규칙(프롬프트 명시)
 
@@ -114,10 +119,6 @@ canonical **영문 약어**(`PER/LOC/ORG/PROD/EVT` + PII 5종)를 그대로 출�
 - **JSON 배열만 출력** — 설명 금지, 없으면 `[]`
 - **복합 명칭 통합** — 분리 없이 한 덩어리
 - **영문 태그만** — 원어 라벨(`人名`/`地名` 등) leakage 금지
-
-> **함정 — JA OpenAI만 안전 도입부.** JA OpenAI `SYSTEM_PROMPT`는 합성 PII
-> 벤치마크에서 거부 응답을 피하려 "인공 합성 데이터·정보 추출 전용" 도입부를
-> 추가로 넣는다(VI엔 없음).
 
 ---
 
