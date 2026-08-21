@@ -1,11 +1,19 @@
 # issue-146 — ELECTRA fold 붕괴 조사 (재현성·안정성)
 
+- 조사: 2026-06, `koelectra-base-v3-discriminator`,
+  `data/klue/origin.boundary.eponymy.jsonl`(클린 NER)
+- 발단: #140
+- 붕괴 판정: test overall char-offset span F1 < 0.3 (정상이 0.84대라 경계가
+  넉넉하다)
+
 ## 배경
 
 #140 koelectra 10-fold 재측정 중 fold 하나가 학습에 실패했다(train loss
-~0.76 정체, F1 0). 같은 seed 로 다시 돌리니 수렴해, 데이터·토크나이저
-버그는 아니었다. 이슈는 원인을 fp16·warmup 부재·cuDNN 비결정성으로 보고
-bf16 과 warmup 으로 "근본 제거"하자고 제안했다.
+~0.76 정체, F1 0). 같은 seed 로 다시 돌리니 멀쩡히 수렴해(loss 0.058,
+F1 0.852) 데이터·토크나이저에 결정적 버그가 있는 것은 아니었다. 이슈는
+원인을 fp16·warmup 부재·cuDNN 비결정성으로 보고 bf16 과 warmup 으로
+"근본 제거"하자고 제안했다. 그 가설이 맞는지, 애초에 붕괴가 재현은 되는지
+확인하려고 koelectra 를 약 920회 학습시키며 변수를 하나씩 갈아끼웠다.
 
 ## 수락 기준 (원안 → 결과)
 
@@ -14,20 +22,69 @@ bf16 과 warmup 으로 "근본 제거"하자고 제안했다.
 근본 수정이 존재하지 않는다. 따라서 작업을 "근본 제거"에서 **하드닝 + 기록 +
 운영 완화**로 재정의했다(사람 승인).
 
-## 조사 요약
+## 가른 축
 
-koelectra 약 920회 학습으로 데이터·헤드 init·정밀도·결정성·분할 5축을
-스윕했다. 핵심:
+- 헤드 초기화: 시드 vs 무시드(=from_pretrained 의 새 분류 헤드 random init)
+- 정밀도: fp16 vs bf16
+- 결정성: full_determinism on/off
+- 분할: 단일 split vs 10-fold
+- 데이터: PII 주입(`pii_all`) vs 클린 NER(`origin.boundary.eponymy`)
 
-- 런 간 분산의 주범은 시드 안 된 분류 헤드 init(~1pp)이고 cuDNN 비결정성
-  기여는 ~0.03pp 로 미미했다.
-- 붕괴는 데이터 분할에 의존한다 — 단일 split 240회는 0건, 10-fold 는 80회
-  중 3건(folds 0·4·9 집중).
-- fix 귀속: warmup 은 반증(0.06 에서도 2/60 붕괴), seed 고정은 불충분
-  (1/60), bf16 은 빈도를 낮추나 제거 못 하고 깨끗한 사전등록 검증이 비유의
-  (fp16 3/150 vs bf16 1/150, Fisher p=0.62).
+## 추적 과정
 
-수치 영구 인용: `docs/reports/korean-bert-classifier-fold-collapse.md`.
+**분산의 주범은 초기화였다.** 같은 설정을 반복해도 결과가 흔들리던 원인을
+파보니, 코드가 분류 헤드 init 을 시드하지 않아 매 실행마다 init 이 달랐다.
+init 을 시드한 채 cuDNN 비결정성만 남기면 런 간 차이는 ~0.03pp 로 거의
+사라진다. 흔들림의 ~1pp 는 init 에서 왔고 cuDNN 기여는 미미했다.
+
+**단일 split 으로는 붕괴가 재현되지 않았다.** 시드·무시드, 정밀도, 결정성을
+바꿔가며 단일 split 으로 243회를 돌렸지만 붕괴는 한 번도 없었다. 클린 NER
+데이터로 원래 조건(무시드·fp16·det off)을 60회 재현해도 0 이었다. 붕괴가
+데이터 종류가 아니라 다른 데 걸려 있다는 얘기다.
+
+**10-fold 로 바꾸자 재현됐다.** #140 의 마지막 미검증 축이 분할이었다. fold
+0~9 를 8회 반복(80런)하니 3건이 붕괴했고, folds 0·4·9 에 집중됐다. 단일
+split(seed 42)은 우연히 견고한 분할이었을 뿐, 일부 분할이 붕괴-취약이었다.
+요컨대 붕괴는 분할 의존적이다.
+
+**fix 귀속.** 붕괴-취약 folds 에 집중해 같은 무시드 init 분포에서 정밀도와
+warmup 만 바꿔 비교했다.
+
+- warmup 은 반증됐다. warmup 0.06 에서도 2/60 이 붕괴했다.
+- seed 고정도 불충분했다. 시드해도 1/60 이 붕괴했다.
+- bf16 은 빈도를 낮췄지만 제거하진 못했다(1건 붕괴). 깨끗한 사전등록 검증
+  (fp16 3/150 vs bf16 1/150)은 Fisher p=0.62 로 유의하지 않았다. 동일 조건
+  데이터를 풀링하면 p=0.022 로 떨어진다. 다만 그 데이터가 "bf16 이 좋다"는
+  가설을 만든 데이터라 순환이다 — 신뢰할 증거가 못 된다.
+
+**결정성은 재현성 도구다.** 시드+결정성을 켠 60회 스캔은 붕괴 0 이었다. 다만
+시드와 결정성을 동시에 바꾼 비교라, 결정성이 붕괴를 막았다고 인과로 단정하긴
+어렵다. 결정성의 본질은 같은 seed 에서 바이트 단위 재현이지, 검증된 붕괴
+수정이 아니다.
+
+## 측정 (영구 인용)
+
+koelectra-base-v3, `origin.boundary.eponymy`, 1 epoch, 붕괴 = F1 < 0.3.
+
+| 조건 | 붕괴 |
+|---|---|
+| 단일 split (시드·무시드·det 다양) | 0 / 243 |
+| 10-fold 무시드 fp16 (원래 조건) | 3 / 80 |
+| 10-fold 시드+결정성 (folds 0·4·9 포함 스캔) | 0 / 60 |
+| fix 귀속, folds 0·4·9 — base / warm / bf16 / seed | 3 / 2 / 0 / 1 (각 60) |
+| bf16 검증, folds 0·4·9 — fp16 / bf16 | 3 / 150 · 1 / 150 (p=0.62) |
+| 위 + 동일조건 풀링 — fp16 / bf16 | 9 / 234 · 1 / 210 (p=0.022, 순환 주의) |
+
+단일 split 243 = 단발 실험 합계(pilot 15 · hunt 48 · posctl 120 ·
+neronly 60). `results/` 는 gitignore·휘발이라 **본 표가 이 조사 수치의 영구
+인용 단일 출처**다.
+
+## 결론
+
+검증된 근본 수정은 없다. warmup 은 틀렸고, seed 고정은 모자라고, bf16 은
+줄이되 없애지 못하며 그마저 깨끗한 검증을 통과하지 못했다. 붕괴는 희귀
+(~0.3~3%)하고 분할에 의존하는 확률적 꼬리 사건이다. 이슈가 내건 "근본 제거"는
+이 데이터로는 이룰 수 없다.
 
 ## 결정 — 코드
 
@@ -35,30 +92,37 @@ koelectra 약 920회 학습으로 데이터·헤드 init·정밀도·결정성·
 
 - `--train-seed`(기본 None = 무시드, 기존 동작 BC; 값 지정 시 헤드 init·셔플
   고정으로 재현 가능한 run).
-- `--deterministic`(train-seed 필수; cuDNN·CUBLAS 까지 결정화해 바이트 단위
-  재현, 느림).
-- `metrics.json` 에 `train_seed`·`deterministic`·`precision` 기록(측정
-  무결성 — #140 의 precision 을 사후 확인할 수 없던 갭을 닫음).
+- `metrics.json` 에 `train_seed`·`precision` 기록(측정 무결성 — #140 의
+  precision 을 사후 확인할 수 없던 갭을 닫음).
 
 폐기:
 
 - `--warmup-ratio`(반증됨), `--legacy-unseeded-init`(양성대조 스캐폴딩).
+- `--deterministic`(도입 후 제거 — 아래 결정 로그).
 
 기본 학습 동작을 바꾸지 않았으므로 기존 KO baseline 은 그대로 유효하고
 재측정이 필요 없다.
 
 ## 운영 완화 (근본 수정 부재 대응)
 
-- canonical 측정은 `--train-seed` + `--deterministic` 로 안정성과 재현성을
-  확보한다(~1.7배 느림).
-- 또는 어느 fold 가 F1≈0 으로 무너지면 `--train-seed` 만 바꿔 그 fold 를
-  재실행한다. 정상 분포가 0.84±0.003 으로 좁고 붕괴는 F1≈0 의 명확한
-  outlier 라, 파국만 골라 재실행하는 것은 선택 편향이 아니다.
+어느 fold 가 F1≈0 으로 무너지면 `--train-seed` 만 바꿔 그 fold 를 다시
+돌린다. 정상 분포가 0.84±0.003 으로 좁고 붕괴는 F1≈0 의 명확한 outlier 라,
+파국만 골라 재실행하는 것은 선택 편향이 아니다.
+
+재현성이 필요하면 `--train-seed` 로 충분하다 — seed-내 잔여 비결정성은
+loss ~1e-4 로 무시 가능하다.
+
+## 결정 로그 (append-only)
+
+- 2026-06: 수락 기준을 "bf16+warmup 으로 붕괴 0 입증"에서 "하드닝 + 기록 +
+  운영 완화"로 재정의(사람 승인) — 검증된 근본 수정이 없다는 것이 조사 결과다.
+- 2026-06-29: `--deterministic` 을 도입한 당일 제거(`e0b288b` → `ee3e67b`).
+  학습 루프 ~1.9배(wall ~1.7배) 비용을 치르면서 붕괴를 막지 못하고 재현만
+  하며, byte-exact 재현은 이 프로젝트에 필요한 적이 없었다. 그래서 canonical
+  측정도 `--train-seed` 만 쓴다.
 
 ## 검증
 
 - `pytest tests/ner/classifier` 76 passed, `ruff` clean.
 - BC: `--train-seed` 미지정 시 `train_seed=null`(무시드) — 기존 학습 경로와
   동일.
-- 가드: `--deterministic` 단독 지정 시 `--deterministic requires
-  --train-seed` 에러.
