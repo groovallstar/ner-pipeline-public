@@ -493,10 +493,9 @@ def spawn_instructions(dhash, path, why):
     # 반박자 미실행 시 메인 모델에 줄 지시문
     return (
         f'{why}\n'
-        'Spawn an ISOLATED-CONTEXT refuter: invoke the `refuter` skill (or an '
-        'Agent whose model is chosen by diff risk — Sonnet by default, Opus '
-        'when refuting needs adversarial reasoning beyond number/JSON '
-        "matching) whose job is to REFUTE — not approve — the current diff "
+        'Spawn an ISOLATED-CONTEXT refuter: invoke the `refuter` skill (or '
+        'an Agent on the session default model — do not override it) whose '
+        "job is to REFUTE — not approve — the current diff "
         'against the original acceptance criteria (nearest '
         'docs/issues/issue-*.md plan section or the active PRD).\n\n'
         'The refuter MUST write its verdict to:\n'

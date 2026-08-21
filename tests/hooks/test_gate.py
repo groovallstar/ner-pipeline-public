@@ -146,7 +146,7 @@ def test_ruler_needs_both_human_allow_and_refuter_pass(repo):
 
     Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
         {'verdict': 'PASS', 'diff_hash': dhash, 'defects': [],
-         'checked': ['gold 재계산 일치'], 'model': 'sonnet', 'round': 1}
+         'checked': ['gold 재계산 일치'], 'model': 'default', 'round': 1}
     ))
     _, _, result = _gate(repo)
     assert result is None
@@ -159,7 +159,7 @@ def test_refuter_fail_keeps_the_gate_shut(repo):
     _allow(sdir, dhash)
     Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
         {'verdict': 'FAIL', 'diff_hash': dhash, 'defects': ['gold moved'],
-         'checked': [], 'model': 'opus', 'round': 1}
+         'checked': [], 'model': 'default', 'round': 1}
     ))
     _, _, result = _gate(repo)
     assert result[0] == 'ruler-refuter'
@@ -173,12 +173,12 @@ def test_old_verdict_files_are_still_readable(repo):
     Path(core.verdict_path(sdir, 'oldhash')).write_text(json.dumps(
         {'verdict': 'FAIL', 'diff_hash': 'oldhash',
          'findings': ['PASS: 테스트 무결성 확인', 'σ 표기 불일치'],
-         'model': 'sonnet', 'round': 1}
+         'model': 'default', 'round': 1}
     ))
     state, defects, meta = core.read_verdict(sdir, 'oldhash')
     assert state == 'FAIL'
     assert 'σ 표기 불일치' in defects
-    assert meta['model'] == 'sonnet'
+    assert meta['model'] == 'default'
 
 
 def test_verdict_without_defects_key_passes(repo):
@@ -186,7 +186,7 @@ def test_verdict_without_defects_key_passes(repo):
     sdir = core.state_dir(repo)
     Path(core.verdict_path(sdir, 'h2')).write_text(json.dumps(
         {'verdict': 'PASS', 'diff_hash': 'h2', 'defects': [],
-         'checked': ['확인 기록 세 줄'], 'model': 'opus', 'round': 1}
+         'checked': ['확인 기록 세 줄'], 'model': 'default', 'round': 1}
     ))
     state, defects, _ = core.read_verdict(sdir, 'h2')
     assert state == 'PASS' and defects == []
