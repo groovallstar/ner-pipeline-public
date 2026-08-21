@@ -3,10 +3,8 @@
 JA·VI·KO·EN 라벨러와 증강기가 공유하는 통합 엔티티 라벨 공간. NER/PII 구분
 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약으로 표기한다.
 
-10종은 네 언어 모두 같지만 그것을 채우는 경로는 원천마다 갈린다. 갈림은
-**합성 PII 를 몇 종 주입하나** 하나로 모인다 — `augmenters/pii` 의 기본
-주입 세트는 7종(`NAME`·`ADDRESS`·`DAT` + PII 4종)이고, `--pii-labels` 로
-4종(`EMAIL`·`PHONE`·`ID_NUM`·`CREDIT_CARD`)만 넣도록 줄일 수 있다.
+10종은 네 언어 모두 같지만 그것을 채우는 경로는 **두 갈래**로 갈린다 —
+원천이 어디까지 채워 주나, 그리고 합성 PII 를 몇 종 주입하나.
 
 | 언어 | 원천 | 전용 코드 (`src/ner/` 기준) | 데이터 | PII 주입 | 언어별 절 |
 |---|---|---|---|---|---|
@@ -15,32 +13,22 @@ JA·VI·KO·EN 라벨러와 증강기가 공유하는 통합 엔티티 라벨 �
 | KO | KLUE | `labelers/ko/` | `data/klue/` | 4종 | §3.4 · §5.3 |
 | EN | HF OntoNotes5 | `labelers/en/` · `augmenters/ontonotes_en/` | `data/ontonotes_en/` | 4종 | §4.5 |
 
-그 선택이 두 가지를 함께 정한다. **`DAT` 의 출처** — 기본 7종을 넣는 JA·VI
-는 날짜가 합성분이고, 4종만 넣는 KO·EN 은 원천 gold 가 날짜를 준다(KLUE
-유래 · OntoNotes `DATE`). 그리고 **`PER`·`LOC` 의 순도** — 기본 7종의
-`NAME`·`ADDRESS` 는 `DEFAULT_MERGE_RULES` 로 `PER`·`LOC` 에 무조건
-병합되므로(§1 아래 주석 · §4.4) JA·VI 의 두 라벨에는 합성분이 섞이고
-KO·EN 은 섞이지 않는다. **JA·VI 의 `PER`·`LOC` 지표를 사람 gold 성능으로
-읽으면 안 된다.**
+**원천이 덜 채워 줄수록 재라벨이 많아진다.** VI 는 원천이 3종
+(`PER/LOC/ORG`)뿐이라 `PROD`·`EVT` 를 LLM 재라벨로 만들고, KO 는
+`PROD`·`EVT` 만 재라벨 증분이며(`TI`·`QT` 드롭), EN 은 원천 18종이 이미
+넘쳐 재라벨 없이 9종을 버린다(§4.5).
 
-`augmenters/pii/` 는 네 언어 공통이라 표에서 뺐다. 원천이 덜 채워 줄수록
-재라벨이 많아진다 — VI 는 원천이 3종(`PER/LOC/ORG`)뿐이라 `PROD`·`EVT` 를
-LLM 재라벨로 만들고, KO 는 `PROD`·`EVT` 만 재라벨 증분이며(`TI`·`QT` 드롭),
-EN 은 원천 18종이 이미 넘쳐 재라벨 없이 9종을 버린다(§4.5).
+**주입 세트는 두 가지를 함께 정한다.** `augmenters/pii` 의 기본 세트는
+7종(`NAME`·`ADDRESS`·`DAT` + PII 4종)이고 `--pii-labels` 로 4종
+(`EMAIL`·`PHONE`·`ID_NUM`·`CREDIT_CARD`)까지 줄일 수 있다. 첫째는 **`DAT` 의
+출처** — 기본 7종을 넣는 JA·VI 는 날짜가 합성분이고, 4종만 넣는 KO·EN 은
+원천 gold 가 날짜를 준다(KLUE 유래 · OntoNotes `DATE`). 둘째는 **`PER`·`LOC`
+의 순도** — 기본 7종의 `NAME`·`ADDRESS` 는 `DEFAULT_MERGE_RULES` 로
+`PER`·`LOC` 에 무조건 병합되므로(§1 아래 주석 · §4.4) JA·VI 의 두 라벨에는
+합성분이 섞이고 KO·EN 은 섞이지 않는다. **JA·VI 의 `PER`·`LOC` 지표를 사람
+gold 성능으로 읽으면 안 된다.**
 
-## 배경
-
-JA Stockmark HF 원본은 일본어 원문 라벨(`人名`, `法人名`, `地名` 등)을,
-VI WikiANN 은 3종 영문 라벨(`PER/LOC/ORG`)을 사용하지만 프로젝트 통합
-라벨 공간은 다음 이유로 영문 canonical 10종 평면 목록을 쓴다:
-
-1. **다국어 라벨 공간 정합** — JA/VI 모두 동일한 영문 3축 구조
-   (PER/LOC/ORG) 상위에서 비교 가능
-2. **리포트 가독성** — 일본어·베트남어 라벨이 혼입된 영문 서사 방지
-3. **라벨러·증강기 코드 재사용성** — 동일 타입을 여러 언어에서 재활용할
-   때 변환기 불필요
-4. **스키마 평면화** — 실제 라벨러·증강기·평가기는 `type` 문자열만
-   다루므로 NER vs PII 메타 분류는 문서상 구분에 지나지 않음
+`augmenters/pii/` 는 네 언어 공통이라 표에서 뺐다.
 
 ## 1. 10종 canonical 정의 (평면 목록)
 
