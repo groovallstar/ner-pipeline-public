@@ -25,7 +25,9 @@ export VLLM_TENSOR_PARALLEL=1
 export VLLM_DTYPE=${VLLM_DTYPE:-auto}
 export VLLM_PORT=${VLLM_PORT:-8081}
 export VLLM_EXTRA_ARGS=""
-export VLLM_IMAGE=vllm/vllm-openai:v0.23.0
+# 상시 운영 2종과 이미지를 맞춘다. 다만 이 모델로는 아직 기동을 확인하지 않았다 —
+# 웹 데모용 선택 스크립트라 상시로 돌지 않는다. 처음 띄울 때 로그를 확인할 것.
+export VLLM_IMAGE=vllm/vllm-openai:v0.26.0
 export VLLM_CONTAINER=vllm-gemma2-9b
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1}
 

@@ -19,7 +19,7 @@ span F1 을 측정한다.
 | `confidence_threshold.py` | per-class 신뢰도 임계값(confidence threshold) 운영점 — valid 에서 임계값 fit(`fit_thresholds`, greedy P·R≥target) / 적용(`apply_thresholds`) / 저장·로드(`save_thresholds`·`load_thresholds`). NER 4종(ORG/LOC/EVT/PROD)만 대상 |
 | `error_analysis.py` | test-set 오답 추출 + 카테고리 분류 (BOUNDARY / TYPE_MISMATCH / MISS / HALLUCINATION) + 사람 검수용 stratified 샘플. 두 입력 경로: (1) 단일 모델 추론 (`--model-path`), (2) K-fold pooled 예측 재진단 (`--from-predictions --fold-dirs ...`, 재추론 없이 fold 별 `test_predictions.json` 소비). CLI: `python -m ner.classifier.error_analysis` |
 | `kfold_pool.py` | 층화 K-fold 학습 결과의 fold 별 test 예측을 합쳐 pooled span F1 산출 + 그룹 단위 cross-fold 누출 검증(누출 시 `ValueError`, `--allow-cross-fold-leak` 으로 카운트만) + 판정 근거(`leak_check_basis`) 기록 + 비교 가능성 지문(`ruler`) 승격. CLI: `python -m ner.classifier.kfold_pool` |
-| `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko}` |
+| `__main__.py` | CLI: `python -m ner.classifier --lang {ja,vi,ko,en}` |
 
 ## CLI
 
@@ -111,10 +111,11 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 - `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/origin.jsonl`
 - `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용
+- `--lang en`: 모델 `roberta-base`(백본 벤치마크 전 잠정값), 데이터 `data/ontonotes_en/pii_all.jsonl` (OntoNotes5 유래 NER 5종+DAT + 합성 PII 4종). split 별 파일을 `ner.augmenters.ontonotes_en.merge_splits` 로 합친 것이며 `--group-key orig` 로 재분할한다
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
 - 재현성 (`--train-seed`): 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·dropout·셔플을 고정해 재현 가능한 run 이 된다. GPU FP 비결합에 따른 seed-내 잔여 비결정성(loss ~1e-4)은 effect size 대비 무시 가능 — 비교 측정은 양 팔을 같은 `--train-seed` 로 고정하거나 multi-seed paired 로 본다. `metrics.json` 에 `train_seed`·`precision` 기록.
-- fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — F1≈0 fold 만 `--train-seed` 를 바꿔 재실행한다(full-determinism 은 붕괴를 막지 못하고 재현만 하며 ~1.9× 비용이라 비채택). 상세: `docs/reports/korean-bert-classifier-fold-collapse.md`.
+- fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — F1≈0 fold 만 `--train-seed` 를 바꿔 재실행한다(full-determinism 은 붕괴를 막지 못하고 재현만 하며 ~1.9× 비용이라 비채택). 상세: `docs/issues/issue-146-electra-fold-collapse.md`.
 - **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
 ### 누출-free 분할 (`--group-key`, 필수)
@@ -248,7 +249,7 @@ docs/reports/vietnamese-bert-classifier-history.md       # VI 히스토리
 docs/reports/vietnamese-bert-classifier-spec.md          # VI 최종 출하 스펙
 docs/reports/korean-bert-classifier-benchmark.md         # KO 요약
 docs/reports/korean-bert-classifier-per-entity-diagnosis.md  # KO 엔티티별 성능 진단
-docs/reports/korean-bert-classifier-fold-collapse.md     # KO fold 붕괴 조사 (재현성·안정성)
+docs/issues/issue-146-electra-fold-collapse.md           # KO fold 붕괴 조사 (재현성·안정성)
 ```
 
 ## 출하·배포 (JA·VI deploy)

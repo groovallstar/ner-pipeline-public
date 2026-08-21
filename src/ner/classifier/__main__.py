@@ -49,19 +49,23 @@ DEFAULT_DATA = {
     'ja': 'data/stockmark/pii_all.jsonl',
     'vi': 'data/wikiann_vi/origin.jsonl',
     'ko': 'data/klue/pii_all.jsonl',
+    'en': 'data/ontonotes_en/pii_all.jsonl',
 }
 DEFAULT_MODEL = {
     'ja': 'tohoku-nlp/bert-base-japanese-v3',
     'vi': 'xlm-roberta-base',
     'ko': 'monologg/koelectra-base-v3-discriminator',
+    'en': 'roberta-base',
 }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='NER BERT fine-tune (canonical 10-class, JA·VI·KO)'
+        description='NER BERT fine-tune (canonical 10-class, JA·VI·KO·EN)'
     )
-    parser.add_argument('--lang', choices=['ja', 'vi', 'ko'], required=True)
+    parser.add_argument(
+        '--lang', choices=['ja', 'vi', 'ko', 'en'], required=True,
+    )
     parser.add_argument('--data', help='Override JSONL path')
     parser.add_argument('--model-name', help='Override HF model name')
     parser.add_argument('--epochs', type=int, default=5)

@@ -32,6 +32,17 @@ LLM 재라벨로 부족한 타입을 만들어냈지만, OntoNotes 는 `PRODUCT`
 | `convert.py` | BIO 디코드 · 레코드 변환 · **엔티티↔원본 토큰 대조** · 문장 동일 행의 `orig` 묶기 |
 | `restore_groups.py` | 주입이 버린 `orig`·`split` 되돌리기 — 아래 |
 | `__main__.py` | CLI (`python -m ner.augmenters.ontonotes_en`). split 별로 파일을 갈라 쓴다 |
+| `merge_splits.py` | split 파일 셋 → 학습용 단일 JSONL. `split` 필드를 떨어뜨린다 — 아래 |
+
+#### 병합이 `split` 을 떨어뜨리는 이유
+`classifier` 는 파일 하나를 받아 스스로 쪼개므로(`--data`) ko·ja·vi 와 같은
+자로 재려면 en 도 한 파일이어야 한다. 그런데 세 파일을 그대로 이어붙이면
+`split` 이 한 파일 안에서 세 값을 갖고, `validate_group_key` 는 값이 적으면서
+선언한 키의 그룹을 가르지 않는 필드를 "더 강한 그룹 키" 로 보고 거부한다 —
+같은 `orig` 의 행은 언제나 같은 split 에 있어(경계를 하나도 가르지 않는다)
+정확히 그 모양이 되고, `--group-key orig` 가 통째로 막힌다. 재분할이 전제라
+원 split 은 학습에 쓰이지 않으며, 어느 split 이었는지는 `id`·`orig` 접두사
+(`en-train-`/`en-valid-`/`en-test-`)에 남아 정보도 잃지 않는다.
 
 #### LOC/ORG 경계 — EN 은 JA·VI 관례
 `FAC`(공항·역·경기장·다리·고속도로)를 `ORG` 로 흡수한다. KO 의 narrow-ORG
