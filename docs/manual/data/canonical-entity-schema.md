@@ -1,18 +1,32 @@
-# Canonical Entity Schema (JA · VI · KO)
+# Canonical Entity Schema (JA · VI · KO · EN)
 
-`src/ner/labelers/ja/`·`src/ner/augmenters/pii/` (Stockmark) 와 `src/ner/labelers/vi/`·
-`src/ner/augmenters/wikiann_vi/` (WikiANN) 가 공유하는 통합 엔티티 라벨 공간.
-NER/PII 구분 없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약으로 표기한다.
+JA·VI·KO·EN 라벨러와 증강기가 공유하는 통합 엔티티 라벨 공간. NER/PII 구분
+없이 **10종 평면 목록**을 OntoNotes 관용 영문 축약으로 표기한다.
 
-- 적용 코드: `src/ner/labelers/{ja,vi}/`, `src/ner/augmenters/pii/`,
-  `src/ner/augmenters/wikiann_vi/`
-- 적용 데이터: `data/stockmark/` (JA NER 5종 + PII 주입 10종),
-  `data/wikiann_vi/` (VI 재라벨 NER 5종 + PII 주입 10종)
-- KO: canonical **10종 평면 완성**. NER 5종(`PER/LOC/ORG/PROD/EVT`) +
-  `DAT`는 KLUE 유래(라벨러 `src/ner/labelers/ko/**`, `PROD/EVT`는 LLM
-  재라벨 증분). PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 PII를
-  **llm 자연삽입**으로 증분(`data/klue/pii_all.jsonl`). KO PROD 경계 회색지대(eponymy·명명 탈것·
-  SW·span 범위)는 §3.4·§5.3 결정표로 명문화.
+10종은 네 언어 모두 같지만 그것을 채우는 경로는 원천마다 갈린다. 갈림은
+**합성 PII 를 몇 종 주입하나** 하나로 모인다 — `augmenters/pii` 의 기본
+주입 세트는 7종(`NAME`·`ADDRESS`·`DAT` + PII 4종)이고, `--pii-labels` 로
+4종(`EMAIL`·`PHONE`·`ID_NUM`·`CREDIT_CARD`)만 넣도록 줄일 수 있다.
+
+| 언어 | 원천 | 전용 코드 (`src/ner/` 기준) | 데이터 | PII 주입 | 언어별 절 |
+|---|---|---|---|---|---|
+| JA | HF Stockmark | `labelers/ja/` | `data/stockmark/` | 기본 7종 | §2.3 · §4.1 · §5.1 |
+| VI | HF WikiANN | `labelers/vi/` · `augmenters/wikiann_vi/` | `data/wikiann_vi/` | 기본 7종 | §2.4 · §4.2 · §5.2 |
+| KO | KLUE | `labelers/ko/` | `data/klue/` | 4종 | §3.4 · §5.3 |
+| EN | HF OntoNotes5 | `labelers/en/` · `augmenters/ontonotes_en/` | `data/ontonotes_en/` | 4종 | §4.5 |
+
+그 선택이 두 가지를 함께 정한다. **`DAT` 의 출처** — 기본 7종을 넣는 JA·VI
+는 날짜가 합성분이고, 4종만 넣는 KO·EN 은 원천 gold 가 날짜를 준다(KLUE
+유래 · OntoNotes `DATE`). 그리고 **`PER`·`LOC` 의 순도** — 기본 7종의
+`NAME`·`ADDRESS` 는 `DEFAULT_MERGE_RULES` 로 `PER`·`LOC` 에 무조건
+병합되므로(§1 아래 주석 · §4.4) JA·VI 의 두 라벨에는 합성분이 섞이고
+KO·EN 은 섞이지 않는다. **JA·VI 의 `PER`·`LOC` 지표를 사람 gold 성능으로
+읽으면 안 된다.**
+
+`augmenters/pii/` 는 네 언어 공통이라 표에서 뺐다. 원천이 덜 채워 줄수록
+재라벨이 많아진다 — VI 는 원천이 3종(`PER/LOC/ORG`)뿐이라 `PROD`·`EVT` 를
+LLM 재라벨로 만들고, KO 는 `PROD`·`EVT` 만 재라벨 증분이며(`TI`·`QT` 드롭),
+EN 은 원천 18종이 이미 넘쳐 재라벨 없이 9종을 버린다(§4.5).
 
 ## 배경
 

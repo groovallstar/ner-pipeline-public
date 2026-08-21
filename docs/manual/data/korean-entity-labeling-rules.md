@@ -1,7 +1,7 @@
 # 한국어 엔티티 라벨링 규칙 (KO Entity Labeling Rules)
 
 한국어 NER gold 의 LOC/ORG/시설 경계 라벨링 **단일 규칙 출처**. 다국어 공용
-`canonical-entity-schema.md`(JA·VI·KO)와 **별개로 관리**한다 — 한국어는 LOC/ORG
+`canonical-entity-schema.md`(JA·VI·KO·EN)와 **별개로 관리**한다 — 한국어는 LOC/ORG
 외연을 좁게 재정의하며, 공용 스키마의 "인공 시설=전부 ORG"(JA·VI)와 다르다.
 이 문서는 사람 주석·dual-LLM 재라벨 양쪽의 rubric 으로 쓴다.
 
