@@ -201,6 +201,29 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
 `--pii-labels` 로 주입 PII 라벨을 제한한다(기본 7종 → 지정 라벨만). 미지정
 시 `DEFAULT_PII_LABELS` 전체.
 
+**이 플래그가 gold 의 성격을 바꾼다 — 지표를 읽을 때 알아야 한다.** 기본
+7종에는 `NAME`·`ADDRESS`·`DAT` 가 들어 있고 앞 둘은 `DEFAULT_MERGE_RULES` 로
+`PER`·`LOC` 에 무조건 병합된다. 그래서 플래그 없이 돌린 JA·VI 산출물은
+`PER`·`LOC` 의 **1/4~1/3 이 합성분**이고(실측 JA 25.4%·31.3%, VI 32.7%·32.4%)
+`DAT` 도 전량 합성이다. 4종만 넣은 KO·EN 은 그 셋이 원천 gold 그대로다
+(합성 매처로 재면 1% 미만이고 그마저 오탐이다).
+
+**그러므로 JA·VI 의 `PER`·`LOC`·`DAT` 점수를 사람 gold 성능으로 읽으면 안
+된다.** 합성 PII 는 정규 패턴이라 모델이 쉽게 맞히므로 그 세 지표가 위로
+당겨진다. 언어끼리 그 라벨을 나란히 놓는 비교도 성립하지 않는다 — KO·EN 은
+같은 라벨이 순수하다.
+
+**`--lang` 은 주입 세트를 바꾸지 않는다.** 언어별 기본값 분기가 없어
+`--lang ko` 를 줘도 플래그를 빼면 7종이 들어간다. 재생성 때 빠뜨리면 어떻게
+되는지는 언어마다 갈린다 — EN 은
+`tests/ner/augmenters/ontonotes_en/test_corpus_invariants.py` 의
+`test_injection_replays_exactly` 가 4종을 못 박은 채 주입을 재생해 산출물과
+대조하므로, 합성 `PER`·`LOC`·`DAT` span 이 재생 불가로 잡혀 시끄럽게 깨진다
+(주입 산출물이 있을 때만 도는 검사다). **KO 는 그 대조가 없어 gold 의 성격이
+조용히 뒤집힌다** — 플래그를 쓰는 두 언어 중 무방비인 쪽은 KO 하나다.
+JA·VI 는 기본 7종이 의도된 상태라 이 방향으로 뒤집힐 것이 없지만, 그쪽도
+동형 재생 대조는 없다.
+
 ## 모드 선택 가이드
 
 | 항목 | suffix | llm |
