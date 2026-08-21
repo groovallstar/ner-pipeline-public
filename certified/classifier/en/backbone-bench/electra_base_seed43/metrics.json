@@ -1,0 +1,234 @@
+{
+  "lang": "en",
+  "model_name": "google/electra-base-discriminator",
+  "data_path": "data/ontonotes_en/pii_all.jsonl",
+  "data_extra_train_jsonl": null,
+  "train_samples": 61104,
+  "valid_samples": 7637,
+  "test_samples": 7637,
+  "epochs": 5,
+  "batch_size": 16,
+  "lr": 5e-05,
+  "max_length": 256,
+  "valid_ratio": 0.1,
+  "test_ratio": 0.1,
+  "kfold": null,
+  "fold_index": null,
+  "group_key": "orig",
+  "n_rows": 76378,
+  "n_groups": 70641,
+  "data_fingerprint": "39cb0f9e9c16f265",
+  "stratify": true,
+  "seed": 42,
+  "train_seed": 43,
+  "precision": "bf16",
+  "offset_trim": true,
+  "metric_for_best": "eval_loss",
+  "curriculum": false,
+  "curriculum_stage1_epochs": null,
+  "train_time_sec": 1265.1,
+  "overall": {
+    "f1": 0.9173356351604085,
+    "precision": 0.9025080677121666,
+    "recall": 0.9326585537093377,
+    "support": 17092
+  },
+  "per_entity": {
+    "CREDIT_CARD": {
+      "f1": 0.953951595630756,
+      "precision": 0.9368952461085401,
+      "recall": 0.9716404886561955,
+      "support": 2292
+    },
+    "DAT": {
+      "f1": 0.8532235939643348,
+      "precision": 0.8249336870026526,
+      "recall": 0.8835227272727273,
+      "support": 1408
+    },
+    "EMAIL": {
+      "f1": 0.9855132450331127,
+      "precision": 0.9730281977932161,
+      "recall": 0.9983228511530399,
+      "support": 2385
+    },
+    "EVT": {
+      "f1": 0.7017543859649122,
+      "precision": 0.6611570247933884,
+      "recall": 0.7476635514018691,
+      "support": 107
+    },
+    "ID_NUM": {
+      "f1": 0.9505541346973572,
+      "precision": 0.9192085737840066,
+      "recall": 0.9841129744042365,
+      "support": 2266
+    },
+    "LOC": {
+      "f1": 0.8832244008714597,
+      "precision": 0.8707044673539519,
+      "recall": 0.8961096374889478,
+      "support": 2262
+    },
+    "ORG": {
+      "f1": 0.8063175394846218,
+      "precision": 0.8206429780033841,
+      "recall": 0.7924836601307189,
+      "support": 1836
+    },
+    "PER": {
+      "f1": 0.9520597446398459,
+      "precision": 0.95,
+      "recall": 0.9541284403669725,
+      "support": 2071
+    },
+    "PHONE": {
+      "f1": 0.9575255935526029,
+      "precision": 0.9401197604790419,
+      "recall": 0.9755881047492233,
+      "support": 2253
+    },
+    "PROD": {
+      "f1": 0.5157232704402517,
+      "precision": 0.4641509433962264,
+      "recall": 0.5801886792452831,
+      "support": 212
+    }
+  },
+  "overall_strict": {
+    "f1": 0.9173356351604085,
+    "precision": 0.9025080677121666,
+    "recall": 0.9326585537093377,
+    "support": 17092
+  },
+  "per_entity_strict": {
+    "CREDIT_CARD": {
+      "f1": 0.953951595630756,
+      "precision": 0.9368952461085401,
+      "recall": 0.9716404886561955,
+      "support": 2292
+    },
+    "DAT": {
+      "f1": 0.8532235939643348,
+      "precision": 0.8249336870026526,
+      "recall": 0.8835227272727273,
+      "support": 1408
+    },
+    "EMAIL": {
+      "f1": 0.9855132450331127,
+      "precision": 0.9730281977932161,
+      "recall": 0.9983228511530399,
+      "support": 2385
+    },
+    "EVT": {
+      "f1": 0.7017543859649122,
+      "precision": 0.6611570247933884,
+      "recall": 0.7476635514018691,
+      "support": 107
+    },
+    "ID_NUM": {
+      "f1": 0.9505541346973572,
+      "precision": 0.9192085737840066,
+      "recall": 0.9841129744042365,
+      "support": 2266
+    },
+    "LOC": {
+      "f1": 0.8832244008714597,
+      "precision": 0.8707044673539519,
+      "recall": 0.8961096374889478,
+      "support": 2262
+    },
+    "ORG": {
+      "f1": 0.8063175394846218,
+      "precision": 0.8206429780033841,
+      "recall": 0.7924836601307189,
+      "support": 1836
+    },
+    "PER": {
+      "f1": 0.9520597446398459,
+      "precision": 0.95,
+      "recall": 0.9541284403669725,
+      "support": 2071
+    },
+    "PHONE": {
+      "f1": 0.9575255935526029,
+      "precision": 0.9401197604790419,
+      "recall": 0.9755881047492233,
+      "support": 2253
+    },
+    "PROD": {
+      "f1": 0.5157232704402517,
+      "precision": 0.4641509433962264,
+      "recall": 0.5801886792452831,
+      "support": 212
+    }
+  },
+  "overall_relaxed": {
+    "f1": 0.9341101999712272,
+    "precision": 0.9190114929513673,
+    "recall": 0.9497133161713082,
+    "support": 17092
+  },
+  "per_entity_relaxed": {
+    "CREDIT_CARD": {
+      "f1": 0.9597344185050332,
+      "precision": 0.9425746739587716,
+      "recall": 0.9775305410122164,
+      "support": 2292
+    },
+    "DAT": {
+      "f1": 0.8851165980795609,
+      "precision": 0.8557692307692307,
+      "recall": 0.9165482954545454,
+      "support": 1408
+    },
+    "EMAIL": {
+      "f1": 0.986134105960265,
+      "precision": 0.9736411932979158,
+      "recall": 0.9989517819706499,
+      "support": 2385
+    },
+    "EVT": {
+      "f1": 0.7587719298245614,
+      "precision": 0.7148760330578512,
+      "recall": 0.8084112149532711,
+      "support": 107
+    },
+    "ID_NUM": {
+      "f1": 0.9546035805626598,
+      "precision": 0.9231244847485574,
+      "recall": 0.9883053839364518,
+      "support": 2266
+    },
+    "LOC": {
+      "f1": 0.9169934640522877,
+      "precision": 0.9039948453608248,
+      "recall": 0.9303713527851459,
+      "support": 2262
+    },
+    "ORG": {
+      "f1": 0.855361596009975,
+      "precision": 0.8705583756345178,
+      "recall": 0.8406862745098039,
+      "support": 1836
+    },
+    "PER": {
+      "f1": 0.9600096362322332,
+      "precision": 0.9579326923076923,
+      "recall": 0.9620956059874457,
+      "support": 2071
+    },
+    "PHONE": {
+      "f1": 0.9614463079939012,
+      "precision": 0.9439692044482464,
+      "recall": 0.9795827785175322,
+      "support": 2253
+    },
+    "PROD": {
+      "f1": 0.610062893081761,
+      "precision": 0.5490566037735849,
+      "recall": 0.6863207547169812,
+      "support": 212
+    }
+  }
+}
