@@ -61,15 +61,6 @@ RULER_DIRS = (
     'src/ner/validity/',
 )
 
-# 파일은 잠그되 정의와 무관한 절은 빼는 문서. gold 정의가 머리말(10종
-# 평면 목록·언어별 라벨 인벤토리)부터 각 절에 흩어져 있어 '정의 절만
-# 잠그기' 는 성립하지 않는다 — 기록·맥락 절만 면제한다.
-SECTION_EXEMPT = {
-    'docs/manual/data/canonical-entity-schema.md':
-        re.compile(r'^##\s+(변경 이력|배경)\s*$'),
-}
-
-
 # 이번 실행에서 검사가 '대상 없이' 지나간 사유. 게이트는 스스로 고장 나면
 # 열린 채 빠지는데(커밋을 영구 봉쇄하면 안 되므로), 그게 조용하면 통과가
 # 검사 통과인지 검사 부재인지 구별할 수 없다 — 그래서 기록해 훅이 알린다.
@@ -350,45 +341,6 @@ def check_cited_metrics(proj):
     ]
 
 
-def _touched_locked_sections(proj, path, exempt_re):
-    # 변경 줄이 면제 절 '밖' 에 하나라도 있으면 잠근다. 머리말은 면제가
-    # 아니다(정의 요약이 거기 산다). 파일을 못 읽으면 보수적으로 잠근다.
-    try:
-        with open(os.path.join(proj, path)) as f:
-            lines = f.read().splitlines()
-    except Exception:
-        return True
-
-    exempt, start = [], None
-    for i, ln in enumerate(lines, start=1):
-        if not ln.startswith('## '):
-            continue
-        if start is not None:
-            exempt.append((start, i - 1))
-            start = None
-        if exempt_re.match(ln):
-            start = i
-    if start is not None:
-        exempt.append((start, len(lines)))
-
-    free = lambda n: any(a <= n <= b for a, b in exempt)  # noqa: E731
-    lineno = 0
-    for line in git(['diff', 'HEAD', '--', path], proj).splitlines():
-        if line.startswith('@@'):
-            m = re.search(r'\+(\d+)', line)
-            lineno = int(m.group(1)) if m else 0
-        elif line.startswith('+') and not line.startswith('+++'):
-            if not free(lineno):
-                return True
-            lineno += 1
-        elif line.startswith('-') and not line.startswith('---'):
-            if not free(lineno):
-                return True
-        elif line.startswith(' '):
-            lineno += 1
-    return False
-
-
 def is_ruler(path):
     # 그 경로가 실험을 재는 자인가 — 열거된 파일이거나 자 패키지 안의 `.py`
     return path in RULER_PATHS or (
@@ -401,19 +353,13 @@ def check_ruler_touched(proj):
     # 규칙·분할) 자체가 움직인 것 — 사람이 새 정의를 못 박고 예외 승인으로
     # 풀기 전까지 커밋을 막는다.
     #
-    # `SECTION_EXEMPT` 에 오른 문서는 정의와 무관한 절(변경 이력·배경)의
-    # 변경만으로는 잠기지 않는다. 그 절만 건드린 커밋까지 사람 확인을
-    # 요구하면 확인이 허울이 되기 때문이다.
+    # 절 단위 면제는 두지 않는다. 면제 구간을 변경 *후* 파일에서 구하는
+    # 이상, 면제될 절을 새로 만들면서 그 안에 내용을 넣으면 추가한 줄이
+    # 통째로 자기가 만든 구간에 들어가 게이트가 한 번도 울리지 않는다 —
+    # 문턱을 낮추는 방향으로 새는 구멍이라 오탐보다 비싸다. 대신 이 표에
+    # 오른 문서에는 기록·맥락 절을 두지 않아 오탐 자체를 없앤다.
     changed = set(git(['diff', '--name-only', 'HEAD'], proj).splitlines())
-    hits = []
-    for p in sorted(changed):
-        if not is_ruler(p):
-            continue
-        exempt_re = SECTION_EXEMPT.get(p)
-        if exempt_re and not _touched_locked_sections(proj, p, exempt_re):
-            continue
-        hits.append(p)
-    return hits
+    return [p for p in sorted(changed) if is_ruler(p)]
 
 
 def _diff_by_file(diff):
