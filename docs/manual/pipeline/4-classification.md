@@ -234,7 +234,7 @@ CE).
 10-fold 일부 분할에서 koelectra가 드물게(~0.3~3%) 학습 붕괴(F1≈0). 검증된
 근본 수정은 없고, F1≈0 fold만 `train_seed`를 바꿔 재실행한다(full-determinism은
 붕괴를 막지 못하고 재현만 하며 ~1.9× 비용이라 비채택). 상세:
-`docs/reports/korean-bert-classifier-fold-collapse.md`.
+`docs/issues/issue-146-electra-fold-collapse.md`.
 
 ---
 

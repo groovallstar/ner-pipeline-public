@@ -10,7 +10,9 @@
   남는다. 다시 필요하면 git 히스토리에서 되살린다 — gold 는 공개 데이터
   (FLORES-200 dev)에서 seed 42·언어당 100문장으로 결정적으로 생성됐고,
   파생 4종(한자only-ja·무부호-vi·romaji-ja·vi+ja)은 그 샘플의 결정적 함수다.
-- 원시 결과: `results/lang_detect_bench.json`(gitignore).
+- 원시 결과: 남아 있지 않다 — `results/`(gitignore·휘발 scratch)에만 뒀고
+  하네스를 폐기할 때 함께 사라졌다. 아래 표의 요약 지표가 이 측정의 유일한
+  기록이며, 다시 재려면 위 재현 경로대로 gold 를 만들어 재실행해야 한다.
 
 ## 요약
 
@@ -40,6 +42,46 @@ vi false-accept 0, vi-부호 recall 100%, ko/en/zh/romaji-ja → unsupported
   미사용. `vi_diacritics` 는 술어로 필터하지 않고 샘플 전수를 쓴다(규칙에
   유리하게 고르지 않음). 측정은 coverage 율이 아니라 gold expected 라벨
   대비 혼동행렬 — 규칙 재진술(tautology) 회피.
+
+### 버킷별 샘플과 난이도
+
+버킷마다 가장 짧은 문장을 뽑은 것이다. FLORES 는 같은 원문을 언어마다 번역해
+둔 병렬 코퍼스라 서로 다른 언어의 예시가 같은 문장의 다른 판인 경우가 많다 —
+아래 `vi_diacritics` 와 `zh` 가 그 쌍이다.
+
+| 버킷 | expected | 샘플(버킷 내 최단 문장) |
+|---|---|---|
+| ja_kana | ja | 火曜日に大阪で亡くなりました。 |
+| ja_kanji_only | ja(보고 전용) | 点差 · 本目 |
+| vi_diacritics | vi | Một số người có thể không đồng ý nhưng tôi không quan tâm. |
+| vi_khong_dau | unsupported | Mot so nguoi co the khong dong y nhung toi khong quan tam. |
+| romaji_ja | unsupported | kayoubi ni oosaka de naku narimashita . |
+| vi_ja_switch | ja | Một số người có thể không đồng ý nhưng tôi không quan tâm. ジョンソンは7点差の2,243点で2位となっています。 |
+| ko | unsupported | 그것은 eBay 역사상 가장 큰 성과입니다. |
+| en | unsupported | "We were all simply in shock," the mother stated. |
+| zh | unsupported | “有些人可能不同意，但我不在乎。” |
+| fr | unsupported | Une enquête a été ouverte. |
+| pt | unsupported | Ele morreu em Osaka na terça-feira. |
+| de | unsupported | Es ist die größte Übernahme in der Geschichte von eBay. |
+| es | unsupported | Debe elegir cuidadosamente su alianza aérea de viajero frecuente. |
+| tr | unsupported | Sonrasında semazenler sahneye çıktı. |
+
+**샘플이 실제로 어려운지는 부호 보유율이 말해 준다.** pan-Latin 500문장 중
+467문장이 라틴 결합부호를 실제로 갖는다(fr 99·tr 97·pt 94·es 90·de 87).
+vi false-accept 0 은 그 문장들에 부호가 없어서 나온 값이 아니라, 좁은 술어
+(horn·hook·dot·đ)가 그쪽 부호(circumflex·acute·grave·tilde·움라우트·
+cedilla·breve)와 겹치지 않아 나온 값이다. vi recall 100% 도 같은 방식으로
+받쳐진다 — `vi_diacritics` 100문장 전수가 vi-변별 부호를 갖고(평균 131자
+full 문장이라 부호가 한 번도 안 나올 확률이 낮다), 부호만 떼어낸
+`vi_khong_dau` 는 같은 100문장의 보유율이 0 으로 뒤집힌 대조군이다.
+
+**`ja_kanji_only` 만 문장이 아니다.** 한자 run 만 남긴 조각이라 평균 3.5자·
+최단 2자(`本目`)다. zh 와 스크립트가 같은 데다 길이까지 짧아 어떤 감지기도
+복구할 수 없고, 그래서 채택 판단에서 빼고 *보고 전용* 으로만 싣는다.
+
+위 보유율·길이 카운트는 폐기된 gold 를 git 히스토리에서 꺼내
+(`git show 87dbd9f^:src/server/scripts/lang_detect/gold.jsonl`) 다시 센
+값이다 — 파일이 결정적이라 언제 세도 같은 수가 나온다.
 
 ## 결과 — 버킷별 recall(예측==expected)
 

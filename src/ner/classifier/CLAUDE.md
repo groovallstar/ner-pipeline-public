@@ -114,7 +114,7 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
 - 재현성 (`--train-seed`): 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·dropout·셔플을 고정해 재현 가능한 run 이 된다. GPU FP 비결합에 따른 seed-내 잔여 비결정성(loss ~1e-4)은 effect size 대비 무시 가능 — 비교 측정은 양 팔을 같은 `--train-seed` 로 고정하거나 multi-seed paired 로 본다. `metrics.json` 에 `train_seed`·`precision` 기록.
-- fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — F1≈0 fold 만 `--train-seed` 를 바꿔 재실행한다(full-determinism 은 붕괴를 막지 못하고 재현만 하며 ~1.9× 비용이라 비채택). 상세: `docs/reports/korean-bert-classifier-fold-collapse.md`.
+- fold 붕괴 (희귀·분할의존): 10-fold 일부 분할에서 koelectra 가 드물게(~0.3~3%) 학습 붕괴(F1≈0)한다. 검증된 근본 수정은 없음 — F1≈0 fold 만 `--train-seed` 를 바꿔 재실행한다(full-determinism 은 붕괴를 막지 못하고 재현만 하며 ~1.9× 비용이라 비채택). 상세: `docs/issues/issue-146-electra-fold-collapse.md`.
 - **층화 K-fold 모드** (`--kfold N --fold-index K`): PROD/EVT 보유 여부로 층화하여 N개 fold 에 배정. test = fold K, valid = fold (K+1)%N, train = 나머지. `--kfold 10` 이면 분할 크기가 80/10/10 과 동일. fold 모드에서는 test 예측이 `test_predictions.json` 으로 저장되어 `kfold_pool` 의 pooled 평가 입력이 된다. N ≥ 3 필수. 평가 프로토콜 상세: `docs/reports/japanese-bert-classifier-per-entity-diagnosis.md`
 
 ### 누출-free 분할 (`--group-key`, 필수)
@@ -248,7 +248,7 @@ docs/reports/vietnamese-bert-classifier-history.md       # VI 히스토리
 docs/reports/vietnamese-bert-classifier-spec.md          # VI 최종 출하 스펙
 docs/reports/korean-bert-classifier-benchmark.md         # KO 요약
 docs/reports/korean-bert-classifier-per-entity-diagnosis.md  # KO 엔티티별 성능 진단
-docs/reports/korean-bert-classifier-fold-collapse.md     # KO fold 붕괴 조사 (재현성·안정성)
+docs/issues/issue-146-electra-fold-collapse.md           # KO fold 붕괴 조사 (재현성·안정성)
 ```
 
 ## 출하·배포 (JA·VI deploy)
