@@ -262,6 +262,38 @@ PII 를 선정 기준에서 빼는 판단 자체는 유지한다 — 한 seed �
 
 구현: `ner.classifier.backbone_summary --check`.
 
+## 학습시간 — 1 epoch GPU 독점 재측
+
+| 후보 | 파라미터 | 1 epoch 학습시간 | 초당 샘플 |
+|---|---|---|---|
+| `bert-base-cased` | 108M | 252초 | 244 |
+| `roberta-base` | 125M | 254초 | 242 |
+| `google/electra-base-discriminator` | 110M | 254초 | 242 |
+| `xlm-roberta-base` | 278M | 290초 | 212 |
+| `answerdotai/ModernBERT-base` | 149M | 437초 | 140 |
+
+측정 조건은 위 §조건과 같고 `--epochs 1` 만 다르다. GPU 한 장(A6000 0번)을
+한 프로세스가 독점한 상태에서 다섯 후보를 **하나씩 차례로** 돌렸고, 값은
+`metrics.json` 의 `train_time_sec` — 학습 루프만이며 토크나이즈·평가·저장은
+빠져 있다. `microsoft/deberta-v3-base` 는 학습이 안 돼 제외했다. 이 실행들의
+F1 은 1 epoch 짜리라 순위 판정에 쓰지 않았고 어디에도 인용하지 않는다.
+
+**병렬 wall-clock 은 시간을 재는 데 쓸 수 없다.** 폐기한 병렬 실행에서는
+`roberta-base` 가 `bert-base-cased` 의 2.1배로 보였는데, 독점 재측에서는 252초
+대 254초로 차이가 1% 안이다. 앞의 배수는 모델의 성질이 아니라 그때 GPU 를
+누가 함께 쓰고 있었는지의 기록이었다.
+
+**파라미터 수로 학습시간을 갈음할 수 없다.** 가장 큰 `xlm-roberta-base`(278M)가
+가장 느리지 않고, 그 절반인 `ModernBERT-base`(149M)가 가장 느리다. xlm-r 의
+여분 파라미터는 대부분 25만 어휘의 임베딩 표에 있는데, 임베딩은 층 계산이
+아니라 행 조회라 파라미터가 늘어도 스텝 시간이 그만큼 늘지 않는다.
+`ModernBERT-base` 가 느린 원인은 이 실행에서 확인하지 않았다 — 로그에 attention
+백엔드 관련 경고는 남지 않았다.
+
+**서빙 비용의 대리 지표로만 읽는다.** 학습 한 스텝은 순전파와 역전파를 함께
+돌지만 추론은 순전파만 하므로, 이 표의 배수가 추론 지연에 그대로 옮겨가지
+않는다. baseline 선정은 이 표를 쓰지 않았다 — 갈림은 macro 와 PROD 에서 났다.
+
 ## 한계
 
 - **단일 split** — 분할은 하나이고 seed 만 셋이다. 따라서 std 가 재는 것은
@@ -270,11 +302,10 @@ PII 를 선정 기준에서 빼는 판단 자체는 유지한다 — 한 seed �
 - **외부 수치와 비교 불가** — 공식 test 를 안 쓰고, 18종을 6종으로 매핑해
   라벨 공간도 다르다. 이 표의 절대값은 published OntoNotes NER F1 과 나란히
   놓을 수 없다.
-- **학습시간 미측정** — 측정 조건(GPU 독점 + 조용한 호스트)이 세션 중복
-  사고로 깨져 값을 전부 폐기했다. 병렬 wall-clock 은 모델의 성질이 아니라
-  스케줄링의 부산물이라 인용하지 않는다. 서빙 비용 비교가 필요하면 재측해야
-  하며, 파라미터 수로 갈음할 수 없다는 정황이 있다 — 폐기 전 관측에서
-  `roberta-base`(124M)가 `bert-base-cased`(108M)의 2.1배였다.
+- **학습시간은 후보당 1회 1 epoch** — 반복이 없어 이 값들의 흔들림 폭을
+  모른다. 상위 세 후보의 252~254초 차이는 그 폭 안일 수 있으므로 서로
+  구분되는 값으로 읽지 않는다. `ModernBERT-base` 가 1.7배 느린 것처럼 폭이
+  큰 차이만 실체가 있다.
 - **large 급 미포함** — 영문 인코더 SOTA 는 large 급에 있지만 ko·ja·vi 와
   파라미터 층위를 맞추기 위해 base 급으로 한정했다.
 - **기성 OntoNotes 파인튜닝 모델과 미비교** — `tner/roberta-large-ontonotes5`
@@ -302,6 +333,14 @@ CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
 python -m ner.classifier.backbone_summary \
     --runs-dir results/classifier/en_bench --pattern '*_seed4*' --check \
     --output results/classifier/en_bench/median_summary.json
+
+# 4) 학습시간 재측 — 5종을 하나씩, GPU 독점 상태에서 1 epoch
+#    시작 전 nvidia-smi --query-compute-apps 로 다른 프로세스가 없음을 확인한다
+CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
+    --lang en --model-name roberta-base --group-key orig \
+    --precision bf16 --train-seed 42 --epochs 1 --lr 5e-5 \
+    --batch-size 16 --max-length 256 --seed 42 \
+    --output-dir results/classifier/en_bench/time_1ep/roberta_base
 ```
 
 **동시에 여러 실행을 띄우지 않는다.** 한 GPU 에 나눠 담으면 F1 은 그대로지만
@@ -314,6 +353,7 @@ python -m ner.classifier.backbone_summary \
 |---|---|
 | 원장(인용 근거) | `certified/classifier/en/backbone-bench/` — run 16개 `metrics.json` + `median_summary.json` |
 | scratch | `results/classifier/en_bench/` (gitignore·휘발) |
+| 학습시간 재측 | `results/classifier/en_bench/time_1ep/` (gitignore·휘발) |
 | 병합 도구 | `src/ner/augmenters/ontonotes_en/merge_splits.py` |
 | 집계·검사 도구 | `src/ner/classifier/backbone_summary.py` |
 | 이슈 문서 | `docs/issues/issue-215-en-backbone-benchmark.md` |

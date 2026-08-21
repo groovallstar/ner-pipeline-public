@@ -55,7 +55,6 @@ DEFAULT_MODEL = {
     'ja': 'tohoku-nlp/bert-base-japanese-v3',
     'vi': 'xlm-roberta-base',
     'ko': 'monologg/koelectra-base-v3-discriminator',
-    # en 은 백본 벤치마크 전이라 잠정값이다 — 선정되면 그 모델로 바꾼다.
     'en': 'roberta-base',
 }
 
