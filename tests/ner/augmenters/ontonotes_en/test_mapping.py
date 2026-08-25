@@ -94,7 +94,9 @@ def test_schema_section_45_matches_this_table():
     schema = (Path(__file__).resolve().parents[4] / 'docs' / 'manual' /
               'data' / 'canonical-entity-schema.md').read_text(encoding='utf-8')
     body = schema[schema.index('### 4.5 EN'):]
-    body = body[:body.index('####')]
+    # 절의 끝은 다음 `## ` 다 — 하위 heading(`#### `)을 끝으로 삼으면 그 heading 이
+    # 사라질 때 표가 아니라 파서가 먼저 깨진다.
+    body = body[:body.index('\n## ', 1)]
 
     declared: dict[str, str] = {}
     for row in re.findall(r'^\|(.+?)\|(.+?)\|', body, re.M):
