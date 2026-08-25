@@ -10,8 +10,7 @@
 10종 평면화 때 인공 시설을 모두 ORG 로 흡수했고, KO 는 narrow-ORG 재정의를 따라
 ORG 를 정부·행정·공공·정치 기관으로 좁히고 인공 시설·민간조직을 아예 버린다.
 `generators/ko.py` 로 KO 주입을 돌릴 때 이 차이를 JA·VI 기준으로 착각하면
-주입 자체는 맞아도 gold 해석이 틀어진다. 언어별 정본: 위 스키마 문서 §KO 및
-`docs/manual/data/korean-entity-labeling-rules.md`.
+주입 자체는 맞아도 gold 해석이 틀어진다. 언어별 정본: 위 스키마 문서 §2.5.
 
 ## 서브 모듈
 
