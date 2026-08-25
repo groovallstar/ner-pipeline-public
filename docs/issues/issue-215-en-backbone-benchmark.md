@@ -1,6 +1,7 @@
 # issue-215: 영문(en) BERT 백본 NER 벤치마크 — base 급 6종 baseline 확립
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/215
+- PR: https://github.com/groovallstar/ner-pipeline/pull/217
 - 브랜치: `feat/issue-215-en-backbone-benchmark`
 - 승인일: 2026-08-21
 - **측정 상세·수치·해석: `docs/reports/english-bert-classifier-benchmark.md`**
@@ -91,3 +92,5 @@ baseline 백본을 확정한다. 임계값 게이트가 아니라 **baseline 수
 
 - `c1b7a58` feat(classifier): 영문 en 배선 + split 병합 도구
 - `e63cd8d` feat(classifier): 영문 백본 벤치마크 결과 + 집계 도구
+- `617a776` docs(reports): 영문 백본 벤치마크 리포트 + 이슈 문서 축약
+- `9b48973` docs(classifier): 영문 백본 학습시간 1 epoch 독점 재측
