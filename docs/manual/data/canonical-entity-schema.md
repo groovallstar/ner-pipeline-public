@@ -264,7 +264,7 @@ PROD 는 **유형 제품·창작 작품·패키지 소프트웨어·형식명 �
 
 보조: 番組(정규 방송 프로그램)·패키지 게임은 PROD 유지. 방송 플랫폼·
 위성방송 서비스(`モバHO!`)·게임 서비스 플랫폼(`Xbox Live`)은 비-entity.
-형식·급·모델명 제조물(`IV号戦車`·`MBSat`)은 PROD(§3.1 A).
+형식·급·모델명 제조물(`IV号戦車`·`MBSat`)은 PROD(§3.1 제조 명명 탈것 행).
 
 ### 3.3 EVT 회색지대 규정 — scope 재정의
 
@@ -324,10 +324,10 @@ PROD 는 **유형 제품·창작 작품·패키지 소프트웨어·형식명 �
   (`授賞式`·`Awards`)은 EVT. §3.2 "상·훈장·규격 → 비-entity"는
   훈장·표창·규격기 한정(시상 행사 아님).
 
-### 3.4 KO PROD 경계 — eponymy·명명 탈것·SW·span 범위
+### 3.4 KO PROD 경계 — eponymy·명명 탈것·SW·span 범위·설비 호기
 
 §3.1~§3.3(JA 이식분: 운영리그·법령·시대구분)으로 가려지지 않는 **KO 고유
-모호 4류**를 아래로 닫는다. KLUE 사람 gold 의 PER/LOC/ORG/DAT 도
+모호 케이스**를 아래로 닫는다. KLUE 사람 gold 의 PER/LOC/ORG/DAT 도
 silver(경계·타입 noise 존재)이며 본 규칙은 전 타입에 적용된다 — PROD 만
 상세표를 받는 것은 나머지가 무오류라서가 아니다.
 
@@ -406,7 +406,7 @@ LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨
 | `DATE` | `DAT` | §1 — 모든 날짜 |
 | `LAW` | **비-entity** | §3.1 법령·법률·법안·규정 |
 | `NORP`, `LANGUAGE` | **비-entity** | §2.3 국적·언어·계통 |
-| `TIME` `QUANTITY` `MONEY` `PERCENT` `ORDINAL` `CARDINAL` | **비-entity** | KO 의 TI/QT 드롭과 동형 |
+| `TIME` `QUANTITY` `MONEY` `PERCENT` `ORDINAL` `CARDINAL` | **비-entity** | KO 가 KLUE 의 `TI`(시간)·`QT`(수량)를 드롭하는 것과 동형 |
 | (OntoNotes 미커버) | `EMAIL`, `PHONE`, `ID_NUM`, `CREDIT_CARD` | PII 주입이 추가 |
 
 **EN 은 원천이 넘치는 유일한 언어다.** JA·VI·KO 는 원천이 빈약해 LLM 재라벨로
