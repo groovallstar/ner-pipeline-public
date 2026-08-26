@@ -1,7 +1,7 @@
 # issue-221: 영문(en) NER 배포 패키지 — roberta-base 체크포인트를 /data/ner/en 에 출하
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/221
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/226
 - 브랜치: `feat/issue-221-en-deploy-model`
 - 승인일: 2026-08-25
 
@@ -166,7 +166,7 @@ NER 5종 strict F1 을 원장 backbone-bench 3-seed 와 나란히 둔다. 같은
 
 ## 관련 커밋
 
-<!-- 커밋 후 채움 -->
+- `6b3bcc7`: 포장·배포 추론 스크립트 + 검사 14종 + 원장 승격 + 문서 갱신
 
 ## 후속 작업
 
