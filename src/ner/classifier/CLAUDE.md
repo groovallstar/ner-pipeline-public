@@ -217,7 +217,7 @@ B-CREDIT_CARD, I-CREDIT_CARD
 
 | 분기 | 조건 | 정렬 방식 |
 |---|---|---|
-| fast | `tokenizer.is_fast` (XLM-R·CafeBERT·mmBERT·DeBERTa-V3 등) | `return_offsets_mapping=True` + `_trim_offset`. SentencePiece 계열이 `▁` 토큰에 선행 공백을, 숫자형 entity 끝에 문장부호를 흡착해 char-offset 이 어긋나는 것을 **선행 공백·후행 `.`/`,` trim** 으로 교정 (`_encode_vi`) |
+| fast | `tokenizer.is_fast` (XLM-R·CafeBERT·mmBERT·DeBERTa-V3 등) | `return_offsets_mapping=True` + `_trim_offset`. SentencePiece 계열이 `▁` 토큰에 선행 공백을, 숫자형 entity 끝에 문장부호를 흡착해 char-offset 이 어긋나는 것을 **선행 공백·후행 `.`/`,` trim** 으로 교정 (`_encode_vi`). trim 결과가 비면 원래 offset 을 돌려준다 — 길이 0 조각은 아래 포함 검사가 양끝을 포함하는 탓에 entity 종료 지점에서 통과해 entity 밖 문장부호를 삼킨다 |
 | PhoBERT | `_is_phobert` (slow, 단어분절 전제) | `pyvi` 단어분절 후 단어별 BPE, 단어 char-span 정렬 (`_encode_phobert`). 의존성: `pyvi` |
 | JA slow | 그 외 slow (`BertJapaneseTokenizer`) | `tokenize()` → `text.find(surface, pos)` greedy. `##` strip. UNK 시 0-length. 의존성: `fugashi` + `unidic-lite` |
 

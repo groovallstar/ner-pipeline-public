@@ -1,0 +1,162 @@
+{
+  "data": "/data/ner/en/data/test.jsonl",
+  "lang": "en",
+  "tokenizer": "/data/ner/en/model",
+  "max_length": 256,
+  "audit": {
+    "rows": 7637,
+    "entity_labeled_tokens": 101277,
+    "boundary_violations": {
+      "total": 8110,
+      "by_kind": {
+        "zero_at_end": 8110
+      },
+      "by_kind_type": {
+        "zero_at_end/CREDIT_CARD": 1533,
+        "zero_at_end/DAT": 672,
+        "zero_at_end/EMAIL": 1167,
+        "zero_at_end/EVT": 42,
+        "zero_at_end/ID_NUM": 1387,
+        "zero_at_end/LOC": 774,
+        "zero_at_end/ORG": 514,
+        "zero_at_end/PER": 979,
+        "zero_at_end/PHONE": 996,
+        "zero_at_end/PROD": 46
+      }
+    },
+    "roundtrip": {
+      "entities": 17092,
+      "recovered": 16816,
+      "missed": 276,
+      "ceiling": 0.9838520945471566,
+      "per_type": {
+        "CREDIT_CARD": {
+          "recovered": 2292,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "DAT": {
+          "recovered": 1404,
+          "missed": 4,
+          "ceiling": 0.9971590909090909
+        },
+        "EMAIL": {
+          "recovered": 2385,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "EVT": {
+          "recovered": 107,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "ID_NUM": {
+          "recovered": 2266,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "LOC": {
+          "recovered": 2119,
+          "missed": 143,
+          "ceiling": 0.9367816091954023
+        },
+        "ORG": {
+          "recovered": 1718,
+          "missed": 118,
+          "ceiling": 0.9357298474945533
+        },
+        "PER": {
+          "recovered": 2064,
+          "missed": 7,
+          "ceiling": 0.9966199903428296
+        },
+        "PHONE": {
+          "recovered": 2253,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "PROD": {
+          "recovered": 208,
+          "missed": 4,
+          "ceiling": 0.9811320754716981
+        }
+      }
+    }
+  },
+  "checkpoint": {
+    "model_dir": "/data/ner/en/model",
+    "rows": 7637,
+    "pred_label_ids_sha256": "404b536e6f4a59c79155789765c5082c2f5338cebd9c7cf121b9222e8789cd39",
+    "input_ids_sha256": "d7a11732aede0fe4e44b067e48b9838d4b476e48a766f1eb820715a7b2948bdb",
+    "strict": {
+      "overall": {
+        "f1": 0.898157074000567,
+        "precision": 0.8713279788755639,
+        "recall": 0.9266908495202434,
+        "support": 17092
+      },
+      "per_entity": {
+        "CREDIT_CARD": {
+          "f1": 0.9615141955835963,
+          "precision": 0.928136419001218,
+          "recall": 0.9973821989528796,
+          "support": 2292
+        },
+        "DAT": {
+          "f1": 0.8439692616104243,
+          "precision": 0.7968454258675078,
+          "recall": 0.8970170454545454,
+          "support": 1408
+        },
+        "EMAIL": {
+          "f1": 0.848048048048048,
+          "precision": 0.8114942528735632,
+          "recall": 0.8880503144654088,
+          "support": 2385
+        },
+        "EVT": {
+          "f1": 0.7246376811594203,
+          "precision": 0.75,
+          "recall": 0.7009345794392523,
+          "support": 107
+        },
+        "ID_NUM": {
+          "f1": 0.9482020547945207,
+          "precision": 0.9206151288445553,
+          "recall": 0.9774933804060018,
+          "support": 2266
+        },
+        "LOC": {
+          "f1": 0.8712529652792754,
+          "precision": 0.8505263157894737,
+          "recall": 0.8930150309460654,
+          "support": 2262
+        },
+        "ORG": {
+          "f1": 0.8233092755947609,
+          "precision": 0.8083989501312336,
+          "recall": 0.8387799564270153,
+          "support": 1836
+        },
+        "PER": {
+          "f1": 0.9416846652267818,
+          "precision": 0.9360687022900763,
+          "recall": 0.9473684210526315,
+          "support": 2071
+        },
+        "PHONE": {
+          "f1": 0.9592489865585663,
+          "precision": 0.923582580115037,
+          "recall": 0.9977807367953839,
+          "support": 2253
+        },
+        "PROD": {
+          "f1": 0.5384615384615384,
+          "precision": 0.5490196078431373,
+          "recall": 0.5283018867924528,
+          "support": 212
+        }
+      }
+    }
+  }
+}
