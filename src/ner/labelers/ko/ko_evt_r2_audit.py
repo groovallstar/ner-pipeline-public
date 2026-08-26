@@ -507,6 +507,47 @@ _EXCLUDE_MARKER = re.compile(r"^R2 제외 `([^`]+)`")
 _WORD_EDGE = re.compile(r"^[^가-힣A-Za-z0-9]+|[^가-힣A-Za-z0-9]+$")
 _HANGUL_WORD = re.compile(r"[가-힣]+")
 
+KO_SECTION = "### 5.3"
+
+
+def canonical_section_rows(
+    path: str = CANONICAL_PATH, heading: str = KO_SECTION,
+) -> List[str]:
+    """`heading` 절 안의 표 줄만 돌려준다. 절이 없거나 표가 없으면 예외.
+
+    **빈 목록이 아니라 예외인 이유.** 파서가 읽는 절이 사라지거나 이름이 바뀌면
+    결과가 빈 구조가 되는데, 빈 구조는 "규칙이 실제로 비어 있다" 와 구별되지
+    않는다. 그러면 `canonical_rule_sha256()` 이 그 빈 규칙의 해시를 정상 값처럼
+    만들어 내므로, 파싱이 깨진 채 사전등록을 다시 뜨면 빈 규칙이 정본으로 굳는다.
+    규칙을 세는 쪽이 규칙을 못 읽었을 때는 조용한 0 이 아니라 시끄러운 실패여야
+    한다 — 안전한 방향으로 실패하는 쪽이 과도한 차단이라 그쪽을 고른다.
+
+    절의 끝은 다음 `## ` 또는 `### ` 이다. 같은 층의 다음 절에서 멈추지 않으면
+    `### 5.4` 가 생겼을 때 그 표의 행이 KO 규칙으로 섞여 든다.
+    """
+    rows: List[str] = []
+    found = False
+    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
+        if line.startswith(heading):
+            found = True
+            continue
+        if found and (line.startswith("## ") or line.startswith("### ")):
+            break
+        if found and line.startswith("|"):
+            rows.append(line)
+    if not found:
+        raise ValueError(
+            f"canonical section {heading!r} not found in {path}; "
+            "the rule parser reads its population from that section, and an "
+            "empty result would be indistinguishable from an empty rule set"
+        )
+    if not rows:
+        raise ValueError(
+            f"canonical section {heading!r} in {path} has no table rows; "
+            "the rule parser reads its population from that table"
+        )
+    return rows
+
 
 def parse_canonical_r2(path: str = CANONICAL_PATH) -> Dict[str, object]:
     """canonical §5.3 표에서 R2 head·단독 어휘·제외 목록을 읽어 온다.
@@ -520,15 +561,7 @@ def parse_canonical_r2(path: str = CANONICAL_PATH) -> Dict[str, object]:
     bare: Tuple[str, ...] = ()
     ceremony: Tuple[str, ...] = ()
     exclude: Dict[str, Tuple[str, ...]] = {}
-    in_ko_table = False
-    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
-        if line.startswith("### 5.3"):
-            in_ko_table = True
-            continue
-        if in_ko_table and line.startswith("## "):
-            break
-        if not in_ko_table or not line.startswith("|"):
-            continue
+    for line in canonical_section_rows(path):
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) != 3:
             continue

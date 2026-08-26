@@ -52,6 +52,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 # — 자가 둘이 되는 것과 같다.
 from ner.labelers.ko.ko_evt_r2_audit import (
     CANONICAL_PATH,
+    canonical_section_rows,
     EVT,
     _load_jsonl,
     _strip_particle,
@@ -166,15 +167,7 @@ def parse_canonical_axis1(path: str = CANONICAL_PATH) -> Dict[str, object]:
     codes: List[str] = []
     min_len = 0
     min_ratio = 0.0
-    in_ko_table = False
-    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
-        if line.startswith("### 5.3"):
-            in_ko_table = True
-            continue
-        if in_ko_table and line.startswith("## "):
-            break
-        if not in_ko_table or not line.startswith("|"):
-            continue
+    for line in canonical_section_rows(path):
         marker = _AXIS1_HEAD_MARKER.search(line)
         if marker:
             heads = tuple(_BACKTICK.findall(marker.group(1)))
@@ -586,6 +579,11 @@ def canonical_rule_sha256(path: str = CANONICAL_PATH) -> str:
     정의 완화)은 이 지문으로 잠기지 않으므로 그때 잠글 수단을 따로 만들어야 한다.
     옛 파일 전체 해시는 그것까지 잡았지만 실측 주석 한 줄에도 깨져 갱신을 강요했다 —
     넓게 새는 쪽 대신 좁게 확실한 쪽을 골랐고, 그 대가가 이 범위 제한이다.
+
+    **파싱이 깨지면 값을 내지 않고 예외를 낸다**(`canonical_section_rows()`).
+    빈 규칙의 지문도 형식은 정상 해시라, 절이 사라진 줄 모르고 사전등록을 다시
+    뜨면 빈 규칙이 정본으로 굳고 그 뒤로는 head 를 얼마든 넓혀도 이 값이
+    반박하지 않는다.
     """
     rule = parse_canonical_axis1(path)
     payload = json.dumps(rule, ensure_ascii=False, sort_keys=True)

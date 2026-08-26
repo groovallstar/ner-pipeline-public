@@ -268,6 +268,47 @@ def test_canonical_parser_reads_heads_and_exclusions(tmp_path):
     assert parsed["ceremony"] == ("개막식",)
 
 
+def test_canonical_parser_raises_when_the_section_is_gone(tmp_path):
+    """읽을 절이 없으면 빈 결과가 아니라 예외다.
+
+    빈 결과는 "규칙이 실제로 비어 있다" 와 구별되지 않는다 — 그러면
+    `canonical_rule_sha256()` 이 그 빈 규칙의 해시를 정상 값처럼 만들어 내고,
+    파싱이 깨진 채 사전등록을 다시 뜨면 빈 규칙이 정본으로 굳는다.
+    """
+    doc = tmp_path / "canon.md"
+    doc.write_text(
+        "### 5.9 다른 절\n\n| 표면형 | 판정 | 근거 |\n|---|---|---|\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="not found"):
+        parse_canonical_r2(str(doc))
+
+
+def test_canonical_parser_raises_when_the_table_is_gone(tmp_path):
+    """절 제목만 남고 표가 사라진 경우도 같다 — 규칙을 못 읽은 것은 마찬가지다."""
+    doc = tmp_path / "canon.md"
+    doc.write_text(
+        "### 5.3 KO\n\n산문만 남았다.\n\n## 6. 다음 절\n", encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="no table rows"):
+        parse_canonical_r2(str(doc))
+
+
+def test_canonical_parser_stops_at_the_next_sibling_section(tmp_path):
+    """형제 절(`### 5.4`)이 생겨도 그 표의 행이 KO 규칙으로 섞이면 안 된다."""
+    doc = tmp_path / "canon.md"
+    doc.write_text(
+        "### 5.3 KO\n\n"
+        "| 표면형 | 판정 | 근거 |\n|---|---|---|\n"
+        "| `청문회` (단독) | `EVT` | R2 단독 — head 자체가 회의 형식 |\n"
+        "\n### 5.4 EN\n\n"
+        "| 표면형 | 판정 | 근거 |\n|---|---|---|\n"
+        "| `townhall` (단독) | `EVT` | R2 단독 — EN 절의 행 |\n",
+        encoding="utf-8",
+    )
+    assert parse_canonical_r2(str(doc))["bare_standalone"] == ("청문회",)
+
+
 def test_r2_rule_of_puts_exclusion_before_head_match():
     """제외가 형태 매칭에 덮이면 canonical 이 무력해진다.
 

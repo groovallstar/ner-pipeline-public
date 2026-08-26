@@ -3,9 +3,9 @@
 이 표의 대부분은 새로 정한 것이 아니라 canonical 규칙이 이미 강제하던 것을
 적은 것이고, 각 행에 근거 절 번호를 남긴다. **다만 한 가지는 고른 것이라
 스키마 문서에도 함께 적었다** — 아래 LOC/ORG 경계이며, 그래서
-`docs/manual/data/canonical-entity-schema.md` 에 §4.5 가 신설됐다.
+`docs/manual/data/canonical-entity-schema.md` 에 §4.3 이 신설됐다.
 
-**정본은 이 표이고 §4.5 는 근거를 적은 사본이다.** 둘이 갈리면
+**정본은 이 표이고 §4.3 은 근거를 적은 사본이다.** 둘이 갈리면
 `tests/.../test_mapping.py` 의 동기화 검사가 잡는다 — 한쪽만 고치면 붉어진다.
 
 **LOC/ORG 경계는 언어마다 다르므로 EN 이 어느 쪽인지 여기서 선언한다.**
