@@ -95,6 +95,10 @@ tests/ner/
   `importorskip`(`classifier/test_encode.py`). CI 설정은 리포에 없어(호스트 실행 전제)
   "CI 에서 스킵" 이라는 경로 자체가 없다
 - 테스트는 `PYTHONPATH` 설정 없이 동작 (uv editable install 기준)
+- 저장소 루트는 `pyproject.toml` 의 `[tool.pytest.ini_options] pythonpath` 가
+  올린다 — 형제 테스트 모듈을 `tests.ner...` 로 읽는 파일이 있어서다. 환경변수
+  `PYTHONPATH` 가 아니라 pytest 세션 안에서만 사는 경로라 위 금지와 다른 축이고,
+  없으면 `pytest` 와 `python -m pytest` 의 결과가 갈린다
 
 ## 의존성
 
