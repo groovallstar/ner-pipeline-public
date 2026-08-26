@@ -3,7 +3,7 @@
 > **이 단계가 하는 일**: 증강·검증을 통과한 canonical 10종 평면 JSONL로
 > BERT 토큰 분류기를 파인튜닝하고 char-offset span F1로 평가한다.
 > **대상 코드**: `src/ner/classifier/`
-> **산출**: `results/classifier/{ja,vi}/`(best 모델 + `metrics.json` +
+> **산출**: `results/classifier/{ja,vi,ko,en}/`(best 모델 + `metrics.json` +
 > `thresholds.json`)
 
 ### 책임 경계
@@ -40,7 +40,7 @@ flowchart LR
 6. [신뢰도 임계값 운영점](#6-신뢰도-임계값-운영점)
 7. [오류 분석·K-fold pooling](#7-오류-분석k-fold-pooling)
 8. [산출물·배포](#8-산출물배포)
-9. [JA/VI 분기 요약](#9-javi-분기-요약)
+9. [언어별 분기 요약](#9-언어별-분기-요약)
 10. [CLI·테스트](#10-cli테스트)
 
 ---
@@ -356,7 +356,7 @@ python -m ner.classifier.kfold_pool \
 ## 8. 산출물·배포
 
 ```
-results/classifier/{ja,vi,ko}/
+results/classifier/{ja,vi,ko,en}/
 ├── best/            # best 체크포인트 (HF model dir)
 ├── checkpoint-*/    # 중간 (save_total_limit=1)
 ├── metrics.json     # 학습 설정 + overall/per-entity strict·relaxed F1
@@ -379,9 +379,60 @@ results/classifier/{ja,vi,ko}/
 > classifier 패키지를 import만 한다(패키지에 서빙 코드 없음). 상시 REST
 > 서빙은 `src/server/`(본 단계 범위 밖).
 
+### EN 출하 (deploy)
+
+EN 은 **학습과 포장을 두 단계로 나눈다.** 학습은 CLI 가 그대로 맡고, 포장
+스크립트는 그 산출물을 배포 레이아웃으로 옮기기만 한다. 학습 경로를 포장
+스크립트 안에 복제하면 배포 체크포인트가 CLI 아닌 그 스크립트의 산물이 돼,
+백본 벤치마크 원장과 수치를 견주는 일이 서로 다른 코드 경로를 비교하는 것이
+된다.
+
+```bash
+# 1) 학습 — 백본 벤치마크의 seed42 조건 그대로
+python -m ner.classifier --lang en --group-key orig \
+    --seed 42 --train-seed 42 --precision bf16 \
+    --output-dir results/classifier/en/deploy-trainseed42
+
+# 2) 포장 — /data/ner/en 으로
+python src/ner/scripts/build_en_ner_prod.py \
+    --run-dir results/classifier/en/deploy-trainseed42
+```
+
+| 아티팩트 | 위치 | 역할 |
+|---|---|---|
+| 포장 | `src/ner/scripts/build_en_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다 |
+| 배포 추론 | `src/ner/scripts/eval_en_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. 절대경로만. 기본 레이아웃 `/data/ner/en/{model,data/test.jsonl}`. 임계값 파일이 없으면 raw 폴백 |
+| 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
+| 원장 | `certified/classifier/en/deploy-trainseed42/` | 배포런의 metric. 백본 벤치마크 원장(`backbone-bench/`)과 같은 데이터·분할이라 나란히 놓을 수 있다 |
+| 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 프로비넌스 정합 · 원장과 같은 자로 쟀는지 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
+
+**포장 스크립트가 분할을 다시 유도하는 이유** — 학습 CLI 는 분할 JSONL 을
+저장하지 않는다. 같은 인자로 다시 부르면 결정적으로 같은 분할이 나오지만,
+그 사실을 믿고 넘어가는 대신 유도한 크기를 run 의 `metrics.json` 기록과
+대조해 어긋나면 중단한다. 실제로 학습에 쓰이지 않은 분할을 배포 데이터로
+적어 두는 것이 여기서 가능한 가장 조용한 실패이기 때문이다.
+
+**test 홀드아웃이 JA·VI 의 100문장이 아닌 이유** — EN gold 는 EVT 보유 행이
+856(1.1%)·PROD 가 1,754(2.3%)라, 100문장을 떼면 두 타입이 각각 한두 행만
+들어와 측정이 성립하지 않는다. JA·VI 는 원본이 작아 그 크기가 불가피했지만
+EN 은 76,378행이라 벤치마크와 같은 `test_ratio=0.1`(7,637행)을 그대로 쓴다.
+폴더 구조만 동형이고 홀드아웃 크기는 다르다.
+
+**재현 대조를 하지 않는 이유** — 처음에는 배포런이 같은 시드의 벤치마크 run 을
+재현할 것으로 보고 수치 일치를 검사에 넣었으나, 그 전제가 거짓이다. best 에포크
+선택이 valid `eval_loss` 기준이라 미세한 수치 차이가 어느 체크포인트를 출하할지를
+뒤집고, 예측 span 복원이 라벨 생성과 같은 offset 배열을 쓰므로 채점 경로도 완전히
+결정적이지 않다. 그래서 검사는 재현이 아니라 **프로비넌스 정합 · 같은 자 · 붕괴
+검출 바닥** 셋을 본다. 바닥을 좁게 조이면 seed 뽑기를 통과 조건으로 만드는 셈이다.
+
+**EN EMAIL 은 seed 뽑기를 탄다** — 같은 설정 3-seed 에서 EMAIL strict F1 이 크게
+갈린다. 원인은 정답표 경계 결함(길이 0 offset 이 엔티티 밖 문장부호를 삼킨다)이며
+`_trim_offset` 을 공유하는 KO·VI 도 같은 노출을 받는다(JA 는 slow 경로라 비켜
+간다). 별도 이슈로 추적하고, 배포 카드의 §운영 주의에 수치와 함께 적어 둔다.
+
 ---
 
-## 9. JA/VI 분기 요약
+## 9. 언어별 분기 요약
 
 | 항목 | JA | VI |
 |---|---|---|
@@ -394,6 +445,11 @@ results/classifier/{ja,vi,ko}/
 
 KO는 `monologg/koelectra-base-v3-discriminator`(ELECTRA 계열, `--precision fp16`
 기본), `data/klue/pii_all.jsonl`.
+
+EN은 `roberta-base`(백본 벤치마크로 확정), `data/ontonotes_en/pii_all.jsonl`,
+fast(RoBERTa BPE) 토크나이저라 별도 런타임 의존이 없다. 원문 파생 행이 있어
+`--group-key orig` 가 필수이고, DeBERTa-v3 발산 전례 때문에 `--precision bf16`
+을 쓴다. 출하는 `/data/ner/en/` + `eval_en_ner_test`(§8).
 
 ---
 

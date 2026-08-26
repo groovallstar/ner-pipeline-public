@@ -146,7 +146,7 @@ def test_ruler_needs_both_human_allow_and_refuter_pass(repo):
 
     Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
         {'verdict': 'PASS', 'diff_hash': dhash, 'defects': [],
-         'checked': ['gold 재계산 일치'], 'model': 'sonnet', 'round': 1}
+         'checked': ['gold 재계산 일치'], 'model': 'default', 'round': 1}
     ))
     _, _, result = _gate(repo)
     assert result is None
@@ -159,7 +159,7 @@ def test_refuter_fail_keeps_the_gate_shut(repo):
     _allow(sdir, dhash)
     Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
         {'verdict': 'FAIL', 'diff_hash': dhash, 'defects': ['gold moved'],
-         'checked': [], 'model': 'opus', 'round': 1}
+         'checked': [], 'model': 'default', 'round': 1}
     ))
     _, _, result = _gate(repo)
     assert result[0] == 'ruler-refuter'
@@ -173,12 +173,12 @@ def test_old_verdict_files_are_still_readable(repo):
     Path(core.verdict_path(sdir, 'oldhash')).write_text(json.dumps(
         {'verdict': 'FAIL', 'diff_hash': 'oldhash',
          'findings': ['PASS: 테스트 무결성 확인', 'σ 표기 불일치'],
-         'model': 'sonnet', 'round': 1}
+         'model': 'default', 'round': 1}
     ))
     state, defects, meta = core.read_verdict(sdir, 'oldhash')
     assert state == 'FAIL'
     assert 'σ 표기 불일치' in defects
-    assert meta['model'] == 'sonnet'
+    assert meta['model'] == 'default'
 
 
 def test_verdict_without_defects_key_passes(repo):
@@ -186,7 +186,7 @@ def test_verdict_without_defects_key_passes(repo):
     sdir = core.state_dir(repo)
     Path(core.verdict_path(sdir, 'h2')).write_text(json.dumps(
         {'verdict': 'PASS', 'diff_hash': 'h2', 'defects': [],
-         'checked': ['확인 기록 세 줄'], 'model': 'opus', 'round': 1}
+         'checked': ['확인 기록 세 줄'], 'model': 'default', 'round': 1}
     ))
     state, defects, _ = core.read_verdict(sdir, 'h2')
     assert state == 'PASS' and defects == []
@@ -205,13 +205,27 @@ def test_allow_dies_when_the_diff_changes(repo):
     assert result[0] == 'ruler-lock'  # 이전 승인이 따라오지 않는다
 
 
-def test_exempt_sections_do_not_lock(repo):
-    """정의가 안 움직이는 절(변경 이력)만 고친 커밋까지 잠그면 확인이
-    허울이 된다 — 그래서 면제된다."""
+def test_no_section_is_exempt_from_the_ruler_lock(repo):
+    """절 단위 면제는 없다 — 기준 문서는 어느 줄을 고쳐도 잠근다.
+
+    면제 구간을 변경 *후* 파일에서 구하던 옛 규칙에는, 면제될 절을 새로
+    만들면서 그 안에 정의를 바꿔 넣으면 추가한 줄이 통째로 자기가 만든
+    구간에 들어가 게이트가 울리지 않는 구멍이 있었다. 그 경로가 실제로
+    잠기는지를 기록으로 남긴다."""
     _seed_ruler(repo)
+
+    # (1) 기록·맥락 절만 고쳐도 잠긴다
     _write(repo, RULER_DOC, SCHEMA_BEFORE + '- 두 번째 항목\n')
     _, _, result = _gate(repo)
-    assert result is None
+    assert result[0] == 'ruler-lock'
+
+    # (2) 옛 면제 구멍 — '## 변경 이력' 절을 새로 만들고 그 안에서 정의를
+    #     바꾸는 경로. 추가 줄이 모두 새 절 안이라 옛 규칙은 통과시켰다
+    _write(repo, RULER_DOC,
+           '# 스키마\n\n## 정의\n\nPER LOC ORG\n\n'
+           '## 변경 이력\n\n- 최초\n- PROD 를 추가하고 ORG 를 뺀다\n')
+    _, _, result = _gate(repo)
+    assert result[0] == 'ruler-lock'
 
 
 # ── 테스트 무결성 ─────────────────────────────────────────────────────

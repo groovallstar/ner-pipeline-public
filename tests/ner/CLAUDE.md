@@ -51,6 +51,10 @@ tests/ner/
 │   │                  # FP 사각 진단(모양 판정이 head 목록을 안 쓴다·낱말 조각 분리),
 │   │                  # 비순환 재채점(동일 팔 Δ 0·회수 행 제외·행/분할 불일치 거부),
 │   │                  # 커밋된 산출물 4종의 지문 대조(사전등록이 순서를 집행한다)
+│   ├── test_ko_locorg_ledger.py  # canonical §2.5 ↔ KO gold 원장 —
+│   │                  # 원장 자체 정합성(gold 없이도 돈다), 모집단이 §2.5
+│   │                  # 예시에서 나오는지, gold 지문 불일치는 거부,
+│   │                  # `data/` 없는 워크트리에서는 경고를 남기고 skip
 │   ├── test_ko_split_audit.py  # 옛 두 팔의 fold 대응 사후 감사 —
 │   │                  # 회수 역적용(좌표 일치분만·판정별 필드명 분기),
 │   │                  # 겹침의 자가 Jaccard 가 아님, 문턱이 실측 전에 고정됨,
@@ -68,8 +72,9 @@ tests/ner/
 ```
 
 `labelers/` 에 `ko/` 디렉토리는 없다 — 한국어 라벨러 테스트는 최상위
-`test_base_labelers.py`·`test_bio_dataset.py` 와 `labelers/test_ko_evt_r2_audit.py`
-에 흩어져 있다.
+`test_base_labelers.py`·`test_bio_dataset.py` 와 `labelers/test_ko_*.py` 에
+흩어져 있다. `test_ko_ner_prompts.py` 는 축1 head 동기에 더해 canonical §2.5 ↔
+프롬프트 LOC/ORG 동기를 양방향으로 대조한다.
 
 `tests/server/`는 별도 패키지(server 계약·통합·live 테스트)로, 본 문서는
 `tests/ner/`만 다룬다. 상세 전략: `src/server/CLAUDE.md`.
@@ -90,6 +95,10 @@ tests/ner/
   `importorskip`(`classifier/test_encode.py`). CI 설정은 리포에 없어(호스트 실행 전제)
   "CI 에서 스킵" 이라는 경로 자체가 없다
 - 테스트는 `PYTHONPATH` 설정 없이 동작 (uv editable install 기준)
+- 저장소 루트는 `pyproject.toml` 의 `[tool.pytest.ini_options] pythonpath` 가
+  올린다 — 형제 테스트 모듈을 `tests.ner...` 로 읽는 파일이 있어서다. 환경변수
+  `PYTHONPATH` 가 아니라 pytest 세션 안에서만 사는 경로라 위 금지와 다른 축이고,
+  없으면 `pytest` 와 `python -m pytest` 의 결과가 갈린다
 
 ## 의존성
 

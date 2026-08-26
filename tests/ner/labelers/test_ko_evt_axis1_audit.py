@@ -370,6 +370,20 @@ def test_canonical_population_guards_match_module_constants():
     assert parsed["min_proper_ratio"] == DEFAULT_MIN_PROPER_RATIO
 
 
+def test_canonical_rule_sha256_raises_instead_of_hashing_nothing(tmp_path):
+    """파싱이 깨졌을 때 빈 규칙의 지문을 내놓으면 안 된다.
+
+    이 값은 사전등록의 앵커다 — 파싱이 깨진 채 값을 다시 뜨면 빈 규칙이
+    정본으로 굳고, 그 뒤로는 head 를 얼마든 넓혀도 지문이 반박하지 않는다.
+    """
+    doc = tmp_path / "canon.md"
+    doc.write_text("## 1. 정의\n\nPER LOC ORG\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not found"):
+        parse_canonical_axis1(str(doc))
+    with pytest.raises(ValueError, match="not found"):
+        canonical_rule_sha256(str(doc))
+
+
 def test_canonical_exclude_codes_match_module():
     """canonical 이 선언한 사유코드 집합과 모듈이 집행하는 집합이 같아야 한다.
 

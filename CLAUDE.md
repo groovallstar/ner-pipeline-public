@@ -131,7 +131,7 @@ touch .omc/state/refuter/human-allow-<diff_hash>
 
 | 무엇 | 잠그는 것 (정본: `gate_core.py` 의 `RULER_PATHS`·`RULER_DIRS`) |
 |---|---|
-| 정답 | `docs/manual/data/canonical-entity-schema.md` (변경 이력·배경 절은 면제 — 정의가 안 움직인다) |
+| 정답 | `docs/manual/data/canonical-entity-schema.md` — **절 단위 면제 없이 파일 전체**. 면제 구간을 변경 후 파일에서 구하는 이상 면제될 절을 새로 만들며 그 안에 정의를 넣는 경로가 열리므로, 오탐을 줄이는 방법은 면제가 아니라 이 문서에 기록·맥락 절을 두지 않는 것이다 |
 | 채점규칙 | `src/ner/metrics/`·`src/ner/validity/` **패키지 안의 모든 `.py`** — 파일을 열거하면 새 파일이 생겨도 목록이 조용히 낡는다. 둘 다 변경이 드물어 통째로 잡아도 과잉 잠금이 안 된다 |
 | 분할 | `src/ner/classifier/data_utils.py`, `kfold_pool.py` — 이 패키지는 학습·분석 코드가 섞여 있어 파일로 적는다. **채점에 닿는 파일을 새로 만들면 목록도 함께 갱신해야 한다** |
 
