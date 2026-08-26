@@ -78,10 +78,10 @@ def test_exhaustiveness_gate_passes_on_known_types():
     assert_exhaustive(SOURCE_TYPES)
 
 
-def test_schema_section_45_matches_this_table():
-    """기준 파일 §4.5 의 매핑표가 코드와 갈리지 않는다.
+def test_schema_section_43_matches_this_table():
+    """기준 파일 §4.3 의 매핑표가 코드와 갈리지 않는다.
 
-    §4.5 는 이 표의 사본이다 — 사람이 "이 span 이 왜 ORG 인가" 를 되짚을 때
+    §4.3 은 이 표의 사본이다 — 사람이 "이 span 이 왜 ORG 인가" 를 되짚을 때
     읽는 자리이고, 기준 파일이라 바꾸려면 사람 승인과 반박자를 지나야 한다.
     사본이 조용히 낡으면 그 승인 절차가 낡은 표를 지키게 된다.
 
@@ -93,7 +93,7 @@ def test_schema_section_45_matches_this_table():
 
     schema = (Path(__file__).resolve().parents[4] / 'docs' / 'manual' /
               'data' / 'canonical-entity-schema.md').read_text(encoding='utf-8')
-    body = schema[schema.index('### 4.5 EN'):]
+    body = schema[schema.index('### 4.3 EN'):]
     # 절의 끝은 다음 `## ` 다 — 하위 heading(`#### `)을 끝으로 삼으면 그 heading 이
     # 사라질 때 표가 아니라 파서가 먼저 깨진다.
     body = body[:body.index('\n## ', 1)]
@@ -114,7 +114,7 @@ def test_schema_section_45_matches_this_table():
             declared[source_type] = canonical
 
     assert declared == ONTONOTES_TO_CANONICAL, (
-        '§4.5 와 mapping.py 가 갈렸다 — '
+        '§4.3 과 mapping.py 가 갈렸다 — '
         f'문서만: {set(declared.items()) - set(ONTONOTES_TO_CANONICAL.items())} / '
         f'코드만: {set(ONTONOTES_TO_CANONICAL.items()) - set(declared.items())}'
     )
