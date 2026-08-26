@@ -1,7 +1,7 @@
 # issue-225: 정답표 경계 결함 — 길이 0 offset 이 엔티티 밖 문장부호를 삼킨다
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/225
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/230
 - 브랜치: `feat/issue-225-zero-length-span-boundary`
 - 승인일: 2026-08-26
 
@@ -154,4 +154,4 @@ en 회귀 테스트 네 건을 `tests/ner/classifier/test_encode.py` 에 `robert
 
 ## 관련 커밋
 
-<!-- 머지 직전 채움 -->
+- `7601ade`: `_trim_offset` 수정 + 감사 스크립트 + en 회귀 테스트 4건 + 원장 승격 + 문서 갱신
