@@ -4,7 +4,6 @@ BIO 토큰 시퀀스 NER 데이터셋을 스펙 기반으로 로드하고, BIO �
 
 - 소스: `src/ner/labelers/bio_dataset.py`
 - 테스트: `tests/ner/test_bio_dataset.py`
-- 설계 문서: `openspec/changes/add-bio-dataset-spec-registry/`
 
 ## 배경
 

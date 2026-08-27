@@ -84,6 +84,13 @@ torch = { index = "pytorch-cu130" }
 select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
+# 저장소 루트를 sys.path 에 올린다. tests/ 에는 __init__.py 도 루트 conftest.py 도
+# 없어서, 이것이 없으면 테스트 모듈이 최상위 이름으로 import 되고 그 파일이 있던
+# 디렉토리만 sys.path 에 들어간다. 그러면 형제 테스트 모듈을 `tests.ner...` 로 읽는
+# 파일이 수집 단계에서 ImportError 를 내고 전체 수집이 중단된다. `python -m pytest`
+# 는 cwd 를 넣어주므로 통과하고 `pytest`·`uv run pytest` 는 실패해, 호출 형태에 따라
+# 결과가 갈렸다 — 통과 여부가 무엇을 쳤는지에 달리면 통과가 증거가 되지 못한다.
+pythonpath = ["."]
 markers = [
     "integration: tests requiring HF dataset cache",
     "live: tests that boot a real uvicorn server (need /data models)",

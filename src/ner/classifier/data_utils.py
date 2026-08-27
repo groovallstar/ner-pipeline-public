@@ -524,12 +524,23 @@ def _trim_offset(text: str, start: int, end: int) -> Tuple[int, int]:
        병합한다(예: '568.' → 끝이 entity 경계를 넘어감).
     공백·후행 `.`/`,` 를 trim 하면 토크나이저 무관하게 정렬되고, 이미 분리해
     내는 XLM-R 계열에는 사실상 no-op 이다. (start,end)=(0,0) 특수토큰·
-    zero-length 는 그대로 둔다.
+    애초에 zero-length 인 offset 은 그대로 둔다.
+
+    다만 토큰이 공백·문장부호만으로 이뤄져 trim 결과가 비면 원래 offset 을
+    돌려준다. `_bio_labels_from_offsets` 의 포함 검사가 양끝을 포함하므로
+    (`es <= s and e <= ee`), 길이 0 조각은 엔티티가 *끝나는* 지점에서 그 조건을
+    통과해 엔티티 밖 문장부호가 엔티티 안으로 라벨된다. 원래 offset 을 유지하면
+    그 조각이 엔티티 밖 char 를 들고 있어 포함 검사에서 떨어진다. 엔티티가
+    문장부호로 끝나는 경우(`Inc.`)에도 마지막 char 가 살아 있어야 gold 라벨을
+    디코드했을 때 원래 span 이 복원된다.
     """
+    orig = (start, end)
     while start < end and text[start].isspace():
         start += 1
     while end > start and (text[end - 1].isspace() or text[end - 1] in _TRAIL_PUNCT):
         end -= 1
+    if start == end and orig[0] != orig[1]:
+        return orig
     return (start, end)
 
 
