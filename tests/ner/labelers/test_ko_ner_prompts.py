@@ -13,6 +13,10 @@ import re
 import tempfile
 
 from ner.labelers.ko.ko_evt_axis1_audit import AXIS1_HEADS
+from ner.labelers.ko.ko_evt_holiday_audit import (
+    following_span_head,
+    parse_canonical_holiday,
+)
 from ner.labelers.ko.ko_evt_r2_audit import CANONICAL_PATH, canonical_section_rows
 from ner.labelers.ko.ner_prompts import SINGLE_PROMPT_TEMPLATE
 
@@ -514,3 +518,187 @@ def test_a_discriminating_few_shot_survives():
         and not (dropped & {s["text"] for s in spans})
     ]
     assert discriminating, "비-entity 를 실제로 버리는 few-shot 이 없다"
+
+
+# ── canonical §3.3·§5.3 ↔ 프롬프트 명절 판정 동기 ──────────────────────────
+#
+# gold 는 명절 이름 138 자리를 `DAT` 에서 `EVT` 로 옮겼는데 **프롬프트는 잠금
+# 밖이다.** 둘이 갈리면 라벨러가 옛 기준으로 답하고 그 하락이 재라벨 탓인지
+# 모델 탓인지 구별되지 않는다 — 어떤 기계 검사도 안 잡는 자리라 여기서 묶는다.
+#
+# 대조 상대는 모듈 상수가 아니라 **canonical 표**다. 상수 ↔ canonical 은
+# `test_ko_evt_holiday_audit.py` 가 이미 양방향으로 대조하므로, 여기서 상수를
+# 보면 두 사본이 나란히 틀려도 통과하는 고리가 생긴다.
+
+_HOLIDAY_LIST = {
+    "day_heads": re.compile(r"하루 머리\(([^)]*)\)"),
+    "span_heads": re.compile(r"기간 머리\(([^)]*)\)"),
+    "category_heads": re.compile(r"범주 머리\(([^)]*)\)"),
+    "period_names": re.compile(r"구간 이름\(([^)]*)\)"),
+}
+
+
+def _taught_holiday(key, template=SINGLE_PROMPT_TEMPLATE):
+    """프롬프트가 실제로 열거하는 목록. **열거는 목록마다 한 자리여야 한다.**
+
+    두 자리에 적으면 한쪽이 좁아져도 다른 쪽이 맞아 집합 비교가 통과한다 —
+    LLM 은 둘 다 읽으므로 좁은 쪽이 실제 판정을 바꾼다. 그래서 개수를 여기서
+    막고, 목록을 옮기려면 옮긴 자리 하나만 남겨야 한다.
+    """
+    body = template.replace("{{", "{").replace("}}", "}")
+    hits = _HOLIDAY_LIST[key].findall(body)
+    assert len(hits) == 1, (key, len(hits))
+    return set(_QUOTED.findall(hits[0]))
+
+
+def test_the_template_teaches_exactly_the_canonical_holiday_lists():
+    """네 목록이 §5.3 과 정확히 같다 (좁힘·넓힘 양쪽).
+
+    가르는 것은 이름이 아니라 **머리**다 — `크리스마스`(EVT)와
+    `크리스마스 시즌`(DAT)을 나누는 것이 기간 머리 목록이라, 거기서 `즈음`
+    하나가 빠지면 그 자리의 타입이 통째로 뒤집힌다.
+    """
+    parsed = parse_canonical_holiday()
+    for key in _HOLIDAY_LIST:
+        assert _taught_holiday(key) == set(parsed[key]), key
+
+
+def test_holiday_list_extraction_ignores_the_surrounding_examples():
+    """뽑는 범위가 넓어지면 위 집합 비교가 의미를 잃는다 — 추출기를 고정한다.
+
+    같은 줄에 판정 예시(`"크리스마스 시즌"`)가 함께 있어, 따옴표를 줄째 긁으면
+    집합이 늘 안 맞는다. 반대로 목록 밖을 걸러 맞추면 초과분을 못 본다.
+    """
+    span_heads = _taught_holiday("span_heads")
+    assert "올해 크리스마스 시즌" not in span_heads
+    assert "설 연휴" not in span_heads
+    assert {"시즌", "연휴", "때"} <= span_heads
+    assert "첫 날" in _taught_holiday("day_heads")     # 공백 있는 항목도 읽는다
+
+
+def _holiday_gap(canonical_text, template):
+    """두 소스의 어긋남. 비어 있으면 동기 상태다."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "canonical.md"
+        path.write_text(canonical_text, encoding="utf-8")
+        parsed = parse_canonical_holiday(str(path))
+    gap = set()
+    for key in _HOLIDAY_LIST:
+        gap |= _taught_holiday(key, template) ^ set(parsed[key])
+    return gap
+
+
+def test_holiday_sync_breaks_in_both_directions():
+    """한쪽만 고치면 실패한다 — **양방향을 실제로 태워** 확인한다.
+
+    집합이 지금 같다는 사실만으로는 검사가 무는지 알 수 없다. canonical 을
+    좁히는 쪽과 프롬프트를 넓히는 쪽을 각각 만들어 걸리는 것을 본다.
+    """
+    canonical = pathlib.Path(CANONICAL_PATH).read_text(encoding="utf-8")
+    assert not _holiday_gap(canonical, SINGLE_PROMPT_TEMPLATE)      # 지금은 동기다
+
+    narrowed = canonical.replace("·`즈음`", "")
+    assert narrowed != canonical
+    assert _holiday_gap(narrowed, SINGLE_PROMPT_TEMPLATE) == {"즈음"}
+
+    widened = SINGLE_PROMPT_TEMPLATE.replace('"즈음")', '"즈음", "환절기")')
+    assert widened != SINGLE_PROMPT_TEMPLATE
+    assert _holiday_gap(canonical, widened) == {"환절기"}
+
+
+def test_every_holiday_example_the_prompt_teaches_has_a_canonical_root():
+    """프롬프트가 §5.3 이 모르는 이름을 EVT 로 가르치지 않는다.
+
+    어근 목록은 감사 모듈의 **후보 그물**이라, 목록 밖 이름은 gold 에서
+    `DAT` 로 남아 있다. 프롬프트만 `추분`·`백중` 을 EVT 로 가르치면 그
+    예측은 전부 FP 가 되고, 어긋남을 볼 것이 없다.
+
+    **잡는 것은 넓힘뿐이다** — 프롬프트의 예시는 열거가 아니라 표본이라
+    어근을 덜 든 것은 결함이 아니다. 좁힘을 막는 것은 위 네 목록의 집합
+    비교이고, 그쪽은 판정을 가르는 머리라 표본일 수 없다.
+    """
+    roots = parse_canonical_holiday()["roots"]
+    for prefix in ("주의: 명절·기념일·절기 이름은 EVT", "주의: 하루 머리("):
+        line = re.sub(r"하루 머리\([^)]*\)", "", _prompt_line(prefix))
+        names = _QUOTED.findall(line)
+        assert names, prefix
+        for name in names:
+            assert any(root in name for root in roots), (name, prefix)
+
+
+DERIVED_EXAMPLE = "올해 크리스마스 시즌"
+
+
+def test_the_holiday_contrast_pair_is_in_the_few_shots():
+    """파생 `DAT` ↔ 맨이름 `EVT` 대조쌍이 예시로 있다.
+
+    규칙 문장만으로는 **포함 우선순위**가 안 전해진다 — `올해 크리스마스 시즌`
+    을 `DAT` 하나로 낼지, 그 안의 `크리스마스` 를 `EVT` 로 또 낼지가 문장에서는
+    둘 다 읽히고 gold 는 평면 BIO 라 겹칠 수 없다. 그래서 파생 예시에 그 이름이
+    **별도 span 으로 없다는 것**을 여기서 못 박는다.
+
+    두 답이 한 예시에 같이 있으면 대조가 아니라 모순이므로 서로 다른 예시여야
+    한다.
+    """
+    shots = _few_shots()
+    derived = [(t, s) for t, s in shots
+               if any(x["text"] == DERIVED_EXAMPLE for x in s)]
+    assert len(derived) == 1, len(derived)
+    text, spans = derived[0]
+    assert [x["type"] for x in spans if x["text"] == DERIVED_EXAMPLE] == ["DAT"]
+    assert "크리스마스" not in {x["text"] for x in spans}
+
+    bare = [(t, s) for t, s in shots
+            if any(x["text"] == "크리스마스" and x["type"] == "EVT" for x in s)]
+    assert bare, "맨이름 `크리스마스`=EVT 예시가 없다"
+    assert all(t != text for t, _ in bare)
+
+
+def test_a_few_shot_teaches_the_period_head_shared_across_a_coordination():
+    """`설과 추석 연휴` — 등위로 기간 머리를 나눠 갖는 자리.
+
+    바로 뒤만 보면 `추석 연휴` 만 `DAT` 로 걸러지고 `설` 은 `EVT` 로 남아
+    **한 명사구 안에서 타입이 갈린다.** gold 는 그 4 자리를 `DAT` 로 묶어 뒀고
+    (`evt_holiday_prereg.json` 의 `site_exceptions`), 프롬프트가 반대를
+    가르치면 그 자리마다 라벨러와 gold 가 어긋난다.
+    """
+    hit = [(t, s) for t, s in _few_shots() if "설과 추석 연휴" in t]
+    assert hit, "등위 예시가 없다"
+    _text, spans = hit[0]
+    types = {x["text"]: x["type"] for x in spans}
+    assert types.get("설") == "DAT", types
+    assert types.get("추석 연휴") == "DAT", types
+
+
+def test_few_shot_holiday_spans_obey_the_head_rule():
+    """예시 출력이 §3.3 머리 원칙과 갈리지 않는다.
+
+    위 두 검사는 지목한 예시만 본다 — **새 예시가 `추석`=DAT 를 가르쳐도
+    지나간다.** 여기서는 명절 어근을 담은 모든 예시 span 을 판정 함수에
+    태워, 자리마다 머리가 무엇을 부르는지로 기대 타입을 계산해 대조한다.
+    머리를 보는 것은 감사 모듈의 `following_span_head()` — gold 를 그렇게
+    갈랐으므로 예시도 같은 자로 재야 한다.
+
+    **span 을 붙여서 내는 예시는 건너뛴다**(`서울 삼성동`→`서울삼성동`) —
+    원문에 그대로 없어 자리를 계산할 수 없다. 명절 예시에는 그런 자리가 없다.
+    """
+    parsed = parse_canonical_holiday()
+    tails = tuple(parsed["span_heads"]) + tuple(parsed["category_heads"])
+    seen = 0
+    for text, spans in _few_shots():
+        for span in spans:
+            surface = span["text"]
+            if not any(root in surface for root in parsed["roots"]):
+                continue
+            if surface not in text:
+                continue
+            seen += 1
+            # 같은 표면형이 한 예시에 두 번 나오면 `index()` 가 첫 자리만 봐
+            # 뒤엣것이 검사 밖으로 빠진다. 조용히 넘기지 않고 여기서 막는다 —
+            # 그런 예시를 넣으려면 자리 계산을 먼저 고쳐야 한다.
+            assert text.count(surface) == 1, (surface, text)
+            end = text.index(surface) + len(surface)
+            derived = surface.endswith(tails) or bool(following_span_head(text, end))
+            expected = "DAT" if derived else "EVT"
+            assert span["type"] == expected, (surface, expected, span["type"], text)
+    assert seen >= 6, f"명절 어근을 담은 예시 span 이 {seen} 개뿐이다"
