@@ -1,7 +1,7 @@
 # issue-232: 한국어 NER 배포 패키지와 REST API 서빙
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/232
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/233
 - 브랜치: `feat/issue-232-ko-rest-api`
 - 승인일: 2026-08-27
 
