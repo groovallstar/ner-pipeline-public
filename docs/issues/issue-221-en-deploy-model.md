@@ -131,11 +131,11 @@ ja·vi 는 원본이 작아(5,270·37,706행) 100문장이 불가피했지만 en
 | 배포 추론 | `src/ner/scripts/eval_en_ner_test.py` + `.sh` — 평가 대상(`--limit`)과 화면 표시(`--show`)를 분리해 받는다. en test 는 7,637행이라 하나로 묶으면 전수 채점과 육안 확인이 서로를 막는다 |
 | 배포 번들 | `/data/ner/en/` — ja·vi 동형. `thresholds.json` 없음(vi 와 같이 raw) |
 | 검사 | `tests/ner/classifier/test_en_deploy_package.py`(8) · `tests/ner/scripts/test_eval_en_ner_test.py`(6) |
+| 원장 | `certified/classifier/en/deploy-trainseed42/metrics.json` |
 
 > 포장 스크립트는 이후 #232(KO 배포·서빙)에서 `build_ner_prod.py` 로 이름이
 > 바뀌고 언어를 run 의 `metrics.json` 에서 읽게 됐다. 위 명령의 파일명은 이
 > 이슈 시점의 것이다.
-| 원장 | `certified/classifier/en/deploy-trainseed42/metrics.json` |
 
 **`model/` 에 tokenizer 를 동봉하는 이유가 실증됐다.** `Trainer.save_model()` 은
 토크나이저를 남기지 않는데, 그 경로로 `AutoTokenizer.from_pretrained` 를 부르면
