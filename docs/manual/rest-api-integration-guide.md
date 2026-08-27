@@ -2,7 +2,8 @@
 
 외부 시스템에서 NER(개체명 인식) REST API를 호출해 연동하기 위한
 문서입니다. 텍스트를 보내면 인물·장소·조직 등 개체명과 그 위치(원문에서
-몇 번째 글자인지)를 돌려줍니다. 일본어(`ja`)·베트남어(`vi`)를 지원합니다.
+몇 번째 글자인지)를 돌려줍니다. 일본어(`ja`)·한국어(`ko`)·베트남어(`vi`)를
+지원합니다.
 
 이 문서는 연동에 필요한 계약(엔드포인트·요청/응답·에러·한도)만 다룹니다.
 서버가 제공하는 대화형 API 문서(`GET /docs`, Swagger UI)와 기계용 스키마
@@ -34,7 +35,7 @@
 |---|---|---|---|
 | `text` | string | 택일 | 단일 텍스트 |
 | `texts` | string[] | 택일 | 배치 텍스트(여러 문장을 한 번에) |
-| `lang` | string | 선택 | `ja` 또는 `vi`. **생략하면 자동 감지**. 그 외 값 → 400 |
+| `lang` | string | 선택 | `ja`·`ko`·`vi` 중 하나. **생략하면 자동 감지**. 그 외 값 → 400 |
 
 ### 3.2 응답 — 단일(`text` 요청)
 
@@ -59,6 +60,7 @@
 {
   "results": [
     {"lang": "ja", "entities": [{"label": "ORG", "start_char": 0, "end_char": 3, "text": "トヨタ"}]},
+    {"lang": "ko", "entities": [{"label": "PER", "start_char": 0, "end_char": 3, "text": "이재용"}]},
     {"lang": "vi", "entities": [{"label": "LOC", "start_char": 0, "end_char": 6, "text": "Hà Nội"}]}
   ]
 }
@@ -91,24 +93,29 @@
 
 | 상황 | 결과 |
 |---|---|
-| `lang`을 `ja`·`vi`로 명시 | 그 언어 모델로 추출 |
+| `lang`을 `ja`·`ko`·`vi`로 명시 | 그 언어 모델로 추출 |
 | `lang`을 그 외 값으로 명시 | **400** (`unsupported lang '...'`) |
-| `lang` 생략, ja·vi 판별 문자 있음 | 감지된 언어로 추출, 응답에 리턴 |
-| `lang` 생략, ja·vi 판별 문자 없음 | **200** + `{"lang": "unsupported", "entities": []}` (에러 아님) |
+| `lang` 생략, 판별 문자 있음 | 감지된 언어로 추출, 응답에 리턴 |
+| `lang` 생략, 판별 문자 없음 | **200** + `{"lang": "unsupported", "entities": []}` (에러 아님) |
 
-즉 언어를 생략하고 보낸 텍스트가 일본어·베트남어가 아니면 **에러가 아니라
+즉 언어를 생략하고 보낸 텍스트가 지원 언어가 아니면 **에러가 아니라
 빈 결과**로 돌아옵니다. 배치에서는 지원 언어 항목만 추출하고 미지원 항목은
 빈 결과로 두어 순서를 유지합니다(부분 성공).
 
-**자동 감지 방식**: 일본어는 가나(히라가나·가타카나)로, 베트남어는 성조
-부호(ơ·ư·ả·ạ 등)나 `đ`로 판별합니다. 부호를 뗀 베트남어(không dấu)는
-판별 문자가 없어 `unsupported`로 분류됩니다 — 이 경우 요청에 `"lang": "vi"`를
-명시해야 추출됩니다.
+**자동 감지 방식**: 일본어는 가나(히라가나·가타카나)로, 한국어는 한글(음절
+또는 자모)로, 베트남어는 성조 부호(ơ·ư·ả·ạ 등)나 `đ`로 판별합니다. 세 신호는
+서로 겹치지 않고, 한 문장에 둘 이상 있으면 일본어 → 한국어 → 베트남어 순으로
+먼저 맞은 것이 이깁니다.
 
-대칭으로, 가나 없이 **한자로만 된 일본어**(인명·주소·헤드라인 등, 예:
-`東京都千代田区`)도 판별 문자가 없어 `unsupported`가 됩니다 — 이 경우
-`"lang": "ja"`를 명시해야 합니다. **언어를 아는 경우 `lang`을 항상 명시하면**
-이런 감지 한계를 겪지 않습니다.
+판별이 안 되는 자리가 둘 있습니다.
+
+- **한자로만 된 문장**(인명·주소·헤드라인 등, 예: `東京都千代田区`) — 일본어와
+  한국어가 한자를 함께 쓰므로 한자만으로는 어느 쪽인지 가릴 수 없습니다.
+  `"lang": "ja"` 또는 `"lang": "ko"` 를 명시해야 추출됩니다.
+- **부호를 뗀 베트남어**(không dấu) — 판별 문자가 없어 `unsupported` 가 됩니다.
+  `"lang": "vi"` 를 명시해야 추출됩니다.
+
+**언어를 아는 경우 `lang`을 항상 명시하면** 이런 감지 한계를 겪지 않습니다.
 
 ## 4. 개체명 종류(label)
 
@@ -240,14 +247,27 @@ curl -s -X POST 'http://{host}:{port}/v1/ner' \
 #      {"label":"PER","start_char":0,"end_char":4,"text":"織田信長"},
 #      {"label":"LOC","start_char":5,"end_char":12,"text":"東京都千代田区"}]}
 
+# 단일 — 언어 자동 감지(한국어)
+curl -s -X POST 'http://{host}:{port}/v1/ner' \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"이재용 삼성전자 회장은 지난달 부산에서 열린 국제가전박람회에 참석했다."}'
+# → {"lang":"ko","entities":[
+#      {"label":"PER","start_char":0,"end_char":3,"text":"이재용"},
+#      {"label":"DAT","start_char":13,"end_char":16,"text":"지난달"},
+#      {"label":"LOC","start_char":17,"end_char":19,"text":"부산"},
+#      {"label":"EVT","start_char":25,"end_char":32,"text":"국제가전박람회"}]}
+
 # 배치 — 혼합 언어(텍스트별 감지)
 curl -s -X POST 'http://{host}:{port}/v1/ner' \
   -H 'Content-Type: application/json' \
-  -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
+  -d '{"texts":["トヨタは日本の会社です。","이재용 회장은 부산에 갔다.","Hà Nội là thủ đô."]}'
 # → {"results":[
 #      {"lang":"ja","entities":[
 #        {"label":"ORG","start_char":0,"end_char":3,"text":"トヨタ"},
 #        {"label":"LOC","start_char":4,"end_char":6,"text":"日本"}]},
+#      {"lang":"ko","entities":[
+#        {"label":"PER","start_char":0,"end_char":3,"text":"이재용"},
+#        {"label":"LOC","start_char":8,"end_char":10,"text":"부산"}]},
 #      {"lang":"vi","entities":[
 #        {"label":"LOC","start_char":0,"end_char":6,"text":"Hà Nội"}]}]}
 

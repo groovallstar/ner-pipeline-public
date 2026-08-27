@@ -1,4 +1,4 @@
-"""FastAPI 앱 — ja/vi NER 단일·배치 엔드포인트.
+"""FastAPI 앱 — ja/ko/vi NER 단일·배치 엔드포인트.
 
 요청은 원문 텍스트(단일 `text` 또는 배치 `texts`) + 선택 `lang`. lang 생략
 시 텍스트별 자동 감지하고 응답에 감지 결과를 에코한다. 출력 span 은
@@ -24,7 +24,7 @@ from server.detect import UNSUPPORTED, detect_lang
 from server.inference import ModelUnavailable
 from server.limits import BodySizeLimitMiddleware
 from server.request_log import RequestLogMiddleware
-from server.translate import TranslationUnavailable
+from server.translate import TRANSLATABLE_LANGS, TranslationUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,9 @@ class BatchResponse(BaseModel):
 
 class TranslateRequest(BaseModel):
     """번역 요청 — 원문 `text` + `lang`(ja/vi) + `/v1/ner` 결과 `spans`.
+
+    `lang` 이 받는 값은 **NER 지원 언어보다 좁다**(`TRANSLATABLE_LANGS`) —
+    한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없다.
 
     호출자(웹 UI)가 `/v1/ner` 에서 받은 엔티티를 그대로 넘긴다. 그중 PII
     라벨만 마스킹 대상이며, 나머지는 무시된다(고유명사는 음차).
@@ -139,21 +142,23 @@ def _lang_summary(langs: List[str]) -> str:
 
 # OpenAPI/Swagger 노출용 — 외부 소비자를 위한 사용법만 담는다. 구현 세부는
 # 핸들러 docstring 에 두고, Swagger 에는 아래 요약·설명만 노출한다.
-_NER_SUMMARY = '텍스트에서 개체명 추출 (일본어·베트남어)'
+_NER_SUMMARY = '텍스트에서 개체명 추출 (일본어·한국어·베트남어)'
 
 _NER_DESCRIPTION = (
-    '일본어(`ja`)·베트남어(`vi`) 텍스트에서 개체명(인물·장소·조직 등)과 '
-    '그 위치를 추출합니다.\n\n'
+    '일본어(`ja`)·한국어(`ko`)·베트남어(`vi`) 텍스트에서 개체명(인물·장소·'
+    '조직 등)과 그 위치를 추출합니다.\n\n'
     '**요청** — `text`(단일 문장) 또는 `texts`(여러 문장 배치) 중 하나를 '
     '보냅니다. 둘 다 넣거나 둘 다 비우면 400 입니다. `lang` 은 선택이며, '
-    '생략하면 자동 감지합니다(`ja`·`vi` 외 값은 400).\n\n'
+    '생략하면 자동 감지합니다(`ja`·`ko`·`vi` 외 값은 400).\n\n'
     '**응답** — 개체마다 `label`(종류), `start_char`·`end_char`(원문 글자 '
     '위치, 시작 포함·끝 제외), `text`(해당 글자)를 돌려줍니다. 배치 응답 '
     '`results` 는 입력 순서와 1:1 입니다.\n\n'
-    '**참고** — 일본어·베트남어가 아닌 텍스트는 에러가 아니라 '
-    '`{"lang":"unsupported","entities":[]}` (200) 로 응답합니다. 여러 줄 '
-    '텍스트는 문자열을 직접 잇지 말고 JSON 인코더로 보내세요(개행을 escape '
-    '하지 않으면 400/422).'
+    '**참고** — 지원 언어가 아닌 텍스트는 에러가 아니라 '
+    '`{"lang":"unsupported","entities":[]}` (200) 로 응답합니다. 한자만 '
+    '있는 텍스트도 여기 해당합니다 — 일본어와 한국어가 한자를 공유해 '
+    '어느 쪽인지 가릴 수 없으므로, 그때는 `lang` 을 직접 지정하세요. 여러 '
+    '줄 텍스트는 문자열을 직접 잇지 말고 JSON 인코더로 보내세요(개행을 '
+    'escape 하지 않으면 400/422).'
 )
 
 # Swagger "Try it out" 용 실행 가능한 예제 — 각 항목은 text/texts 택일을
@@ -166,8 +171,13 @@ _NER_BODY_EXAMPLES = {
     'batch': {
         'summary': '배치 — 혼합 언어(텍스트별 감지)',
         'value': {
-            'texts': ['トヨタは日本の会社です。', 'Hà Nội là thủ đô.'],
+            'texts': ['トヨタは日本の会社です。', '삼성전자는 수원에 있다.',
+                      'Hà Nội là thủ đô.'],
         },
+    },
+    'korean': {
+        'summary': '단일 텍스트 — 언어 자동 감지(한국어)',
+        'value': {'text': '김민준은 2019년에 서울대학교를 졸업했다.'},
     },
     'lang_specified': {
         'summary': '언어 명시(자동 감지 대신 직접 지정)',
@@ -360,16 +370,21 @@ def create_app(registry, config: Optional[ServerConfig] = None,
         인프로세스 백엔드(nllb)면 둘이 같은 GPU 를 쓰므로 이 분리가 VRAM
         가드이기도 하다. 동시 상한 초과는 429(대기 없음).
 
-        translator 미주입(비활성) 시 503. lang 은 ja/vi 만 허용하고, 텍스트
-        크기는 NER 과 동일 상한을 재사용한다. 백엔드 호출 실패는 503 으로
-        graceful degrade — 호출 측(UI)은 글로스를 생략하고 NER 은 그대로 둔다.
+        translator 미주입(비활성) 시 503. 텍스트 크기는 NER 과 동일 상한을
+        재사용한다. 백엔드 호출 실패는 503 으로 graceful degrade — 호출
+        측(UI)은 글로스를 생략하고 NER 은 그대로 둔다.
+
+        **lang 은 `SUPPORTED_LANGS` 가 아니라 `TRANSLATABLE_LANGS` 로 본다.**
+        한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없어, NER 이 받는 ko 를
+        여기서는 400 으로 거절한다. 두 목록이 갈리는 유일한 지점이다.
         """
         if translator is None:
             raise HTTPException(
                 status_code=503, detail='translation is not enabled')
-        if req.lang not in SUPPORTED_LANGS:
+        if req.lang not in TRANSLATABLE_LANGS:
             raise HTTPException(
-                status_code=400, detail=f"unsupported lang '{req.lang}'")
+                status_code=400,
+                detail=f"lang '{req.lang}' is not translatable")
         _check_text(req.text)
         spans = [s.model_dump() for s in req.spans]
         try:

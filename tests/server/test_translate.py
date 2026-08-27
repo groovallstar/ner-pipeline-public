@@ -18,9 +18,11 @@ from fastapi.testclient import TestClient
 
 from server import translate_nllb
 from server.app import create_app
-from server.config import ServerConfig
+from server.config import SUPPORTED_LANGS, ServerConfig
 from server.translate import (
     DEFAULT_SENTINEL,
+    LANG_NAME,
+    TRANSLATABLE_LANGS,
     SentinelFormat,
     TranslationResult,
     TranslationUnavailable,
@@ -277,6 +279,27 @@ def test_translate_unsupported_lang_400():
     r = _client(translator=_EchoTranslator()).post(
         '/v1/translate', json={'text': 'hi', 'lang': 'en', 'spans': []})
     assert r.status_code == 400
+
+
+def test_translate_rejects_ko_even_though_ner_supports_it():
+    """NER 이 받는 ko 를 번역은 400 으로 거절한다.
+
+    한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없다. `SUPPORTED_LANGS`
+    (ja·ko·vi)와 `TRANSLATABLE_LANGS`(ja·vi)가 갈리는 유일한 지점이고,
+    같은 목록을 쓰면 ko 가 조용히 통과해 원문이 그대로 '번역'으로 나온다.
+    """
+    assert 'ko' in SUPPORTED_LANGS
+    assert 'ko' not in TRANSLATABLE_LANGS
+    r = _client(translator=_EchoTranslator()).post(
+        '/v1/translate',
+        json={'text': '김민준은 서울에 산다.', 'lang': 'ko', 'spans': []})
+    assert r.status_code == 400
+
+
+def test_translatable_langs_all_have_a_prompt_name():
+    """번역 대상 목록과 프롬프트 이름표가 어긋날 수 없다(같은 출처)."""
+    assert set(TRANSLATABLE_LANGS) == set(LANG_NAME)
+    assert TRANSLATABLE_LANGS <= set(SUPPORTED_LANGS)
 
 
 def test_translate_backend_unavailable_503():

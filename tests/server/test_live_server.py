@@ -89,6 +89,6 @@ def test_ner_single_live(base_url):
 def test_bad_lang_live(base_url):
     """실서버 잘못된 lang → 400 + 구조화 에러."""
     r = httpx.post(f'{base_url}/v1/ner',
-                   json={'text': 'x', 'lang': 'ko'}, timeout=10)
+                   json={'text': 'x', 'lang': 'en'}, timeout=10)
     assert r.status_code == 400
     assert 'error' in r.json()
