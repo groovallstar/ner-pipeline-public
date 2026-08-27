@@ -403,13 +403,13 @@ python -m ner.classifier --lang en --group-key orig \
     --output-dir results/classifier/en/deploy-trainseed42
 
 # 2) 포장 — /data/ner/en 으로
-python src/ner/scripts/build_en_ner_prod.py \
-    --run-dir results/classifier/en/deploy-trainseed42
+python src/ner/scripts/build_ner_prod.py \
+    --run-dir results/classifier/en/deploy-trainseed42 --lang en
 ```
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
-| 포장 | `src/ner/scripts/build_en_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다 |
+| 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
 | 배포 추론 | `src/ner/scripts/eval_en_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. 절대경로만. 기본 레이아웃 `/data/ner/en/{model,data/test.jsonl}`. 임계값 파일이 없으면 raw 폴백 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
 | 원장 | `certified/classifier/en/deploy-trainseed42/` | 배포런의 metric. 백본 벤치마크 원장(`backbone-bench/`)과 같은 데이터·분할이라 나란히 놓을 수 있다 |
@@ -434,6 +434,14 @@ EN 은 76,378행이라 벤치마크와 같은 `test_ratio=0.1`(7,637행)을 그�
 결정적이지 않다. 그래서 검사는 재현이 아니라 **프로비넌스 정합 · 같은 자 · 붕괴
 검출 바닥** 셋을 본다. 바닥을 좁게 조이면 seed 뽑기를 통과 조건으로 만드는 셈이다.
 
+**포장 스크립트는 언어별 사본을 두지 않는다** — 분할 재유도·지문 대조·누출
+가드는 언어와 무관한 안전장치라, 언어마다 복사해 두면 그 장치가 여러 벌이 되고
+한쪽만 고쳐지는 순간 조용히 갈린다. 언어에 딸린 것은 출력 경로와 카드 문구뿐이라
+run 의 `metrics.json` 이 선언한 `lang` 에서 끌어온다. 카드의 토크나이저 줄도
+언어별 표가 아니라 **실제로 동봉된 토크나이저**에서 만든다 — 백본을 바꿨을 때
+카드만 옛말이 되는 일을 막기 위해서다. 이 파라미터화가 어느 언어에서도 같게
+도는지는 `tests/ner/scripts/test_build_ner_prod.py` 가 합성 run 으로 태워 본다.
+
 **EN EMAIL 은 seed 뽑기를 탄다** — 같은 설정 3-seed 에서 EMAIL strict F1 이 크게
 갈린다. 원인은 아직 밝혀지지 않았다. 한때 정답표 경계 결함(길이 0 offset 이 엔티티
 밖 문장부호를 삼킨다) 탓으로 봤으나, 그 결함을 똑같이 안고 학습한 백본 5종 중 4종은
@@ -441,6 +449,41 @@ seed 간 폭이 거의 없고 붕괴는 `roberta_base_seed43` 단일 런이라 �
 같은 설정을 두 번 돌린 `roberta_base_seed42` 와 `deploy-trainseed42` 사이에도 overall
 strict F1 이 벌어져, 재현 격차 자체가 이 하네스의 미해결 문제다. 배포 카드의 §운영
 주의에 수치와 함께 적어 둔다. 경계 결함 쪽은 별도로 수정됐다(위 §fast 경로).
+
+### KO 출하 (deploy)
+
+KO 도 EN 과 같은 두 단계다 — 학습은 CLI, 포장은 그 산출물을 옮기기만 한다.
+포장 스크립트도 같은 것을 쓴다.
+
+```bash
+# 1) 학습 — 원장 k-fold 와 같은 group-key
+python -m ner.classifier --lang ko --group-key id \
+    --seed 42 --train-seed 42 \
+    --output-dir results/classifier/ko/deploy-trainseed42
+
+# 2) 포장 — /data/ner/ko 로
+python src/ner/scripts/build_ner_prod.py \
+    --run-dir results/classifier/ko/deploy-trainseed42 --lang ko
+```
+
+| 아티팩트 | 위치 | 역할 |
+|---|---|---|
+| 배포 추론 | `src/ner/scripts/eval_ko_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. EN 판과 같이 평가 대상(`--limit`)과 화면 표시(`--show`)를 따로 받는다 |
+| 출하 번들 | `/data/ner/ko/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI·EN 과 같이 임계값 미적용) |
+| 원장 | `certified/classifier/ko/deploy-trainseed42/` | 배포런의 metric |
+| 검사 | `tests/ner/classifier/test_ko_deploy_package.py` | 프로비넌스 정합 · 분할 고정값 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
+
+**원장이 배포 run 자신인 이유** — EN 은 백본 벤치(`backbone-bench/`)라는 선행
+원장이 있어 패키지를 그것과 견줬다. KO 에 있는 원장은 10-fold pooled 뿐이라
+자가 다르다: 교차검증 추정치와 단일 홀드아웃 수치를 같은 표에 놓는 것은 대조가
+아니라 혼동이다. 그래서 배포 run 의 `metrics.json` 자체를 원장으로 승격하고,
+검사는 *재현*이 아니라 *프로비넌스 정합*(패키지가 자기가 나온 run 과 어긋나지
+않는가)을 본다. 참고로 두 수치는 가까운 자리에 있다 — 배포 run strict overall
+F1 0.9153, 10-fold pooled 0.9203.
+
+**서빙까지 한 이슈로 닫은 이유** — EN 은 라틴 스크립트에 고유 코드포인트가 없어
+양성 감지가 불가능했고, 그래서 `SUPPORTED_LANGS`·`detect.py` 를 손대는 일이 별도
+결정으로 미뤄졌다. 한글은 결정적 스크립트 신호라 그 장애물이 없다(`src/server/`).
 
 ---
 
@@ -456,7 +499,8 @@ strict F1 이 벌어져, 재현 격차 자체가 이 하네스의 미해결 문�
 | 출하 | 번들 + `eval_ja_ner_test.py` | `eval_vi_ner_test`(`/data/ner/vi`) |
 
 KO는 `monologg/koelectra-base-v3-discriminator`(ELECTRA 계열, `--precision fp16`
-기본), `data/klue/pii_all.jsonl`.
+기본), `data/klue/pii_all.jsonl`. 행마다 고유한 `id` 를 group-key 로 쓴다. 출하는
+`/data/ner/ko/` + `eval_ko_ner_test`(§8)이고 REST 서버가 이 경로를 로드한다.
 
 EN은 `roberta-base`(백본 벤치마크로 확정), `data/ontonotes_en/pii_all.jsonl`,
 fast(RoBERTa BPE) 토크나이저라 별도 런타임 의존이 없다. 원문 파생 행이 있어

@@ -1,9 +1,14 @@
-"""영어 NER 배포 패키지 빌드 — 학습 산출물을 배포 레이아웃으로 포장한다.
+"""NER 배포 패키지 빌드 — 학습 산출물을 배포 레이아웃으로 포장한다.
 
 **학습은 하지 않는다.** `python -m ner.classifier` 가 낸 run 디렉토리를 읽어
-ja·vi 와 같은 배포 레이아웃으로 옮긴다. 학습 경로를 여기서 복제하면 배포
+`/data/ner/{lang}/` 배포 레이아웃으로 옮긴다. 학습 경로를 여기서 복제하면 배포
 체크포인트가 CLI 가 아닌 이 스크립트의 산물이 돼, 원장(certified)에 올라간
 벤치마크 수치와 맞춰 보는 일이 서로 다른 코드 경로를 비교하는 것이 된다.
+
+**언어는 run 이 정한다.** 언어별 사본을 두지 않는 이유는 분할 재유도·지문
+대조·누출 가드가 언어와 무관한 안전장치이기 때문이다 — 복사본을 만들면 그
+장치가 여러 벌이 되고 한쪽만 고쳐지는 순간 조용히 갈린다. 언어에 딸린 것은
+출력 경로와 카드 문구뿐이라 `metrics.json` 의 `lang` 에서 끌어온다.
 
 분할 JSONL 은 run 이 저장하지 않으므로 같은 인자로 다시 유도한다
 (`split_train_valid_test` 는 결정적이다). 유도한 크기가 run 의 `metrics.json`
@@ -19,10 +24,10 @@ ja·vi 와 같은 배포 레이아웃으로 옮긴다. 학습 경로를 여기�
     └── MODEL_CARD.md
 
 사용:
-    python src/ner/scripts/build_en_ner_prod.py \\
-        --run-dir results/classifier/en/deploy-trainseed42
-    python src/ner/scripts/build_en_ner_prod.py \\
-        --run-dir <run> --out-dir /abs/out --force
+    python src/ner/scripts/build_ner_prod.py \\
+        --run-dir results/classifier/ko/deploy-trainseed42
+    python src/ner/scripts/build_ner_prod.py \\
+        --run-dir <run> --lang ko --out-dir /abs/out --force
 """
 import argparse
 import json
@@ -41,9 +46,14 @@ from ner.classifier.data_utils import (
 logging.basicConfig(
     level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s'
 )
-logger = logging.getLogger('build_en_ner_prod')
+logger = logging.getLogger('build_ner_prod')
 
-DEFAULT_OUT_DIR = '/data/ner/en'
+# 배포 루트 — 언어 디렉토리가 그 아래 붙는다(`/data/ner/{lang}`).
+DEPLOY_ROOT = '/data/ner'
+
+# 카드 산문에 쓰는 언어 이름. 포장 가능한 언어의 목록이기도 하다 — 이름이
+# 없는 언어는 카드를 쓸 수 없으므로 여기 없으면 포장을 거절한다.
+LANG_LABEL = {'ja': '일본어', 'ko': '한국어', 'vi': '베트남어', 'en': '영어'}
 
 
 def dump_jsonl(rows, path):
@@ -53,12 +63,16 @@ def dump_jsonl(rows, path):
             f.write(json.dumps(row, ensure_ascii=False) + '\n')
 
 
-def load_run_metrics(run_dir):
+def load_run_metrics(run_dir, expect_lang=None):
     """run 의 metrics.json 을 읽고, 배포 포장이 가능한 run 인지 검사한다.
 
     포장 가능한 run 은 단일 분할·단일 스테이지다. k-fold 는 교차검증 추정이라
     배포할 체크포인트 하나를 가리키지 않고, curriculum·extra-train 은 기록된
     분할만으로 학습 데이터를 재현할 수 없다.
+
+    언어는 run 이 선언한 값을 쓰되, `expect_lang` 이 주어지면 대조한다 —
+    출력 경로가 언어에서 유도되므로, 잘못된 run 을 가리켰을 때 조용히 다른
+    언어 자리에 쓰는 대신 여기서 멈춘다.
     """
     path = os.path.join(run_dir, 'metrics.json')
     if not os.path.exists(path):
@@ -66,9 +80,15 @@ def load_run_metrics(run_dir):
     with open(path, encoding='utf-8') as f:
         m = json.load(f)
 
-    if m.get('lang') != 'en':
+    lang = m.get('lang')
+    if lang not in LANG_LABEL:
         raise SystemExit(
-            f"Error: run lang is {m.get('lang')!r}, expected 'en'")
+            f'Error: run lang is {lang!r}; packageable languages are '
+            f'{sorted(LANG_LABEL)}')
+    if expect_lang is not None and lang != expect_lang:
+        raise SystemExit(
+            f'Error: run lang is {lang!r} but --lang says {expect_lang!r}; '
+            'refusing to ship a run into another language\'s slot')
     if m.get('kfold') is not None:
         raise SystemExit(
             'Error: k-fold run cannot be packaged for deployment '
@@ -155,10 +175,27 @@ def build_model_dir(run_dir, out_dir, model_name, force):
     except (TypeError, ValueError, OSError):
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     tokenizer.save_pretrained(model_dir)
-    return model_dir
+    # 토크나이저를 돌려주는 것은 카드가 *실제로 동봉된 것*을 적게 하려는
+    # 것이다. 언어별 표를 따로 두면 백본을 바꿨을 때 카드만 옛말이 된다.
+    return model_dir, tokenizer
 
 
-def write_model_card(path, *, m, leak, out_dir, run_dir, notes):
+def describe_tokenizer(tokenizer):
+    """카드에 적을 토크나이저 한 줄 — 실제 클래스와 fast 여부에서 만든다."""
+    kind = 'fast' if getattr(tokenizer, 'is_fast', False) else 'slow'
+    return f'{kind}(`{type(tokenizer).__name__}`)'
+
+
+def tokenizer_files(model_dir):
+    """`model/` 에 저장된 토크나이저 파일 이름들(가중치·config 제외)."""
+    weights = {'config.json', 'model.safetensors', 'pytorch_model.bin',
+               'training_args.bin'}
+    names = sorted(n for n in os.listdir(model_dir) if n not in weights)
+    return ' · '.join(names) if names else '(none)'
+
+
+def write_model_card(path, *, m, leak, out_dir, run_dir, notes,
+                     tokenizer_desc, tokenizer_names):
     """배포 모델 카드(MODEL_CARD.md) 작성 — ja·vi 패키지 포맷.
 
     운영 주의는 인자(`notes`)로 받는다. 이 체크포인트에만 해당하는 한계를
@@ -186,10 +223,17 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes):
                  f'train/valid 에 {leak}건'
                  if m['group_key'] not in (None, 'none') else '행 단위 random')
 
-    card = f"""# EN NER production 모델
+    lang = m['lang']
+    label = LANG_LABEL[lang]
+    threshold_line = (
+        '신뢰도 임계값(confidence threshold) 미적용 — raw 모델 출력 그대로.'
+        if not os.path.exists(os.path.join(out_dir, 'thresholds.json'))
+        else '신뢰도 임계값(`thresholds.json`) 적용 — 운영점 그대로 낸다.')
 
-영어 canonical 10종 평면 NER BERT 분류기. 실제 추론 배포용.
-신뢰도 임계값(confidence threshold) 미적용 — raw 모델 출력 그대로.
+    card = f"""# {lang.upper()} NER production 모델
+
+{label} canonical 10종 평면 NER BERT 분류기. 실제 추론 배포용.
+{threshold_line}
 
 ## 구성
 
@@ -197,7 +241,7 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes):
 {out_dir}/
 ├── model/              # fine-tuned 가중치 + tokenizer (자립 로드)
 │   ├── config.json · model.safetensors    # 모델 (BIO 21라벨)
-│   └── tokenizer.json · tokenizer_config.json  # 토크나이저 (RoBERTa BPE)
+│   └── {tokenizer_names}  # 토크나이저
 ├── metrics.json        # 학습 설정 + test 메트릭 + 누출 가드
 ├── data/               # 학습/검증/평가 split
 │   ├── train.jsonl     # {m['train_samples']:,} 문장
@@ -211,7 +255,7 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes):
 | 항목 | 값 |
 |---|---|
 | base 모델 | `{m['model_name']}` |
-| 토크나이저 | fast(RoBERTa BPE) — **`model/` 에 동봉**. 별도 런타임 의존 없음 |
+| 토크나이저 | {tokenizer_desc} — **`model/` 에 동봉**. 별도 런타임 의존 없음 |
 | 라벨 | canonical 10종 = NER 5(PER/LOC/ORG/PROD/EVT) + PII 5(DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD), BIO 21 |
 | gold | `{m['data_path']}` ({m['n_rows']:,} 문장 · {m['n_groups']:,} 그룹) |
 | 데이터 지문 | `{m['data_fingerprint']}` |
@@ -247,12 +291,12 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes):
 1. `model/` 을 `AutoTokenizer` · `AutoModelForTokenClassification` 로 로드
    (별도 tokenizer 다운로드 불필요).
 2. char offset 디코드는 `ner.classifier.data_utils` 의 인코딩 경로와 짝을
-   이룬다 — `src/ner/scripts/eval_en_ner_test.py` 가 그 사용 예다.
+   이룬다 — `src/ner/scripts/eval_{lang}_ner_test.py` 가 그 사용 예다.
 
 ## 프로비넌스
 
-`python -m ner.classifier --lang en` 산출물(`{run_dir}`)을
-`src/ner/scripts/build_en_ner_prod.py` 로 포장했다. 학습 경로는 CLI 이고 이
+`python -m ner.classifier --lang {lang}` 산출물(`{run_dir}`)을
+`src/ner/scripts/build_ner_prod.py` 로 포장했다. 학습 경로는 CLI 이고 이
 카드의 수치는 그 run 의 `metrics.json` 에서 옮긴 값이다.
 """
     if notes:
@@ -264,14 +308,18 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes):
 
 def main():
     p = argparse.ArgumentParser(
-        description='Package a trained EN NER run into the deployment '
-                    'layout (model/ + data/ + metrics.json + MODEL_CARD.md). '
-                    'Does not train: point --run-dir at the output of '
-                    '`python -m ner.classifier --lang en`.')
+        description='Package a trained NER run into the deployment layout '
+                    '(model/ + data/ + metrics.json + MODEL_CARD.md). Does '
+                    'not train: point --run-dir at the output of '
+                    '`python -m ner.classifier --lang <lang>`. The language '
+                    'comes from the run; --lang only cross-checks it.')
     p.add_argument('--run-dir', required=True,
                    help='Training run dir containing best/ and metrics.json')
-    p.add_argument('--out-dir', default=DEFAULT_OUT_DIR,
-                   help=f'Deployment package dir (default {DEFAULT_OUT_DIR})')
+    p.add_argument('--lang', choices=sorted(LANG_LABEL),
+                   help='Expected language; fails if the run disagrees')
+    p.add_argument('--out-dir',
+                   help=f'Deployment package dir '
+                        f'(default {DEPLOY_ROOT}/<lang>)')
     p.add_argument('--force', action='store_true',
                    help='Replace an existing package at --out-dir')
     p.add_argument('--note', action='append', default=[],
@@ -280,21 +328,24 @@ def main():
                         'baked into the template.')
     args = p.parse_args()
 
-    m = load_run_metrics(args.run_dir)
-    logger.info('Run: model=%s split=%s/%s/%s fingerprint=%s',
-                m['model_name'], m['train_samples'], m['valid_samples'],
-                m['test_samples'], m['data_fingerprint'])
+    m = load_run_metrics(args.run_dir, expect_lang=args.lang)
+    lang = m['lang']
+    out_dir = args.out_dir or os.path.join(DEPLOY_ROOT, lang)
+    logger.info('Run: lang=%s model=%s split=%s/%s/%s fingerprint=%s',
+                lang, m['model_name'], m['train_samples'],
+                m['valid_samples'], m['test_samples'], m['data_fingerprint'])
 
     rows, train_rows, valid_rows, test_rows, leak = rederive_split(m)
     logger.info('Re-derived split matches the run (%d rows, leak=%d)',
                 len(rows), leak)
 
-    os.makedirs(args.out_dir, exist_ok=True)
-    model_dir = build_model_dir(
-        args.run_dir, args.out_dir, m['model_name'], args.force)
-    logger.info('Model dir ready: %s', model_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    model_dir, tokenizer = build_model_dir(
+        args.run_dir, out_dir, m['model_name'], args.force)
+    logger.info('Model dir ready: %s (%s)',
+                model_dir, describe_tokenizer(tokenizer))
 
-    data_dir = os.path.join(args.out_dir, 'data')
+    data_dir = os.path.join(out_dir, 'data')
     os.makedirs(data_dir, exist_ok=True)
     dump_jsonl(train_rows, os.path.join(data_dir, 'train.jsonl'))
     dump_jsonl(valid_rows, os.path.join(data_dir, 'valid.jsonl'))
@@ -308,20 +359,22 @@ def main():
         'leaked_test_groups': leak,
         'split_rederived': True,
     }
-    with open(os.path.join(args.out_dir, 'metrics.json'), 'w',
+    with open(os.path.join(out_dir, 'metrics.json'), 'w',
               encoding='utf-8') as f:
         json.dump(packaged, f, indent=2, ensure_ascii=False)
 
     write_model_card(
-        os.path.join(args.out_dir, 'MODEL_CARD.md'),
-        m=m, leak=leak, out_dir=args.out_dir, run_dir=args.run_dir,
-        notes=args.note)
+        os.path.join(out_dir, 'MODEL_CARD.md'),
+        m=m, leak=leak, out_dir=out_dir, run_dir=args.run_dir,
+        notes=args.note,
+        tokenizer_desc=describe_tokenizer(tokenizer),
+        tokenizer_names=tokenizer_files(model_dir))
 
     op = m['overall_strict']
     print(f"\n{'=' * 72}")
-    print('  EN NER deployment package')
+    print(f'  {lang.upper()} NER deployment package')
     print(f"{'=' * 72}")
-    print(f'  Out      : {args.out_dir}')
+    print(f'  Out      : {out_dir}')
     print(f"  Model    : {m['model_name']}")
     print(f'  Split    : {len(train_rows)}/{len(valid_rows)}/'
           f'{len(test_rows)}  (leak={leak})')
