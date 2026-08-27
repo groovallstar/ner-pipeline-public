@@ -1,7 +1,7 @@
 # issue-222: KO 명절·기념일 이름을 EVT 로
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/222
-- PR: <!-- develop 머지 시 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/231
 - 브랜치: `feat/issue-222-ko-holiday-evt`
 - 승인일: 2026-08-26
 
