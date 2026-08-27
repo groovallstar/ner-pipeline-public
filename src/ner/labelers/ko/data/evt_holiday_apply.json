@@ -1,0 +1,34 @@
+{
+  "moved": 138,
+  "held_by_site_exception": 15,
+  "by_reason": {
+    "day_head": 10,
+    "modified": 6,
+    "name": 111,
+    "period_name": 11
+  },
+  "label_totals": {
+    "before": {
+      "DAT": 9934,
+      "EVT": 1731
+    },
+    "after": {
+      "DAT": 9796,
+      "EVT": 1869
+    }
+  },
+  "gold_sha256": {
+    "before": "d15c964587be34c59b324b6f30ffe3012b6c15d5b1e92f315ed113258f27c596",
+    "after": "993e405e645656934f643551cff854063046ff00708bd8087765bcc4d9ef8e2d"
+  },
+  "ledger_sha256": "ba81c323cbd65466d2dc99bf58f7fd9a098ee0bb6d4c4fd03e686a95868f9445",
+  "gate_after": {
+    "phase": "applied",
+    "unclassified": 0,
+    "verified_sites": 1372,
+    "stale_sites": 0,
+    "label_drift": 0,
+    "sweep_matches": true,
+    "failures": []
+  }
+}
