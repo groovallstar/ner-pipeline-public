@@ -494,15 +494,15 @@ F1 0.9153, 10-fold pooled 0.9203.
 | 기본 모델 | `tohoku-nlp/bert-base-japanese-v3` | `xlm-roberta-base` |
 | 토크나이저 | slow(BertJapanese, MeCab) → `_encode_ja` | fast(XLM-R) → `_encode_vi`; PhoBERT 시 `_encode_phobert` |
 | 의존성 | `fugashi`+`unidic-lite` | (XLM-R 없음) / PhoBERT 시 `pyvi` |
-| 기본 데이터 | `data/stockmark/pii_all.jsonl` | `data/wikiann_vi/origin.jsonl` |
+| 기본 데이터 | `data/stockmark/origin.jsonl` | `data/wikiann_vi/origin.jsonl` |
 | 누출-free | (원문 중복 적음) | `--group-key orig` 필수(WikiANN 원문 중복) |
 | 출하 | 번들 + `eval_ja_ner_test.py` | `eval_vi_ner_test`(`/data/ner/vi`) |
 
 KO는 `monologg/koelectra-base-v3-discriminator`(ELECTRA 계열, `--precision fp16`
-기본), `data/klue/pii_all.jsonl`. 행마다 고유한 `id` 를 group-key 로 쓴다. 출하는
+기본), `data/klue/origin.jsonl`. 행마다 고유한 `id` 를 group-key 로 쓴다. 출하는
 `/data/ner/ko/` + `eval_ko_ner_test`(§8)이고 REST 서버가 이 경로를 로드한다.
 
-EN은 `roberta-base`(백본 벤치마크로 확정), `data/ontonotes_en/pii_all.jsonl`,
+EN은 `roberta-base`(백본 벤치마크로 확정), `data/ontonotes_en/origin.jsonl`,
 fast(RoBERTa BPE) 토크나이저라 별도 런타임 의존이 없다. 원문 파생 행이 있어
 `--group-key orig` 가 필수이고, DeBERTa-v3 발산 전례 때문에 `--precision bf16`
 을 쓴다. 출하는 `/data/ner/en/` + `eval_en_ner_test`(§8).
@@ -528,7 +528,7 @@ python -m ner.classifier --lang vi \
 # 층화 K-fold (누출-free)
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   python -m ner.classifier --lang ja \
-      --data data/stockmark/pii_all_phonediv.jsonl \
+      --data data/stockmark/origin.jsonl \
       --kfold 10 --fold-index ${fold} --group-key orig \
       --output-dir results/classifier/ja_sweep/<실험>/fold${fold}
 done

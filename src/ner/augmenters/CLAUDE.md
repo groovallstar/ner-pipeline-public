@@ -205,7 +205,7 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
     --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
     --inject-url http://localhost:8081/v1 \
     --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --output data/klue/pii_all.jsonl
+    --output data/klue/origin.jsonl
 ```
 
 `--pii-labels` 로 주입 PII 라벨을 제한한다(기본 7종 → 지정 라벨만). 미지정

@@ -114,16 +114,24 @@ python -m ner.augmenters.pii --source stockmark --lang ja \
     --verify vllm --verify-policy drop_span
 
 # KO — KLUE gold에 PII 4종만(DAT 제외) 자연 주입, verify 없음
-python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
+python -m ner.augmenters.pii --source jsonl --input <주입 전 KLUE gold> \
     --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
     --inject-url http://localhost:8081/v1 \
     --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --output data/klue/pii_all.jsonl
+    --output data/klue/origin.new.jsonl
+mv data/klue/origin.new.jsonl data/klue/origin.jsonl   # 검토 후 gold 로 승격
 ```
 
 `--source`는 `stockmark`/`jsonl`(크롤링 등 임의)/`hf`(HF Hub) 어댑터
 (`loaders.py`). `--pii-labels`로 주입 PII 라벨을 제한(미지정 시
 `DEFAULT_PII_LABELS` 전체).
+
+**입력이 자리표시자인 것은 주입 전 파일을 보관하지 않기 때문이다.** 언어마다
+디스크에 두는 gold 는 `data/<데이터셋>/origin.jsonl` 하나이고 그것이 주입까지
+끝난 상태다. 다시 돌려야 하면 상류(§2B)에서 주입 전 gold 를 새로 만들어
+입력으로 준다. 출력을 곧장 `origin.jsonl` 로 쓰지 않고 임시 이름으로 받아
+승격하는 것도 같은 이유다 — 입력과 출력이 같은 경로면 실패한 실행이 gold 를
+덮어쓴다.
 
 ### 언어별 적용
 

@@ -53,7 +53,7 @@ RTX A6000, fold 당 학습 ~97초.
 # 10-fold 학습 + pooled 평가
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   CUDA_VISIBLE_DEVICES=0 uv run python -m ner.classifier --lang ja \
-    --data data/stockmark/pii_all_phonediv.jsonl \
+    --data data/stockmark/origin.jsonl \
     --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
     --kfold 10 --fold-index ${fold} \
     --output-dir results/classifier/ja_sweep/<실험명>/fold${fold} \

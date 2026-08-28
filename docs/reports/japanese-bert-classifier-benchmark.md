@@ -213,7 +213,7 @@ uv add fugashi unidic-lite && uv sync
 # production 모델 학습 (S8, seed 45)
 CUDA_VISIBLE_DEVICES=0 uv run python -m ner.classifier --lang ja \
   --epochs 5 --batch-size 16 --max-length 256 \
-  --data-path data/stockmark/pii_all_phonediv.jsonl \
+  --data-path data/stockmark/origin.jsonl \
   --data-extra-train-jsonl data/stockmark/pii_extra_s8_prod_domain_N5.jsonl \
   --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
   --output-dir results/classifier/ja_sweep/s8_prod_domain_N5_seed45 \

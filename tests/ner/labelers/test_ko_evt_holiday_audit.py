@@ -500,7 +500,7 @@ def test_apply_is_a_set_equation_not_a_count():
 
 _HERE = pathlib.Path(__file__).resolve()
 _REPO = _HERE.parents[3]
-_GOLD = _REPO / "data" / "klue" / "pii_all.jsonl"
+_GOLD = _REPO / "data" / "klue" / "origin.jsonl"
 _DATA = _REPO / "src" / "ner" / "labelers" / "ko" / "data"
 
 
