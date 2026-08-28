@@ -63,8 +63,10 @@ def _write(proj, rel, text):
 def _clean_degraded():
     """훅은 매번 새 프로세스라 모듈 전역이 비어 있다 — 테스트에서도 같게."""
     core._DEGRADED.clear()
+    core._UNENFORCED.clear()
     yield
     core._DEGRADED.clear()
+    core._UNENFORCED.clear()
 
 
 @pytest.fixture
@@ -701,3 +703,128 @@ def test_aborting_is_not_gated():
 def test_read_only_commands_are_not_gated():
     for cmd in ('git status', 'git log --oneline', 'git diff HEAD'):
         assert not commit_gate.creates_a_commit(cmd), cmd
+
+
+# ── 확인마다 집행 주체가 있는가 ───────────────────────────────────────
+#
+# 반박자가 통과시킨 확인은 대부분 손으로 다시 센 것이라, 다음 라운드가 같은
+# 계산을 처음부터 한다. 판정 파일이 확인마다 "다음번에 무엇이 이걸 잡나"를
+# 담게 하고, 답이 없는 것을 사람에게 목록으로 넘겨 테스트로 옮길 수 있게
+# 한다. 없다는 사실 자체는 판정을 바꾸지 않는다.
+
+def _verdict(sdir, dhash, checked, verdict='PASS'):
+    Path(core.verdict_path(sdir, dhash)).write_text(json.dumps(
+        {'verdict': verdict, 'diff_hash': dhash, 'defects': [],
+         'checked': checked, 'model': 'default', 'round': 1},
+        ensure_ascii=False,
+    ))
+
+
+def test_a_checked_item_names_what_enforces_it(repo):
+    """집행 주체가 적힌 확인은 사람에게 넘길 목록에 안 오른다."""
+    sdir = core.state_dir(repo)
+    _verdict(sdir, 'h', [
+        {'what': '테스트 무결성', 'enforced_by': 'tests/hooks/test_gate.py::t'},
+    ])
+    state, _, _ = core.read_verdict(sdir, 'h')
+    assert state == 'PASS'
+    assert core.unenforced() == []
+    assert core.unenforced_notice(sdir, 'h') is None
+
+
+def test_an_unowned_check_is_reported_but_does_not_block(repo):
+    """`enforced_by` 가 null 이면 목록에 오르되 PASS 는 PASS 로 남는다 —
+    집행 주체가 없다는 것은 결함이 아니라 아직 옮기지 않은 일이다."""
+    sdir = core.state_dir(repo)
+    _verdict(sdir, 'h', [
+        {'what': '표 아홉 칸 산술을 손으로 다시 셌다', 'enforced_by': None},
+        {'what': '골든 상수 대조', 'enforced_by': 'pytest tests/test_g.py'},
+    ])
+    state, defects, _ = core.read_verdict(sdir, 'h')
+    assert (state, defects) == ('PASS', [])
+    assert core.unenforced() == ['표 아홉 칸 산술을 손으로 다시 셌다']
+    notice = core.unenforced_notice(sdir, 'h')
+    assert '표 아홉 칸 산술을 손으로 다시 셌다' in notice
+    assert '골든 상수 대조' not in notice
+
+
+def test_words_that_mean_none_count_as_none(repo):
+    """모델이 null 대신 말로 없음을 적어도 집행 주체 없음으로 읽는다."""
+    sdir = core.state_dir(repo)
+    _verdict(sdir, 'h', [
+        {'what': 'a', 'enforced_by': '없음'},
+        {'what': 'b', 'enforced_by': '  '},
+        {'what': 'c', 'enforced_by': 'N/A'},
+        {'what': 'd'},
+    ])
+    core.read_verdict(sdir, 'h')
+    assert core.unenforced() == ['a', 'b', 'c', 'd']
+
+
+def test_old_string_checked_lists_are_still_read(repo):
+    """옛 판정은 `checked` 가 문자열 배열이라 집행 주체를 적을 자리가
+    없었다 — 읽히되 전부 집행 주체 없음으로 센다. 실제로도 없었다."""
+    sdir = core.state_dir(repo)
+    _verdict(sdir, 'h', ['확인 기록 한 줄', '또 한 줄'])
+    state, defects, meta = core.read_verdict(sdir, 'h')
+    assert (state, defects, meta['model']) == ('PASS', [], 'default')
+    assert core.unenforced() == ['확인 기록 한 줄', '또 한 줄']
+
+
+def test_a_verdict_without_checked_reports_nothing(repo):
+    """`findings` 만 있던 더 옛 형식은 확인 기록 자체가 없다."""
+    sdir = core.state_dir(repo)
+    Path(core.verdict_path(sdir, 'h')).write_text(json.dumps(
+        {'verdict': 'FAIL', 'diff_hash': 'h', 'findings': ['σ 불일치'],
+         'model': 'default', 'round': 1}, ensure_ascii=False,
+    ))
+    state, defects, _ = core.read_verdict(sdir, 'h')
+    assert state == 'FAIL' and 'σ 불일치' in defects
+    assert core.unenforced() == []
+
+
+def test_the_same_verdict_read_twice_lists_each_check_once(repo):
+    """기준 파일 diff 는 한 훅 안에서 판정을 두 번 읽는다(기계 검사 ·
+    Stop 7단계). 목록이 두 배로 부풀면 안 된다."""
+    sdir = core.state_dir(repo)
+    _verdict(sdir, 'h', [{'what': '손 계산', 'enforced_by': None}])
+    core.read_verdict(sdir, 'h')
+    core.read_verdict(sdir, 'h')
+    assert core.unenforced() == ['손 계산']
+
+
+def test_a_long_check_is_cut_on_screen_but_whole_in_the_log(repo):
+    """확인 문구는 한 항목이 문단 길이까지 자란다. 화면은 자르고 이력에는
+    전문을 남긴다 — 자른 것만 남으면 나중에 무엇이었는지 복원이 안 된다."""
+    sdir = core.state_dir(repo)
+    long_what = '가' * 400
+    _verdict(sdir, 'h', [{'what': long_what, 'enforced_by': None}])
+    core.read_verdict(sdir, 'h')
+    notice = core.unenforced_notice(sdir, 'h')
+    assert long_what not in notice and '…' in notice
+    logged = [json.loads(line) for line in
+              open(os.path.join(sdir, 'log.jsonl'))]
+    assert any(r.get('result') == 'UNENFORCED' and long_what in r['checked']
+               for r in logged)
+
+
+def test_pass_notice_carries_both_kinds(repo):
+    """검사가 못 돈 사유와 집행 주체 없는 확인은 둘 다 '막지는 않지만
+    사람이 봐야 하는 것' 이라, 한 통과에서 함께 나와야 한다."""
+    sdir = core.state_dir(repo)
+    _verdict(sdir, 'h', [{'what': '손 계산', 'enforced_by': None}])
+    core.read_verdict(sdir, 'h')
+    core._DEGRADED.append('git diff: exit 128')
+    notice = core.pass_notice(sdir, 'h')
+    assert 'could not run' in notice and '손 계산' in notice
+
+
+def test_the_stop_gate_shows_unowned_checks_when_it_passes(repo):
+    """계약의 끝까지 — 훅을 실제 프로세스로 태워 화면 문구까지 확인한다."""
+    _write(repo, 'src/x.py', 'y = 1\n')
+    dhash, sdir, _ = _gate(repo)
+    Path(os.path.join(repo, '.omc/state/refuter-gate.on')).touch()
+    _verdict(sdir, dhash, [{'what': '손으로 다시 센 표', 'enforced_by': None}])
+    out, _ = _stop_hook(repo, 'sess-unowned')
+    assert 'decision' not in out
+    assert '손으로 다시 센 표' in out.get('systemMessage', '')

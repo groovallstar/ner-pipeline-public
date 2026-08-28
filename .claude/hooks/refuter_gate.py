@@ -135,7 +135,7 @@ def main():
     if not diff.strip():
         # git 호출이 실패해도 여기로 온다 — 그 경우 '변경 없음' 이 아니라
         # '못 봤음' 이므로 조용히 넘기지 않는다.
-        _passthrough(counter, core.degraded_notice(state_dir, dhash))
+        _passthrough(counter, core.pass_notice(state_dir, dhash))
 
     # 4) 무한루프 차단: 연속 block 상한. 통과할 때마다 카운터가 지워지므로
     #    여기 걸리는 건 같은 문제를 못 고치고 도는 상황이다. 무력화는 조용히
@@ -172,7 +172,7 @@ def main():
     # 6) 반박자는 서브에이전트를 요구해 비싸므로 자율 루프에서만 자동으로
     #    건다. 평범한 단발 작업은 여기서 끝난다.
     if not _loop_active(proj, session_id):
-        _passthrough(counter, core.degraded_notice(state_dir, dhash))
+        _passthrough(counter, core.pass_notice(state_dir, dhash))
 
     # 7) 반박자 판정. 기준 파일을 건드린 diff 라면 기계 검사가 이미 같은
     #    판정을 요구했으므로 여기서는 추가 비용 없이 통과한다.
@@ -188,7 +188,9 @@ def main():
             'diff_hash': dhash, 'entry': 'stop', 'layer': 'refuter',
             'result': 'PASS', **meta,
         })
-        _passthrough(counter)
+        # 통과시키되 집행 주체 없는 확인은 화면에 남긴다 — 그걸 테스트로
+        # 옮기는 것만이 다음 라운드를 없앤다.
+        _passthrough(counter, core.pass_notice(state_dir, dhash))
 
     # FAIL: 결함 보고 + 수정 요구
     _bump(counter, n_blocks)

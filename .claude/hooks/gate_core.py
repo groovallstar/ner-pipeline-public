@@ -78,6 +78,25 @@ def degraded():
     return sorted(set(_DEGRADED))
 
 
+# 반박자가 통과시킨 확인 중 집행 주체가 없는 것 — 다음번에 그것을 대신 볼
+# 기계가 없어 사람이나 다음 라운드가 손으로 다시 세게 되는 확인이다. 통과를
+# 막지는 않는다(없다는 사실 자체는 결함이 아니다). 다만 조용하면 라운드마다
+# 같은 손 계산이 반복되므로, 목록을 화면과 이력에 남겨 사람이 테스트로 옮길
+# 수 있게 한다 — 옮길 수 있는 것은 사람뿐이다.
+_UNENFORCED = []
+
+
+def unenforced():
+    """판정 파일이 집행 주체를 적지 않은 확인들. 등장 순서를 지킨 중복 제거
+    — 한 훅 안에서 같은 판정을 두 번 읽어도 목록이 부풀지 않게."""
+    seen, out = set(), []
+    for item in _UNENFORCED:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
+
 def git(args, cwd, allow_fail=False):
     # git 호출. 실패해도 빈 문자열을 돌려 게이트가 열린 채 빠진다.
     #
@@ -485,8 +504,85 @@ def degraded_notice(sdir, dhash):
     )
 
 
+# 화면 한 줄에 남길 확인 길이. 판정 파일의 확인 문구는 한 항목이 문단
+# 길이까지 자라므로, 이력에는 전문을 남기고 화면에서만 자른다.
+NOTICE_WIDTH = 110
+NOTICE_ITEMS = 8
+
+
+def _shorten(text):
+    text = ' '.join(str(text).split())
+    return text if len(text) <= NOTICE_WIDTH else text[:NOTICE_WIDTH - 1] + '…'
+
+
+def unenforced_notice(sdir, dhash):
+    """집행 주체 없는 확인 목록 문구 (없으면 None).
+
+    통과를 막지 않는다 — 확인을 대신 볼 기계가 없다는 것은 결함이 아니라
+    아직 옮기지 않은 일이다. 다만 조용히 넘기면 다음 라운드가 같은 확인을
+    손으로 다시 하므로, 라운드 수가 줄지 않는다. 이력에는 전문을, 화면에는
+    자른 목록을 남긴다.
+    """
+    items = unenforced()
+    if not items:
+        return None
+    log(sdir, {
+        'diff_hash': dhash, 'result': 'UNENFORCED', 'checked': items,
+    })
+    shown = [f'- {_shorten(x)}' for x in items[:NOTICE_ITEMS]]
+    if len(items) > NOTICE_ITEMS:
+        shown.append(f'- (+{len(items) - NOTICE_ITEMS} more, see log.jsonl)')
+    return (
+        f'[gate] The refuter passed {len(items)} check(s) that nothing '
+        'enforces — nothing re-runs them, so the next round redoes them by '
+        'hand:\n' + '\n'.join(shown)
+        + '\nMove each into a test, a grep, or certified/, or drop the claim. '
+        'Only a human can do that.'
+    )
+
+
+def pass_notice(sdir, dhash):
+    """통과 시점에 화면에 남길 것 전부 (없으면 None). 검사가 못 돈 사유와
+    집행 주체 없는 확인은 둘 다 '막지는 않지만 사람이 봐야 하는 것' 이다."""
+    parts = [
+        n for n in (degraded_notice(sdir, dhash), unenforced_notice(sdir, dhash))
+        if n
+    ]
+    return '\n'.join(parts) if parts else None
+
+
 def verdict_path(sdir, dhash):
     return os.path.join(sdir, f'{dhash}.json')
+
+
+# `enforced_by` 에 적혀도 집행 주체가 아닌 값. 모델이 null 대신 말로 없음을
+# 적는 경우가 있어, 그것도 '없음' 으로 읽는다.
+_NO_OWNER = ('', '-', 'none', 'null', 'n/a', 'na', '없음', '없다', '해당 없음')
+
+
+def checked_items(data):
+    """판정 파일의 `checked` 를 (무엇, 집행 주체) 쌍으로 읽는다.
+
+    새 형식은 항목마다 객체다 — `{"what": ..., "enforced_by": ...}`.
+    `enforced_by` 는 *다음번에 이 확인을 대신 할 것*(테스트 노드 id · grep
+    한 줄 · 게이트 검사 이름)이고, 없으면 `null` 이다. 손으로 다시 센 확인은
+    집행 주체가 없다.
+
+    옛 형식(문자열 배열)은 집행 주체를 적을 자리가 없었으므로 전부 없음으로
+    읽는다 — 실제로도 없었다.
+    """
+    out = []
+    for item in data.get('checked') or []:
+        if isinstance(item, dict):
+            what = item.get('what') or item.get('check') or ''
+            by = item.get('enforced_by')
+            by = by.strip() if isinstance(by, str) else ''
+            if by.lower() in _NO_OWNER:
+                by = ''
+            out.append((str(what), by))
+        else:
+            out.append((str(item), ''))
+    return out
 
 
 def read_verdict(sdir, dhash):
@@ -494,10 +590,15 @@ def read_verdict(sdir, dhash):
     'missing' · 'unreadable' · 'PASS' · 'FAIL'. 파일명이 diff 해시라
     diff 가 바뀌면 이전 판정은 자동으로 무효다. 다만 이 파일은 모델이
     쓰므로 위조 가능하다 — 신선도는 보증하되 진정성은 보증하지 않는다.
+    `enforced_by` 도 같은 성격이라, 적힌 테스트가 실제로 있는지는 보증하지
+    않는다.
 
     `defects`(막는 사유)와 `checked`(확인 기록)를 나눠 받는다. 옛 판정은
     둘을 `findings` 한 배열에 섞어 썼으므로 그 형식도 읽는다 — 다만 섞인
     배열에서 결함만 골라낼 수는 없어 통째로 사유로 취급한다.
+
+    `checked` 중 집행 주체가 없는 것은 `_UNENFORCED` 에 모아 통과 시점에
+    사람에게 보고한다. 없다는 것 자체는 판정을 바꾸지 않는다.
     """
     path = verdict_path(sdir, dhash)
     if not os.path.exists(path):
@@ -511,6 +612,7 @@ def read_verdict(sdir, dhash):
     if defects is None:
         defects = data.get('findings') or []
     state = 'PASS' if str(data.get('verdict', '')).upper() == 'PASS' else 'FAIL'
+    _UNENFORCED.extend(what for what, by in checked_items(data) if not by)
     meta = {'model': data.get('model'), 'round': data.get('round')}
     return state, defects, meta
 
@@ -527,16 +629,21 @@ def spawn_instructions(dhash, path, why):
         'The refuter MUST write its verdict to:\n'
         f'  {path}\n'
         'as JSON: {"verdict":"PASS"|"FAIL","diff_hash":"' + dhash +
-        '","defects":[...],"checked":[...],"model":"...","round":<N>}\n'
+        '","defects":[...],"checked":[{"what":"...","enforced_by":"..."}],'
+        '"model":"...","round":<N>}\n'
+        'Every "checked" entry must name what would catch that same thing '
+        'NEXT time — a pytest node id, a one-line grep, a gate check. Write '
+        'null when nothing would: a check you re-derived by hand has no '
+        'enforcer. Having none is NOT a FAIL; the gate lists them for the '
+        'human, who is the only one who can move them into a test.\n'
         'FAIL only when letting the diff through would record a wrong '
         'conclusion as true (numbers that disagree with the artifact, a '
         'silently moved gold/split/metric, a check that green-lights what it '
         'should block, a test that no longer verifies the same contract). '
         'Things that fail safe — over-blocking, not reachable with current '
         'data, a disclosed discrepancy — go in "checked" with a PASS. When '
-        'genuinely unsure, FAIL — but a round is NOT cheap (~5M input tokens '
-        'measured, 12M at the tail), so do not manufacture doubt to justify '
-        'one.'
+        'genuinely unsure, FAIL — but do not manufacture doubt to justify a '
+        'round: the cap is 3, so spending one leaves two.'
         '\nScope and budget live in the refuter skill (§범위와 예산) and must '
         'be pasted into the spawn prompt: read the diff, the criteria, files '
         'NAMED IN THE DIFF and prior verdicts, run existing tests — no '

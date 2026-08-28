@@ -94,7 +94,7 @@ def main():
 
     result = core.run_deterministic(proj, sdir, dhash)
     if result is None:
-        _passthrough(core.degraded_notice(sdir, dhash))
+        _passthrough(core.pass_notice(sdir, dhash))
 
     check, reason, findings = result
     core.log(sdir, {
