@@ -1,7 +1,7 @@
 {
   "lang": "ko",
   "model_name": "monologg/koelectra-base-v3-discriminator",
-  "data_path": "data/klue/pii_all.jsonl",
+  "data_path": "data/klue/origin.jsonl",
   "data_extra_train_jsonl": null,
   "train_samples": 20793,
   "valid_samples": 2598,
