@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse 훅: `git commit` 이 실행되기 직전에 기계 검사를 건다.
+"""PreToolUse 훅: 커밋을 만드는 git 명령 직전에 기계 검사를 건다.
 
 Stop 훅만 있으면 커밋을 마친 턴에는 미커밋 diff 가 남지 않아 검사 대상
 자체가 사라진다 — 한 턴에서 수정하고 커밋까지 하면 아무 검사도 받지
@@ -21,16 +21,23 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_core as core  # noqa: E402
 
-# `git ... commit` 감지. 경로 있는 git, 전역 플래그(-C · -c · --git-dir 등),
-# `&&`·`;` 로 이어붙인 형태를 모두 잡는다. 셸 인용을 파싱하지 않으므로
-# 문자열 안의 우연한 일치는 오탐이 되지만, 보수적 오탐이라 허용한다.
+# 커밋을 만드는 git 하위명령 감지. `commit` 만 잡으면 충돌을 해소하고
+# 이어가는 경로(`rebase --continue` 등)와 다른 커밋을 옮겨오는 경로
+# (`cherry-pick`·`revert`·`am`)가 통째로 빠진다. 경로 있는 git, 전역
+# 플래그(-C · -c · --git-dir 등), `&&`·`;` 로 이어붙인 형태를 모두 잡는다.
+# 셸 인용을 파싱하지 않으므로 문자열 안의 우연한 일치는 오탐이 되지만,
+# 보수적 오탐이라 허용한다.
 GIT_COMMIT_RE = re.compile(
     r'(?:^|[\s;&|(])'
     r'(?:[^\s;&|]*/)?git'
     r'(?:\s+(?:-C\s+\S+|-c\s+\S+|--git-dir[=\s]\S+|--work-tree[=\s]\S+'
     r'|--namespace[=\s]\S+|--exec-path[=\s]\S+|-[^\s]+))*'
-    r'\s+commit\b'
+    r'\s+(?:commit|cherry-pick|revert|am|rebase|merge)\b'
 )
+
+# 진행 중인 작업을 접거나 건너뛰는 형태는 커밋을 만들지 않는다. 막으면
+# 충돌 상태에서 빠져나올 길이 사라진다.
+GIT_ABORT_RE = re.compile(r'--(?:abort|quit|skip)\b')
 
 
 def _passthrough(notice=None):
@@ -54,8 +61,11 @@ def _deny(reason):
     sys.exit(0)
 
 
-def is_git_commit(command):
-    return bool(GIT_COMMIT_RE.search(command or ''))
+def creates_a_commit(command):
+    command = command or ''
+    if GIT_ABORT_RE.search(command):
+        return False
+    return bool(GIT_COMMIT_RE.search(command))
 
 
 def main():
@@ -69,7 +79,7 @@ def main():
     if data.get('tool_name') != 'Bash':
         _passthrough()
     command = (data.get('tool_input') or {}).get('command', '')
-    if not is_git_commit(command):
+    if not creates_a_commit(command):
         _passthrough()
 
     proj = core.project_dir(data)
@@ -79,7 +89,7 @@ def main():
     if not text.strip():
         _passthrough()
 
-    dhash = core.diff_hash(text)
+    dhash = core.anchor_hash(proj, text)
     sdir = core.state_dir(proj)
 
     result = core.run_deterministic(proj, sdir, dhash)

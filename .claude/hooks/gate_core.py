@@ -10,8 +10,12 @@
   서브에이전트를 요구하는 검사는 이쪽에만 있다 — 커밋 명령 중간에는
   에이전트를 부를 수 없다.
 
-두 진입점이 같은 `diff_hash` 를 계산하므로, 사람이 만든 예외 승인
-파일(`human-allow-<diff_hash>`) 하나로 양쪽이 함께 풀린다.
+두 진입점이 같은 앵커 지문(`anchor_hash`)을 계산하므로, 사람이 만든 예외
+승인 파일(`human-allow-<앵커>`) 하나로 양쪽이 함께 풀린다.
+
+**검사 대상과 앵커는 다르다.** 검사는 `diff_text()` 전체를 본다. 앵커는
+거기서 `ANCHOR_EXCLUDE` 를 뺀 것으로, 판정·승인이 무엇에 묶이는지만
+정한다.
 """
 import glob
 import hashlib
@@ -19,6 +23,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 
 # 인용 수치로 볼 토큰 (0.93 · 0.9361 · 1.00 등)
@@ -115,6 +120,27 @@ def skip_requested():
 def diff_text(proj):
     # 인덱스 포함 미커밋 변경. `git add` 된 새 파일도 여기 잡힌다
     return git(['diff', 'HEAD'], proj)
+
+
+# 앵커 지문에서 빼는 경로. 이슈 문서는 채점에 쓰이지 않는 기록이라, 여기
+# 한 줄이 늘었다고 앞선 판정을 무효로 만들지 않는다.
+ANCHOR_EXCLUDE = ('docs/issues',)
+
+
+def anchor_hash(proj, full_diff):
+    """판정·승인이 묶이는 지문.
+
+    `ANCHOR_EXCLUDE` 를 뺀 diff 로 계산한다. 기계 검사와 반박자는
+    `diff_text()` 전체를 그대로 보므로, 좁아지는 것은 "무엇이 판정을
+    무효로 만드는가" 뿐이다.
+
+    제외 후 diff 가 비면 전체 diff 로 되돌아간다 — 이슈 문서만 고친
+    변경들이 빈 해시 하나를 공유하면 서로의 판정을 물려받는다.
+    """
+    args = ['diff', 'HEAD', '--', '.']
+    args += [f':(exclude){path}' for path in ANCHOR_EXCLUDE]
+    narrowed = git(args, proj)
+    return diff_hash(narrowed if narrowed.strip() else full_diff)
 
 
 def diff_hash(text):
@@ -501,25 +527,78 @@ def spawn_instructions(dhash, path, why):
         'The refuter MUST write its verdict to:\n'
         f'  {path}\n'
         'as JSON: {"verdict":"PASS"|"FAIL","diff_hash":"' + dhash +
-        '","defects":[...],"checked":[...],"model":"...","round":1}\n'
+        '","defects":[...],"checked":[...],"model":"...","round":<N>}\n'
         'FAIL only when letting the diff through would record a wrong '
         'conclusion as true (numbers that disagree with the artifact, a '
         'silently moved gold/split/metric, a check that green-lights what it '
         'should block, a test that no longer verifies the same contract). '
         'Things that fail safe — over-blocking, not reachable with current '
         'data, a disclosed discrepancy — go in "checked" with a PASS. When '
-        'genuinely unsure, FAIL: one more round is cheaper than a wrong pass.'
-        '\nKeep it narrow: judge from the diff + criteria; read files only to '
-        'verify a specific claim. Do not declare done until verdict is PASS.'
+        'genuinely unsure, FAIL — but a round is NOT cheap (~5M input tokens '
+        'measured, 12M at the tail), so do not manufacture doubt to justify '
+        'one.'
+        '\nScope and budget live in the refuter skill (§범위와 예산) and must '
+        'be pasted into the spawn prompt: read the diff, the criteria, files '
+        'NAMED IN THE DIFF and prior verdicts, run existing tests — no '
+        'corpus-wide scans, no repo-wide greps, no new analysis scripts, at '
+        'most 20 Bash calls. Do not re-count a claim that only a full scan '
+        'could check — record it as a defect instead.'
+        '\n\nROUND CAP. Get <N> from `ls .omc/state/refuter/*.json` — read '
+        'the count off disk, never from memory. Past round 3 on the same '
+        'task, STOP: hand the open defects to the human instead of spawning '
+        'another refuter. If the same place is flagged twice, the fix owed is '
+        'a structural change, not another patch to that spot. Do not declare '
+        'done until the verdict is PASS or you have handed it over at the cap.'
     )
+
+
+# 게이트 자신이 바뀐 diff 에서만 도는 자기 검사. 게이트는 목록으로 움직이는데
+# 그 목록이 든 파일은 기준 파일이 아니라, 목록을 좁혀도 네 검사가 다 조용하다.
+SELF_DIRS = ('.claude/hooks/',)
+SELF_TESTS = 'tests/hooks'
+
+
+def _pytest_cmd(proj):
+    # 훅은 시스템 python 으로 뜨므로 pytest 가 없을 수 있다. 저장소 venv 우선.
+    venv = os.path.join(proj, '.venv/bin/python')
+    return [venv if os.path.exists(venv) else sys.executable, '-m', 'pytest']
+
+
+def check_self_tests(proj):
+    """게이트를 고치는 diff 면 그 회귀 테스트를 돌린다.
+
+    통과·대상 없음·실행 불가면 None, 실패면 pytest 출력 꼬리를 돌려준다.
+    실행 불가는 차단하지 않고 기록만 한다 — 게이트 고장이 커밋을 영구
+    봉쇄해선 안 된다.
+    """
+    changed = git(['diff', '--name-only', 'HEAD'], proj).splitlines()
+    if not any(p.startswith(SELF_DIRS) for p in changed):
+        return None
+    if not os.path.isdir(os.path.join(proj, SELF_TESTS)):
+        _DEGRADED.append(f'self-test: {SELF_TESTS} missing')
+        return None
+    try:
+        out = subprocess.run(
+            [*_pytest_cmd(proj), SELF_TESTS, '-q'],
+            cwd=proj, capture_output=True, text=True, timeout=90,
+        )
+    except Exception as exc:
+        _DEGRADED.append(f'self-test: {type(exc).__name__}')
+        return None
+    if out.returncode == 0:
+        return None
+    if out.returncode >= 4:  # pytest 사용 오류(수집 실패·인자 오류)
+        _DEGRADED.append(f'self-test: pytest exit {out.returncode}')
+        return None
+    return (out.stdout or out.stderr)[-1500:]
 
 
 def run_deterministic(proj, sdir, dhash):
     """기계 검사 전체. 통과면 None, 막히면 (check, reason, findings).
 
     모델 판단이 아니라 diff 와 `certified/` 를 게이트가 직접 읽는다.
-    ruff 는 사람 승인으로도 면제되지 않는다 — 기계적으로 고칠 수 있는
-    결함이라 예외 승인 대상이 아니다.
+    ruff 와 자기 검사는 사람 승인으로도 면제되지 않는다 — 기계적으로 고칠
+    수 있는 결함이라 예외 승인 대상이 아니다.
 
     기준 파일을 건드렸을 때만은 예외로 반박자 판정까지 요구한다. 반박자가
     잡아야 할 위험(gold 변조·분할 누수·"올랐다=개선"의 순환)이 거기 몰려
@@ -533,6 +612,17 @@ def run_deterministic(proj, sdir, dhash):
             'Deterministic gate failed: ruff check did not pass on changed '
             f'files. Fix lint errors before committing.\n\n{ruff_out}',
             ['ruff check failed'],
+        )
+
+    self_fail = check_self_tests(proj)
+    if self_fail is not None:
+        return (
+            'self-test',
+            'The gate itself changed and its regression tests fail. The gate '
+            'is defined by lists inside these files, and nothing else locks '
+            'them — a narrowed list passes every other check silently. Make '
+            f'{SELF_TESTS} green before committing.\n\n{self_fail}',
+            ['gate self-tests failed'],
         )
 
     has_allow = human_allowed(sdir, dhash)

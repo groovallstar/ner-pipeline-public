@@ -21,8 +21,9 @@ diff(`gate_core` 가 요구)와 자율 루프가 도는 중(`_loop_active`). 평
 기계 검사의 오탐은 사람이 `human-allow-<diff_hash>` 파일로 해제한다.
 해시가 같으므로 한 번 만든 승인은 두 진입점에서 함께 듣는다. 모든 판정·해제는
 `log.jsonl` 에 append-only 로 남는다. 무한 루프는 연속 block 카운터로
-차단하되 통과할 때마다 리셋하고, 상한에 걸려 게이트가 열리는 순간도
-`log.jsonl` 과 사용자 화면 양쪽에 남긴다 — 조용히 꺼지지 않게.
+차단하되 **통과할 때마다 리셋한다 — 상한에 걸려 여는 통과도 포함이다.**
+상한으로 열리는 순간은 `log.jsonl` 과 사용자 화면 양쪽에 남긴다 — 조용히
+꺼지지 않게.
 """
 import json
 import os
@@ -59,12 +60,6 @@ def _passthrough(counter=None, notice=None):
         _reset(counter)
     if notice:
         print(json.dumps({'systemMessage': notice}, ensure_ascii=False))
-    sys.exit(0)
-
-
-def _notice(message):
-    # 사용자 화면에 뜨는 알림 — stderr 는 디버그 모드에서만 보인다
-    print(json.dumps({'systemMessage': message}))
     sys.exit(0)
 
 
@@ -136,7 +131,7 @@ def main():
     # 3) 미커밋 diff 없으면 통과 (잡담·조회 턴, 또는 커밋을 마친 턴 —
     #    후자는 커밋 직전에 `commit_gate.py` 가 이미 검사했다)
     diff = core.diff_text(proj)
-    dhash = core.diff_hash(diff)
+    dhash = core.anchor_hash(proj, diff)
     if not diff.strip():
         # git 호출이 실패해도 여기로 온다 — 그 경우 '변경 없음' 이 아니라
         # '못 봤음' 이므로 조용히 넘기지 않는다.
@@ -145,15 +140,21 @@ def main():
     # 4) 무한루프 차단: 연속 block 상한. 통과할 때마다 카운터가 지워지므로
     #    여기 걸리는 건 같은 문제를 못 고치고 도는 상황이다. 무력화는 조용히
     #    넘기지 않고 이력과 사용자 화면 양쪽에 남긴다.
+    #
+    #    상한으로 여는 이 통과도 카운터를 지운다. 상한의 뜻은 '이 턴을 연다'
+    #    이지 '이 세션을 포기한다' 가 아니다 — 안 지우면 그 세션의 Stop
+    #    게이트가 영구히 죽고, 화면이 평소와 같아 아무도 못 알아챈다.
     if n_blocks >= MAX_BLOCKS:
         core.log(state_dir, {
             'diff_hash': dhash, 'entry': 'stop', 'result': 'LIMIT',
             'note': f'consecutive block limit {MAX_BLOCKS} reached',
         })
-        _notice(
+        _passthrough(
+            counter,
             f'[refuter-gate] consecutive block limit ({MAX_BLOCKS}) reached — '
-            'this turn passes through UNCHECKED by the Stop gate. Commits are '
-            'still gated separately. Review the diff manually.'
+            'this turn passes through UNCHECKED by the Stop gate. The counter '
+            'resets, so the next change cycle is checked again. Commits are '
+            'still gated separately. Review the diff manually.',
         )
 
     # 5) 기계 검사 — 루프 여부와 무관하게 항상 실행한다. 모델을 부르지
