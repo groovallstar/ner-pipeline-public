@@ -167,9 +167,17 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 ## 테스트·검증
 
 - **pytest**: `uv run pytest tests/server/` — 계약·전송은 stub registry 로
-  모델 없이 CI 가능, 모델 통합(offset 정합성·ja parity)은 `/data` 있을 때만
-  (`pytest.skip` 가드). ja parity 는 `eval_*` 스크립트를 import 하지 않고
-  `/data/ner/ja/metrics.json` 운영점과 대조한다.
+  모델 없이 CI 가능, 모델 통합(`test_inference_integration.py`)은 `/data` 있을
+  때만 (`pytest.skip` 가드). 통합은 **ja·ko·vi 를 같은 축으로** 태운다 —
+  offset 정합·thresholds 부재 시 raw 동작·장문 청크 offset 과 후반 recall·
+  청크 배치 parity·gold 엔티티 청크 경계 불가침·`predict_many` 등가·NFD 입력
+  동일, 그리고 세 언어 인터리브 배치가 단건과 1:1. 계약 테스트는 stub 이라
+  모델을 안 부르므로 토크나이저 분기(ja 만 slow)·청킹 경로(ko 는 문장이
+  아니라 단어 경계로 쪼개진다)가 갈리는 자리는 여기서만 잡힌다.
+- **배포 parity**: 서버 predict 로 잰 F1 을 배포 `metrics.json` 과 대조해
+  패키지가 자기가 나온 run 과 어긋나지 않는지 본다. `eval_*` 스크립트를
+  import 하지 않고 기록된 값(데이터)과 맞춘다. ja 는 thresholds 가 있어
+  abstention on/off 둘을, ko 는 raw 하나를 본다(`overall_strict`).
 - **번역 백엔드**: 계약·설정 검증·동시성은 stub 으로 모델 없이 돈다. `nllb`
   실모델 경로(ja·vi PII 5종 verbatim 보존)는 가중치가 필요해 env 로 연다 —
   `NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B uv run pytest
