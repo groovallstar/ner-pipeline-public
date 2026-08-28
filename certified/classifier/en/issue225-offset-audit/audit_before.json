@@ -1,0 +1,86 @@
+{
+  "data": "/work/git/ner-pipeline/data/ontonotes_en/pii_all.jsonl",
+  "lang": "en",
+  "tokenizer": "roberta-base",
+  "max_length": 256,
+  "audit": {
+    "rows": 76378,
+    "entity_labeled_tokens": 1009678,
+    "boundary_violations": {
+      "total": 80288,
+      "by_kind": {
+        "zero_at_end": 80288
+      },
+      "by_kind_type": {
+        "zero_at_end/CREDIT_CARD": 15435,
+        "zero_at_end/DAT": 6542,
+        "zero_at_end/EMAIL": 12022,
+        "zero_at_end/EVT": 364,
+        "zero_at_end/ID_NUM": 13747,
+        "zero_at_end/LOC": 7375,
+        "zero_at_end/ORG": 4991,
+        "zero_at_end/PER": 9051,
+        "zero_at_end/PHONE": 10257,
+        "zero_at_end/PROD": 504
+      }
+    },
+    "roundtrip": {
+      "entities": 167871,
+      "recovered": 165326,
+      "missed": 2545,
+      "ceiling": 0.9848395494159206,
+      "per_type": {
+        "CREDIT_CARD": {
+          "recovered": 22948,
+          "missed": 2,
+          "ceiling": 0.9999128540305011
+        },
+        "DAT": {
+          "recovered": 13892,
+          "missed": 34,
+          "ceiling": 0.9975585236248743
+        },
+        "EMAIL": {
+          "recovered": 24104,
+          "missed": 1,
+          "ceiling": 0.9999585148309479
+        },
+        "EVT": {
+          "recovered": 946,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "ID_NUM": {
+          "recovered": 22529,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "LOC": {
+          "recovered": 20359,
+          "missed": 1312,
+          "ceiling": 0.9394582621937151
+        },
+        "ORG": {
+          "recovered": 16273,
+          "missed": 1106,
+          "ceiling": 0.9363599746820875
+        },
+        "PER": {
+          "recovered": 19192,
+          "missed": 68,
+          "ceiling": 0.9964693665628245
+        },
+        "PHONE": {
+          "recovered": 23115,
+          "missed": 0,
+          "ceiling": 1.0
+        },
+        "PROD": {
+          "recovered": 1968,
+          "missed": 22,
+          "ceiling": 0.9889447236180905
+        }
+      }
+    }
+  }
+}

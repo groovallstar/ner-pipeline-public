@@ -87,7 +87,7 @@ def count_tokens(lm: LangModel, texts: List[str]) -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description='NER server throughput bench')
-    ap.add_argument('--lang', required=True, choices=['ja', 'vi'])
+    ap.add_argument('--lang', required=True, choices=['ja', 'ko', 'vi'])
     ap.add_argument('--mode', default='seq', choices=['seq', 'batch'])
     ap.add_argument('--batch-size', type=int, default=32)
     ap.add_argument('--apply-threshold', default='true',

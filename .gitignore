@@ -76,10 +76,7 @@ Thumbs.db
 .claude/*.backup.*
 .claude/scheduled_tasks.lock
 # 플러그인·외부 도구가 제공하는 스킬/커맨드 미러는 도구가 재생성 — 추적 제외
-.claude/skills/openspec-*/
-.claude/commands/opsx/
 .omc/
-openspec/
 
 # Project specific
 docker/dev/config/.env

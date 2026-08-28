@@ -40,7 +40,13 @@ PII_LABELS = frozenset({'DAT', 'EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD'})
 # sentinel 접두 — 프로세스별 랜덤 nonce. 클라이언트가 예측·재현할 수 없어
 # 원문을 만들어 충돌시키는 게 불가능하다.
 _SENTINEL_TAG = f'PII{secrets.token_hex(3)}_'
-_LANG_NAME = {'ja': '일본어', 'vi': '베트남어'}
+# 번역 대상 언어와 그 한국어 이름(프롬프트에 박힌다). **NER 지원 언어와
+# 다르다** — 이 엔드포인트는 "한국어로 번역"이라 ko 입력은 대상이 없다.
+# 이름이 곧 자격이라 `TRANSLATABLE_LANGS` 를 여기서 유도한다: 프롬프트에
+# 넣을 이름이 없는 언어는 번역할 수단이 없다는 뜻이므로, 목록을 따로 두면
+# 한쪽만 늘어나 조용히 어긋난다.
+LANG_NAME = {'ja': '일본어', 'vi': '베트남어'}
+TRANSLATABLE_LANGS = frozenset(LANG_NAME)
 
 _PROMPT_TEMPLATE = (
     '다음 {lang_name} 문장을 한국어로 번역하세요.\n'
@@ -196,7 +202,7 @@ class LLMTranslator:
         """
         masked, id2val = _mask(text, spans, self._sentinel)
         prompt = _PROMPT_TEMPLATE.format(
-            lang_name=_LANG_NAME.get(lang, lang), text=masked,
+            lang_name=LANG_NAME.get(lang, lang), text=masked,
             left=self._sentinel.left, right=self._sentinel.right)
         try:
             resp = self._client.chat.completions.create(

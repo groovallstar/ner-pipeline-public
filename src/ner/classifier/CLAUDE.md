@@ -110,8 +110,8 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 기본값:
 - `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/origin.jsonl`
-- `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용
-- `--lang en`: 모델 `roberta-base`(base 급 6종 3-seed 벤치마크로 확정), 데이터 `data/ontonotes_en/pii_all.jsonl` (OntoNotes5 유래 NER 5종+DAT + 합성 PII 4종). split 별 파일을 `ner.augmenters.ontonotes_en.merge_splits` 로 합친 것이며 `--group-key orig` 로 재분할한다. 배포 패키지는 `/data/ner/en/`(포장: `src/ner/scripts/build_en_ner_prod.py`, 추론: `eval_en_ner_test.sh`)
+- `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용. 배포 패키지는 `/data/ner/ko/`(포장: `src/ner/scripts/build_ner_prod.py`, 추론: `eval_ko_ner_test.sh`)이고 REST 서버가 이 경로를 로드한다
+- `--lang en`: 모델 `roberta-base`(base 급 6종 3-seed 벤치마크로 확정), 데이터 `data/ontonotes_en/pii_all.jsonl` (OntoNotes5 유래 NER 5종+DAT + 합성 PII 4종). split 별 파일을 `ner.augmenters.ontonotes_en.merge_splits` 로 합친 것이며 `--group-key orig` 로 재분할한다. 배포 패키지는 `/data/ner/en/`(포장: `src/ner/scripts/build_ner_prod.py`, 추론: `eval_en_ner_test.sh`)
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
 - 재현성 (`--train-seed`): 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·dropout·셔플을 고정해 재현 가능한 run 이 된다. GPU FP 비결합에 따른 seed-내 잔여 비결정성(loss ~1e-4)은 effect size 대비 무시 가능 — 비교 측정은 양 팔을 같은 `--train-seed` 로 고정하거나 multi-seed paired 로 본다. `metrics.json` 에 `train_seed`·`precision` 기록.
@@ -217,7 +217,7 @@ B-CREDIT_CARD, I-CREDIT_CARD
 
 | 분기 | 조건 | 정렬 방식 |
 |---|---|---|
-| fast | `tokenizer.is_fast` (XLM-R·CafeBERT·mmBERT·DeBERTa-V3 등) | `return_offsets_mapping=True` + `_trim_offset`. SentencePiece 계열이 `▁` 토큰에 선행 공백을, 숫자형 entity 끝에 문장부호를 흡착해 char-offset 이 어긋나는 것을 **선행 공백·후행 `.`/`,` trim** 으로 교정 (`_encode_vi`) |
+| fast | `tokenizer.is_fast` (XLM-R·CafeBERT·mmBERT·DeBERTa-V3 등) | `return_offsets_mapping=True` + `_trim_offset`. SentencePiece 계열이 `▁` 토큰에 선행 공백을, 숫자형 entity 끝에 문장부호를 흡착해 char-offset 이 어긋나는 것을 **선행 공백·후행 `.`/`,` trim** 으로 교정 (`_encode_vi`). trim 결과가 비면 원래 offset 을 돌려준다 — 길이 0 조각은 아래 포함 검사가 양끝을 포함하는 탓에 entity 종료 지점에서 통과해 entity 밖 문장부호를 삼킨다 |
 | PhoBERT | `_is_phobert` (slow, 단어분절 전제) | `pyvi` 단어분절 후 단어별 BPE, 단어 char-span 정렬 (`_encode_phobert`). 의존성: `pyvi` |
 | JA slow | 그 외 slow (`BertJapaneseTokenizer`) | `tokenize()` → `text.find(surface, pos)` greedy. `##` strip. UNK 시 0-length. 의존성: `fugashi` + `unidic-lite` |
 

@@ -30,4 +30,7 @@ cross-package 기능 스크립트**를 둔다. 한 패키지에 속하는 도구
 | `eval_vi_ner_test.sh` | 위 `.py`를 `uv run`으로 감싸 실행하는 래퍼 |
 | `eval_en_ner_test.py` | 배포된 EN NER 모델 test 추론 — VI 판과 같은 구성이되 평가 대상(`--limit`, 기본 0=전수)과 화면 표시(`--show`, 기본 100)를 따로 받는다. EN 배포 test 는 7,637행이라 하나로 묶으면 지표를 전수로 재는 일과 태깅을 눈으로 보는 일이 서로를 막는다 |
 | `eval_en_ner_test.sh` | 위 `.py`를 `uv run`으로 감싸 실행하는 래퍼 |
-| `build_en_ner_prod.py` | EN 배포 패키지 포장 — `python -m ner.classifier` run 을 `/data/ner/en/{model,data,metrics.json,MODEL_CARD.md}` 로 옮긴다. **학습은 하지 않는다**: 학습 경로를 복제하면 배포 체크포인트가 CLI 아닌 이 스크립트의 산물이 돼 벤치마크 원장과의 수치 대조가 서로 다른 코드 경로 비교가 된다. 분할 JSONL 은 run 이 저장하지 않아 같은 인자로 다시 유도하고, 유도한 크기가 run 기록과 어긋나면 중단한다 |
+| `eval_ko_ner_test.py` | 배포된 KO NER 모델 test 추론 — EN 판과 같은 구성(`--limit`·`--show` 분리). KO 배포 test 는 2,598행이라 같은 이유가 걸린다 |
+| `eval_ko_ner_test.sh` | 위 `.py`를 `uv run`으로 감싸 실행하는 래퍼 |
+| `audit_offset_alignment.py` | 토큰 char-offset 정렬 감사 — `ner.classifier`(data_utils) + `ner.metrics` 를 가로질러 ① 엔티티 라벨을 받은 토큰이 엔티티 밖 char 를 물거나 종료 경계의 길이 0 조각인 건수 ② gold 라벨 → decode → gold 엔티티 strict 복원율(모델이 완벽해도 못 넘는 채점 상한)을 학습 없이 결정적으로 잰다. `--model-dir` 를 주면 고정 체크포인트를 재평가하며 토큰별 예측 label id 시퀀스 해시를 함께 남겨, 정렬을 바꾼 전후로 점수 차이가 정렬에서만 왔는지 확인할 수 있다 |
+| `build_ner_prod.py` | 배포 패키지 포장 — `python -m ner.classifier` run 을 `/data/ner/{lang}/{model,data,metrics.json,MODEL_CARD.md}` 로 옮긴다. **학습은 하지 않는다**: 학습 경로를 복제하면 배포 체크포인트가 CLI 아닌 이 스크립트의 산물이 돼 벤치마크 원장과의 수치 대조가 서로 다른 코드 경로 비교가 된다. 분할 JSONL 은 run 이 저장하지 않아 같은 인자로 다시 유도하고, 유도한 크기가 run 기록과 어긋나면 중단한다. **언어별 사본을 두지 않는다** — 그 안전장치들이 언어와 무관하므로 복사하면 여러 벌이 되고 한쪽만 낡는다. 언어는 run 의 `lang` 에서 읽으며 `--lang` 은 대조용이고, 카드의 토크나이저 줄은 동봉된 실물에서 만든다 |

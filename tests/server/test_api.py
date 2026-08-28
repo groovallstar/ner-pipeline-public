@@ -7,14 +7,14 @@ lang 에코·감지·에러·인증·헬스)만 검증한다.
 from fastapi.testclient import TestClient
 
 from server.app import create_app
-from server.config import ServerConfig
+from server.config import SUPPORTED_LANGS, ServerConfig
 from server.inference import ModelUnavailable
 
 
 class StubRegistry:
     """결정적 stub — 첫 단어를 PER span 으로 반환(순서·offset 검증)."""
 
-    def __init__(self, langs=('ja', 'vi'), unavailable=()):
+    def __init__(self, langs=('ja', 'vi', 'ko'), unavailable=()):
         self._langs = langs
         self._unavailable = set(unavailable)
 
@@ -92,6 +92,8 @@ def test_lang_autodetect_echoed():
     assert r.json()['lang'] == 'ja'
     r2 = _client().post('/v1/ner', json={'text': 'Hà Nội là thủ đô'})
     assert r2.json()['lang'] == 'vi'
+    r3 = _client().post('/v1/ner', json={'text': '삼성전자는 수원에'})
+    assert r3.json()['lang'] == 'ko'
 
 
 def test_explicit_lang_overrides_detection():
@@ -105,6 +107,27 @@ def test_batch_per_text_detection():
     r = _client().post('/v1/ner', json={'texts': ['テスト x', 'Hà Nội y']})
     langs = [it['lang'] for it in r.json()['results']]
     assert langs == ['ja', 'vi']
+
+
+def test_ko_explicit_lang_accepted():
+    """명시 `lang:"ko"` 는 400 이 아니라 그대로 추론된다."""
+    r = _client().post('/v1/ner', json={'text': '김민준 씨', 'lang': 'ko'})
+    assert r.status_code == 200
+    assert r.json()['lang'] == 'ko'
+    assert r.json()['entities'][0]['text'] == '김민준'
+
+
+def test_batch_mixes_three_langs_in_order():
+    """ja·ko·vi 혼합 배치가 언어별로 갈려도 입력 순서·lang 이 1:1."""
+    r = _client().post('/v1/ner', json={'texts': [
+        'テスト x',      # ja (가나)
+        '김민준 y',      # ko (한글)
+        'Hà Nội z',      # vi (dot-below)
+    ]})
+    results = r.json()['results']
+    assert [it['lang'] for it in results] == ['ja', 'ko', 'vi']
+    assert [it['entities'][0]['text'] for it in results] == [
+        'テスト', '김민준', 'Hà']
 
 
 def test_unsupported_autodetect_single():
@@ -141,8 +164,8 @@ def test_batch_per_item_partial_unsupported():
 
 
 def test_explicit_unsupported_lang_still_400():
-    """명시 lang 이 미지원(ko)이면 자동감지와 달리 400(클라이언트 계약)."""
-    r = _client().post('/v1/ner', json={'text': 'Hà Nội', 'lang': 'ko'})
+    """명시 lang 이 미지원(en)이면 자동감지와 달리 400(클라이언트 계약)."""
+    r = _client().post('/v1/ner', json={'text': 'Hà Nội', 'lang': 'en'})
     assert r.status_code == 400
 
 
@@ -159,9 +182,23 @@ def test_both_text_and_texts_400():
 
 
 def test_invalid_lang_400():
-    r = _client().post('/v1/ner', json={'text': 'a', 'lang': 'ko'})
+    r = _client().post('/v1/ner', json={'text': 'a', 'lang': 'en'})
     assert r.status_code == 400
     assert r.json()['error']['status'] == 400
+
+
+def test_openapi_ner_description_names_every_supported_lang():
+    """Swagger 설명이 실제 지원 언어와 어긋나지 않는지.
+
+    소비자가 읽는 유일한 계약 문구라, 코드에 언어를 늘리고 문구를 안 고치면
+    "지원 안 한다"고 적힌 언어가 조용히 200 을 내는 상태가 된다.
+    """
+    spec = _client().get('/openapi.json').json()
+    doc = spec['paths']['/v1/ner']['post']
+    blob = doc['summary'] + doc['description']
+    for lang in SUPPORTED_LANGS:
+        assert f'`{lang}`' in doc['description'], lang
+    assert '한국어' in blob
 
 
 def test_openapi_422_declares_error_envelope():
@@ -239,7 +276,7 @@ def test_health_shape():
     assert r.status_code == 200
     body = r.json()
     assert body['status'] == 'ok'
-    assert set(body['langs']) == {'ja', 'vi'}
+    assert set(body['langs']) == {'ja', 'vi', 'ko'}
 
 
 def test_health_no_auth_required():

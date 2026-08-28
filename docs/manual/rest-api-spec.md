@@ -1,6 +1,6 @@
 # NER REST API 명세서
 
-> **이 문서가 하는 일**: `src/server/`가 제공하는 ja·vi NER 추론 REST API의
+> **이 문서가 하는 일**: `src/server/`가 제공하는 ja·ko·vi NER 추론 REST API의
 > 계약(엔드포인트·요청/응답 스키마·상태 코드·에러·설정)을 한 곳에 고정한다.
 > **대상 코드**: `src/server/` (`app.py`·`config.py`·`inference.py`·
 > `detect.py`·`concurrency.py`·`chunking.py`)
@@ -35,8 +35,8 @@ FastAPI가 런타임에 자동 생성하는 OpenAPI 문서(`GET /docs`·`GET
 canonical span(`{label, start_char, end_char, text}`)으로 `.jsonl`
 데이터 관례와 1:1이라 API 결과를 파이프라인에 그대로 되먹일 수 있다.
 
-- **지원 언어**: `ja`(일본어)·`vi`(베트남어) 2종. `lang` 생략 시 텍스트별
-  자동 감지, 어느 신호도 없으면 `unsupported`(에러 아님, §4 참조).
+- **지원 언어**: `ja`(일본어)·`ko`(한국어)·`vi`(베트남어) 3종. `lang` 생략 시
+  텍스트별 자동 감지, 어느 신호도 없으면 `unsupported`(에러 아님, §4 참조).
 - **핸들러 무상태**: 모든 가변 상태는 부팅 때 로드한 모델 registry 안에
   있고 요청은 그것을 읽기만 한다.
 - **포함**: 요청 검증 / 언어 감지 / 긴 입력 분할 / 배치 forward / BIO
@@ -157,18 +157,24 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 
 | 상황 | 결과 |
 |---|---|
-| `lang` 명시 = `ja`\|`vi` | 감지 없이 해당 모델로 추론 |
+| `lang` 명시 = `ja`\|`ko`\|`vi` | 감지 없이 해당 모델로 추론 |
 | `lang` 명시 = 그 외 | **400** `unsupported lang '{lang}'` (클라이언트 계약 위반) |
-| `lang` 생략, 감지 = `ja`\|`vi` | 감지 언어로 추론, 응답에 에코 |
+| `lang` 생략, 감지 = `ja`\|`ko`\|`vi` | 감지 언어로 추론, 응답에 에코 |
 | `lang` 생략, 감지 = `unsupported` | **200** `{lang:"unsupported", entities:[]}` — 모델 미호출 |
 
 배치에서 자동 감지 `unsupported` 항목은 빈 결과로 두고 지원 언어 항목만
 추론한다(**부분 성공** — 입력 순서·`lang` 1:1 보존).
 
-**자동 감지 규칙**(`detect.py`): 가나(히라가나·가타카나) → `ja`,
-vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` → `vi`, 그 외 →
-`unsupported`. 부호를 뗀 베트남어(không dấu)는 변별 신호가 없어
-`unsupported`로 떨어지는 수용된 한계다. 근거: `docs/reports/
+**자동 감지 규칙**(`detect.py`): 가나(히라가나·가타카나) → `ja`, 한글(음절
+또는 자모) → `ko`, vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` →
+`vi`, 그 외 → `unsupported`. 셋의 신호는 서로소이고, 한 문장에 둘 이상 있으면
+위 순서대로 먼저 맞은 언어가 이긴다.
+
+감지가 놓치는 자리가 둘 있다. **한자만 있는 텍스트**는 ja·ko 가 한자를 공유해
+어느 쪽도 가리키지 않으므로 `unsupported` 다 — 가나·한글이라는 *배타적*
+스크립트만 신호로 쓰기 때문이며, 그런 입력은 `lang` 을 직접 지정해야 한다.
+**부호를 뗀 베트남어**(không dấu)도 변별 신호가 없어 `unsupported` 로 떨어진다.
+둘 다 false-accept 를 0 으로 두기 위해 받아들인 한계다. 근거: `docs/reports/
 language-detection-benchmark.md`.
 
 ## 5. `GET /health` — 상태
@@ -326,7 +332,7 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ## 10. 엔티티 라벨 셋
 
-`label`은 ja·vi 공통 canonical **10종 평면** 중 하나다.
+`label`은 ja·ko·vi 공통 canonical **10종 평면** 중 하나다.
 
 | 구분 | 라벨 |
 |---|---|
@@ -351,7 +357,7 @@ flowchart TD
     VAL -->|위반| ERR["400 / 413"]
     VAL -->|통과| LANG{"언어 결정<br/>지정 or 자동감지"}
     LANG -->|unsupported| EMPTY["200 · 빈 결과<br/>모델 미호출"]
-    LANG -->|ja/vi| GUARD["동시성 guard 진입<br/>큐/타임아웃 초과 → 429"]
+    LANG -->|"ja·ko·vi"| GUARD["동시성 guard 진입<br/>큐/타임아웃 초과 → 429"]
     GUARD --> INFER["추론: 긴 입력 분할 →<br/>배치 forward → BIO<br/>디코드"]
     INFER --> CANON["원문 offset 복원 +<br/>임계값 자동 적용 →<br/>canonical span"]
     CANON --> OK["200 · entities/results"]

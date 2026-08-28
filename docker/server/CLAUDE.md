@@ -1,4 +1,4 @@
-# server — ja·vi NER REST API 배포
+# server — ja·ko·vi NER REST API 배포
 
 `src/server` 추론 서버를 컨테이너로 빌드·기동한다. CUDA 베이스
 (`pytorch:2.13.0-cuda13.0`)에서 uv 로 프로젝트(ner·server)를 설치하고
@@ -66,6 +66,6 @@ healthcheck 자체는 오케스트레이터(compose `depends_on`·swarm·k8s rea
 
 ## 의존성·주의
 
-- NVIDIA Container Toolkit, 호스트 `/data/ner/{ja,vi}/model` 존재
+- NVIDIA Container Toolkit, 호스트 `/data/ner/{ja,ko,vi}/model` 존재
 - 빌드 컨텍스트는 레포 루트(`../../`) — `.dockerignore` 가 `.venv`·산출물 제외
 - 모델은 마운트(이미지 미포함) — 재학습 모델 교체는 `/data` 갱신 후 재기동
