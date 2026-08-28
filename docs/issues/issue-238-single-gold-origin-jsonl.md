@@ -102,6 +102,13 @@ uv run pytest tests/   # 1107 passed, 3 skipped (78s)
 - 2026-08-28: 배포 패키지의 `metrics.json` 은 건드리지 않았다. `data_path` 는
   학습이 무엇을 읽었는지에 대한 기록이고, 파일이 나중에 개명됐다는 이유로 고치면
   실행 기록의 위조가 된다.
+- 2026-08-28: ko 원장(`certified/classifier/ko/**`)을 배포 실행 하나로 줄이려다
+  되돌렸다. 인용 대조의 표면을 줄여 검출력을 올린다는 계산이었는데, 그 원장은
+  죽은 기록이 아니라 **살아 있는 검사의 기준**이었다 —
+  `test_ko_evt_axis1_audit` 이 `issue202-axis1-*` 의 sha256 을 사전등록과
+  대조하고, `test_ko_evt_holiday_audit` 이 이슈 문서의 support 를
+  `certified/classifier/ko/**` 의 pooled 전량과 맞춘다. 셋이 깨져 복원했다.
+  **원장을 줄일 때는 문서 참조뿐 아니라 `tests/` 참조를 먼저 봐야 한다.**
 
 ## 후속 작업
 
