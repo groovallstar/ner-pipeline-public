@@ -1,4 +1,4 @@
-"""내부 소비자용 ja·vi NER REST API 호출 예제·자기검증.
+"""내부 소비자용 ja·ko·vi NER REST API 호출 예제·자기검증.
 
 내부망 별도 프로세스가 서버를 어떻게 호출하는지 보여주는 최소 레퍼런스다.
 `NERClient` 로 단일·배치·자동감지를 호출하고, 데모는 정상 경로와 계약 에러
@@ -20,7 +20,7 @@ import requests
 
 
 class NERClient:
-    """ja·vi NER 서버 클라이언트(내부망 별도 프로세스용 최소 래퍼).
+    """ja·ko·vi NER 서버 클라이언트(내부망 별도 프로세스용 최소 래퍼).
 
     `ner_single`/`ner_batch` 는 `requests.Response` 를 그대로 돌려준다 —
     호출자가 `status_code` 와 `json()` 으로 정상/에러 계약을 직접 판단하게
@@ -82,12 +82,14 @@ def run_demo(client: NERClient, max_chars: int = 20000) -> int:
         r.status_code == 200 and body.get('lang') == 'ja'
         and any(e['label'] == 'PER' for e in body['entities']), str(body))
 
-    # 정상: 배치 ja+vi 자동감지(순서 1:1 보존)
-    r = client.ner_batch(['トヨタは日本の会社です。', 'Hà Nội là thủ đô.'])
+    # 정상: 배치 ja+ko+vi 자동감지(순서 1:1 보존)
+    r = client.ner_batch(['トヨタは日本の会社です。', '삼성전자는 수원에 있다.',
+                          'Hà Nội là thủ đô.'])
     body = r.json()
     langs = [item['lang'] for item in body.get('results', [])]
-    ok &= _check('batch -> ja,vi order preserved',
-                 r.status_code == 200 and langs == ['ja', 'vi'], str(langs))
+    ok &= _check('batch -> ja,ko,vi order preserved',
+                 r.status_code == 200 and langs == ['ja', 'ko', 'vi'],
+                 str(langs))
 
     # 미지원: 영어 → 200 + unsupported(모델 미호출, 빈 결과)
     r = client.ner_single('This is plain English.')

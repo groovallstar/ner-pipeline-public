@@ -103,7 +103,7 @@ def test_success_batch_logged_at_debug(caplog):
 def test_reject_bad_request_warns(caplog):
     """400(잘못된 lang) → WARNING reason=bad_request."""
     with caplog.at_level(logging.INFO, logger=_MW_LOGGER):
-        r = _client().post('/v1/ner', json={'text': 'a', 'lang': 'ko'})
+        r = _client().post('/v1/ner', json={'text': 'a', 'lang': 'en'})
     assert r.status_code == 400
     line = _one(caplog, _MW_LOGGER)
     assert line.levelno == logging.WARNING

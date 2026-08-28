@@ -1,6 +1,6 @@
-# src/server/ — ja·vi NER REST API 서비스
+# src/server/ — ja·ko·vi NER REST API 서비스
 
-학습된 BERT 분류기(`/data/ner/{ja,vi}/model/`)를 감싸 HTTP 로 NER 추론을
+학습된 BERT 분류기(`/data/ner/{ja,ko,vi}/model/`)를 감싸 HTTP 로 NER 추론을
 제공한다. `ner.classifier` 의 data_utils(인코딩·디코드)와
 confidence_threshold(임계값 fit·apply)에 의존하고, 학습·평가 모듈은
 import 하지 않는다.
@@ -44,7 +44,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 엔드포인트 | 설명 |
 |---|---|
 | `POST /v1/ner` | 단일 `{text, lang?}` 또는 배치 `{texts:[...], lang?}`. `lang` 생략 시 텍스트별 자동감지. 신뢰도 임계값은 모델 로드 시 자동 적용 |
-| `POST /v1/translate` | **웹 데모 전용**(OpenAPI 미노출) — `{text, lang, spans}`(spans=`/v1/ner` 결과)를 한국어로 번역. PII 는 마스킹-복원으로 원문 그대로 보존, 고유명사는 한글 음차(백엔드가 `llm` 일 때 — `nllb` 는 프롬프트가 없어 지시할 수단이 없다). 기본 비활성→503(`NER_SERVER_TRANSLATE_*` 로 활성). `/v1/ner` 과 같은 `max_chars` 상한을 재사용하므로 초과→413, 미지원 lang·비정상 span→400, **번역 전용 동시성 상한 초과→429**. `/v1/ner` 계약과 독립 |
+| `POST /v1/translate` | **웹 데모 전용**(OpenAPI 미노출) — `{text, lang, spans}`(spans=`/v1/ner` 결과)를 한국어로 번역. **lang 은 ja·vi 만 받는다**(§번역 대상 언어). PII 는 마스킹-복원으로 원문 그대로 보존, 고유명사는 한글 음차(백엔드가 `llm` 일 때 — `nllb` 는 프롬프트가 없어 지시할 수단이 없다). 기본 비활성→503(`NER_SERVER_TRANSLATE_*` 로 활성). `/v1/ner` 과 같은 `max_chars` 상한을 재사용하므로 초과→413, 미지원 lang·비정상 span→400, **번역 전용 동시성 상한 초과→429**. `/v1/ner` 계약과 독립 |
 | `GET /v1/translate/status` | **웹 데모 전용**(OpenAPI 미노출) — `{enabled, available}`. `available` 은 토글 ON + 백엔드가 지금 번역할 수 있음이고, **무엇을 확인하는지는 백엔드가 정한다**(`llm`=원격 엔드포인트 liveness, `nllb`=로드 성공이 곧 가용이라 항상 true). UI 가 페이지 로드 시 1회 조회해 번역 버튼을 켜고, 미가용이면 계속 끈다(폴링 없음) |
 | `GET /` | 내부 개발·데모용 웹 UI(자족적 HTML, 동일 출처로 `/v1/ner`·`/v1/translate` 호출·CORS 불필요). 인증·Swagger 미노출 |
 | `GET /health` | 언어별 모델 로드 상태 + thresholds 존재 여부(인증 없음) |
@@ -52,7 +52,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 응답 span 은 canonical `{label, start_char, end_char, text}`
 (`.jsonl` 데이터 관례와 일치). 단일 → `{lang, entities}`, 배치 →
 `{results:[{lang, entities}, ...]}`(입력 순서 1:1). `lang` 생략 시 자동감지가
-ja·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에러
+ja·ko·vi 신호를 못 찾으면 **`200 + {lang:"unsupported", entities:[]}`**(에러
 아님, 모델 미호출) — 배치는 항목별 부분성공. 명시 `lang` 이 미지원이면 400
 (클라이언트 계약). 에러는 구조화 `{error: {status, message}}` — 잘못된 요청
 (lang·text/texts 택일)→400, 크기 한도(max_chars·max_batch·max_total_chars)
@@ -80,14 +80,14 @@ curl -s -X POST localhost:8008/v1/ner \
 # 배치(혼합 언어, 텍스트별 감지)
 curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
-  -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
-# → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
+  -d '{"texts":["トヨタは日本の会社です。","삼성전자는 수원에 있다.","Hà Nội là thủ đô."]}'
+# → {"results":[{"lang":"ja",...},{"lang":"ko",...},{"lang":"vi",...}]}
 
 # 언어 명시(자동 감지 대신 직접 지정)
 curl -s -X POST 'localhost:8008/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
 
-# 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
+# 미지원 입력(영어·한자만 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
 curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' -d '{"text":"plain English"}'
 # → {"lang":"unsupported","entities":[]}
@@ -106,16 +106,16 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | 파일 | 역할 |
 |------|------|
 | `config.py` | `ServerConfig` — env 설정·언어별 경로(`model_dir`/`thresholds_path`) |
-| `detect.py` | `detect_lang` — ja·vi **양성 감지** + 미지원 명시. 가나→ja, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi, 그 외→`unsupported`(vi 폴백 안 함). `DETECTORS` (신호,언어) 레지스트리로 확장 — 스크립트 언어 추가는 한 줄. 근거: `docs/reports/language-detection-benchmark.md` |
+| `detect.py` | `detect_lang` — ja·ko·vi **양성 감지** + 미지원 명시. 가나→ja, 한글(음절·자모)→ko, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi, 그 외→`unsupported`(vi 폴백 안 함). 한자만 있는 텍스트도 `unsupported` — ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않으므로 *배타적* 스크립트만 신호로 쓴다. `DETECTORS` (신호,언어) 레지스트리로 확장 — 스크립트 언어 추가는 한 줄. 근거: `docs/reports/language-detection-benchmark.md` |
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
 | `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). 추론은 fp32 전용(단건·배치 결정적), 입력은 NFC 정규화. 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429. `app.py` 가 **둘을 만든다** — NER 용과 번역 전용(`TRANSLATE_MAX_CONCURRENCY`, 큐 없음) |
 | `limits.py` | `BodySizeLimitMiddleware`(순수 ASGI) — 라우팅·인증 이전에 요청 바디를 `MAX_BODY_BYTES` 로 bound. Content-Length 조기 거부 + chunked 스트리밍 누적 거부(우회 차단), 초과 시 413 봉투. 전송 계층 메모리 고갈 가드 |
 | `request_log.py` | `RequestLogMiddleware`(순수 ASGI, 최외곽) — 요청별 request-id 생성·`X-Request-ID` 에코, 지연·결과를 한 줄로. 성공 2xx→DEBUG(기본 침묵), 거절 4xx·503→WARNING(사유 태그). 핸들러가 `request.state.ner_meta`(lang·batch·entities)를 채워 성공 로그에 실린다 |
 | `app.py` | `create_app(registry, config, translator)` — FastAPI 라우트(async)·Pydantic·인증·에러. 추론은 guard 안 `run_in_threadpool` 로 실행. registry 는 `predict`/`predict_batch`/`health` 를 가진 객체면 됨(실모델 또는 stub). `translator`(옵션)는 `/v1/translate` 용, None 이면 503. `GET /` 은 임포트 시 1회 읽은 `static/index.html` 을 그대로 반환 |
-| `translate.py` | 마스킹-복원 + `LLMTranslator`(원격 OpenAI 호환) + `build_translator`(백엔드 선택·설정 검증). PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. sentinel 을 감싸는 괄호는 `SentinelFormat` 으로 갈아끼운다 — 표기가 번역기 토크나이저에 종속되기 때문이며 기본값은 종전 `【…】` 그대로다. `/v1/ner`·`inference.py` 무의존 additive |
+| `translate.py` | 마스킹-복원 + `LLMTranslator`(원격 OpenAI 호환) + `build_translator`(백엔드 선택·설정 검증). 번역 대상 언어 목록 `TRANSLATABLE_LANGS`(=`LANG_NAME` 의 키)도 여기 있다. PII span 을 sentinel 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. sentinel 을 감싸는 괄호는 `SentinelFormat` 으로 갈아끼운다 — 표기가 번역기 토크나이저에 종속되기 때문이며 기본값은 종전 `【…】` 그대로다. `/v1/ner`·`inference.py` 무의존 additive |
 | `translate_nllb.py` | `NLLBTranslator` — 전용 NMT 를 **서버 프로세스 안에서** 돌리는 백엔드(같은 계약: `translate`·`available`). ASCII sentinel·문장 단위 분할·반복 억제가 엔진 속성으로 붙는다(§번역 백엔드). torch·transformers 를 끌어오므로 `build_translator` 가 `nllb` 를 고를 때만 임포트된다 |
-| `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다 |
+| `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/ko/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다. 결과가 ko 면 버튼을 **감춘다** — 눌러도 400 이 될 버튼을 회색으로 남기면 "백엔드가 죽었나"로 읽힌다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
 | `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
 | `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`) |
@@ -182,6 +182,20 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 - **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
   서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
   skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
+
+## 번역 대상 언어
+
+번역이 받는 `lang` 은 **NER 이 받는 `lang` 보다 좁다.** `/v1/ner` 은
+`SUPPORTED_LANGS`(ja·ko·vi)를 보지만 `/v1/translate` 는
+`TRANSLATABLE_LANGS`(ja·vi)를 본다 — 이 엔드포인트는 "한국어로 번역"이라
+한국어 원문은 옮길 곳이 없기 때문이다. `lang:"ko"` 는 400 이다.
+
+목록을 따로 두지 않고 `LANG_NAME`(프롬프트에 박히는 언어 이름)의 키에서
+유도한다. 이름이 곧 자격이라서다 — 프롬프트에 넣을 이름이 없는 언어는 번역할
+수단이 없다. 목록을 별도로 두면 한쪽만 늘어나 조용히 어긋나고, 그때 나타나는
+증상은 에러가 아니라 **원문이 그대로 '번역'으로 돌아오는 것**이다.
+
+웹 UI 도 같은 목록을 두고 ko 결과에서는 번역 버튼을 감춘다.
 
 ## 번역 백엔드 — 기동 때 고르고, 기본값은 없다
 

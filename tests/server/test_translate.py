@@ -10,17 +10,22 @@ stub translator 로 검증한다.
 """
 
 import asyncio
+import re
 import threading
+from pathlib import Path
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+import server
 from server import translate_nllb
 from server.app import create_app
-from server.config import ServerConfig
+from server.config import SUPPORTED_LANGS, ServerConfig
 from server.translate import (
     DEFAULT_SENTINEL,
+    LANG_NAME,
+    TRANSLATABLE_LANGS,
     SentinelFormat,
     TranslationResult,
     TranslationUnavailable,
@@ -277,6 +282,43 @@ def test_translate_unsupported_lang_400():
     r = _client(translator=_EchoTranslator()).post(
         '/v1/translate', json={'text': 'hi', 'lang': 'en', 'spans': []})
     assert r.status_code == 400
+
+
+def test_translate_rejects_ko_even_though_ner_supports_it():
+    """NER 이 받는 ko 를 번역은 400 으로 거절한다.
+
+    한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없다. `SUPPORTED_LANGS`
+    (ja·ko·vi)와 `TRANSLATABLE_LANGS`(ja·vi)가 갈리는 유일한 지점이고,
+    같은 목록을 쓰면 ko 가 조용히 통과해 원문이 그대로 '번역'으로 나온다.
+    """
+    assert 'ko' in SUPPORTED_LANGS
+    assert 'ko' not in TRANSLATABLE_LANGS
+    r = _client(translator=_EchoTranslator()).post(
+        '/v1/translate',
+        json={'text': '김민준은 서울에 산다.', 'lang': 'ko', 'spans': []})
+    assert r.status_code == 400
+
+
+def test_translatable_langs_all_have_a_prompt_name():
+    """번역 대상 목록과 프롬프트 이름표가 어긋날 수 없다(같은 출처)."""
+    assert set(TRANSLATABLE_LANGS) == set(LANG_NAME)
+    assert TRANSLATABLE_LANGS <= set(SUPPORTED_LANGS)
+
+
+def test_web_ui_translatable_list_matches_the_server():
+    """웹 UI 의 목록이 서버와 갈라지지 않는지.
+
+    UI 는 vanilla JS 라 서버 상수를 import 할 수 없어 손으로 복사한 목록을
+    쥔다. 갈라져도 증상이 조용하다 — 서버가 넓으면 버튼이 없는 언어가
+    생기고, UI 가 넓으면 눌렀을 때 400 이 난다. 그래서 한쪽을 고칠 때 다른
+    쪽을 잊는 것을 여기서 잡는다.
+    """
+    ui = (Path(server.__file__).parent / 'static' / 'index.html').read_text(
+        encoding='utf-8')
+    m = re.search(r'const TRANSLATABLE = new Set\(\[([^\]]*)\]\)', ui)
+    assert m, 'web UI has no TRANSLATABLE list'
+    declared = set(re.findall(r'"([a-z]{2})"', m.group(1)))
+    assert declared == set(TRANSLATABLE_LANGS)
 
 
 def test_translate_backend_unavailable_503():
