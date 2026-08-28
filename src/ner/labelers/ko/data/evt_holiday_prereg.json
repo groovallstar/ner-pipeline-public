@@ -1,5 +1,5 @@
 {
- "gold": "data/klue/pii_all.jsonl",
+ "gold": "data/klue/origin.jsonl",
  "gold_sha256": "d15c964587be34c59b324b6f30ffe3012b6c15d5b1e92f315ed113258f27c596",
  "candidates": {
   "surfaces": 163,

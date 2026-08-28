@@ -320,7 +320,7 @@ uv sync
 # 1) split 병합 — split 필드를 떨어뜨린다
 python -m ner.augmenters.ontonotes_en.merge_splits \
     --input-dir data/ontonotes_en/pii \
-    --output data/ontonotes_en/pii_all.jsonl
+    --output data/ontonotes_en/origin.jsonl
 
 # 2) 후보 1종 × seed 1개 (6종 × seed 42·43·44 = 18회, 실제 15회 + deberta 1회)
 CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \

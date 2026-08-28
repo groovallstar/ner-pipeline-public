@@ -20,7 +20,7 @@
 
 사용:
     python src/ner/scripts/audit_offset_alignment.py \\
-        --data /abs/pii_all.jsonl --model-name roberta-base --out /abs/out.json
+        --data /abs/origin.jsonl --model-name roberta-base --out /abs/out.json
 
     python src/ner/scripts/audit_offset_alignment.py \\
         --data /abs/test.jsonl --model-dir /abs/model --out /abs/out.json

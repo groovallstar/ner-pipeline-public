@@ -63,12 +63,18 @@ gold 품질을 위해 다음 설계 결정을 거쳤다.
 산출: 커밋 `dcfb2e0`, PR #118. 재현:
 
 ```bash
-python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
+python -m ner.augmenters.pii --source jsonl --input <주입 전 KLUE gold> \
     --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
     --inject-url http://localhost:8081/v1 \
     --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --output data/klue/pii_all.jsonl
+    --output data/klue/origin.new.jsonl
+mv data/klue/origin.new.jsonl data/klue/origin.jsonl
 ```
+
+당시에는 주입 전 gold 가 `origin.jsonl`, 주입 결과가 `pii_all.jsonl` 이었다.
+지금은 언어마다 gold 를 `origin.jsonl` 하나만 두므로 입력이 자리표시자이고
+출력을 임시 이름으로 받아 승격한다. 절차 정본은
+`docs/manual/pipeline/2-augmentation.md`.
 
 ## Part 1 — 엔티티별 진단
 

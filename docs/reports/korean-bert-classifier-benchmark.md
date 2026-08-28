@@ -110,7 +110,7 @@ xlm-r은 영어 ASCII가 핵심인 EMAIL조차 단일언어가 이미 F1≈1.0�
 ## 재현
 
 ```bash
-ls data/klue/pii_all.jsonl   # 25,989 (생성은 augmenters, gitignore)
+ls data/klue/origin.jsonl   # 25,989 (생성은 augmenters, gitignore)
 uv sync
 python -m ner.classifier --lang ko \
   --model-name monologg/koelectra-base-v3-discriminator \

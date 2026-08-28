@@ -1023,9 +1023,9 @@ def main():
     group_key = None if args.group_key == 'none' else args.group_key
 
     default_data = {
-        'ja': 'data/stockmark/pii_all.jsonl',
+        'ja': 'data/stockmark/origin.jsonl',
         'vi': 'data/wikiann_vi/origin.jsonl',
-        'ko': 'data/klue/pii_all.jsonl',
+        'ko': 'data/klue/origin.jsonl',
     }
     data_path = args.data or default_data[args.lang]
 

@@ -1,6 +1,6 @@
 """병합본 전량 불변식 — 학습에 들어가는 파일이 그대로인가.
 
-병합본(`data/ontonotes_en/pii_all.jsonl`)이 없으면 통째로 건너뛴다. `data/` 는
+병합본(`data/ontonotes_en/origin.jsonl`)이 없으면 통째로 건너뛴다. `data/` 는
 gitignore 되므로 클론 직후에는 없고, 그때 실패시키면 무관한 변경까지 붉어진다.
 
 **골든 넘버는 이 파일에 둔다.** 병합 모듈에서 가져오면 도구를 고칠 때 기대치도
@@ -20,7 +20,7 @@ from ner.classifier.data_utils import (
 
 MERGED = (
     Path(__file__).resolve().parents[4]
-    / 'data' / 'ontonotes_en' / 'pii_all.jsonl'
+    / 'data' / 'ontonotes_en' / 'origin.jsonl'
 )
 
 pytestmark = pytest.mark.skipif(

@@ -170,7 +170,7 @@ canonical §3.3 의 명절 예외 문단을 없애고 하루/기간 축으로 �
   밖이다** — `augmenters/ontonotes_en/test_merged_corpus.py::test_label_counts` 로,
   공유 `data/` 의 EN 병합본이 다른 세션에서 다시 만들어져 손으로 고정한 골든 라벨 수와
   어긋난 것이다(`LOC`·`ORG` 두 칸). 이 브랜치는 EN 경로를 건드리지 않는다
-- 게이트: `ko_evt_holiday_audit gate --gold data/klue/pii_all.jsonl --ledger
+- 게이트: `ko_evt_holiday_audit gate --gold data/klue/origin.jsonl --ledger
   src/ner/labelers/ko/data/evt_holiday_prereg.json` → `applied` PASS, 미배정 0 ·
   유령 0 · 라벨 드리프트 0 · 검증 자리 1,372 · 스윕 지문 일치
 - 무회귀: 축1 `gate` sites 186 · status_counts 동일, R2 `audit`
