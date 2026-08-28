@@ -1,0 +1,7652 @@
+{
+ "canonical_section": "### 3",
+ "criterion": "개별 구조물은 ORG, 여러 지점을 잇는 경로는 LOC (§3 인프라). 표면형이 가리키는 실체로 판정하며 환유 용법은 판정을 바꾸지 않는다 (§3 환유). canonical 규칙상 entity 가 아니면 DROP 이다 — 원본 태그가 아니라 canonical 이 정본이다.",
+ "population": "원본 OntoNotes5 가 FAC 로 태그한 표면 전량. unique 634 / span 1110 (train 860 · valid 115 · test 135).",
+ "decision": "두 로컬 모델에 표면과 그 표면이 쓰인 문맥을 주어 판정시키고, 일치하면 high, 갈리면 conflict 로 두어 conflict 를 사람이 판정했다. 규칙이 없던 범주(광장·국립공원·국경검문소)는 사람이 규칙을 정해 일괄 적용했다.",
+ "separate_entities": [
+  {
+   "surface": "Great Wall",
+   "verdict": "DROP",
+   "why": "만리장성과 별개로 신용카드 브랜드가 같은 이름을 쓴다. 관측된 세 문맥이 모두 브랜드거나 비유라 실체를 안 가리킨다"
+  },
+  {
+   "surface": "\" Shenzhen Expressway \"",
+   "verdict": "ORG",
+   "why": "고속도로와 별개로 같은 이름의 상장 회사가 있다. 두 문맥 모두 회사이고 원본도 ORG 로 1 회 태그했다"
+  },
+  {
+   "surface": "`` the West Wing ''",
+   "verdict": "DROP",
+   "why": "백악관 서관과 별개로 같은 이름의 TV 프로그램이 있다. 관측 문맥이 프로그램이다"
+  }
+ ],
+ "lexical_exceptions": [
+  {
+   "surface": "\" Shenzhen Expressway \"",
+   "verdict": "ORG",
+   "lexical": "LOC",
+   "why": "상장 회사. 원본도 ORG 로 1 회 태그했다 — 별개 실체가 실재하므로 §3 환유 항 밖이고 §2.1 로 조직이다"
+  },
+  {
+   "surface": "Stone Harbor",
+   "verdict": "LOC",
+   "lexical": "ORG",
+   "why": "뉴저지 해변 마을. 접미가 harbor 지만 항만이 아니라 정착지다 (§2.1)"
+  }
+ ],
+ "entries": [
+  {
+   "surface": "\" Progress M - 24 \"",
+   "verdict": "DROP",
+   "reason": "nonentity:other",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   },
+   "note": "우주선. 시설도 경로도 아니다"
+  },
+  {
+   "surface": "\" Shenzhen Expressway \"",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "101",
+   "verdict": "LOC",
+   "reason": "route:number",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "288",
+   "verdict": "LOC",
+   "reason": "route:number",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 9,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "34th Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "42nd Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "460",
+   "verdict": "LOC",
+   "reason": "route:number",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "57th Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "5th Zone Garrison",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "ACME",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Abu Ghraib",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 2,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Abu Ghraib Prison",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Abu Ghraib U.S. Military Prison",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Abu Graib",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Aden Harbor",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Akagera",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Akagera National Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Al Zaharah Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Alamo",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Allgate",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 0,
+    "valid": 3,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Allgate tube station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "AnaMor Towers",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Andre Emmerich Gallery",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Antung Street Studio",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Arlington National Cemetery",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Arthur Avenue",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Auschwitz",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Avery Fisher Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Baghdad Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Baghdad International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Baghdad University",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Bagram Air Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Bally 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Bank of China Tower",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Barclay",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Beijing - Hangzhou Grand Canal",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Beveneary 3rd",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Beverly",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Big Earl 's Stop - N - Flop",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Bilbrey",
+   "verdict": "DROP",
+   "reason": "nonentity:other",
+   "agreement": "high",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   },
+   "note": "유정. 설비 단위 (§3.4 연장)"
+  },
+  {
+   "surface": "Binhai International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Blackfriar 's Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Bletchley Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Blum & Poe Gallery",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Botanical Garden",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Bowling Airbase",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Broadway",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Buckingham Palace",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "CKS Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "CKS International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Cafe Al - Rasini",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Cailion",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Camden Yards",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Camp David",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Camp Side",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Camp Zeist",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Campbell County Comprehensive High School",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Candlestick",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Candlestick Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 2,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Capitol",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Cedars",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 7
+   }
+  },
+  {
+   "surface": "Center of the East Central .",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Changhong Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Chaoyang Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 4
+   }
+  },
+  {
+   "surface": "Chengyu",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Chernobyl",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Chiards",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Chieurs",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Chuanqing",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Chunghsiao East Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Chunghua Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Chungshan Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "City Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Club 88",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Cobb Parkway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Colorado Boulevard",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Crystal Drive",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Cypress",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Datong - Hongdong",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Diaoyutai State Hotel",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Diner On The Square",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Disney",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 6,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Disneyland",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 5,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Dodger Stadium",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Dome",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Don",
+   "verdict": "DROP",
+   "reason": "nonentity:other",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   },
+   "note": "유전. 설비 단위 (§3.4 연장)"
+  },
+  {
+   "surface": "Donald Lee Holland Parkway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Dover Air Force Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 2,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Dulles Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Dulles Toll Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Dylan 's Candy Bars",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "East 57th Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "East Fourth Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "East Second Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "East Third Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 11
+   }
+  },
+  {
+   "surface": "Edwards Air Force Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Embarcadero",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "EuroDisney",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Farmer 's Market",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fashion Island",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fashion Island Shopping Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Feitsui Reservoir",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fenghua Garden",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fifth Avenue",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "Fifth Avenues",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Fillmore Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Five - Left",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Five - Right",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Fleet Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Formosa Wonderworld",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fort Carson",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fort Dietrick",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fort Gulick",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fort Hood",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fort San Domingo",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Fourth Nuclear Power Plant",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Fourth Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Ft. Hood",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ganzhou airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Gaza Beach",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Georgetown",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Gitmo",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Gorky Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Gracie Mansion",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Grand Boulevard Plaza",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Great Wall",
+   "verdict": "DROP",
+   "reason": "nonentity:other",
+   "agreement": "high",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 1
+   },
+   "note": "카드 브랜드·비유. 만리장성 자체를 안 가리킨다 (별개 실체 → §2.1)"
+  },
+  {
+   "surface": "Guanghua Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Guantanamo",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 16,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Guanyin Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Guggenheim",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Guomao Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "HSBC Main Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Haneda Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hartsfield Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Heathrow",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Heathrow Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Highland Valley",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Highway 101",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hong Kong Disneyland",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 4,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hong Kong International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hong Kong Wetland Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 4,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hsia Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 6,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hsiuluan Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Huguenot Trail",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Hutung trail",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Igaras",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Immaculate Conception",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "International Space Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Interstate 295",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Iraqi Village",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Izu Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "J F K",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jen - ai Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jiangbei Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jingdezhen airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jingguang Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 9
+   }
+  },
+  {
+   "surface": "Jinrunfa",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jiujiang Railway Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jiulong Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "John F. Kennedy International Airports",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Joseph 's Tomb",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Jothun",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Juragua",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "Kaliningrad",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Kennedy Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Kennedy Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Kennedy airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ketagelan Boulevard",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Khan Younus",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Khobar Towers",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 3
+   }
+  },
+  {
+   "surface": "Kiriyah",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ko - nan Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Kremlin",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Kuantu Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Kunqu highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "L' Aec en ciel",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "La Guardia",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 6,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "La Guardia 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "La Guardia Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "LaGuardia",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "LaGuardia Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lake Akagera National Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lake View",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lake View 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lake View Cemetery",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lanhua Chemical Fertilizer Plant",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Le Beverly",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Le Chabanais",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Le Grand Balcon",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Le Gros Millan",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Le One Two Two",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Le Sphinx",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Leifeng Tower",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Les Halles",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lima Pier",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lin Fong Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lompoc Federal Prison",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Los Angeles International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lubyanka",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lugou Bridge - Handan",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Lukou International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "MCV",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "MRT",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "MRT network",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "MRT system",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Macau Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Madison",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "Madison Avenue",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Madison Square Garden",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Main Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mansion House",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mass Rapid Transit",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mausoleum of the Martyrs",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "McDonalds",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mecca Market",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Memorial Hospital",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mercury Blvd",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Merdelet",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mersa Metruh",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Metro",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 9,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Metropolitan",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Metrorail",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Middle - East Bureau",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Millennium Dome",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Minsheng East Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mir",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 12,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mir Space Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Modern",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mojia street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Montgomery Village Ave",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Mt. Everest",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "NOVA",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Nanjing Zijin Mountain Observatory",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Nasser Hospital",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 2,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Nasser Preliminary school",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "National Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Neverland",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 3
+   }
+  },
+  {
+   "surface": "New Trier High School",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "New York Stock Exchange",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ngong Ping 360",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ningpo West Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Nippon Convention Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "No. 1 subway line",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "No. 2 subway line",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "NoVA",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Notre Dame",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Notre Dame Basilica",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "O'Hare Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "O'Hare International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Olympic Hill",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Orange Bowl",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Palisades",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Parkshore Tower",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Pateh Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Peace",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Peking Supreme Restaurant",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Pennsylvania",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Pennsylvania Avenue",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Pentagon",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 25,
+    "valid": 3,
+    "test": 3
+   }
+  },
+  {
+   "surface": "Perimeter",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Petit - muse",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Philippines Cultural Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Pigalle",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Piper Alpha",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Pocahontas Parkway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Port of Norflolk",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Port of Norfolk",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Porte Dauphine",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Potala Palace",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Poverty Lane Orchard",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Provincial Highway #15",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 2,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Provincial Highway 17",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Pulkova Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Pushkin Square",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Rachel 's Tomb",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ramstein",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ramstein Air Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Ramstein Air Force Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Reagan National Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Red Fort",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Red Square",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Reserve",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Robious Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Rocky Flats",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Rodeo Drive",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Route 288",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Route 7",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Route 80",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Royal Air Force",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Saddam Hussein International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Saddam International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Saint - Denis",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Salang Highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sanford Regional Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sanshan King Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Santos Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sao Paolo",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Scarlet",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Schloss Ketwig",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Seabrook",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Second Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Seventh Avenue",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Severence Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sexodrome in Pigalle",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Shanghai Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Shannon",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Shannon Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Shape Headquarters",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "Sharpshooter",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Shenzhen 's Great Theater",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sheraton",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sheremetyevo Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Shihkang Dam",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Skibo Castle",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sniper",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "South America Bureau",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "St. Paul 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "State Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Stone Harbor",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Sunshine Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Superdome",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 2,
+    "test": 0
+   }
+  },
+  {
+   "surface": "T W A",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "TIMES SQUARE",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Taipei City Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Taipei North Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tamkang Middle School",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Tanshui Line",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Tanshui New Town",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tasse - Nonian",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Temple Mount",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The 301 national highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Alishan Mountain Railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Bay Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Beijing - Hangzhou Grand Canal",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Burma Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Chengyu expressway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Federal Parliament",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Golden Gate",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Green Island Human Rights Memorial",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Leifeng Tower",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Nanchang - Jiujiang highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The PLA Hong Kong Garrison Plaza",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Pocahontas Parkway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Qinzhou Port",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Reserve",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Secretariat Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Sun Yat - sen Memorial Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The U.S. Embassy",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Zhanjiang Port",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "The Zhengtai Railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Third Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Tiananmen",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tiananmen Square",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tianjin - Dezhou",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Times Square",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Trans-Mediterranean",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tungshih East Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tunhua South Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tuniu Elementary School",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tzu - tien Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Tzu - yun Lane",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "U.S. 460",
+   "verdict": "LOC",
+   "reason": "route:number",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "U.S. 460 's",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "U.S. 58",
+   "verdict": "LOC",
+   "reason": "route:number",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "UN",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "US 460",
+   "verdict": "LOC",
+   "reason": "route:number",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "US 60 / I 64",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "UVA",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Underground",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Valley Ranch",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "Vatican",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 6,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Vermont - Slauson",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Vermont - Slauson Shopping Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Vincennes",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "WTC",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 3,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Wall Street",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 8,
+    "valid": 1,
+    "test": 2
+   }
+  },
+  {
+   "surface": "Wanhua - Panchiao",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Warsaw Trade Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Waterstones",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Watkins Landing",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Wenceslas Square",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "West Dawang Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "West Wing",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Wetland Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 3,
+    "test": 0
+   }
+  },
+  {
+   "surface": "White House",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 6,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Whitney",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Wind Cave National Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Windsor Castle",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Winterfield Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Woods Drive",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "World Trade Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Wrigley Field",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Xiangyu",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Xiaolangdi",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Xingdong Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Yachtsman Resort",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Yimin Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Yin Shan Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "Zijin Mountain Observatory",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "Zimbabwe Highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "`` the West Wing ''",
+   "verdict": "DROP",
+   "reason": "nonentity:other",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   },
+   "note": "TV 프로그램"
+  },
+  {
+   "surface": "a JC Penney 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "an Abu Ghraib",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "bobmart",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "had a flea",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "interstate ninety - four",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "la rue de la Grande Truanderie",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "passed away",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue Beaubourg",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue Marie - Stuart",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue Saint - Denis",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 12,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue Tire - Boudin",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue Trousse - Nonain",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue de la Croix des Petits - Champs",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue de la Pute - y - muse",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rue du Beaujolais",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "rues Merdeuses",
+   "verdict": "LOC",
+   "reason": "route:lead",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "that City Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "that Jingguang Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the \" Taiwanese Compatriots Investment Service Center of Tianjin \"",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the 2nd Southern Freeway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the A - Ma - Gau",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Aden Harbor",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Agora Garden Conference Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Airport Prison",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Al - Aqsa Mosque",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Al - Udeid Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Al - aksa Mosque",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Alfred P. Murrah Federal Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Alishan Mountain Railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 2,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the AnaMor Towers",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Anhui - Jiangxi",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Antung Street Studio",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Art Alliance",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Atrium Court",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Avenue of Stars",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 4,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Baghdad Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Baghdad International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Ballston Corridor",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Bay Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 4,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Beijing - Kowloon",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Beijing - Kowloon Railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Beijing - Kowloon railroad",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Beijing Institute of Civil Engineering and Architecture",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Berlin Olympic Stadium",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Berlin Wall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Borishely Coal Mine",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the British Museum",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Brooklyn Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the CKS Memorial",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the CNN Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Cabinet Room",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Charter Oak Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Chiang Kai - shek Memorial",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the China Shipping Mansion",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the China World Trade Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Chiuchiungken Forest Paths",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Chunlei kindergarten",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Club 88",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Criminal Courts Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Criterion Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Diaoyutai State Guest House",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Diaoyutai State Guesthouse",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Dulles Toll road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Embarcadero Freeway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Eric 's Crossing",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Erics Crossing",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Ertan Water Power Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Fangchenggang Port",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Fangfei Garden",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Fenghua Garden",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Fourth Nuclear Power Plant",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 11,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Fourth Nuclear Power Plant 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the G Street Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Golden Gate",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Golden Gate Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Golden State Freeway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Governor - General 's Residence",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Governor General 's Mansion",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Grand Boulevard Plaza",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Grand Canal",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 5,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Grand Hotel",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Great Hall Of The People",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Great Hall Of the People",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Great Hall of the People",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Great Hussein Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Great Nanchang bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Great People 's Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Guomao Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Hailar airfield",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Haram al - Sharif",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Hijaz road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Holiday Inn",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Hotel Palau",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Hsinchu Science Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Huguenot Trail",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Human Rights Memorial",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Hundred Regiments Offensive Museum",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the International Conference Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the International Space Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Jindao Refined Rice Processing Factory",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Jingguang Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Jinpu Line",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Jiujiang Railway Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Jiujiang Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Karada bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Key Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Khobar Towers",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Kuandu Nature Reserve",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Kuantu Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Kuantu Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Le Tian Hotel",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Lefortovo Prison",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Liao Tianding Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Ling'ao Nuclear Power Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Long Beach Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Los Angeles State and County Arboretum",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Lu jiatuo Mine",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Lu jiatuo Mine 's",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Lu jiatuo mine",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Lungshan Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the MRT station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Mackay Hospital",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the Marine Life Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Mecca Markets",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Meiguan Expressway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Meiji Shrine",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Minchuan or the Second Macarthur Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Mucha Zoo",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Museum of Contemporary Art",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Nanning - Fangchenggang railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the National Mall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Naval Hospital",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Naval Observatory",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the New Golden Triangle Mall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the New York Academy of Art",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the New York National Tennis Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the New York Stock Exchange",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Nicaraguan National Assembly",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Norfolk Naval Air Station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Norfolk Naval station",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the North Pole",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Novel Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Ocean Park",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Ocean Theater",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Old Tan Lan Trail",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Orange County Museum of Art",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Oval Office",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Palace of the Revolution",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Palais - Royal",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Palestine Hotel",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Panama Canal",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Port of Norfolk",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Port of Taichung",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Portsmouth Naval Hospital",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Presidential Palace",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Public Insurance Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Qassebi and Turki Al Ahmad roads",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Quanzhou - Xiamen and Xiamen - Zhangzhou expressways",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Ramstein Air Base",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Richmond International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Robert Taylor Homes",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Rose Bowl",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Rose Garden",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the S - bahn",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Saddam Hussein International Airport",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the San Francisco - Oakland Bay Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the San Mateo Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Science Museum",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Second Northern Freeway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Securities Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Semiconductor Factory",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Shaanxi International Exhibition Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Shanghai International Finance Institute",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Shanghai Securities Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Shenzhen Gymnasium",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Star Cafe",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the State Department",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Suez Canal",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Summer Palace",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Sun Ball",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Supreme Court",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 3,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Sydney City Hall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Taipei - Ilan Expressway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Taipei - Ilan Highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Taipei Financial Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Taipei Guest House",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Taipei Ilan Highway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Taipei International Convention Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tangshan Sports Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tanshui Line",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Tanshui New Town",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Third Ring Road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Tianjin - Taiwan Trade Co-operation Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Time Life Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tokyo Handicapped Integrated Sports Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tongpu Railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tongpu railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tri-Service Stadium",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Tuntex Building",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the U.S. Capitol",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 1
+   }
+  },
+  {
+   "surface": "the U.S. Consulate",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the U.S. Embassy",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 2,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the UN",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the United Nations",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 12,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Valley Ranch",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 0,
+    "test": 2
+   }
+  },
+  {
+   "surface": "the Vermont - Slauson Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Virginia Museum of Fine Arts",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Washington Mall",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Waterfront Promenade",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the West Moor",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Western War Plaza",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "conflict",
+   "decided_by": "human",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Wetland Park Exploration Center",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the White House",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 39,
+    "valid": 4,
+    "test": 5
+   }
+  },
+  {
+   "surface": "the White house",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Wuhan - Jiujiang",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Wuhu arena",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Yangtze River Bridge",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Yingtan - Xiamen",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Yukuang Nanshan Temple",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Zhejiang - Jiangxi",
+   "verdict": "LOC",
+   "reason": "route:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Zhengtai Line",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Zhengtai Railway",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 9,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Zhongnanhai Purple Light Pavilion",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Zijin Mountain Astronomical Observatory",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 3,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the Zuo Xiu school",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the `` Eiffel Tower",
+   "verdict": "ORG",
+   "reason": "structure:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the eastern ring road",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the elk 's lodge",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "the oval office",
+   "verdict": "ORG",
+   "reason": "structure:world",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 0,
+    "valid": 1,
+    "test": 0
+   }
+  },
+  {
+   "surface": "this \" Golden Waterway \"",
+   "verdict": "LOC",
+   "reason": "route:head",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "two",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  },
+  {
+   "surface": "your apostolate",
+   "verdict": "DROP",
+   "reason": "noise:source",
+   "agreement": "high",
+   "decided_by": "models",
+   "occurrences": {
+    "train": 1,
+    "valid": 0,
+    "test": 0
+   }
+  }
+ ]
+}
