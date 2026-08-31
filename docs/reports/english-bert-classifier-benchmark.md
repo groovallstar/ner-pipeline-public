@@ -11,6 +11,23 @@
 - 한국어·일본어·베트남어 동일 셋업:
   `docs/reports/{korean,japanese,vietnamese}-bert-classifier-benchmark.md`
 
+## 이 표의 수치가 속한 gold 세대
+
+**이 리포트의 모든 수치는 gold 세대 1 로 잰 것이며 현행 코퍼스로는 재현되지
+않는다.** 측정 뒤 정답이 두 번 바뀌었다.
+
+| 언제 | 무엇이 바뀌었나 | 이 표에 미치는 영향 |
+|---|---|---|
+| 2026-08-26 (#225) | 엔티티 밖 문장부호를 엔티티 안으로 라벨하던 결함을 없앴다 (전수 80,288건) | 같은 예측이 다르게 채점된다. `dataset_fingerprint` 는 안 바뀌므로 비교 유효성 게이트가 이 경계를 못 잡는다 |
+| 2026-08-31 (#236·#239) | 원본 `FAC` 를 전량 `ORG` 로 태우던 것을 표면별로 `ORG`·`LOC`·삭제로 갈랐다 | `LOC` +274 · `ORG` −289 span. `dataset_fingerprint` 가 `39cb0f9e9c16f265` → `258166d6972c8144` 로 바뀌어 새 런과의 비교는 자동 거부된다 |
+
+데이터 경로도 그 사이 `pii_all.jsonl` 에서 `origin.jsonl` 로 개명됐다(#238).
+아래 본문은 측정 당시 표기를 그대로 둔다 — 조건을 사후에 고쳐 적으면 이 표가
+어느 조건에서 나왔는지가 흐려지기 때문이다.
+
+현행 코퍼스의 실측값·지문과 세대별 이력은
+`docs/reports/english-ner-corpus-spec.md` 에 있다.
+
 ## 요약
 
 - **baseline = `roberta-base`** — NER-5 strict micro-F1 median **0.8795**,
