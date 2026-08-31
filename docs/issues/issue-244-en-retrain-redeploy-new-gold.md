@@ -1,6 +1,7 @@
 # issue-244: EN 새 gold 재학습·재출하
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/244
+- PR: https://github.com/groovallstar/ner-pipeline/pull/245
 - 브랜치: `feat/issue-244-en-retrain-redeploy-new-gold`
 - 승인일: 2026-08-31 (수락 기준 4개 승인)
 
