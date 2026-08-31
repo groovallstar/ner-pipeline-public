@@ -1,7 +1,7 @@
 # issue-239: EN FAC 분할 디스크 코퍼스 이동
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/239
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/242
 - 브랜치: `feat/issue-239-en-fac-disk-corpus-migration`
 - 승인일: 2026-08-31
 
@@ -197,7 +197,8 @@ diff 에 안 남는데, 실물과 원장이 갈리면 검사가 붉어진다.
 
 ## 관련 커밋
 
-<!-- PR 직전 채움 -->
+- `feat(augmenters)`: 스크립트 · 원장 · 원장 검사 · 병합본 골든 갱신
+- `docs(issues)`: 설계와 검증 결과 · 반박자 비차단 기록
 
 ## 후속 작업
 
