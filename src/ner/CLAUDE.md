@@ -89,7 +89,7 @@ K-fold 실험 비교 유효성 게이트 (재학습 0회). `fold*/metrics.json`�
 
 - **KO·JA·VI 공통**: canonical 10종 평면 = NER 5종(`PER/LOC/ORG/PROD/EVT`) + PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)
 - **KO**: NER 5종 + `DAT` 은 KLUE 유래(`PROD/EVT` 는 LLM 재라벨 증분, TI/QT 드롭), PII 4종(`EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 합성 주입
-- **EN**: NER 5종 + `DAT` 은 OntoNotes5 유래(재라벨 없음 — 원천이 `PRODUCT`·`WORK_OF_ART`·`EVENT` 를 이미 갖고 있다. 18종 중 9종 드롭), PII 4종은 합성 주입 — KO 와 같은 구조다. LOC/ORG 경계는 JA·VI 관례(`FAC`→`ORG`)를 따르고 PII 는 미국 단일 체계다
+- **EN**: NER 5종 + `DAT` 은 OntoNotes5 유래(재라벨 없음 — 원천이 `PRODUCT`·`WORK_OF_ART`·`EVENT` 를 이미 갖고 있다. 18종 중 9종 드롭), PII 4종은 합성 주입 — KO 와 같은 구조다. LOC/ORG 경계는 canonical §3 인프라 규칙대로 **개별 구조물은 `ORG`, 여러 지점을 잇는 경로는 `LOC`** 이며 원본 `FAC` 를 표면별 판정 표로 가른다. PII 는 미국 단일 체계다
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 코딩 컨벤션
