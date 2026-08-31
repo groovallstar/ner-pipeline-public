@@ -46,10 +46,10 @@ logger = logging.getLogger(__name__)
 
 # 언어별 기본값 (round 2 deep-interview lock-in)
 DEFAULT_DATA = {
-    'ja': 'data/stockmark/pii_all.jsonl',
+    'ja': 'data/stockmark/origin.jsonl',
     'vi': 'data/wikiann_vi/origin.jsonl',
-    'ko': 'data/klue/pii_all.jsonl',
-    'en': 'data/ontonotes_en/pii_all.jsonl',
+    'ko': 'data/klue/origin.jsonl',
+    'en': 'data/ontonotes_en/origin.jsonl',
 }
 DEFAULT_MODEL = {
     'ja': 'tohoku-nlp/bert-base-japanese-v3',

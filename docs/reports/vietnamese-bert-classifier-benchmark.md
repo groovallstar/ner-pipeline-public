@@ -263,7 +263,7 @@ fold0만 eval_loss ~2.17에 고착(all-O, F1=0)하고 나머지 4-fold는 정상
 ## 재현
 
 ```bash
-ls data/wikiann_vi/pii_all.jsonl   # 중복 제거 후 38,371 (생성은 augmenters, gitignore)
+ls data/wikiann_vi/origin.jsonl   # 중복 제거 후 38,371 (생성은 augmenters, gitignore)
 uv sync                            # pyvi 포함
 # 단일 모델 5-fold (fold 0..4 반복 후 pooling)
 for f in 0 1 2 3 4; do

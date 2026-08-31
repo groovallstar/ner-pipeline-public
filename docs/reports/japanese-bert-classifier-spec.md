@@ -83,7 +83,7 @@ uv add fugashi unidic-lite && uv sync
 # 10-fold 학습 + 임계값 fit/apply
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   CUDA_VISIBLE_DEVICES=0 uv run python -m ner.classifier --lang ja \
-    --data data/stockmark/pii_all_phonediv.jsonl \
+    --data data/stockmark/origin.jsonl \
     --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
     --kfold 10 --fold-index ${fold} --seed 42 \
     --fit-threshold \

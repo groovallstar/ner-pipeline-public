@@ -4,7 +4,7 @@
 
     python -m ner.augmenters.ontonotes_en.merge_splits \
         --input-dir data/ontonotes_en/pii \
-        --output data/ontonotes_en/pii_all.jsonl
+        --output data/ontonotes_en/origin.jsonl
 
 ## 왜 합치나
 

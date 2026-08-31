@@ -8,6 +8,7 @@
 argparse 가 인자 파싱 단계에서 끝내며 허용 목록을 그대로 뱉으므로, 학습을
 시작하지 않고도 계약을 읽을 수 있다.
 """
+import os
 import re
 
 import pytest
@@ -15,6 +16,10 @@ import pytest
 from ner.classifier.__main__ import DEFAULT_DATA, DEFAULT_MODEL, main
 
 SUPPORTED = ('ja', 'vi', 'ko', 'en')
+# 저장소 루트 — 기본 경로가 루트 기준 상대경로라 여기서 풀어 존재를 본다.
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+_DATA_ROOT = os.path.join(_REPO, 'data')
 
 
 @pytest.mark.parametrize('lang', SUPPORTED)
@@ -30,7 +35,32 @@ def test_defaults_cover_exactly_the_supported_languages():
 
 def test_en_points_at_the_merged_corpus():
     """en 은 split 별 파일이 아니라 병합본을 본다 — 재분할이 전제이기 때문."""
-    assert DEFAULT_DATA['en'] == 'data/ontonotes_en/pii_all.jsonl'
+    assert DEFAULT_DATA['en'] == 'data/ontonotes_en/origin.jsonl'
+
+
+def test_every_default_is_named_origin_jsonl():
+    """네 언어의 gold 파일명이 `origin.jsonl` 하나로 통일돼 있다.
+
+    언어마다 이름이 갈리면 코드가 가리키는 경로와 실재가 어긋나도 조용하다 —
+    실제로 ja 기본값이 없는 파일(`pii_all.jsonl`)을 가리킨 채로 남아 있었고,
+    그 언어를 기본값으로 돌릴 때에야 드러났다. 이름 규칙을 문자열로 고정해
+    다음에 한쪽만 바뀌는 것을 막는다.
+    """
+    for lang in SUPPORTED:
+        assert DEFAULT_DATA[lang].endswith('/origin.jsonl'), lang
+
+
+@pytest.mark.skipif(not os.path.isdir(_DATA_ROOT),
+                    reason=f'dataset root not present: {_DATA_ROOT}')
+@pytest.mark.parametrize('lang', SUPPORTED)
+def test_default_data_path_exists(lang):
+    """기본 경로가 **실재하는 파일**을 가리킨다.
+
+    `data/` 는 gitignore 라 CI 에 없다 — 그때는 skip 한다(약화 아님, 사유
+    출력). 로컬에서는 이 검사가 경로 문자열과 디스크를 잇는 유일한 자리다.
+    """
+    path = os.path.join(_REPO, DEFAULT_DATA[lang])
+    assert os.path.isfile(path), f'{lang}: {DEFAULT_DATA[lang]} is missing'
 
 
 def test_lang_option_accepts_exactly_the_supported_languages(
