@@ -26,7 +26,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 LEDGER = (
-    REPO / 'certified' / 'classifier' / 'en' / 'backbone-bench'
+    REPO / 'certified' / 'classifier' / 'en' / 'roberta-3seed'
     / 'roberta_base_seed42' / 'metrics.json'
 )
 PACKAGE = Path('/data/ner/en')
@@ -93,11 +93,24 @@ def test_ruler_matches_ledger(pkg, ledger):
 
 
 def test_split_sizes_are_the_locked_ones(pkg):
-    """분할 크기와 데이터 지문은 그 자체가 고정값이다."""
+    """분할 크기와 데이터 지문은 그 자체가 고정값이다.
+
+    **네 상수의 출처는 코퍼스이지 run 이 아니다.** 배포된 `metrics.json` 에서
+    베껴 오면 이 검사가 검사 대상의 전사가 되어, 잘못된 코퍼스로 학습한
+    패키지도 자기 자신과는 언제나 일치한다.
+
+    - `data_fingerprint`: `dataset_fingerprint(load_jsonl(
+      'data/ontonotes_en/origin.jsonl'))` 를 직접 돌린 값
+    - 분할 셋: 코퍼스 76,378 행을 CLI 가 선언한 비율(valid 0.1 / test 0.1)로
+      나눈 값이다. 10% 두 몫은 내림해 각 7,637 이고 나머지가 train 61,104 다
+
+    어긋나면 상수를 고칠 것이 아니라 조사한다 — 코퍼스가 바뀌었거나, 분할
+    인자가 바뀌었거나, 패키지가 다른 데이터로 학습된 run 에서 나온 것이다.
+    """
     assert pkg['train_samples'] == 61104
     assert pkg['valid_samples'] == 7637
     assert pkg['test_samples'] == 7637
-    assert pkg['data_fingerprint'] == '39cb0f9e9c16f265'
+    assert pkg['data_fingerprint'] == '258166d6972c8144'
 
 
 def test_test_gold_is_the_same_gold(pkg, ledger):

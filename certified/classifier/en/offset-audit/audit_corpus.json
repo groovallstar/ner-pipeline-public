@@ -1,21 +1,21 @@
 {
-  "data": "/work/git/ner-pipeline/data/ontonotes_en/pii_all.jsonl",
+  "data": "/work/git/ner-en/data/ontonotes_en/origin.jsonl",
   "lang": "en",
   "tokenizer": "roberta-base",
   "max_length": 256,
   "audit": {
     "rows": 76378,
-    "entity_labeled_tokens": 928564,
+    "entity_labeled_tokens": 928516,
     "boundary_violations": {
       "total": 0,
       "by_kind": {},
       "by_kind_type": {}
     },
     "roundtrip": {
-      "entities": 167871,
-      "recovered": 166815,
+      "entities": 167856,
+      "recovered": 166800,
       "missed": 1056,
-      "ceiling": 0.9937094554747395,
+      "ceiling": 0.9937088933371461,
       "per_type": {
         "CREDIT_CARD": {
           "recovered": 22948,
@@ -43,14 +43,14 @@
           "ceiling": 1.0
         },
         "LOC": {
-          "recovered": 21211,
+          "recovered": 21485,
           "missed": 460,
-          "ceiling": 0.978773476074016
+          "ceiling": 0.9790385053542948
         },
         "ORG": {
-          "recovered": 16857,
+          "recovered": 16568,
           "missed": 522,
-          "ceiling": 0.969963749352667
+          "ceiling": 0.9694558221181978
         },
         "PER": {
           "recovered": 19218,

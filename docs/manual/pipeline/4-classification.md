@@ -397,14 +397,14 @@ EN 은 **학습과 포장을 두 단계로 나눈다.** 학습은 CLI 가 그대
 된다.
 
 ```bash
-# 1) 학습 — 백본 벤치마크의 seed42 조건 그대로
+# 1) 학습 — 3-seed baseline 의 seed42 조건 그대로
 python -m ner.classifier --lang en --group-key orig \
     --seed 42 --train-seed 42 --precision bf16 \
-    --output-dir results/classifier/en/deploy-trainseed42
+    --output-dir results/classifier/en/roberta-3seed/roberta_base_seed42
 
 # 2) 포장 — /data/ner/en 으로
 python src/ner/scripts/build_ner_prod.py \
-    --run-dir results/classifier/en/deploy-trainseed42 --lang en
+    --run-dir results/classifier/en/roberta-3seed/roberta_base_seed42 --lang en
 ```
 
 | 아티팩트 | 위치 | 역할 |
@@ -412,7 +412,7 @@ python src/ner/scripts/build_ner_prod.py \
 | 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
 | 배포 추론 | `src/ner/scripts/eval_en_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. 절대경로만. 기본 레이아웃 `/data/ner/en/{model,data/test.jsonl}`. 임계값 파일이 없으면 raw 폴백 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
-| 원장 | `certified/classifier/en/deploy-trainseed42/` | 배포런의 metric. 백본 벤치마크 원장(`backbone-bench/`)과 같은 데이터·분할이라 나란히 놓을 수 있다 |
+| 원장 | `certified/classifier/en/deploy-trainseed42/` | 배포된 패키지의 `metrics.json` 사본. 배포본이 나온 run 은 `certified/classifier/en/roberta-3seed/roberta_base_seed42/` 에 있고, 같은 데이터·분할이라 나란히 놓을 수 있다 |
 | 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 프로비넌스 정합 · 원장과 같은 자로 쟀는지 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
 
 **포장 스크립트가 분할을 다시 유도하는 이유** — 학습 CLI 는 분할 JSONL 을
@@ -473,8 +473,8 @@ python src/ner/scripts/build_ner_prod.py \
 | 원장 | `certified/classifier/ko/deploy-trainseed42/` | 배포런의 metric |
 | 검사 | `tests/ner/classifier/test_ko_deploy_package.py` | 프로비넌스 정합 · 분할 고정값 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
 
-**원장이 배포 run 자신인 이유** — EN 은 백본 벤치(`backbone-bench/`)라는 선행
-원장이 있어 패키지를 그것과 견줬다. KO 에 있는 원장은 10-fold pooled 뿐이라
+**원장이 배포 run 자신인 이유** — EN 은 3-seed baseline(`roberta-3seed/`)이라는
+선행 원장이 있어 패키지를 그것과 견줬다. KO 에 있는 원장은 10-fold pooled 뿐이라
 자가 다르다: 교차검증 추정치와 단일 홀드아웃 수치를 같은 표에 놓는 것은 대조가
 아니라 혼동이다. 그래서 배포 run 의 `metrics.json` 자체를 원장으로 승격하고,
 검사는 *재현*이 아니라 *프로비넌스 정합*(패키지가 자기가 나온 run 과 어긋나지

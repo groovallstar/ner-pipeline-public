@@ -230,10 +230,5 @@
       "recall": 0.7193396226415094,
       "support": 212
     }
-  },
-  "deploy_package": {
-    "source_run_dir": "results/classifier/en/roberta-3seed/roberta_base_seed42",
-    "leaked_test_groups": 0,
-    "split_rederived": true
   }
 }

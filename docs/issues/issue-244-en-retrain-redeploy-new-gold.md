@@ -64,15 +64,18 @@ en 배포 패키지(`/data/ner/en/`)를 지금 코드와 함께 서비스할 수
 | 옛 원장 크기 | `certified/classifier/en/` 네 디렉토리 (약 280KB) |
 | 옛 scratch 크기 | `results/classifier/en/` 약 1.9GB (gitignore) |
 
-코퍼스 실측·지문·세대 이력의 정본은 `docs/reports/english-ner-corpus-spec.md` 다.
+코퍼스 실측·지문의 정본은 `src/ner/augmenters/ontonotes_en/data/`
+`fac_disk_migration_ledger.json` 과 그것을 디스크와 대조하는 골든 테스트다. 세대
+이력은 `docs/reports/english-bert-classifier-benchmark.md` 의 §이 표의 수치가 속한
+gold 세대 에 있다.
 
-## 수락 기준 (승인 전 초안)
+## 수락 기준
 
-- [ ] **1. 재학습이 원래 결함을 실제로 지웠다.** 현행 코퍼스와 새 체크포인트로
+- [x] **1. 재학습이 원래 결함을 실제로 지웠다.** 현행 코퍼스와 새 체크포인트로
   `src/ner/scripts/audit_offset_alignment.py` 를 돌려 경계 위반(`zero_at_end`)
-  0 · gold 왕복 복원율이 canonical 10종 어느 타입도 #225 값 미만이 아님을
-  확인하고 그 감사 JSON 을 새 원장에 승격한다.
-- [ ] **2. 3-seed 가 현행 gold 로 돌고 baseline 이 박힌다.** 세 run 모두
+  0 · gold 왕복 복원 **실패 건수**가 canonical 10종 어느 타입도 #225 값을
+  초과하지 않음을 확인하고 그 감사 JSON 을 새 원장에 승격한다.
+- [x] **2. 3-seed 가 현행 gold 로 돌고 baseline 이 박힌다.** 세 run 모두
   `data_fingerprint == 258166d6972c8144`. **이 지문은 `--data` 전 행에서
   계산되므로 "같은 코퍼스 파일을 읽었다"의 증거이지 분할의 증거가 아니다.**
   NER-5 strict micro-F1 median 과 std 를 새 baseline 으로 박는다. **성능 문턱은
@@ -82,21 +85,20 @@ en 배포 패키지(`/data/ner/en/`)를 지금 코드와 함께 서비스할 수
   만들지 않는다** — 코퍼스가 현행 세대라는 것은
   `test_the_corpus_matches_the_after_fingerprints` 와 `test_merged_corpus.py`
   가 이미 보증한다. `backbone_summary --check` 의 시각 정합만 그대로 돌린다.
-- [ ] **3. 배포 패키지가 새 run 에서 나오고 `data_path` 가 산다.** `data_path`
+- [x] **3. 배포 패키지가 새 run 에서 나오고 `data_path` 가 산다.** `data_path`
   존재의 집행 주체는 `build_ner_prod.py` 완주로 단일화한다(배포 테스트에서 다시
   보면 cwd 에 따라 오탐). `test_en_deploy_package.py` 의 하드코딩 상수 넷의
   출처를 **코퍼스로** 못 박는다 — 지문은 `dataset_fingerprint` 를 직접 돌린
   값, 분할 크기 셋은 76,378 행을 선언된 비율로 나눈 값이다. 새 run 의
   `metrics.json` 에서 베끼면 검사가 대상의 전사가 된다. 어긋나면 상수를 고칠
   게 아니라 조사한다. 같은 파일 `:29` 의 `LEDGER` 경로도 새 원장으로 갱신.
-- [ ] **4. 옛 원장·옛 모델 산출물이 제거되고 매달린 출처 선언이 안 남는다.**
+- [x] **4. 옛 원장·옛 모델 산출물이 제거되고 매달린 출처 선언이 안 남는다.**
   `certified/classifier/en/` 의 네 디렉토리와 `results/classifier/en/` 의 옛
-  run 을 지우고 새 run 을 승격한다. 제거 경로를 가리키는 `<!-- certified: -->`
-  선언 여덟 군데를 같은 커밋에서 정리하고, `issue-221` 의 디렉토리 선언
-  `classifier/en` 은 세대별 경로로 좁힌다 — 그대로 두면 새 원장 승격 후 세대 1
-  수치가 세대 3 원장으로 조용히 재대조된다. 집행은 `docs/**` 전수를 훑어
-  `certified/X` 존재를 보는 테스트다(커밋 게이트의 인용 대조는 diff 범위라
-  문서를 안 건드린 삭제 커밋에서 침묵한다).
+  run 을 지우고 새 run 을 승격해, 그 아래에 세대 3 원장만 남게 한다. 제거
+  경로를 가리키는 `<!-- certified: -->` 선언 여덟 군데는 같은 커밋에서
+  지운다. 집행은 `docs/**` 전수를 훑어 `certified/X` 존재를 보는 테스트다
+  (커밋 게이트의 인용 대조는 diff 범위라 문서를 안 건드린 삭제 커밋에서
+  침묵한다).
 
 ## 정렬 세대 필드를 안 만드는 이유
 
@@ -210,6 +212,21 @@ BIO 라벨이 달라진다. #225 의 예로, `He works at Apple.` 의 마지막 
   sha256 을 커밋된 원장과 바이트 단위로 대조한다). **검사가 검사 대상보다
   복잡해지면 결함은 대상이 아니라 검사에 생긴다** — 이번 세션에서 정렬 세대
   필드를 뺀 것과 같은 판단이다.
+- **2026-08-31**: 기준 1 의 무회귀 판정을 복원율(비율)에서 복원 실패 건수로
+  바꿨다. FAC 재라벨이 타입별 모수를 옮겨(`ORG` −289 · `LOC` +274) 두 세대의
+  비율이 같은 분모 위에 서지 않는다. 실제 감사에서 `ORG` 비율만
+  0.969964 → 0.969456 으로 내려갔는데, 빠진 289개가 전부 복원에 성공하던
+  엔티티라 같은 522개 실패의 지분이 커진 것이었다. 열 타입 전부 실패 건수가
+  그대로다(전체 1,056 → 1,056). 정렬이 더 잃었는지를 묻는 원래 질문에 직접
+  답하는 값은 건수여서, 모수가 움직여도 뜻이 유지된다.
+- **2026-08-31**: 기준 4 의 "`issue-221` 의 디렉토리 선언을 세대별 경로로
+  좁힌다" 를 뺐다. 그 조항은 기준 4 자신이 집행 주체로 세운 전수 존재 테스트와
+  서로를 부순다 — 없는 세대 경로로 좁히면 그 테스트가 매달린 선언으로 읽고
+  실패시킨다. 남는 위험은 세대 1 표에 새 수치를 적을 때 게이트가 선언 없이
+  원장 전체로 떨어져 무관한 값과 우연히 맞는 경우인데, 그걸 막으려면 원장에
+  수치 없는 묘비 디렉토리를 두고 카탈로그를 공집합으로 만드는 관례가 하나
+  필요하다. 자가 바뀐 뒤의 세대 1 수치는 애초에 새로 주장할 값이 아니라 그
+  방어가 지킬 것이 없어, 관례를 만들지 않고 선언만 지운다.
 - **2026-08-31**: `docs/reports/english-ner-corpus-spec.md` 를 만들었다가
   지웠다. 코퍼스 실측값을 산문으로 한 벌 더 두는 것인데, 그 값은 원장과 골든
   테스트가 이미 기계로 잡고 있어 아무도 안 지키는 사본이 느는 일이었다. 이
@@ -245,6 +262,104 @@ BIO 라벨이 달라진다. #225 의 예로, `He works at Apple.` 의 마지막 
 - 3-seed 중 배포되는 하나만 지문이 대조된다(기준 3 의 상수). 나머지 둘은
   아무도 안 보므로 median 이 이론상 오염될 수 있다. 실현 경로가 `--data` 를
   일부러 딴 파일로 돌리는 것뿐이라 감수한다.
+
+## 검증
+
+네 기준 모두 통과했다. 수치의 정본은 새 원장이고, baseline 표는
+`docs/reports/english-bert-classifier-benchmark.md` §현행 gold 의 `roberta-base`
+baseline 에 있다.
+
+### 기준 1 — 정렬이 더 잃지 않았다
+
+현행 코퍼스 76,378행 · 엔티티 167,856 전수를 `roberta-base` 토크나이저로 감사했다.
+경계 위반 라벨은 **0건**이고, gold 왕복 복원 실패는 **열 타입 전부 세대 2 와 같다.**
+
+| 타입 | 세대 2 실패 | 세대 3 실패 | 세대 2 모수 | 세대 3 모수 |
+|---|---:|---:|---:|---:|
+| PER | 42 | 42 | 19,260 | 19,260 |
+| LOC | 460 | 460 | 21,671 | 21,945 |
+| ORG | 522 | 522 | 17,379 | 17,090 |
+| PROD | 13 | 13 | 1,990 | 1,990 |
+| EVT | 0 | 0 | 946 | 946 |
+| DAT | 16 | 16 | 13,926 | 13,926 |
+| EMAIL | 1 | 1 | 24,105 | 24,105 |
+| PHONE | 0 | 0 | 23,115 | 23,115 |
+| ID_NUM | 0 | 0 | 22,529 | 22,529 |
+| CREDIT_CARD | 2 | 2 | 22,950 | 22,950 |
+| **전체** | **1,056** | **1,056** | **167,871** | **167,856** |
+
+**이 표가 이 문서에 있는 이유는 세대 2 열이 저장소의 다른 어디에도 안 남기
+때문이다.** 원본이던 `certified/classifier/en/issue225-offset-audit/` 는 기준 4 가
+지웠고, `docs/issues/issue-225-zero-length-span-boundary.md` 의 표는 건수가 아니라
+비율을 소수 넷째 자리까지만 싣는다. 세대 3 열의 정본은 새 원장
+(`certified/classifier/en/offset-audit/audit_corpus.json`)이다.
+
+모수가 움직인 두 타입은 `FAC` 재라벨의 결과다 — `ORG` 는 289 를 잃고(`LOC` 로
+274 이동 · 15 삭제) `LOC` 은 274 를 얻었으며, 그 수는 마이그레이션 원장
+`fac_disk_migration_ledger.json` 의 `move`·`remove` 와 정확히 맞는다. 빠진 289 가
+전부 복원에 성공하던 엔티티라 `ORG` **비율**만 0.969964 에서 0.969456 으로
+내려갔는데, 같은 522 건 실패의 지분이 커진 것이지 정렬이 더 잃은 것이 아니다.
+이 관찰이 기준 1 의 판정을 비율에서 건수로 바꾸게 했다(결정 로그).
+
+배포 체크포인트를 test 7,637행에 재평가한 결과도 함께 승격했다
+(`audit_deployed_ckpt.json`). strict overall F1 이 학습 경로·포장 경로·감사 경로
+셋에서 모두 0.9301 로 같아, 감사 스크립트가 기존 평가 경로와 같은 답을 낸다.
+
+### 기준 2 — 3-seed 가 현행 gold 로 돌았다
+
+세 run 모두 `data_fingerprint = 258166d6972c8144` 단일값이고
+(`median_summary.json` 의 `data_fingerprints` 가 원소 하나짜리 배열이다),
+`backbone_summary --check` 가 세 run 의 시각 정합을 통과시켰다(gap 49~51초).
+NER-5 strict micro-F1 median 은 리포트 표에 박았다. 세대 1 값과의 대소는
+해석하지 않는다.
+
+집행에 새 코드를 만들지 않았다. 코퍼스가 현행 세대라는 것은
+`test_the_corpus_matches_the_after_fingerprints` 가 디스크 네 파일의 sha256 을
+바이트 단위로 대조해 이미 보증한다.
+
+### 기준 3 — 배포 패키지가 새 run 에서 나왔다
+
+`build_ner_prod.py` 가 완주했다. 그 완주 자체가 `data_path` 가 살아 있다는
+집행이다 — 스크립트가 그 경로를 열어 분할을 다시 유도하고 지문·크기를 대조하며,
+죽은 경로였다면 `dataset not found` 로 멈춘다. 재유도한 분할이 run 과 일치했고
+(`61104/7637/7637`) test 그룹 누출은 0 이다.
+
+`test_en_deploy_package.py` 의 상수 넷은 출처를 코퍼스로 못 박아 docstring 에
+남겼다 — 지문은 `dataset_fingerprint(load_jsonl('data/ontonotes_en/origin.jsonl'))`
+직접 실행값, 분할 셋은 76,378 행을 선언 비율로 나눈 값이다. 새 run 의
+`metrics.json` 에서 베끼지 않았다. `LEDGER` 경로는 새 원장의
+`roberta-3seed/roberta_base_seed42/metrics.json` 으로 옮겼다.
+
+배포본은 점수가 아니라 seed 로 골랐다 — `train_seed 42` 다. 결과적으로 그것이
+median draw 이기도 하지만, 셋 중 최고를 고르면 배포 선택 자체가 seed 뽑기가 된다.
+
+### 기준 4 — 세대 3 원장만 남았다
+
+`certified/classifier/en/` 의 옛 네 디렉토리와 `results/classifier/en/` 의 옛
+run 을 지우고 새 산출물을 승격했다. 매달린 `<!-- certified: -->` 선언 여덟
+군데를 같은 커밋에서 지웠고, `tests/test_certified_declarations.py` 가 `docs/**`
+전수를 훑어 남은 선언이 전부 원장의 실재 경로를 가리키는지 본다. 그 테스트는
+선언을 하나도 못 찾는 상태(정규식이나 경로가 어긋난 경우)에서 조용히 통과하지
+않도록 커버리지 0 을 먼저 막는다.
+
+| 원장 경로 | 무엇 |
+|---|---|
+| `classifier/en/roberta-3seed/` | 3-seed run metric 셋 + `median_summary.json` |
+| `classifier/en/offset-audit/` | 코퍼스 전수 정렬 감사 + 배포 체크포인트 재평가 |
+| `classifier/en/deploy-trainseed42/` | 배포된 패키지의 `metrics.json` 사본 |
+
+### 테스트
+
+`uv run pytest tests/ --ignore=tests/server` · `uv run ruff check src/ tests/`
+
+## 남은 관찰
+
+- **인용 카탈로그가 git 이 아니라 디스크를 읽는다.** `gate_core.py` 의
+  `_metric_catalog` 는 주석이 "커밋된 metrics JSON (git 원장)" 이라고 적었지만
+  실제로는 작업 트리를 glob 한다. 이 이슈에서 `certified/classifier/en/backbone-bench/`
+  안에 OMC 세션 상태 JSON 이 커밋되지 않은 채 들어 있는 것을 발견했고, 그 파일의
+  수치도 카탈로그에 들어가고 있었다. 지우고 넘어갔으나 기제 자체는 그대로라
+  별건으로 둔다.
 
 ## 구현 순서
 
