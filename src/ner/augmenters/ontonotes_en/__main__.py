@@ -22,6 +22,11 @@ split 별로 파일을 가르면 파일 안에서 `split` 이 상수가 되어(�
 
 변환과 동시에 엔티티↔원본 토큰 대조를 돌리고, 하나라도 어긋나면 비영으로
 끝난다. 검사를 나중에 따로 돌리게 두면 안 돌린 산출물이 섞인다.
+
+`FAC` 판정 표의 피복도 같은 자리에서 본다 — 표에 없는 표면은 `resolve` 가
+span 단위로 세우고, 표에만 있고 코퍼스에 없는 줄은 끝에서 관측 집합과 맞춰
+잡는다. 뒤엣것만 `--partial-corpus` 로 끌 수 있고(픽스처처럼 부분 입력일
+때), 껐다는 사실이 산출 meta 에 남는다.
 """
 from __future__ import annotations
 
@@ -36,11 +41,16 @@ from ner.augmenters.ontonotes_en.convert import (
     assign_text_groups,
     check_entity_token_match,
     convert_record,
+    count_fac_surfaces,
     count_source_spans,
     load_id2label,
     source_types,
 )
-from ner.augmenters.ontonotes_en.mapping import assert_exhaustive
+from ner.augmenters.ontonotes_en.mapping import (
+    FacCoverageError,
+    assert_exhaustive,
+    assert_fac_coverage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,22 +75,33 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--splits', nargs='+', default=list(SPLIT_FILES),
                    choices=list(SPLIT_FILES),
                    help='Splits to convert (default: all)')
+    p.add_argument('--partial-corpus', action='store_true',
+                   help='Input is a subset of the corpus (a fixture), so '
+                        'skip the check that every FAC verdict-table row is '
+                        'observed. The forward check (a surface with no '
+                        'verdict) still stops the run, and the skip is '
+                        'recorded in conversion_meta.json')
     return p
 
 
 def convert_one_split(
     raw_dir: Path, split: str, id2label: dict[int, str],
-) -> tuple[list[dict], list[str], Counter]:
-    """한 split 을 레코드로 옮기고 대조 결과·원본 span 수를 함께 준다.
+) -> tuple[list[dict], list[str], Counter, Counter]:
+    """한 split 을 레코드로 옮기고 대조 결과·원본 span 수·표면 수를 준다.
 
     원본 span 수는 매핑표를 거치지 않고 태그에서 직접 센다. 쓰임은 테스트가
     그 수를 고정하는 것(`GOLDEN_SOURCE_SPANS`)과 `conversion_meta.json` 에
     남기는 것이다 — canonical 쪽 골든과 함께 두면 실패가 어느 단계에서
     났는지 갈린다.
+
+    네 번째 값은 표면별 판정 타입(`FAC`)의 관측 표면이다. 판정 표에만 있고
+    코퍼스에 없는 줄은 span 이 하나도 안 지나가 변환 도중에는 안 걸리므로,
+    끝에서 양쪽을 맞추려면 관측 집합이 따로 있어야 한다.
     """
     records: list[dict] = []
     problems: list[str] = []
     source_counts: Counter = Counter()
+    fac_surfaces: Counter = Counter()
     index = 0
     for filename in SPLIT_FILES[split]:
         with (raw_dir / filename).open(encoding='utf-8') as fh:
@@ -89,6 +110,9 @@ def convert_one_split(
                     continue
                 row = json.loads(line)
                 source_counts.update(count_source_spans(row['tags'], id2label))
+                fac_surfaces.update(count_fac_surfaces(
+                    row['tokens'], row['tags'], id2label,
+                ))
                 record = convert_record(
                     row['tokens'], row['tags'], id2label,
                     record_id=f'en-{split}-{index:06d}', split=split,
@@ -99,7 +123,7 @@ def convert_one_split(
                 records.append(record)
                 index += 1
     assign_text_groups(records)
-    return records, problems, source_counts
+    return records, problems, source_counts, fac_surfaces
 
 
 def report_duplicate_texts(by_split: dict[str, list[dict]]) -> None:
@@ -148,11 +172,13 @@ def main(argv: list[str] | None = None) -> int:
     per_split_source: dict[str, Counter] = {}
     per_split_labels: dict[str, Counter] = {}
     problems: list[str] = []
+    fac_surfaces: Counter = Counter()
 
     for split in args.splits:
-        records, split_problems, source_counts = convert_one_split(
-            args.raw_dir, split, id2label,
+        records, split_problems, source_counts, split_surfaces = (
+            convert_one_split(args.raw_dir, split, id2label)
         )
+        fac_surfaces.update(split_surfaces)
         problems += split_problems
         by_split[split] = records
         labels: Counter = Counter()
@@ -173,10 +199,32 @@ def main(argv: list[str] | None = None) -> int:
         logger.info('%s: %d sentences, %d spans -> %s',
                     split, len(records), sum(labels.values()), path)
 
-    if problems:
-        logger.error('entity/token mismatch: %d', len(problems))
-        for problem in problems[:20]:
-            logger.error('  %s', problem)
+    # 판정 표 피복 검사 — 표에만 있고 코퍼스에 없는 줄을 잡는 자리다.
+    # 반대 방향(코퍼스에만 있는 표면)은 `resolve` 가 span 단위로 이미 세웠다.
+    #
+    # `--partial-corpus` 는 이 방향만 끈다. 부분 입력(픽스처·표본)에서는 표의
+    # 대부분이 관측되지 않는 것이 정상이라 켜 두면 늘 붉기 때문이다. 끈 사실은
+    # 화면과 `conversion_meta.json` 양쪽에 남긴다 — 안 남기면 통과가
+    # "검사를 지났다" 인지 "검사가 안 돌았다" 인지 구별되지 않는다.
+    coverage_error: str | None = None
+    if args.partial_corpus:
+        logger.warning(
+            'partial corpus: FAC verdict-table coverage NOT checked '
+            '(rows in the table with no observed span are allowed)'
+        )
+    else:
+        try:
+            assert_fac_coverage(fac_surfaces, args.splits)
+        except FacCoverageError as exc:
+            coverage_error = str(exc)
+
+    if problems or coverage_error:
+        if coverage_error:
+            logger.error('%s', coverage_error)
+        if problems:
+            logger.error('entity/token mismatch: %d', len(problems))
+            for problem in problems[:20]:
+                logger.error('  %s', problem)
         for staged, _ in staged_paths:
             staged.unlink(missing_ok=True)
         logger.error('no output written (staged files removed)')
@@ -212,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
         'sentence_counts': {
             split: len(records) for split, records in by_split.items()
         },
+        'fac_surface_counts': dict(sorted(fac_surfaces.items())),
+        'fac_coverage_checked': not args.partial_corpus,
     }
     meta_path = args.output_dir / 'conversion_meta.json'
     meta_path.write_text(

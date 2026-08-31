@@ -1,11 +1,14 @@
 """영어 LLM 라벨러용 NER 프롬프트 템플릿.
 
-canonical 10 종 평면 목록(LOC = 지명·주소만, ORG = 인공 시설·조직 일체):
+canonical 10 종 평면 목록(LOC = 지명·주소·경로, ORG = 조직·개별 구조물):
   PER LOC ORG PROD EVT DAT EMAIL PHONE ID_NUM CREDIT_CARD
 
-경계는 JA·VI 관례를 따른다 — 인공 시설(공항·역·경기장·병원·박물관)은 ORG 다.
-KO 의 narrow-ORG 를 따르지 않으며, 같은 선언이
-`ner.augmenters.ontonotes_en.mapping` 에도 있다(원본 `FAC` → `ORG`).
+인프라 경계는 canonical §3 을 따른다 — **개별 구조물은 `ORG`, 여러 지점을
+잇는 경로는 `LOC`** 다. KO 의 narrow-ORG(인공 시설을 아예 버림)를 따르지
+않으며, 같은 선언이 `ner.augmenters.ontonotes_en.mapping` 에도 있다 —
+그쪽은 원본 `FAC` 를 표면별로 두 라벨로 가른다. **선언이 갈리면 검증이
+gold 와 다른 자로 재게 되므로** `tests/ner/labelers/test_en_labeler.py` 가
+이 세 자리(이 docstring · LOC 줄 · ORG 줄)를 문구로 걸어 둔다.
 
 이 라벨러의 현재 용도는 **PII 주입 결과의 교차 검증**이다. LLM 이 주입된
 문장에서 span 을 독립적으로 다시 뽑아 gold 와 대조해야 주입기가 자기 결과를
@@ -25,8 +28,8 @@ SINGLE_PROMPT_TEMPLATE = """You are an expert English named-entity recognition (
 
 ## Entity types ({entity_types})
 - PER: Person names (full name, surname, given name, nickname, stage name). Exclude titles and honorifics ("Mr.", "President", "Sen.", "Dr.")
-- LOC: **Geographic locations only** — countries, states, provinces, cities, counties, rivers, mountains, seas, islands, lakes, and street addresses (house number / building / floor). **Man-made facilities (stations, airports, hospitals, schools, museums, stadiums, bridges, highways) are ORG, not LOC**
-- ORG: Organizations and every man-made facility — companies, corporations, banks, airlines, broadcasters, **universities (the legal body, campuses and affiliated institutes alike)**, political parties, government departments, the military, courts, legislatures, international bodies, sports clubs and leagues, associations, orchestras + **stations, airports, ports, hospitals, primary/middle/high schools, museums, libraries, churches, temples, stadiums, towers, bridges, highways**
+- LOC: **Geographic locations and routes** — countries, states, provinces, cities, counties, rivers, mountains, seas, islands, lakes, street addresses (house number / building / floor), and **routes that connect places — roads, streets, avenues, highways, railway and subway lines**. **A single man-made structure (station, airport, hospital, school, museum, stadium, bridge, tunnel) is ORG, not LOC**
+- ORG: Organizations and single man-made structures — companies, corporations, banks, airlines, broadcasters, **universities (the legal body, campuses and affiliated institutes alike)**, political parties, government departments, the military, courts, legislatures, international bodies, sports clubs and leagues, associations, orchestras + **stations, airports, ports, hospitals, primary/middle/high schools, museums, libraries, churches, temples, stadiums, towers, bridges, tunnels**. **A route that connects places (road, highway, railway or subway line) is LOC, not ORG**
 - PROD: Tangible products, creative works (music, film, books, novels, comics, games, TV programmes), packaged software, and vehicles/weapons/ships/aircraft identified by model or class name. **Excluded: services, SaaS, telecom plans, online-operated games, technical standards/formats/protocols, awards and medals** (these are non-entities); company, person and facility names go to ORG/PER
 - EVT: One-off events — wars, treaties, conventions, major tournaments, named disasters and crises, revolutions, elections. A recurring league or club is ORG; a specific edition ("World Cup 2022") is EVT
 - EMAIL: Complete email addresses of the form `local@domain.TLD` (the TLD is required)
@@ -36,8 +39,8 @@ SINGLE_PROMPT_TEMPLATE = """You are an expert English named-entity recognition (
 - CREDIT_CARD: Credit card numbers (13-19 digits, spaces or hyphens allowed)
 
 ## Tie-breaking rules (apply when unsure, top to bottom)
-1. Organization / legal body / public authority / man-made facility → **ORG**
-2. Purely geographic location (country, state, city, river, mountain, island, address) → **LOC**
+1. Organization / legal body / public authority / single man-made structure → **ORG**
+2. Geographic location (country, state, city, river, mountain, island, address) or a route that connects places (road, highway, railway or subway line) → **LOC**
 3. Product / creative work / programme → **PROD**
 4. One-off event, war or treaty → **EVT**
 
@@ -64,6 +67,9 @@ Output: [{{"text": "Fleet & Leasing Management Inc.", "type": "ORG"}}, {{"text":
 
 Input: The flight landed at Los Angeles International Airport before the team drove to Dodger Stadium.
 Output: [{{"text": "Los Angeles International Airport", "type": "ORG"}}, {{"text": "Dodger Stadium", "type": "ORG"}}]
+
+Input: Traffic on Interstate 95 backed up near the Golden Gate Bridge after the Red Line stopped running.
+Output: [{{"text": "Interstate 95", "type": "LOC"}}, {{"text": "Golden Gate Bridge", "type": "ORG"}}, {{"text": "Red Line", "type": "LOC"}}]
 
 Input: American and Russian officials met in Geneva to discuss the Treaty on Open Skies.
 Output: [{{"text": "Geneva", "type": "LOC"}}, {{"text": "Treaty on Open Skies", "type": "EVT"}}]

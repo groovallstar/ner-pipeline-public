@@ -1,4 +1,4 @@
-"""전량 불변식 — 수락 기준 1·2·4 와 split·group-key·canonical 완료 조건.
+"""전량 불변식 — split·group-key·canonical 완료 조건과 `FAC` 분할의 앵커.
 
 원천(`--raw-dir`)이 없으면 통째로 건너뛴다. `data/` 는 gitignore 되므로
 클론 직후에는 데이터가 없고, 그때 실패시키면 무관한 변경까지 붉어진다.
@@ -6,34 +6,89 @@
 **골든 넘버는 이 파일에 둔다.** 변환 모듈에서 가져오면 매핑을 고칠 때 기대치도
 함께 움직여 검사가 자기참조가 된다. 매핑을 의도적으로 바꾸는 사람은 이 숫자를
 손으로 고쳐야 하고, 그 마찰이 목적이다 — 자를 바꾸면 사람이 멈춰 선다.
+
+**`LOC`·`ORG` 개별 수는 골든이 아니다.** 그 둘은 `FAC` 판정 표가 정하는 값이라
+표를 고치면 함께 움직인다 — 골든에 박으면 표를 손볼 때마다 골든도 고치게 되어
+골든이 표의 사본이 되고, 사본은 원본을 검사하지 못한다. 대신 **표에서 도출한
+기대 수**와 실제 변환 결과를 대조한다. 표를 고치면 기대값도 따라 움직이므로
+골든이 아니지만, 표면 생성·BIO 디코드·표 조회 경로가 틀어지면 어긋난다.
+
+고정하는 것은 표를 어떻게 고쳐도 안 변하는 것뿐이다 — 원본 태그 수
+(`GOLDEN_SOURCE_SPANS`)와 이 분할이 안 건드리는 canonical 타입 넷
+(`GOLDEN_UNTOUCHED_SPANS`)이다.
 """
 import json
 from pathlib import Path
 
 import pytest
 
-from ner.augmenters.ontonotes_en.convert import load_id2label
+from ner.augmenters.ontonotes_en.convert import decode_bio, load_id2label
+from ner.augmenters.ontonotes_en.mapping import (
+    FAC_VERDICTS,
+    assert_fac_coverage,
+)
 from ner.augmenters.ontonotes_en.__main__ import SPLIT_FILES, convert_one_split
 
-RAW_DIR = Path(__file__).resolve().parents[4] / 'data' / 'ontonotes_en' / 'raw'
+_ROOT = Path(__file__).resolve().parents[4]
+RAW_DIR = _ROOT / 'data' / 'ontonotes_en' / 'raw'
+TABLE_PATH = (
+    _ROOT / 'src' / 'ner' / 'augmenters' / 'ontonotes_en'
+    / 'data' / 'fac_labels.json'
+)
 
 pytestmark = pytest.mark.skipif(
     not (RAW_DIR / 'label.json').exists(),
     reason=f'OntoNotes5 source not present at {RAW_DIR}',
 )
 
-# canonical 타입별·split별 span 수. 원천 스냅샷이 고정이라 이 숫자도 고정이다.
-
-GOLDEN_SPANS = {
+# 이 분할이 건드리지 않는 canonical 타입 — 표를 어떻게 고쳐도 안 변한다.
+# `LOC`·`ORG` 는 여기 없다(위 docstring).
+GOLDEN_UNTOUCHED_SPANS = {
     'PER':  {'train': 15429, 'valid': 2020, 'test': 1988},
-    'LOC':  {'train': 16919, 'valid': 2472, 'test': 2419},
-    'ORG':  {'train': 13680, 'valid': 1855, 'test': 1930},
     'DAT':  {'train': 10922, 'valid': 1507, 'test': 1602},
     'PROD': {'train': 1580,  'valid': 214,  'test': 242},
     'EVT':  {'train': 748,   'valid': 143,  'test': 63},
 }
+EXPECTED_LABELS = frozenset({'PER', 'LOC', 'ORG', 'PROD', 'EVT', 'DAT'})
+
+# 타입 통째로 버리는 원본 타입 — **리터럴로 적는다.** 매핑표에서 읽어 오면
+# 매핑축이 등식 양변에 들어가, `DATE` 를 드롭으로 뒤집어도 기대치가 함께
+# 줄어 통과한다.
+SOURCE_TYPES_DROPPED_WHOLE = frozenset({
+    'LAW', 'NORP', 'LANGUAGE', 'TIME', 'QUANTITY', 'MONEY',
+    'PERCENT', 'ORDINAL', 'CARDINAL',
+})
+
 GOLDEN_SENTENCES = {'train': 59924, 'valid': 8528, 'test': 8262}
-GOLDEN_TOTAL_SPANS = 75733
+
+# 갈림 후보 두 그물의 규모. 원본 태그에서 다시 뽑아 대조한다.
+#
+# ① 원본이 `FAC` 와 **다른 타입으로도** 태그한 표면. 다른 타입은 매핑표가
+#    따로 라벨을 내 판정 표가 못 건드리므로 최종 데이터에 섞임이 남는다 —
+#    규칙의 불일치가 아니라 원본 태그의 불일치라 규모만 박는다.
+# ② `FAC` 로 2 회 이상 등장한 표면. 여기서 볼 것은 같은 이름이 별개 실체
+#    둘을 가리키는가이고, 해당하는 자리는 표가 답을 하나만 담으므로 사람이
+#    개별로 정해 표의 `separate_entities` 에 남는다.
+#
+# 교집합은 ① 우선이라 ②' 는 ① 을 뺀 나머지다.
+GOLDEN_MIXED_TYPE_SURFACES = 56
+GOLDEN_MIXED_TYPE_FAC_SPANS = 239
+GOLDEN_REPEATED_SURFACES = 162
+GOLDEN_REPEATED_FAC_SPANS = 638
+GOLDEN_REPEATED_ONLY_SURFACES = 133
+GOLDEN_REPEATED_ONLY_FAC_SPANS = 426
+
+# 같은 이름의 별개 실체가 실재해 사람이 개별로 정한 자리의 수. 비어 있어도
+# "비어 있음" 을 세어 대조한다 — 조용히 줄여 사람 검수를 건너뛰지 못하게 한다.
+#
+# **그물이 후보를 뽑을 뿐 답을 가두지는 않는다.** 셋 중 하나
+# (`` the West Wing ''` — 백악관 서관과 같은 이름의 TV 프로그램)는 `FAC` 로
+# 한 번만 등장하고 다른 타입 태그도 없어 두 그물 어디에도 안 걸린다. 그것이
+# 판정을 그물 안에서만 돌리지 않고 **634 표면 전량**에 돌린 이유다 — 그물만
+# 봤으면 이 자리는 안 보였다. 두 수를 함께 박아 그 비율이 조용히 뒤집히지
+# 않게 한다.
+GOLDEN_SEPARATE_ENTITIES = 3
+GOLDEN_SEPARATE_ENTITIES_IN_NETS = 2
 
 # 원본 타입별 span 수 — 매핑표를 거치지 않고 태그에서 직접 센 값이다.
 # canonical 쪽 골든과 **함께** 고정하는 이유는 실패를 단계별로 가르기
@@ -78,11 +133,15 @@ def converted():
     source_spans: dict[str, dict[str, int]] = {}
     mismatched_slices = 0
 
+    fac_surfaces: dict[str, int] = {}
+
     for split in SPLIT_FILES:
-        records, split_problems, split_source = convert_one_split(
-            RAW_DIR, split, id2label,
+        records, split_problems, split_source, split_surfaces = (
+            convert_one_split(RAW_DIR, split, id2label)
         )
         source_spans[split] = dict(split_source)
+        for surface, count in split_surfaces.items():
+            fac_surfaces[surface] = fac_surfaces.get(surface, 0) + count
         problems += split_problems
         by_split[split] = records
         for record in records:
@@ -102,8 +161,53 @@ def converted():
         'sentences': {s: len(r) for s, r in by_split.items()},
         'spans': spans,
         'source_spans': source_spans,
+        'fac_surfaces': fac_surfaces,
         'mismatched_slices': mismatched_slices,
     }
+
+
+@pytest.fixture(scope='module')
+def source_tags():
+    """원본 태그에서 표면별 타입을 다시 뽑는다 — 갈림 후보 두 그물의 재료.
+
+    변환 산출물이 아니라 **원본 태그**를 읽는 것이 요점이다. 산출물에서 뽑으면
+    판정 표가 이미 답을 준 뒤라 "표가 못 건드리는 자리" 가 안 보인다.
+    """
+    id2label = load_id2label(RAW_DIR / 'label.json')
+    fac: dict[str, int] = {}
+    other_types: dict[str, set] = {}
+    for split, filenames in SPLIT_FILES.items():
+        for filename in filenames:
+            with (RAW_DIR / filename).open(encoding='utf-8') as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    tokens = row['tokens']
+                    for start, end, src in decode_bio(row['tags'], id2label):
+                        surface = ' '.join(tokens[start:end + 1])
+                        if src == 'FAC':
+                            fac[surface] = fac.get(surface, 0) + 1
+                        else:
+                            other_types.setdefault(surface, set()).add(src)
+    return {'fac': fac, 'other_types': other_types}
+
+
+@pytest.fixture(scope='module')
+def verdict_table():
+    return json.loads(TABLE_PATH.read_text(encoding='utf-8'))
+
+
+def _table_totals(table) -> dict[str, dict[str, int]]:
+    """판정별·split별 등장 수를 표에서 합산한다."""
+    totals = {
+        verdict: {split: 0 for split in GOLDEN_SENTENCES}
+        for verdict in ('ORG', 'LOC', 'DROP')
+    }
+    for entry in table['entries']:
+        for split in GOLDEN_SENTENCES:
+            totals[entry['verdict']][split] += entry['occurrences'][split]
+    return totals
 
 
 def test_no_entity_token_mismatch(converted):
@@ -144,22 +248,160 @@ def test_slice_equality_is_tautological_not_a_guard(converted):
     assert converted['mismatched_slices'] == 0
 
 
-def test_span_counts_match_golden(converted):
-    """수락 기준 4 — 타입별·split별 span 수가 실측 고정값과 같다."""
-    assert converted['spans'] == GOLDEN_SPANS
+def test_untouched_span_counts_match_golden(converted):
+    """이 분할이 안 건드리는 타입 넷은 한 span 도 안 움직인다.
+
+    판정 표를 어떻게 고쳐도 `PER`·`DAT`·`PROD`·`EVT` 는 그대로여야 한다 —
+    움직였다면 표가 아니라 디코드나 매핑이 바뀐 것이다.
+    """
+    actual = {
+        label: counts for label, counts in converted['spans'].items()
+        if label in GOLDEN_UNTOUCHED_SPANS
+    }
+    assert actual == GOLDEN_UNTOUCHED_SPANS
+
+
+def test_loc_and_org_match_the_counts_derived_from_the_table(
+    converted, verdict_table,
+):
+    """`LOC`·`ORG` 가 **표에서 도출한 기대 수**와 같다.
+
+    골든이 아니라 도출값이다 — 표를 고치면 기대값도 따라 움직인다. 그래도
+    검사가 되는 것은 기대값이 표를 지나 오고 실제값은 표면 생성·BIO 디코드·
+    표 조회를 지나 오기 때문이다. 그 경로가 틀어지면 둘이 어긋난다.
+
+    표를 전량 `ORG` 로 무력화해도 여기서는 안 걸린다(양변이 함께 움직인다).
+    그 자리를 막는 것은 `test_fac_labels.py` 의 표본 판정과 잔여 하한이다.
+    """
+    totals = _table_totals(verdict_table)
+    expected = {
+        'LOC': {
+            split: (GOLDEN_SOURCE_SPANS['GPE'][split]
+                    + GOLDEN_SOURCE_SPANS['LOC'][split]
+                    + totals['LOC'][split])
+            for split in GOLDEN_SENTENCES
+        },
+        'ORG': {
+            split: GOLDEN_SOURCE_SPANS['ORG'][split] + totals['ORG'][split]
+            for split in GOLDEN_SENTENCES
+        },
+    }
+    actual = {
+        label: converted['spans'][label] for label in ('LOC', 'ORG')
+    }
+    assert actual == expected
+
+
+def test_source_fac_count_equals_the_three_verdicts(converted, verdict_table):
+    """`원본 FAC 수 = ORG + LOC + 버림` 이 split 별로 성립한다.
+
+    표를 어떻게 고쳐도 성립해야 하는 등식이다. 깨지면 span 이 새거나 겹친
+    것이다 — 판정이 옳은지가 아니라 **하나도 안 잃었는지**를 본다.
+    """
+    totals = _table_totals(verdict_table)
+    for split, want in GOLDEN_SOURCE_SPANS['FAC'].items():
+        got = sum(totals[verdict][split] for verdict in totals)
+        assert got == want, f'{split}: {got} != {want}'
 
 
 def test_no_unexpected_labels_appear(converted):
     """드롭해야 할 타입이 canonical 라벨로 새어 들어오지 않는다."""
-    assert set(converted['spans']) == set(GOLDEN_SPANS)
+    assert set(converted['spans']) == EXPECTED_LABELS
 
 
-def test_total_span_count(converted):
+def test_total_span_count(converted, verdict_table):
+    """전량 합은 골든이 아니라 **원본 수에서 버린 몫을 뺀** 값이다.
+
+    `DROP` 판정이 생기면 합이 줄므로 고정값을 못 쓴다. 대신 원본 골든에서
+    버린 몫을 빼 기대치를 만든다 — 버린 몫은 타입 통째로 버리는 원본 타입
+    (리터럴 목록)과 표가 버린 `FAC` 표면 둘로 갈린다.
+    """
+    dropped_whole = sum(
+        n for source_type in SOURCE_TYPES_DROPPED_WHOLE
+        for n in GOLDEN_SOURCE_SPANS[source_type].values()
+    )
+    dropped_by_table = sum(_table_totals(verdict_table)['DROP'].values())
     total = sum(
         n for split_counts in converted['spans'].values()
         for n in split_counts.values()
     )
-    assert total == GOLDEN_TOTAL_SPANS
+    assert total == (
+        GOLDEN_TOTAL_SOURCE_SPANS - dropped_whole - dropped_by_table
+    )
+
+
+def test_the_verdict_table_covers_the_corpus_both_ways(converted):
+    """피복 검사를 전량 코퍼스에 실제로 태운다.
+
+    변환 CLI 가 매 실행 거는 것과 같은 검사다. 여기서 한 번 더 태우는 것은
+    CLI 를 안 돌리고 테스트만 도는 경로가 있기 때문이다.
+    """
+    assert_fac_coverage(converted['fac_surfaces'], list(GOLDEN_SENTENCES))
+    assert len(converted['fac_surfaces']) == len(FAC_VERDICTS)
+
+
+def test_mixed_type_candidate_net_is_pinned(source_tags):
+    """그물 ① — 원본이 `FAC` 와 다른 타입으로도 태그한 표면의 규모.
+
+    다른 타입은 매핑표가 따로 라벨을 내므로 판정 표가 못 건드린다. 최종
+    데이터에 섞임이 남는 것은 규칙의 불일치가 아니라 **원본 태그의 불일치**라
+    없애지 않고 규모만 박는다. 새 표면이 생기면 이 수가 움직인다.
+    """
+    net = {
+        surface for surface in source_tags['fac']
+        if surface in source_tags['other_types']
+    }
+    assert len(net) == GOLDEN_MIXED_TYPE_SURFACES
+    spans = sum(source_tags['fac'][surface] for surface in net)
+    assert spans == GOLDEN_MIXED_TYPE_FAC_SPANS
+
+
+def test_repeated_surface_candidate_net_is_pinned(source_tags):
+    """그물 ② — `FAC` 로 2 회 이상 등장한 표면의 규모.
+
+    같은 이름이 별개 실체 둘을 가리키는지 사람이 보는 자리다. 교집합은
+    ① 우선이므로 ① 을 뺀 나머지도 함께 박는다 — 둘 중 하나만 박으면 표면이
+    그물 사이를 옮겨 다녀도 합이 맞아 안 걸린다.
+    """
+    repeated = {
+        surface for surface, count in source_tags['fac'].items() if count >= 2
+    }
+    assert len(repeated) == GOLDEN_REPEATED_SURFACES
+    assert sum(
+        source_tags['fac'][s] for s in repeated
+    ) == GOLDEN_REPEATED_FAC_SPANS
+
+    only = repeated - set(source_tags['other_types'])
+    assert len(only) == GOLDEN_REPEATED_ONLY_SURFACES
+    assert sum(
+        source_tags['fac'][s] for s in only
+    ) == GOLDEN_REPEATED_ONLY_FAC_SPANS
+
+
+def test_separate_entity_surfaces_are_listed_and_real(
+    source_tags, verdict_table,
+):
+    """사람이 "별개 실체 둘" 로 정한 자리가 열거돼 있고 코퍼스에 실재한다.
+
+    수를 박아 조용히 줄이지 못하게 한다 — 비어 있어도 "비어 있음" 을 세어
+    대조하는 자리다. 그물 안에서 몇 개가 나왔는지도 함께 박는다: 그물은
+    후보를 뽑을 뿐 답을 가두지 않으므로(`GOLDEN_SEPARATE_ENTITIES_IN_NETS`
+    주석), 그 비율이 뒤집히면 판정을 전량이 아니라 그물 안에서만 돌렸다는
+    신호다.
+    """
+    listed = verdict_table['separate_entities']
+    assert len(listed) == GOLDEN_SEPARATE_ENTITIES
+    candidates = {
+        surface for surface in source_tags['fac']
+        if surface in source_tags['other_types']
+        or source_tags['fac'][surface] >= 2
+    }
+    in_nets = 0
+    for entry in listed:
+        # 지어낸 이름이 아니라 원본이 `FAC` 로 태그한 표면이어야 한다.
+        assert entry['surface'] in source_tags['fac'], entry['surface']
+        in_nets += entry['surface'] in candidates
+    assert in_nets == GOLDEN_SEPARATE_ENTITIES_IN_NETS
 
 
 def test_sentence_counts_match_original_split(converted):
