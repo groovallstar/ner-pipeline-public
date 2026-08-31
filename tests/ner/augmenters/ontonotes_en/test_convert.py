@@ -8,7 +8,10 @@ from ner.augmenters.ontonotes_en.convert import (
     source_types,
     strip_ws,
 )
-from ner.augmenters.ontonotes_en.mapping import UndeclaredTypeError
+from ner.augmenters.ontonotes_en.mapping import (
+    UndeclaredTypeError,
+    UnlistedSurfaceError,
+)
 
 ID2LABEL = {
     0: 'O',
@@ -16,8 +19,14 @@ ID2LABEL = {
     3: 'B-ORG', 4: 'I-ORG',
     5: 'B-CARDINAL',
     6: 'B-GPE',
-    7: 'B-FAC',
+    7: 'B-FAC', 8: 'I-FAC',
 }
+
+# 판정 표에 실제로 있는 표면 — 합성 입력이지만 표면은 지어내지 않는다.
+# 지어낸 표면은 표에 없어 `resolve` 가 세우고, 그러면 이 파일이 검사하려던
+# 디코드·offset 이 아니라 표 조회에서 먼저 터진다.
+ROUTE_SURFACE = 'East Third Ring Road'
+STRUCTURE_SURFACE = 'the Golden Gate Bridge'
 
 
 def test_source_types_ignores_outside_tag():
@@ -53,13 +62,37 @@ def test_decode_bio_closes_span_at_end_of_sentence():
     assert decode_bio(tags, ID2LABEL) == [(1, 2, 'PERSON')]
 
 
-def test_convert_record_maps_and_drops():
-    """FAC 는 ORG 로 흡수되고 CARDINAL 은 드롭된다."""
-    tokens = ['Narita', 'Airport', 'saw', 'three', 'flights']
-    tags = [7, 0, 0, 5, 0]
+def test_convert_record_reads_the_verdict_table_for_a_route():
+    """경로형 `FAC` 는 `LOC` 이고 `CARDINAL` 은 타입으로 드롭된다."""
+    tokens = ['Cars', 'on', 'East', 'Third', 'Ring', 'Road', 'passed', 'three']
+    tags = [0, 0, 7, 8, 8, 8, 0, 5]
     record = convert_record(tokens, tags, ID2LABEL, 'en-test-000000', 'test')
-    assert [e['label'] for e in record['entities']] == ['ORG']
-    assert record['entities'][0]['text'] == 'Narita'
+    assert [(e['label'], e['text']) for e in record['entities']] == [
+        ('LOC', ROUTE_SURFACE),
+    ]
+
+
+def test_convert_record_reads_the_verdict_table_for_a_structure():
+    """구조물형 `FAC` 는 `ORG` 다 — 같은 원본 타입이 반대 라벨을 받는다.
+
+    두 검사를 나란히 두는 것이 요점이다. 한쪽만 두면 표를 전량 그 라벨로
+    무력화해도 통과한다.
+    """
+    tokens = ['We', 'crossed', 'the', 'Golden', 'Gate', 'Bridge']
+    tags = [0, 0, 7, 8, 8, 8]
+    record = convert_record(tokens, tags, ID2LABEL, 'en-test-000001', 'test')
+    assert [(e['label'], e['text']) for e in record['entities']] == [
+        ('ORG', STRUCTURE_SURFACE),
+    ]
+
+
+def test_convert_record_stops_on_a_surface_the_table_does_not_judge():
+    """표에 없는 표면은 기본 라벨을 못 받고 변환이 선다."""
+    with pytest.raises(UnlistedSurfaceError):
+        convert_record(
+            ['Zzyzx', 'Interchange'], [7, 8], ID2LABEL,
+            'en-test-000002', 'test',
+        )
 
 
 def test_convert_record_span_is_self_consistent():
@@ -79,9 +112,9 @@ def test_convert_record_carries_split_and_group_key():
 
 
 def test_convert_record_rejects_undeclared_type():
-    id2label = dict(ID2LABEL) | {8: 'B-NEW_TYPE'}
+    id2label = dict(ID2LABEL) | {9: 'B-NEW_TYPE'}
     with pytest.raises(UndeclaredTypeError):
-        convert_record(['x'], [8], id2label, 'en-test-000002', 'test')
+        convert_record(['x'], [9], id2label, 'en-test-000003', 'test')
 
 
 def test_entity_token_check_passes_on_clean_conversion():

@@ -44,8 +44,14 @@ FIXTURE_SOURCE_SPANS = {
 # `FIXTURE_SOURCE_SPANS` 에 `resolve()` 를 먹여 만들면 매핑축이 등식 양변에
 # 들어가 매핑을 뒤집어도 통과한다(2·3 라운드에 실제로 그렇게 실패했다).
 FIXTURE_CANONICAL_SPANS = {
-    'DAT': 16, 'EVT': 1, 'LOC': 9, 'ORG': 23, 'PER': 4, 'PROD': 4,
+    'DAT': 16, 'EVT': 1, 'LOC': 10, 'ORG': 22, 'PER': 4, 'PROD': 4,
 }
+
+# 픽스처의 단 하나뿐인 `FAC` span 과 표가 그것에 준 판정. 경로형(`Avenue`)이라
+# `LOC` 이며, 이 한 줄이 **분할이 무조건 층에서 실제로 일어나는지**를 본다 —
+# `FIXTURE_CANONICAL_SPANS` 만으로는 `LOC` 하나가 어디서 왔는지 안 갈린다.
+FIXTURE_FAC_SURFACE = 'Arthur Avenue'
+FIXTURE_FAC_VERDICT = 'LOC'
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'golden' / 'ontonotes_en'
 
@@ -121,6 +127,34 @@ def test_source_span_counts_are_pinned(converted):
     갈리지 않는다.
     """
     assert dict(converted['source_counts']) == FIXTURE_SOURCE_SPANS
+
+
+def test_the_fac_span_is_split_by_the_verdict_table(converted):
+    """`FAC` 가 타입이 아니라 표면으로 갈린다 — 무조건 층에서 태운다.
+
+    픽스처의 `FAC` span 은 `Arthur Avenue` 하나이고 표가 `LOC` 로 판정했다.
+    `FAC` 를 전량 `ORG` 로 되돌리면 이 검사가 먼저 붉어진다.
+    """
+    from ner.augmenters.ontonotes_en.mapping import resolve
+
+    assert resolve('FAC', FIXTURE_FAC_SURFACE) == FIXTURE_FAC_VERDICT
+    found = [
+        entity for record, _ in converted['records']
+        for entity in record['entities']
+        if entity['text'] == FIXTURE_FAC_SURFACE
+    ]
+    assert len(found) == 1
+    assert found[0]['label'] == FIXTURE_FAC_VERDICT
+
+
+def test_an_unlisted_fac_surface_stops_conversion():
+    """표에 없는 표면은 기본값을 못 받는다 — 미판정이 조용히 흐르지 않는다."""
+    from ner.augmenters.ontonotes_en.mapping import (
+        UnlistedSurfaceError, resolve,
+    )
+
+    with pytest.raises(UnlistedSurfaceError):
+        resolve('FAC', 'a surface no corpus ever produced')
 
 
 def test_canonical_counts_match_pinned_literals(converted):

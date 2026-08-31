@@ -34,7 +34,7 @@ python -m ner.classifier --lang ja --group-key id
 # VI 본 학습 (xlm-roberta-base 기본 모델) — orig 가 원문을 묶는다
 python -m ner.classifier --lang vi --group-key orig --epochs 5 --batch-size 16
 
-# KO 본 학습 (koelectra-base-v3 기본 모델, data/klue/pii_all.jsonl)
+# KO 본 학습 (koelectra-base-v3 기본 모델, data/klue/origin.jsonl)
 # 원문당 1행이라 형제가 없다 — id 도 none 도 같은 분할이며 둘 다 통과한다
 python -m ner.classifier --lang ko --group-key id
 
@@ -50,7 +50,7 @@ python -m ner.classifier --lang vi --group-key orig \
 # 층화 K-fold 교차 검증 (fold 별 1회 학습 후 pooled 평가)
 for fold in 0 1 2 3 4 5 6 7 8 9; do
   python -m ner.classifier --lang ja \
-      --data data/stockmark/pii_all_phonediv.jsonl \
+      --data data/stockmark/origin.jsonl \
       --kfold 10 --fold-index ${fold} --group-key id \
       --output-dir results/classifier/ja_sweep/<실험명>/fold${fold}
 done
@@ -108,10 +108,10 @@ oversampling 보강 시 valid/test leak 방지). BC 유지 — 옵션 미지정 
 기존 단일 jsonl 학습과 동일.
 
 기본값:
-- `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/pii_all.jsonl`
+- `--lang ja`: 모델 `tohoku-nlp/bert-base-japanese-v3`, 데이터 `data/stockmark/origin.jsonl`
 - `--lang vi`: 모델 `xlm-roberta-base`, 데이터 `data/wikiann_vi/origin.jsonl`
-- `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/pii_all.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용. 배포 패키지는 `/data/ner/ko/`(포장: `src/ner/scripts/build_ner_prod.py`, 추론: `eval_ko_ner_test.sh`)이고 REST 서버가 이 경로를 로드한다
-- `--lang en`: 모델 `roberta-base`(base 급 6종 3-seed 벤치마크로 확정), 데이터 `data/ontonotes_en/pii_all.jsonl` (OntoNotes5 유래 NER 5종+DAT + 합성 PII 4종). split 별 파일을 `ner.augmenters.ontonotes_en.merge_splits` 로 합친 것이며 `--group-key orig` 로 재분할한다. 배포 패키지는 `/data/ner/en/`(포장: `src/ner/scripts/build_ner_prod.py`, 추론: `eval_en_ner_test.sh`)
+- `--lang ko`: 모델 `monologg/koelectra-base-v3-discriminator`, 데이터 `data/klue/origin.jsonl` (KLUE 유래 NER 5종+DAT + 합성 PII 4종). ELECTRA 계열이라 `--precision fp16`(기본) 사용. 배포 패키지는 `/data/ner/ko/`(포장: `src/ner/scripts/build_ner_prod.py`, 추론: `eval_ko_ner_test.sh`)이고 REST 서버가 이 경로를 로드한다
+- `--lang en`: 모델 `roberta-base`(base 급 6종 3-seed 벤치마크로 확정), 데이터 `data/ontonotes_en/origin.jsonl` (OntoNotes5 유래 NER 5종+DAT + 합성 PII 4종). split 별 파일을 `ner.augmenters.ontonotes_en.merge_splits` 로 합친 것이며 `--group-key orig` 로 재분할한다. 배포 패키지는 `/data/ner/en/`(포장: `src/ner/scripts/build_ner_prod.py`, 추론: `eval_en_ner_test.sh`)
 - `--valid-ratio 0.1`, `--test-ratio 0.1` (3-way split), `--seed 42`, `--max-length 256`, `--epochs 5`, `--batch-size 16`, `--lr 5e-5`
 - 3-way 분할: train/valid/test = 80/10/10. valid 셋은 epoch best 모델 선택용 (`metric_for_best_model='eval_loss'`), test 셋은 최종 char-offset span F1 측정 단독. test 셋은 학습/모델 선택 어디에도 노출되지 않음.
 - 재현성 (`--train-seed`): 기본 None 은 헤드 init 을 시드하지 않는 기존 동작(BC). 값을 주면 헤드 init·dropout·셔플을 고정해 재현 가능한 run 이 된다. GPU FP 비결합에 따른 seed-내 잔여 비결정성(loss ~1e-4)은 effect size 대비 무시 가능 — 비교 측정은 양 팔을 같은 `--train-seed` 로 고정하거나 multi-seed paired 로 본다. `metrics.json` 에 `train_seed`·`precision` 기록.
@@ -134,7 +134,7 @@ unit 으로 묶어 통째로 한 split 에 배정한다 — 누출이 구조적�
 
 | 데이터 | 행 수 | `id` 그룹 | `orig` 그룹 | 그룹 키 |
 |---|---|---|---|---|
-| `data/klue/pii_all.jsonl` (KO) | 25,989 | 25,989 | 필드 없음 | `id` 또는 `none` (형제 없음) |
+| `data/klue/origin.jsonl` (KO) | 25,989 | 25,989 | 필드 없음 | `id` 또는 `none` (형제 없음) |
 | `data/wikiann_vi/origin.jsonl` (VI) | 37,706 | 37,706 | 29,337 | **`orig`** |
 | `data/stockmark/origin.jsonl` (JA) | 5,270 | **5,166** | 필드 없음 | **`id`** |
 

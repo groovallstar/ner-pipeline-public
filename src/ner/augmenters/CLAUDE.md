@@ -26,7 +26,9 @@ LLM 재라벨로 부족한 타입을 만들어냈지만, OntoNotes 는 `PRODUCT`
 
 | 파일 | 역할 |
 |------|------|
-| `mapping.py` | 원본 18 타입 → canonical 매핑표 + **전수성 게이트**. 선언되지 않은 타입을 만나면 `UndeclaredTypeError` 로 즉시 중단한다 — 조용히 드롭하면 그 타입이 통째로 빠진 것을 아무도 못 본다 |
+| `mapping.py` | 원본 18 타입 → canonical 매핑표 + **전수성 게이트** + 표면별 판정 조회. 선언되지 않은 타입은 `UndeclaredTypeError`, 판정 표에 없는 `FAC` 표면은 `UnlistedSurfaceError` 로 즉시 중단한다 — 조용히 드롭하거나 기본 라벨을 주면 빠진 것을 아무도 못 본다 |
+| `data/fac_labels.json` | `FAC` 표면 634 개의 판정 표 — 표면마다 판정(`ORG`·`LOC`·비-entity)·사유코드·두 모델 합의 여부·split 별 등장 수를 적는다. **gold 를 정하는 정본**이라 어휘 규칙은 이것을 되짚는 검사자로 테스트에만 있다 |
+| `data/fac_disk_migration_ledger.json` | 위 판정 표를 이미 만들어져 있던 디스크 코퍼스에 적용한 기록 — 손댄 span 마다 행 `id`·offset·행 안 엔티티 인덱스·before→after 라벨을 적고, 주입 산출물 넷의 **전·후 SHA256** 을 함께 적는다. `data/**` 가 gitignore 라 이것이 저장소에 남는 유일한 기록이고, 지문이 있어야 되돌리기가 정의상 참이 되지 않는다. 쓰는 쪽은 `ner.scripts.migrate_en_fac_disk_corpus` |
 | `detokenize.py` | 토큰 배열 → 자연문 복원 + 토큰별 char-offset. 규칙은 코퍼스 76,714 문장 전수 측정에서 나왔다(`-` 는 97.6% 가 단어 사이라 붙이고, `&` 는 `Fleet & Leasing` 이라 띄운다) |
 | `convert.py` | BIO 디코드 · 레코드 변환 · **엔티티↔원본 토큰 대조** · 문장 동일 행의 `orig` 묶기 |
 | `restore_groups.py` | 주입이 버린 `orig`·`split` 되돌리기 — 아래 |
@@ -43,9 +45,16 @@ LLM 재라벨로 부족한 타입을 만들어냈지만, OntoNotes 는 `PRODUCT`
 원 split 은 학습에 쓰이지 않으며, 어느 split 이었는지는 `id`·`orig` 접두사
 (`en-train-`/`en-valid-`/`en-test-`)에 남아 정보도 잃지 않는다.
 
-#### LOC/ORG 경계 — EN 은 JA·VI 관례
-`FAC`(공항·역·경기장·다리·고속도로)를 `ORG` 로 흡수한다. KO 의 narrow-ORG
-(인공 시설을 아예 버림)를 따르지 않는다. 물려받은 기본값이 아니라 선택이므로
+#### LOC/ORG 경계 — EN 은 인프라를 둘로 가른다
+canonical §3 대로 **개별 구조물은 `ORG`, 여러 지점을 잇는 경로는 `LOC`** 다 —
+역·공항·경기장·교량·터널이 앞이고 철도·지하철 노선·도로·고속도로가 뒤다.
+KO 의 narrow-ORG(인공 시설을 아예 버림)를 따르지 않는다.
+
+원본 `FAC` 한 타입에 둘이 함께 들어 있어 **타입만 보고는 못 가른다.** 그래서
+판정이 표면별이고, 정본은 표면 634 개를 전량 열거한
+`ontonotes_en/data/fac_labels.json` 이다. 규칙을 판정자로 쓰지 않는 것은
+규칙이 못 가른 몫이 조용히 기본값으로 흐르기 때문이다 — 표에 없는 표면은
+`resolve` 가 기본값 없이 세운다. 물려받은 기본값이 아니라 선택이므로
 `mapping.py` 모듈 docstring 에 선언해 둔다.
 
 #### 수식 위치 GPE 는 빼지 않는다 — 검토했다가 접은 안
@@ -205,7 +214,7 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
     --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
     --inject-url http://localhost:8081/v1 \
     --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --output data/klue/pii_all.jsonl
+    --output data/klue/origin.jsonl
 ```
 
 `--pii-labels` 로 주입 PII 라벨을 제한한다(기본 7종 → 지정 라벨만). 미지정

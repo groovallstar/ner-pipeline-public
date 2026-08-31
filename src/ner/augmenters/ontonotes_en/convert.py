@@ -5,6 +5,11 @@
 풀고, 원본 타입을 canonical 라벨로 옮기고(`mapping`), 자연문 복원에서 받은
 토큰별 offset 으로 char-offset span 을 만든다(`detokenize`).
 
+원본 `FAC` 만 타입이 아니라 **표면**으로 갈린다 — 개별 구조물은 `ORG`,
+여러 지점을 잇는 경로는 `LOC` 이며 판정은 표가 갖는다(§3 인프라). 그래서
+`resolve` 에 표면 키를 함께 넘기고, 그 키는 자연문이 아니라 원본 토큰의
+공백 조인이다(`fac_surface`).
+
 산출 레코드는 기존 JSONL contract 를 그대로 따르고 두 필드를 더한다.
 
 - `split` — OntoNotes 원본 배정(train/valid/test). 저장소 관례인 80/10/10
@@ -29,7 +34,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ner.augmenters.ontonotes_en.detokenize import detokenize, normalize_token
-from ner.augmenters.ontonotes_en.mapping import resolve
+from ner.augmenters.ontonotes_en.mapping import (
+    BY_SURFACE,
+    ONTONOTES_TO_CANONICAL,
+    is_dropped,
+    resolve,
+)
+
+# 표면 키가 필요한 원본 타입 — 지금은 `FAC` 하나다. 리터럴로 적지 않는
+# 것은 매핑표가 정본이기 때문이다.
+BY_SURFACE_TYPES = frozenset(
+    t for t, v in ONTONOTES_TO_CANONICAL.items() if v == BY_SURFACE
+)
 
 
 def load_id2label(label_json: Path) -> dict[int, str]:
@@ -100,6 +116,23 @@ def count_source_spans(
     return counts
 
 
+def count_fac_surfaces(
+    tokens: Sequence[str], tags: Sequence[int], id2label: dict[int, str],
+) -> collections.Counter:
+    """표면별 판정 타입의 표면을 센다 — 피복 검사가 쓰는 관측치.
+
+    `resolve` 는 표에 없는 표면을 span 단위로 세우므로 "원본에만 있는 표면"
+    은 변환 도중에 이미 걸린다. 여기서 걷는 값이 메우는 것은 반대 방향이다 —
+    **표에만 있고 코퍼스에 없는 줄**은 span 이 하나도 안 지나가 아무 데도
+    안 걸리므로, 관측 집합을 따로 모아 끝에서 맞춰야 보인다.
+    """
+    counts: collections.Counter = collections.Counter()
+    for start, end, source_type in decode_bio(tags, id2label):
+        if source_type in BY_SURFACE_TYPES:
+            counts[fac_surface(tokens, start, end)] += 1
+    return counts
+
+
 def strip_ws(text: str) -> str:
     """공백을 전부 뺀 문자열 — 엔티티↔토큰 대조의 정규형.
 
@@ -107,6 +140,19 @@ def strip_ws(text: str) -> str:
     복원이 아니라 변조다.
     """
     return ''.join(text.split())
+
+
+def fac_surface(
+    tokens: Sequence[str], tok_start: int, tok_end: int,
+) -> str:
+    """판정 표를 찾을 표면 키 — 원본 토큰의 공백 조인 (끝 인덱스 포함).
+
+    자연문 복원(`detokenize`)이 아니라 **원본 토큰**으로 키를 만드는 것이
+    요점이다. 복원 규칙은 붙여쓰기·따옴표 처리가 바뀔 수 있는 코드인데,
+    그게 바뀌면 같은 span 이 다른 키를 내어 표 전체가 한꺼번에 미판정으로
+    돌아선다. 토큰 배열은 원천이 준 그대로라 안 흔들린다.
+    """
+    return ' '.join(tokens[tok_start:tok_end + 1])
 
 
 def convert_record(
@@ -120,7 +166,7 @@ def convert_record(
     text, offsets = detokenize(tokens)
     entities = []
     for tok_start, tok_end, src_type in decode_bio(tags, id2label):
-        label = resolve(src_type)
+        label = resolve(src_type, fac_surface(tokens, tok_start, tok_end))
         if label is None:
             continue
         start_char = offsets[tok_start][0]
@@ -175,15 +221,23 @@ def check_entity_token_match(
       않는다.** 그 표는 `test_detokenize.py` 가 따로 고정한다.
     - **잃어버린 span 은 못 본다.** 여기 오는 것은 살아남은 span 뿐이라
       매핑 한 줄이 통째로 빠져도 남은 것끼리는 다 맞는다. 그 자리를 메우는
-      것은 테스트에 손으로 박힌 두 층의 골든 넘버다 — 원본 타입별 수
-      (매핑과 독립)와 canonical 타입별 수. 런타임 등식으로 메우려던 시도는
-      정의상 참이 되어 실패했다(위 `count_source_spans` 참조).
+      것은 테스트에 손으로 박힌 골든 넘버다 — 원본 타입별 수(매핑과 독립)와
+      이 이슈가 안 건드리는 canonical 타입(`PER`·`PROD`·`EVT`·`DAT`)의 수다.
+      `LOC`·`ORG` 는 판정 표가 정하는 값이라 골든이 아니고, 표에서 도출한
+      기대 수와 대조한다. 런타임 등식으로 메우려던 시도는 정의상 참이 되어
+      실패했다(위 `count_source_spans` 참조).
     """
     problems: list[str] = []
-    kept = [
-        (s, e, t) for s, e, t in decode_bio(tags, id2label)
-        if resolve(t) is not None
-    ]
+    kept = []
+    for start, end, source_type in decode_bio(tags, id2label):
+        # 타입만으로 끝나는 드롭은 표면을 만들지 않는다 — `is_dropped` 가
+        # 표면 없이 답하는 자리다. 나머지만 표면을 만들어 표에 묻는다.
+        if is_dropped(source_type):
+            continue
+        if resolve(source_type,
+                   fac_surface(tokens, start, end)) is None:
+            continue
+        kept.append((start, end, source_type))
     if len(kept) != len(record['entities']):
         problems.append(
             f'{record["id"]}: span count {len(record["entities"])} '

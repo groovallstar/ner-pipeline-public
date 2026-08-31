@@ -32,8 +32,17 @@ def raw_dir(tmp_path):
 
 
 def run(raw_dir, out_dir, *extra):
+    """픽스처 입력이라 `--partial-corpus` 를 기본으로 붙인다.
+
+    픽스처는 21 문장이라 `FAC` 판정 표 634 줄 중 하나만 관측된다. 표의 나머지
+    633 줄이 안 보이는 것은 결함이 아니라 부분 입력의 성질이므로, 그 방향의
+    피복 검사는 여기서 끈다. 반대 방향(표에 없는 표면)은 계속 켜져 있다 —
+    아래 `test_a_surface_missing_from_the_verdict_table_stops_the_run` 이
+    그것을 태운다.
+    """
     return main([
-        '--raw-dir', str(raw_dir), '--output-dir', str(out_dir), *extra,
+        '--raw-dir', str(raw_dir), '--output-dir', str(out_dir),
+        '--partial-corpus', *extra,
     ])
 
 
@@ -53,6 +62,56 @@ def test_writes_one_file_per_split_plus_meta(raw_dir, tmp_path):
         4 * meta['sentence_counts']['valid']
     )
     assert set(meta['splits']) == set(SPLIT_FILES)
+
+
+def test_meta_records_that_coverage_was_not_checked(raw_dir, tmp_path):
+    """피복 검사를 껐다는 사실이 산출 meta 에 남는다.
+
+    안 남기면 통과가 "검사를 지났다" 인지 "검사가 안 돌았다" 인지 구별되지
+    않는다 — 게이트가 fail-open 할 때 사유를 남기는 것과 같은 이유다.
+    """
+    out = tmp_path / 'out'
+    assert run(raw_dir, out) == 0
+    meta = json.loads((out / 'conversion_meta.json').read_text('utf-8'))
+    assert meta['fac_coverage_checked'] is False
+    assert meta['fac_surface_counts'] == {'Arthur Avenue': 6}
+
+
+def test_stale_verdict_table_rows_stop_the_run(raw_dir, tmp_path):
+    """`--partial-corpus` 없이 부분 입력을 태우면 산출물이 안 남는다.
+
+    표에만 있고 코퍼스에 없는 줄은 span 이 하나도 안 지나가 변환 도중에는
+    안 걸린다. 그 방향을 끝에서 맞추는 것이 피복 검사이고, 여기서 보는 것은
+    걸렸을 때 디스크가 깨끗한지다.
+    """
+    out = tmp_path / 'out'
+    assert main([
+        '--raw-dir', str(raw_dir), '--output-dir', str(out),
+    ]) == 1
+    assert list(out.glob('*.jsonl')) == []
+    assert list(out.glob('*.partial')) == []
+    assert not (out / 'conversion_meta.json').exists()
+
+
+def test_a_surface_missing_from_the_verdict_table_stops_the_run(
+    raw_dir, tmp_path, monkeypatch,
+):
+    """판정 표에 없는 `FAC` 표면은 기본값을 못 받고 변환을 세운다.
+
+    이것이 전수 사전을 두는 이유다 — 미판정을 기본 라벨로 흘리면 규칙이 못
+    가른 몫이 조용히 한쪽으로 몰리고, #218 이 78.6% 에서 멈춘 것이 바로 그
+    모양이었다. 표에서 한 줄을 빼 실제로 태운다.
+    """
+    from ner.augmenters.ontonotes_en import mapping
+
+    shrunk = dict(mapping.FAC_VERDICTS)
+    del shrunk['Arthur Avenue']
+    monkeypatch.setattr(mapping, 'FAC_VERDICTS', shrunk)
+
+    out = tmp_path / 'out'
+    with pytest.raises(mapping.UnlistedSurfaceError):
+        run(raw_dir, out)
+    assert list(out.glob('*.jsonl')) == []
 
 
 def test_leaves_nothing_behind_when_the_token_check_fails(
