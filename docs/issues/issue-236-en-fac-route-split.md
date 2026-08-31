@@ -1,7 +1,7 @@
 # issue-236: EN OntoNotes FAC 경로·구조물 분할
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/236
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/241
 - 브랜치: `feat/issue-236-en-fac-route-split`
 - 승인일: 2026-08-31
 
