@@ -28,6 +28,7 @@ LLM 재라벨로 부족한 타입을 만들어냈지만, OntoNotes 는 `PRODUCT`
 |------|------|
 | `mapping.py` | 원본 18 타입 → canonical 매핑표 + **전수성 게이트** + 표면별 판정 조회. 선언되지 않은 타입은 `UndeclaredTypeError`, 판정 표에 없는 `FAC` 표면은 `UnlistedSurfaceError` 로 즉시 중단한다 — 조용히 드롭하거나 기본 라벨을 주면 빠진 것을 아무도 못 본다 |
 | `data/fac_labels.json` | `FAC` 표면 634 개의 판정 표 — 표면마다 판정(`ORG`·`LOC`·비-entity)·사유코드·두 모델 합의 여부·split 별 등장 수를 적는다. **gold 를 정하는 정본**이라 어휘 규칙은 이것을 되짚는 검사자로 테스트에만 있다 |
+| `data/fac_disk_migration_ledger.json` | 위 판정 표를 이미 만들어져 있던 디스크 코퍼스에 적용한 기록 — 손댄 span 마다 행 `id`·offset·행 안 엔티티 인덱스·before→after 라벨을 적고, 주입 산출물 넷의 **전·후 SHA256** 을 함께 적는다. `data/**` 가 gitignore 라 이것이 저장소에 남는 유일한 기록이고, 지문이 있어야 되돌리기가 정의상 참이 되지 않는다. 쓰는 쪽은 `ner.scripts.migrate_en_fac_disk_corpus` |
 | `detokenize.py` | 토큰 배열 → 자연문 복원 + 토큰별 char-offset. 규칙은 코퍼스 76,714 문장 전수 측정에서 나왔다(`-` 는 97.6% 가 단어 사이라 붙이고, `&` 는 `Fleet & Leasing` 이라 띄운다) |
 | `convert.py` | BIO 디코드 · 레코드 변환 · **엔티티↔원본 토큰 대조** · 문장 동일 행의 `orig` 묶기 |
 | `restore_groups.py` | 주입이 버린 `orig`·`split` 되돌리기 — 아래 |
