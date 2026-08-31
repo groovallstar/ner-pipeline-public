@@ -254,7 +254,7 @@ test 135)다. 표는 그 634 개를 전량 열거하고 표면마다 판정·사
 ```bash
 uv run ruff check .                          # 통과
 uv run pytest tests/ner/augmenters/ontonotes_en/ -q   # 120 passed, 5 skipped
-uv run pytest tests/ -q                      # 1121 passed, 17 skipped
+uv run pytest tests/ -q                      # 1149 passed, 3 skipped
 ```
 
 변환 CLI 도 전량 코퍼스에 실제로 태웠다(산출물은 scratch 로 보냈다 — 실제
@@ -262,10 +262,12 @@ uv run pytest tests/ -q                      # 1121 passed, 17 skipped
 관측했고 `fac_coverage_checked` 가 `true` 이며, 산출 라벨 수가 위 §변환 결과
 표와 같다.
 
-전량 실행에서 `tests/ner/classifier/test_ko_deploy_package.py::
-test_package_is_the_ledger_run_verbatim` 하나가 붉다. 이 브랜치가 `develop`
-보다 다섯 커밋 뒤에 있어서이고, 그 안에 KO 배포 패키지의 gold 경로를 고친
-커밋이 있다. 이 이슈가 건드린 파일과 무관하며 머지하면 사라진다.
+커밋 직후 전량 실행에서는 `tests/ner/classifier/test_ko_deploy_package.py::
+test_package_is_the_ledger_run_verbatim` 하나가 붉었다. 이 브랜치가 `develop`
+보다 다섯 커밋 뒤에 있어서였고, 그 안에 KO 배포 패키지의 gold 경로를 고친
+커밋(`fad820b`)이 있었다. `develop` 을 머지하니 사라졌고 위 수치는 머지 뒤
+값이다. skip 이 17 에서 3 으로 준 것도 같은 머지가 KO gold 경로를 살렸기
+때문이다 — 그 파일이 없어 건너뛰던 검사들이 이제 실제로 돈다.
 
 ### 메트릭
 
@@ -276,7 +278,7 @@ test_package_is_the_ledger_run_verbatim` 하나가 붉다. 이 브랜치가 `dev
 
 - `3466af8`: docs(schema) — §3 환유 표면형 판정 규칙 (⓪)
 - `7047c6f`: feat(augmenters) — EN FAC 판정 표 634 표면 (①)
-- `<hash>`: feat(augmenters) — EN FAC 표면별 판정 적용 (②) <!-- 커밋 후 채움 -->
+- `c9cb5b3`: feat(augmenters) — EN FAC 표면별 판정을 변환 경로에 배선 (②)
 
 ## 후속 작업
 
