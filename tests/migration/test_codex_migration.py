@@ -24,6 +24,24 @@ INSTRUCTION_PAIRS: tuple[tuple[str, str], ...] = (
     ("tests/ner/CLAUDE.md", "tests/ner/AGENTS.md"),
 )
 
+FORBIDDEN_TARGET_TERMS = (
+    ".claude/",
+    "CLAUDE.md",
+    ".omc/",
+    "oh-my-codex",
+    "refuter_gate.py",
+    "AskUserQuestion",
+    "/tdd",
+)
+
+ROOT_REQUIRED_TERMS = (
+    "uv run",
+    "PYTHONPATH",
+    "certified/",
+    "requesting-code-review",
+    "verification-before-completion",
+)
+
 SKILL_DECISIONS: dict[str, str] = {
     "debug-triage": "이관",
     "explain-diff": "이관",
@@ -38,3 +56,16 @@ SKILL_DECISIONS: dict[str, str] = {
 def test_every_claude_instruction_has_a_codex_target(source, target):
     assert (REPO_ROOT / source).is_file()
     assert (REPO_ROOT / target).is_file()
+
+
+@pytest.mark.parametrize(("_source", "target"), INSTRUCTION_PAIRS)
+def test_codex_instructions_do_not_reference_legacy_harness(_source, target):
+    text = (REPO_ROOT / target).read_text()
+    for term in FORBIDDEN_TARGET_TERMS:
+        assert term not in text, (target, term)
+
+
+def test_root_codex_instruction_keeps_required_project_policy():
+    text = (REPO_ROOT / "AGENTS.md").read_text()
+    for term in ROOT_REQUIRED_TERMS:
+        assert term in text, term
