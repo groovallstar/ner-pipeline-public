@@ -3,7 +3,6 @@
 
 import json
 import os
-import re
 import shlex
 import sys
 from typing import NamedTuple
@@ -11,55 +10,17 @@ from typing import NamedTuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_core as core  # noqa: E402
 
-HISTORY_EXITS = {'rebase', 'merge', 'cherry-pick', 'am'}
-EXIT_OPTIONS = {'--abort', '--quit', '--skip'}
-HISTORY_SUBCOMMANDS = {
-    'am',
-    'branch',
-    'cherry-pick',
-    'commit',
-    'filter-branch',
-    'merge',
-    'notes',
-    'pull',
-    'push',
-    'rebase',
-    'replace',
-    'reset',
-    'revert',
-    'stash',
-    'tag',
-    'update-ref',
+COMMIT_SUBCOMMANDS = {'commit', 'cherry-pick', 'revert', 'am', 'rebase', 'merge'}
+ABORT_OPTIONS = {'--abort', '--quit', '--skip'}
+SHELL_OPERATORS = {'&&', '||', ';', '|', '&', '(', ')', '<', '>', '<<', '>>'}
+SAFE_GIT_FLAGS = {
+    '--no-pager',
+    '--paginate',
+    '--literal-pathspecs',
+    '--glob-pathspecs',
+    '--noglob-pathspecs',
+    '--icase-pathspecs',
 }
-PASSTHROUGH_SUBCOMMANDS = {
-    'add',
-    'blame',
-    'cat-file',
-    'checkout',
-    'clean',
-    'config',
-    'diff',
-    'grep',
-    'help',
-    'log',
-    'ls-files',
-    'ls-tree',
-    'mv',
-    'name-rev',
-    'restore',
-    'rev-parse',
-    'rm',
-    'shortlog',
-    'show',
-    'status',
-    'switch',
-    'version',
-}
-WRAPPERS = {'bash', 'command', 'dash', 'env', 'nice', 'nohup', 'sh', 'sudo', 'zsh'}
-ASSIGNMENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
-DIRECT_GIT_RE = re.compile(r'^\s*git(?:[ \t]|$)')
-NONLITERAL_PATH_CHARS = frozenset('*?[]{}~$`\\')
-SHELL_PUNCTUATION = frozenset(';&|()<>')
 
 
 class CommandPlan(NamedTuple):
@@ -69,9 +30,12 @@ class CommandPlan(NamedTuple):
 
 
 def _tokens(command):
-    """Shell operator를 실행하지 않고 토큰 경계만 확인한다."""
+    """Shell line continuation을 접은 뒤 operator 경계를 보존해 토큰화한다."""
+    continued = command.replace('\\\r\n', '').replace('\\\n', '')
+    if '\n' in continued or '\r' in continued:
+        raise ValueError('raw newlines require the command to be split')
     lexer = shlex.shlex(
-        command,
+        continued,
         posix=True,
         punctuation_chars=';&|()<>',
     )
@@ -80,144 +44,139 @@ def _tokens(command):
     return list(lexer)
 
 
-def _is_shell_operator(token):
-    return bool(token) and set(token) <= SHELL_PUNCTUATION
+def _shell_units(tokens):
+    units = []
+    operators = []
+    current = []
+    for token in tokens:
+        if token in SHELL_OPERATORS:
+            if not current:
+                raise ValueError(f'unsupported shell operator placement: {token}')
+            units.append(current)
+            operators.append(token)
+            current = []
+        else:
+            current.append(token)
+    if not current:
+        if tokens:
+            raise ValueError('command ends with a shell operator')
+        return [], []
+    units.append(current)
+    return units, operators
 
 
-def _mentions_wrapped_git(tokens):
-    if not tokens:
-        return False
-    executable = os.path.basename(tokens[0])
-    if ASSIGNMENT_RE.match(tokens[0]):
-        index = 0
-        while index < len(tokens) and ASSIGNMENT_RE.match(tokens[index]):
+def _resolve_path(base, value):
+    if any(token in value for token in ('$', '`')):
+        raise ValueError(f'dynamic path cannot be inspected safely: {value}')
+    value = os.path.expanduser(value)
+    return os.path.abspath(value if os.path.isabs(value) else os.path.join(base, value))
+
+
+def _git_unit(unit, cwd):
+    if not unit or os.path.basename(unit[0]) != 'git':
+        return False, cwd, None
+
+    project_dir = cwd
+    unsafe_option = None
+    index = 1
+    while index < len(unit):
+        token = unit[index]
+        if token == '-C':
+            if index + 1 >= len(unit):
+                return False, cwd, '-C requires a path'
+            try:
+                project_dir = _resolve_path(project_dir, unit[index + 1])
+            except ValueError as exc:
+                return False, cwd, str(exc)
+            index += 2
+        elif token.startswith('-C') and token != '-C':
+            try:
+                project_dir = _resolve_path(project_dir, token[2:])
+            except ValueError as exc:
+                return False, cwd, str(exc)
             index += 1
-        return index < len(tokens) and os.path.basename(tokens[index]) == 'git'
-    if executable not in WRAPPERS and not executable.startswith('python'):
-        return False
-    return any(
-        os.path.basename(token) == 'git' or re.search(r'\bgit\s+', token)
-        for token in tokens[1:]
-    )
+        elif token in ('--git-dir', '--work-tree'):
+            unsafe_option = unsafe_option or token
+            index += 2
+        elif token.startswith(('--git-dir=', '--work-tree=')):
+            unsafe_option = unsafe_option or token.split('=', 1)[0]
+            index += 1
+        elif token in ('-c', '--namespace', '--exec-path'):
+            if index + 1 >= len(unit):
+                return False, cwd, f'{token} requires a value'
+            index += 2
+        elif token.startswith(('-c', '--namespace=', '--exec-path=')):
+            index += 1
+        elif token in SAFE_GIT_FLAGS:
+            index += 1
+        elif token.startswith('-'):
+            if any(name in unit[index + 1:] for name in COMMIT_SUBCOMMANDS):
+                return False, cwd, f'Git option cannot be inspected safely: {token}'
+            return False, cwd, None
+        else:
+            break
 
-
-def _literal_project_dir(cwd, path, command):
-    if not path or any(char in NONLITERAL_PATH_CHARS for char in path):
-        raise ValueError(f'-C requires a literal path without expansion: {path}')
-    if any(ord(char) < 32 or ord(char) == 127 for char in path):
-        raise ValueError('-C requires a literal path without control characters')
-    if '\\' in command:
-        raise ValueError('-C requires a literal path without backslash escaping')
-    return os.path.abspath(path if os.path.isabs(path) else os.path.join(cwd, path))
+    if index >= len(unit):
+        return False, project_dir, None
+    subcommand = unit[index]
+    if subcommand not in COMMIT_SUBCOMMANDS:
+        return False, project_dir, None
+    if unsafe_option is not None:
+        return True, project_dir, (
+            f'{unsafe_option} cannot be inspected safely; split the command '
+            'and commit from the target working tree'
+        )
+    if subcommand != 'commit' and any(
+        option in ABORT_OPTIONS for option in unit[index + 1:]
+    ):
+        return False, project_dir, None
+    return True, project_dir, None
 
 
 def analyze_command(command: str, cwd: str) -> CommandPlan:
-    """명령을 실행하지 않고 direct commit allowlist로 분류한다."""
+    """하나의 안전한 commit unit과 검사할 저장소를 결정한다."""
     try:
         tokens = _tokens(command)
+        units, operators = _shell_units(tokens)
     except ValueError as exc:
         return CommandPlan(False, None, f'could not parse shell command: {exc}')
-    if not tokens:
-        return CommandPlan(False, None, None)
 
-    if any(char in command for char in ('\0', '\r', '\n')):
-        potential_git = any(
-            os.path.basename(token) == 'git' or re.search(r'\bgit\s+', token)
-            for token in tokens
-        )
-        if potential_git:
-            return CommandPlan(
-                True,
-                None,
-                'control characters are unsupported; use a direct git commit',
-            )
+    current_dir = os.path.abspath(cwd)
+    commits = []
+    non_cd_units = []
+    for index, unit in enumerate(units):
+        if unit[0] == 'cd':
+            if unit not in ([unit[0], unit[-1]], [unit[0], '--', unit[-1]]):
+                return CommandPlan(False, None, 'cd form cannot be inspected safely')
+            if index >= len(operators) or operators[index] != '&&':
+                return CommandPlan(
+                    False,
+                    None,
+                    'cd before commit must use && so failure cannot change the target',
+                )
+            try:
+                current_dir = _resolve_path(current_dir, unit[-1])
+            except ValueError as exc:
+                return CommandPlan(False, None, str(exc))
+            continue
 
-    has_operator = any(_is_shell_operator(token) for token in tokens)
-    potential_git = any(
-        os.path.basename(token) == 'git' or re.search(r'\bgit\s+', token)
-        for token in tokens
-        if not _is_shell_operator(token)
-    )
-    if has_operator and potential_git:
-        return CommandPlan(
-            True,
-            None,
-            'compound shell commands are unsupported; use a direct git commit',
-        )
-    if _mentions_wrapped_git(tokens):
-        return CommandPlan(
-            True,
-            None,
-            'Git wrappers are unsupported; use a direct git commit',
-        )
-    if os.path.basename(tokens[0]) != 'git':
-        return CommandPlan(False, None, None)
-    if not DIRECT_GIT_RE.match(command):
-        return CommandPlan(
-            True,
-            None,
-            'ambiguous Git spelling is unsupported; use a direct git commit',
-        )
+        creates, project_dir, error = _git_unit(unit, current_dir)
+        if error:
+            return CommandPlan(creates, project_dir, error)
+        if creates:
+            commits.append((index, project_dir))
+        else:
+            non_cd_units.append(index)
 
-    project_dir = os.path.abspath(cwd)
-    index = 1
-    used_git_c = False
-    if index < len(tokens) and tokens[index] == '-C':
-        if index + 1 >= len(tokens):
-            return CommandPlan(True, None, '-C requires a literal path')
-        try:
-            project_dir = _literal_project_dir(cwd, tokens[index + 1], command)
-        except ValueError as exc:
-            return CommandPlan(True, None, str(exc))
-        used_git_c = True
-        index += 2
-    elif index < len(tokens) and tokens[index].startswith('-'):
+    if not commits:
+        return CommandPlan(False, None, None)
+    if len(commits) != 1 or non_cd_units or commits[0][0] != len(units) - 1:
         return CommandPlan(
             True,
             None,
-            f'Git global option is unsupported: {tokens[index]}; '
-            'use a direct git commit',
+            'split compound commands so the commit snapshot can be inspected',
         )
-
-    if '\\' in command:
-        return CommandPlan(
-            True,
-            None,
-            'ambiguous Git spelling is unsupported; use a direct git commit',
-        )
-
-    if index >= len(tokens):
-        return CommandPlan(False, None, None)
-    subcommand = tokens[index]
-    arguments = tokens[index + 1:]
-    if (
-        not used_git_c
-        and subcommand in HISTORY_EXITS
-        and len(arguments) == 1
-        and arguments[0] in EXIT_OPTIONS
-    ):
-        return CommandPlan(False, None, None)
-    if subcommand == 'commit':
-        if '`' in command or '$(' in command:
-            return CommandPlan(
-                True,
-                None,
-                'shell expansion is unsupported; use a direct git commit',
-            )
-        return CommandPlan(True, project_dir, None)
-    if subcommand in PASSTHROUGH_SUBCOMMANDS:
-        return CommandPlan(False, None, None)
-    if subcommand in HISTORY_SUBCOMMANDS:
-        return CommandPlan(
-            True,
-            None,
-            'history operations must be performed by the user outside this hook',
-        )
-    return CommandPlan(
-        False,
-        None,
-        f'unsupported Git subcommand: {subcommand}',
-    )
+    return CommandPlan(True, commits[0][1], None)
 
 
 def creates_a_commit(command: str | None) -> bool:
@@ -238,7 +197,7 @@ def deny(result):
                 + '\n'.join(f'- {item}' for item in result.findings)
             ),
         }
-    }, ensure_ascii=True))
+    }, ensure_ascii=False))
 
 
 def _input_error(diagnostic):

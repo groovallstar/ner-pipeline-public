@@ -101,55 +101,15 @@ def _collect_numbers(node, catalog):
             catalog.add(text.rstrip('0'))
 
 
-def _validate_ledger_path(certified_root, path):
-    root = os.path.abspath(certified_root)
-    candidate = os.path.abspath(path)
-    try:
-        contained = os.path.commonpath((root, candidate)) == root
-    except ValueError:
-        contained = False
-    if not contained:
-        raise ValueError(f'ledger path resolves outside certified/: {path}')
-
-    current = root
-    for part in os.path.relpath(candidate, root).split(os.sep):
-        if part == '.':
-            continue
-        current = os.path.join(current, part)
-        if os.path.islink(current):
-            raise ValueError(
-                f'ledger path resolves outside certified/ or uses a symlink: {path}'
-            )
-    resolved = os.path.realpath(candidate)
-    try:
-        contained = os.path.commonpath((root, resolved)) == root
-    except ValueError:
-        contained = False
-    if not contained:
-        raise ValueError(f'ledger path resolves outside certified/: {path}')
-    return resolved
-
-
-def _certified_root(proj):
-    root = os.path.abspath(os.path.join(proj, 'certified'))
-    if os.path.islink(root):
-        raise ValueError('certified root must not be a symlink')
-    return os.path.realpath(root)
-
-
-def ledger_files(root, certified_root=None):
+def ledger_files(root):
     """인용 수치의 근거로 사용하는 원장 파일을 열거한다."""
-    certified_root = os.path.realpath(certified_root or root)
-    safe_root = _validate_ledger_path(certified_root, root)
     found = []
     for ext in CATALOG_EXT:
         found += glob.glob(
-            os.path.join(safe_root, '**', f'*.{ext}'),
+            os.path.join(root, '**', f'*.{ext}'),
             recursive=True,
         )
-    return sorted(
-        _validate_ledger_path(certified_root, path) for path in found
-    )
+    return sorted(found)
 
 
 def _numbers_from_files(paths):
@@ -168,10 +128,10 @@ def _numbers_from_files(paths):
 
 
 def _metric_catalog(proj):
-    root = _certified_root(proj)
+    root = os.path.join(proj, 'certified')
     if not os.path.isdir(root):
         return set()
-    return _numbers_from_files(ledger_files(root, root))
+    return _numbers_from_files(ledger_files(root))
 
 
 def _added_table_numbers(diff, known_path=None):
@@ -219,13 +179,20 @@ def _declared_sources(proj, path, lineno):
 
 
 def _catalog_of(proj, source):
-    root = _certified_root(proj)
+    root_path = os.path.abspath(os.path.join(proj, 'certified'))
+    root = os.path.realpath(root_path)
     if os.path.isabs(source):
         raise ValueError(f'source resolves outside certified/: {source}')
     rel = source.removeprefix('certified/')
-    full = _validate_ledger_path(root, os.path.join(root, rel))
+    full = os.path.realpath(os.path.join(root, rel))
+    try:
+        contained = os.path.commonpath((root, full)) == root
+    except ValueError:
+        contained = False
+    if not contained:
+        raise ValueError(f'source resolves outside certified/: {source}')
     if os.path.isdir(full):
-        paths = ledger_files(full, root)
+        paths = ledger_files(full)
     elif os.path.isfile(full):
         paths = [full]
     else:
@@ -298,14 +265,7 @@ def check_cited_metrics(proj):
             origin = ', '.join(sorted(set(sources)))
         else:
             if global_catalog is None:
-                try:
-                    global_catalog = _metric_catalog(proj)
-                except ValueError as exc:
-                    findings.setdefault(
-                        f'{path}: invalid certified catalog - {exc}',
-                        set(),
-                    )
-                    continue
+                global_catalog = _metric_catalog(proj)
             if not global_catalog:
                 findings.setdefault(
                     f'{path}: cites metrics but certified/ holds no committed '

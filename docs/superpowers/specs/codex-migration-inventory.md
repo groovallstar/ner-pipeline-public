@@ -58,9 +58,3 @@ Codex 커밋 게이트는 Git diff, Ruff, 훅 회귀 테스트, 테스트 무결
 `certified/**/*.json` 보호를 결정적으로 검사한다. 기준 파일 변경은 훅 내부의
 상태나 예외 승인으로 해제하지 않는다. independent reviewer 보고를 받은 뒤 사용자가
 훅 밖에서 직접 커밋하는 의도적 단순화를 적용한다.
-
-명령 해석은 직접 단일 `git commit` 또는 literal path의 `git -C <path> commit`만
-지원한다. exact standalone history exit 외의 merge, rebase, cherry-pick, revert,
-am 등 history operation과 wrapper·복합 shell·target expansion은 진단과 함께 차단한다.
-이는 snapshot과 검사 대상의 불일치를 막기 위한 의도적 안전 단순화이며, Task 6에서
-Claude 동작과의 차이 및 사용자 outside-hook 절차를 비교한다.

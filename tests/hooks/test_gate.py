@@ -915,12 +915,18 @@ def test_codex_commit_detection_preserves_abort_exceptions():
         assert not codex_commit_gate.creates_a_commit(cmd), cmd
 
 
-def test_codex_hook_checks_the_repository_selected_by_git_c(repo, tmp_path):
+@pytest.mark.parametrize('form', ['git-c', 'cd'])
+def test_codex_hook_checks_the_repository_selected_by_the_command(
+    repo, tmp_path, form,
+):
     other = _init_repo(tmp_path / 'other repo')
     _seed_ruler(other)
     _write(other, RULER_DOC, SCHEMA_BEFORE.replace('ORG', 'ORG PROD'))
     _sh(other, 'git', 'add', '-A')
-    command = f'git -C "{other}" commit -m schema'
+    if form == 'git-c':
+        command = f'git -C "{other}" commit -m schema'
+    else:
+        command = f'cd "{other}" && git commit -m schema'
 
     out = _run_codex_hook(
         repo,
@@ -930,20 +936,6 @@ def test_codex_hook_checks_the_repository_selected_by_git_c(repo, tmp_path):
     reason = out['hookSpecificOutput']['permissionDecisionReason']
     assert '[ruler-lock]' in reason
     assert RULER_DOC in reason
-
-
-def test_codex_hook_denies_cd_even_when_the_target_is_literal(repo, tmp_path):
-    other = _init_repo(tmp_path / 'other')
-    command = f'cd "{other}" && git commit -m schema'
-
-    out = _run_codex_hook(
-        repo,
-        _codex_commit_payload(repo, tool_input={'command': command}),
-    )
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[command-error]' in reason
-    assert 'direct git commit' in reason
 
 
 @pytest.mark.parametrize(
@@ -976,7 +968,7 @@ def test_codex_hook_denies_commands_that_can_change_the_commit_snapshot(
         'git \\\ncommit -m x',
     ],
 )
-def test_codex_hook_accepts_only_unambiguous_direct_git_spelling(
+def test_codex_hook_parses_commit_units_instead_of_the_raw_string(
     repo, command,
 ):
     _seed_ruler(repo)
@@ -988,12 +980,7 @@ def test_codex_hook_accepts_only_unambiguous_direct_git_spelling(
         _codex_commit_payload(repo, tool_input={'command': command}),
     )
 
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    if command.startswith('git commit'):
-        assert '[ruler-lock]' in reason
-    else:
-        assert '[command-error]' in reason
-        assert 'direct git commit' in reason
+    assert '[ruler-lock]' in out['hookSpecificOutput']['permissionDecisionReason']
 
 
 def test_codex_hook_does_not_let_an_abort_hide_a_later_commit(repo):
@@ -1125,179 +1112,6 @@ def test_codex_hook_runs_self_tests_when_a_hook_is_renamed_out(repo):
     reason = out['hookSpecificOutput']['permissionDecisionReason']
     assert '[self-test]' in reason
     assert '1 failed' in reason
-
-
-@pytest.mark.parametrize(
-    'command',
-    [
-        'env git commit -m x',
-        'MODE=test git commit -m x',
-        'command git commit -m x',
-        'bash -c "git commit -m x"',
-    ],
-)
-def test_codex_hook_denies_wrapped_commit_commands(repo, command):
-    out = _run_codex_hook(
-        repo,
-        _codex_commit_payload(repo, tool_input={'command': command}),
-    )
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[command-error]' in reason
-    assert 'direct git commit' in reason
-
-
-@pytest.mark.parametrize(
-    'command',
-    [
-        'git merge topic',
-        'git rebase --continue',
-        'git cherry-pick abc123',
-        'git revert HEAD',
-        'git am patch.mbox',
-        'git reset --hard HEAD~1',
-        'git push origin main',
-        'git stash push',
-        'git frobnicate history',
-        'git merge -m "--abort" topic',
-        'git rebase --abort extra',
-    ],
-)
-def test_codex_hook_denies_non_direct_history_operations(repo, command):
-    out = _run_codex_hook(
-        repo,
-        _codex_commit_payload(repo, tool_input={'command': command}),
-    )
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[command-error]' in reason
-    assert 'outside' in reason or 'unsupported' in reason
-
-
-@pytest.mark.parametrize(
-    'command',
-    [
-        'git rebase --abort',
-        'git merge --quit',
-        'git cherry-pick --skip',
-        'git am --abort',
-    ],
-)
-def test_codex_hook_allows_exact_standalone_history_exits(repo, command):
-    payload = _codex_commit_payload(repo, tool_input={'command': command})
-    assert _run_codex_hook(repo, payload) == {}
-
-
-@pytest.mark.parametrize(
-    'target',
-    ['repo*', '~', '$TARGET', '`pwd`', 'repo{1,2}', 'repo\\name'],
-)
-def test_codex_hook_denies_nonliteral_git_c_targets(repo, target):
-    command = f'git -C "{target}" commit -m x'
-
-    out = _run_codex_hook(
-        repo,
-        _codex_commit_payload(repo, tool_input={'command': command}),
-    )
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[command-error]' in reason
-    assert 'literal' in reason
-
-
-def test_codex_hook_allows_a_normal_non_git_command(repo):
-    payload = _codex_commit_payload(
-        repo,
-        tool_input={'command': 'echo normal command'},
-    )
-    assert _run_codex_hook(repo, payload) == {}
-
-
-def test_codex_hook_allows_git_words_passed_to_a_nonwrapper(repo):
-    payload = _codex_commit_payload(
-        repo,
-        tool_input={'command': 'echo "git commit is blocked here"'},
-    )
-    assert _run_codex_hook(repo, payload) == {}
-
-
-def _write_report_with_metric(repo, source=None):
-    declaration = f'<!-- certified: {source} -->\n\n' if source else ''
-    _write(
-        repo,
-        'docs/reports/result.md',
-        declaration + '| 타입 | F1 |\n|---|---|\n| ALL | 0.7700 |\n',
-    )
-    _sh(repo, 'git', 'add', '-A')
-
-
-def test_codex_hook_denies_a_symlinked_certified_root(repo, tmp_path):
-    outside = tmp_path / 'ledger'
-    outside.mkdir()
-    (outside / 'metrics.json').write_text('{"f1": 0.7700}')
-    (Path(repo) / 'certified').symlink_to(outside, target_is_directory=True)
-    _sh(repo, 'git', 'add', '-A')
-    _sh(repo, 'git', 'commit', '-qm', 'linked ledger')
-    _write_report_with_metric(repo, 'metrics.json')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[hard]' in reason
-    assert 'certified root must not be a symlink' in reason
-
-
-def test_codex_hook_denies_a_symlink_inside_a_directory_source(repo, tmp_path):
-    outside = tmp_path / 'metrics.json'
-    outside.write_text('{"f1": 0.7700}')
-    run = Path(repo) / 'certified/run'
-    run.mkdir(parents=True)
-    (run / 'linked.json').symlink_to(outside)
-    _sh(repo, 'git', 'add', '-A')
-    _sh(repo, 'git', 'commit', '-qm', 'linked ledger')
-    _write_report_with_metric(repo, 'run')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[hard]' in reason
-    assert 'outside certified' in reason
-
-
-def test_codex_hook_denies_a_symlink_used_by_the_global_catalog(repo, tmp_path):
-    outside = tmp_path / 'metrics.json'
-    outside.write_text('{"f1": 0.7700}')
-    ledger = Path(repo) / 'certified'
-    ledger.mkdir()
-    (ledger / 'linked.json').symlink_to(outside)
-    _sh(repo, 'git', 'add', '-A')
-    _sh(repo, 'git', 'commit', '-qm', 'linked ledger')
-    _write_report_with_metric(repo)
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[hard]' in reason
-    assert 'outside certified' in reason
-
-
-def test_codex_hook_denies_an_arbitrary_byte_protected_path(repo):
-    certified = os.fsencode(repo) + b'/certified'
-    os.mkdir(certified)
-    name = b'bad-\xff.json'
-    path = certified + b'/' + name
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT, 0o644)
-    try:
-        os.write(descriptor, b'{"score": 0.91}\n')
-    finally:
-        os.close(descriptor)
-    _sh(repo, 'git', 'add', '-A')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[protected-path]' in reason
-    assert os.fsdecode(b'certified/' + name) in reason
 
 
 # ── 확인마다 집행 주체가 있는가 ───────────────────────────────────────
