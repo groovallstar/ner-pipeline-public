@@ -67,6 +67,8 @@ Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업
 
 Claude reviewer와 Codex reviewer의 지적 수나 문체는 비교 대상이 아니다. reviewer 결과는 각 하네스의 내부 품질 검증에 사용하고, 마이그레이션 표에는 실제 기능·정책·부작용 차이만 기록한다. 안전 불변조건이나 사용자가 명시한 정책이 아니라면 Claude와 다른 동작을 Codex 결함으로 간주하지 않는다.
 
+구현 전 판정은 원본 조사와 설계를 근거로 한 예상값이다. 이관표에는 차이의 영향과 판정 근거를 함께 적고, 어느 구현·smoke test에서 판정을 확정할지도 명시한다. 특히 자동 실행을 명시적 호출로 바꾸는 경우에는 호출 누락 가능성과 집행력 감소를 영향으로 기록하며, 실제 reviewer 및 병행 검증 전에는 확정 판정으로 취급하지 않는다.
+
 ## 작업 흐름 대체 방식
 
 OMX의 별도 런타임·상태 관리·팀 오케스트레이션은 이관하지 않는다. 기능별 대체 수단은 다음과 같다.
@@ -127,7 +129,7 @@ Codex의 사용자 수준 설정은 `/home/rkim/.codex/config.toml`에 남는다
 
 ### 커밋 게이트
 
-`commit_gate.py`는 Codex `PreToolUse`의 `Bash` 이벤트에서 실행한다. Codex 입력은 `tool_name`과 `tool_input.command`를 제공하므로, 어댑터는 이 필드로 커밋을 만드는 Git 명령을 판별한다. 차단 시에는 `hookSpecificOutput.permissionDecision = "deny"`와 이유를 반환한다.
+`commit_gate.py`는 Codex `PreToolUse`의 `Bash` 이벤트에서 실행한다. Codex 입력은 `tool_name`과 `tool_input.command`를 제공하므로, 어댑터는 이 필드로 커밋을 만드는 Git 명령을 판별한다. 유효한 비대상 도구와 커밋 생성이 아닌 명령만 통과하며, 입력 파싱 또는 결정적 검사 실행이 실패하면 진단을 포함해 fail-closed한다. 차단 시에는 `hookSpecificOutput.permissionDecision = "deny"`와 이유를 반환한다.
 
 기존 `gate_core.py`의 diff 검사와 승인 파일 지문 계산은 재사용한다. Codex 고유 JSON을 이 공통 로직이 직접 알지 않도록, 새 어댑터에서 표준 명령 문자열과 작업 디렉터리로 변환한다.
 
@@ -135,7 +137,7 @@ Codex의 사용자 수준 설정은 `/home/rkim/.codex/config.toml`에 남는다
 
 Claude의 `refuter_gate.py`와 `lessons_nudge.py`는 Codex Stop 훅으로 이식하지 않는다. Stop 훅이 reviewer를 직접 생성하지 못하고 판정 상태·재진입 제어라는 별도 커스텀 하네스를 요구하기 때문이다.
 
-반박 검토는 Superpowers `requesting-code-review`가 호출하는 읽기 전용 Codex reviewer subagent로 대체한다. 프로젝트 `AGENTS.md`는 기준 파일 변경과 주요 런타임 변경에서 이 절차를 요구한다. reviewer는 요구사항, 기준 diff, 변경된 테스트, 검증 출력을 입력으로 받아 결함·회귀·테스트 공백만 보고하며 구현을 수정하지 않는다.
+반박 검토는 Superpowers `requesting-code-review`가 호출하는 읽기 전용 Codex reviewer subagent로 대체한다. 프로젝트 `AGENTS.md`는 기준 파일 변경과 주요 런타임 변경에서 이 절차를 요구한다. reviewer는 요구사항, 기준 diff, 변경된 테스트, 검증 출력을 입력으로 받아 결함·회귀·테스트 공백만 보고하며 구현을 수정하지 않는다. Stop 훅의 자동 호출을 제거하므로 명시적 호출을 빠뜨릴 수 있고 집행력이 낮아질 수 있다. 이 의도적 단순화 판정은 Task 5의 reviewer smoke test와 Task 6의 병행 검증에서 누락 방지 절차와 실제 호출 증거를 확인한 뒤 확정한다.
 
 최종 완료 전에는 Superpowers `verification-before-completion`을 사용해 테스트·린트·문서·설정 검증의 새 출력을 확인한다. lessons-digest는 기존 Claude·OMC 상태 의존성이 있어 병행 기간에는 보류하고, 반복 지적의 사람 주도 승격 원칙만 문서 규칙으로 유지한다.
 

@@ -45,6 +45,8 @@
 
 **Files:**
 
+- Modify: `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
+- Create: `docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md`
 - Create: `docs/superpowers/specs/codex-migration-inventory.md`
 - Create: `tests/migration/test_codex_migration.py`
 
@@ -97,12 +99,12 @@
 
 - [ ] **Step 3: 이관표를 작성한다**
 
-  문서에 지침 16개를 `원본 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 판정 | 상태 | 검증` 열로 기록한다. 상태는 모두 `계획됨`으로 시작한다. 판정은 `동일 유지`, `동등 대체`, `의도적 단순화`, `제거`, `보류`만 사용하며 차이가 있다는 이유만으로 실패로 표시하지 않는다. 스킬 6개는 다음 결정으로 고정한다.
+  문서에 지침 16개를 `원본 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증` 열로 기록한다. 상태는 모두 `계획됨`으로 시작한다. 판정은 `동일 유지`, `동등 대체`, `의도적 단순화`, `제거`, `보류`만 사용하며 차이가 있다는 이유만으로 실패로 표시하지 않는다. 구현 전 판정은 예상값으로 기록하고 Task 2부터 6까지의 어떤 검증에서 확정할지 각 행에 명시한다. 스킬 6개는 다음 결정으로 고정한다.
 
-  | 원본 스킬 | 결정 | Codex 대상 |
-  | --- | --- | --- |
+  | 원본 스킬 | 결정 | Codex 대상 | 판정 |
+  | --- | --- | --- | --- |
   | `debug-triage` | 이관 | `.agents/skills/ner-debug-triage/SKILL.md` | 동등 대체 |
-  | `explain-diff` | 이관 | `.agents/skills/explain-diff/SKILL.md` | 동일 유지 |
+  | `explain-diff` | 이관 | `.agents/skills/explain-diff/SKILL.md` | 동등 대체 |
   | `perf-measure` | 이관 | `.agents/skills/perf-measure/SKILL.md` | 동일 유지 |
   | `tdd` | 통합 | `superpowers:test-driven-development` | 동등 대체 |
   | `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | 의도적 단순화 |
@@ -126,12 +128,15 @@
 
   Run: `git diff --name-only`
 
-  Expected: 이 Task의 두 새 파일만 출력되며 `.claude`와 `CLAUDE.md`는 출력되지 않는다. 이관표와 실패 테스트 결과를 사용자에게 제시하고 멈춘다.
+  Expected: 이 Task의 설계, 계획, 이관표, 정적 계약 테스트 네 파일만 출력되며 `.claude`와 `CLAUDE.md`는 출력되지 않는다. 이관표와 실패 테스트 결과를 사용자에게 제시하고 멈춘다.
 
 - [ ] **Step 6: 사용자 승인 후 Task 1을 커밋한다**
 
   ```bash
-  git add docs/superpowers/specs/codex-migration-inventory.md tests/migration/test_codex_migration.py
+  git add docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md \
+    docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md \
+    docs/superpowers/specs/codex-migration-inventory.md \
+    tests/migration/test_codex_migration.py
   git commit -m "docs: Codex 이관표 추가"
   ```
 
@@ -458,11 +463,11 @@
       return GateResult(True, "pass", "", ())
   ```
 
-  검사 실행 실패는 정상 통과와 구분되는 `systemMessage`로 알리되 커밋을 영구 차단하지 않는다. `.codex/hooks/` 또는 `tests/hooks/`가 바뀐 경우에만 훅 자기 테스트를 실행한다.
+  `evaluate()` 내부의 Git, Ruff, pytest, diff 파싱을 포함한 결정적 검사 실행에서 예외가 발생하면 `GateResult(False, "internal-error", "Codex gate checks could not complete", (진단,))`로 변환한다. 검사 실행 오류는 진단을 포함해 커밋을 차단하며 정상 통과로 취급하지 않는다. `.codex/hooks/` 또는 `tests/hooks/`가 바뀐 경우에만 훅 자기 테스트를 실행한다.
 
 - [ ] **Step 4: Codex PreToolUse 어댑터를 구현한다**
 
-  `creates_a_commit`은 기존의 commit, cherry-pick, revert, am, rebase, merge 감지와 abort, quit, skip 예외를 보존한다. `main()`은 잘못된 JSON, Bash가 아닌 도구, 커밋 생성이 아닌 명령, 빈 diff를 출력 없이 통과시킨다. 차단 결과는 다음 형식만 출력한다.
+  `creates_a_commit`은 기존의 commit, cherry-pick, revert, am, rebase, merge 감지와 abort, quit, skip 예외를 보존한다. `main()`은 JSON 입력을 먼저 파싱하며 파싱 실패나 필수 필드 형식 오류는 `input-error` 진단을 포함한 deny로 fail-closed한다. 유효한 입력에서 Bash가 아닌 도구와 커밋 생성이 아닌 명령만 출력 없이 통과시킨다. 커밋 생성 명령은 빈 diff를 포함해 `evaluate()`를 호출하고, 검사 결과 또는 실행 예외가 허용을 명시하지 않으면 deny한다. 차단 결과는 다음 형식만 출력한다.
 
   ```python
   def deny(result):
@@ -480,7 +485,7 @@
 
 - [ ] **Step 5: 상태 제거와 회귀 사례를 추가한다**
 
-  Codex 훅 테스트에 정상 변경 통과, Ruff 오류 차단, 테스트 삭제 차단, protected certified JSON 변경 차단, certified 인용 수치 오류 차단, 잘못된 JSON 통과, Bash 외 도구 통과를 추가한다. 기준 파일 차단 메시지에는 `human-allow`, `verdict`, `.omx`, `.codex/state`가 없어야 한다.
+  Codex 훅 테스트에 정상 변경 통과, Ruff 오류 차단, 테스트 삭제 차단, protected certified JSON 변경 차단, certified 인용 수치 오류 차단, malformed JSON 차단, 필수 필드 형식 오류 차단, 결정적 검사 실행 예외 차단, Bash 외 도구 통과, 커밋 생성이 아닌 명령 통과를 추가한다. 오류 차단 사례는 `permissionDecision == "deny"`와 진단 문자열을 모두 검증한다. 기준 파일 차단 메시지에는 `human-allow`, `verdict`, `.omx`, `.codex/state`가 없어야 한다.
 
 - [ ] **Step 6: 대상 테스트와 정적 검사를 실행한다**
 
