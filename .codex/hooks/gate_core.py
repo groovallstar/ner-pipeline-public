@@ -41,14 +41,13 @@ class GateResult(NamedTuple):
     findings: tuple[str, ...]
 
 
-def git(args, cwd):
-    """Git 명령을 실행하고 예상하지 않은 실패를 예외로 올린다."""
+def _run_git(args, cwd, text):
     try:
         out = subprocess.run(
             ['git', *args],
             cwd=cwd,
             capture_output=True,
-            text=True,
+            text=text,
             timeout=20,
         )
     except Exception as exc:
@@ -56,11 +55,23 @@ def git(args, cwd):
             f'git {args[0]} could not run: {type(exc).__name__}: {exc}'
         ) from exc
     if out.returncode != 0:
-        diagnostic = (out.stderr or out.stdout).strip() or 'no diagnostic'
+        diagnostic = (out.stderr or out.stdout).strip()
+        if isinstance(diagnostic, bytes):
+            diagnostic = os.fsdecode(diagnostic)
+        diagnostic = diagnostic or 'no diagnostic'
         raise RuntimeError(
             f'git {args[0]} exited {out.returncode}: {diagnostic}'
         )
     return out.stdout
+
+
+def git(args, cwd):
+    """Git 명령을 실행하고 예상하지 않은 실패를 예외로 올린다."""
+    return _run_git(args, cwd, text=True)
+
+
+def _git_bytes(args, cwd):
+    return _run_git(args, cwd, text=False)
 
 
 def diff_text(proj):
@@ -69,7 +80,11 @@ def diff_text(proj):
 
 
 def _changed_paths(proj):
-    return git(['diff', '--name-only', 'HEAD'], proj).splitlines()
+    raw = _git_bytes(
+        ['diff', '--no-renames', '--name-only', '-z', 'HEAD'],
+        proj,
+    )
+    return [os.fsdecode(path) for path in raw.split(b'\0') if path]
 
 
 def _collect_numbers(node, catalog):
@@ -119,12 +134,12 @@ def _metric_catalog(proj):
     return _numbers_from_files(ledger_files(root))
 
 
-def _added_table_numbers(diff):
+def _added_table_numbers(diff, known_path=None):
     entries = []
-    path = None
+    path = known_path
     lineno = 0
     for line in diff.splitlines():
-        if line.startswith('+++ b/'):
+        if known_path is None and line.startswith('+++ b/'):
             path = line[6:]
         elif line.startswith('@@'):
             match = re.search(r'\+(\d+)', line)
@@ -164,12 +179,18 @@ def _declared_sources(proj, path, lineno):
 
 
 def _catalog_of(proj, source):
-    rel = (
-        source
-        if source.startswith('certified/')
-        else os.path.join('certified', source)
-    )
-    full = os.path.join(proj, rel)
+    root_path = os.path.abspath(os.path.join(proj, 'certified'))
+    root = os.path.realpath(root_path)
+    if os.path.isabs(source):
+        raise ValueError(f'source resolves outside certified/: {source}')
+    rel = source.removeprefix('certified/')
+    full = os.path.realpath(os.path.join(root, rel))
+    try:
+        contained = os.path.commonpath((root, full)) == root
+    except ValueError:
+        contained = False
+    if not contained:
+        raise ValueError(f'source resolves outside certified/: {source}')
     if os.path.isdir(full):
         paths = ledger_files(full)
     elif os.path.isfile(full):
@@ -180,8 +201,12 @@ def _catalog_of(proj, source):
 
 
 def _preexisting_numbers(proj, path):
-    tracked = git(['ls-tree', '-r', '--name-only', 'HEAD', '--', path], proj)
-    if path not in tracked.splitlines():
+    tracked = _git_bytes(
+        ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', path],
+        proj,
+    )
+    tracked_paths = {os.fsdecode(item) for item in tracked.split(b'\0') if item}
+    if path not in tracked_paths:
         return set()
     blob = git(['show', f'HEAD:{path}'], proj)
     return set(NUM_RE.findall(blob))
@@ -189,9 +214,12 @@ def _preexisting_numbers(proj, path):
 
 def check_cited_metrics(proj):
     """새 표 수치가 선언된 certified 원장에 있는지 검사한다."""
-    entries = _added_table_numbers(
-        git(['diff', 'HEAD', '--', 'docs/reports', 'docs/issues'], proj)
-    )
+    entries = []
+    for path in _changed_paths(proj):
+        if not path.startswith(('docs/reports/', 'docs/issues/')):
+            continue
+        diff = git(['diff', '--no-renames', 'HEAD', '--', path], proj)
+        entries.extend(_added_table_numbers(diff, path))
     if not entries:
         return []
 
@@ -209,12 +237,24 @@ def check_cited_metrics(proj):
         if sources:
             catalog = set()
             unknown = []
+            invalid = []
             for source in sources:
-                one = _catalog_of(proj, source)
+                try:
+                    one = _catalog_of(proj, source)
+                except ValueError as exc:
+                    invalid.append(str(exc))
+                    continue
                 if one is None:
                     unknown.append(source)
                 else:
                     catalog |= one
+            if invalid:
+                findings.setdefault(
+                    f'{path}: invalid certified source - '
+                    + ', '.join(sorted(set(invalid))),
+                    set(),
+                )
+                continue
             if unknown:
                 findings.setdefault(
                     f'{path}: declared source not in certified/ - '
@@ -264,39 +304,32 @@ def check_ruler_touched(proj):
     return [path for path in sorted(_changed_paths(proj)) if is_ruler(path)]
 
 
-def _diff_by_file(diff):
-    per_file = {}
-    old = None
-    path = None
+def _diff_changes(diff):
+    added = []
+    removed = []
+    in_hunk = False
     for line in diff.splitlines():
-        if line.startswith('--- '):
-            rest = line[4:]
-            old = rest[2:] if rest.startswith('a/') else None
-        elif line.startswith('+++ '):
-            rest = line[4:]
-            path = rest[2:] if rest.startswith('b/') else old
-            if path:
-                per_file.setdefault(path, ([], []))
-        elif path is None:
+        if line.startswith('@@'):
+            in_hunk = True
+        elif not in_hunk:
             continue
         elif line.startswith('+'):
-            per_file[path][0].append(line[1:])
+            added.append(line[1:])
         elif line.startswith('-'):
-            per_file[path][1].append(line[1:])
-    return per_file
+            removed.append(line[1:])
+    return added, removed
 
 
 def check_test_integrity(proj):
     """테스트 삭제와 무조건 skip, assert 순삭제를 파일별로 검사한다."""
-    diff = git(['diff', 'HEAD', '--', 'tests'], proj)
-    if not diff.strip():
-        return []
-
     def count(lines, pattern):
         return sum(1 for line in lines if re.match(pattern, line.strip()))
 
     findings = []
-    for path, (added, removed) in sorted(_diff_by_file(diff).items()):
+    paths = sorted(path for path in _changed_paths(proj) if path.startswith('tests/'))
+    for path in paths:
+        diff = git(['diff', '--no-renames', 'HEAD', '--', path], proj)
+        added, removed = _diff_changes(diff)
         dropped = count(removed, r'def test_') - count(added, r'def test_')
         if dropped > 0:
             findings.append(f'{path}: {dropped} test function(s) net removed')
