@@ -4,9 +4,9 @@
 
 **Goal:** Claude Code 설정을 보존한 채 두 하네스의 실제 동작을 비교하고, 유지·대체·단순화·제거하기로 결정한 Codex용 자산만 추가한다.
 
-**Architecture:** `CLAUDE.md`와 `.claude/**`는 병행 기간의 원본으로 유지하고, Codex 전용 파일을 `AGENTS.md`, `.agents/skills/`, `.codex/hooks/`, `.codex/agents/`에 새로 추가한다. 커밋 게이트는 Claude의 상태·Stop·refuter 결합부를 복제하지 않고 순수 검사만 독립 구현하며, 독립 반박 검토와 완료 검증은 Codex reviewer subagent와 Superpowers 절차로 수행한다. 사용자 수준 Codex 설정은 저장소 자산 검증이 끝난 뒤 별도 승인으로만 활성화한다.
+**Architecture:** `CLAUDE.md`와 `.claude/**`는 병행 기간의 원본으로 유지하고, Codex 전용 파일을 `AGENTS.md`, `.codex/hooks/`, `.codex/agents/`에 새로 추가한다. 프로젝트 스킬은 baseline으로 중복 여부를 판정하며 Task 3에서는 추가하지 않는다. 커밋 게이트는 Claude의 상태·Stop·refuter 결합부를 복제하지 않고 순수 검사만 독립 구현하며, 독립 반박 검토와 완료 검증은 Codex reviewer subagent와 Superpowers 절차로 수행한다. 사용자 수준 Codex 설정은 저장소 자산 검증이 끝난 뒤 별도 승인으로만 활성화한다.
 
-**Tech Stack:** Python 3.13, pytest 9, Ruff, TOML (`tomllib`), Codex `AGENTS.md`·Hooks·custom agents·repository skills, Superpowers
+**Tech Stack:** Python 3.13, pytest 9, Ruff, TOML (`tomllib`), Codex `AGENTS.md`·Hooks·custom agents, Superpowers
 
 **Spec:** `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
 
@@ -32,9 +32,6 @@
 | `docs/superpowers/specs/codex-migration-inventory.md` | 원본 16개 지침과 6개 스킬의 대상·상태·검증 근거를 기록한다. |
 | `tests/migration/test_codex_migration.py` | 파일 대응, 금지 표현, 원본 보존, TOML·스킬 구조를 정적으로 검증한다. |
 | `AGENTS.md`와 하위 15개 `AGENTS.md` | 현재 디렉터리에 적용되는 Codex 프로젝트·모듈 지침을 제공한다. |
-| `.agents/skills/ner-debug-triage/SKILL.md` | Superpowers 디버깅 절차에 NER별 재현·격리 검사를 덧붙인다. |
-| `.agents/skills/explain-diff/SKILL.md` | 저장소 diff 설명 보고서의 형식과 범위를 제공한다. |
-| `.agents/skills/perf-measure/SKILL.md` | NER 성능 변경의 측정·비교·회귀 방지 절차를 제공한다. |
 | `.codex/hooks/gate_core.py` | `.omx`·refuter 상태 없이 diff 기반 결정적 검사를 수행한다. |
 | `.codex/hooks/commit_gate.py` | Codex `PreToolUse` JSON을 파싱하고 커밋 생성 명령만 검사한다. |
 | `.codex/agents/reviewer.toml` | 소스 수정 권한이 없는 독립 반박 reviewer 역할을 정의한다. |
@@ -103,9 +100,9 @@
 
   | 원본 스킬 | 결정 | Codex 대상 | 판정 |
   | --- | --- | --- | --- |
-  | `debug-triage` | 이관 | `.agents/skills/ner-debug-triage/SKILL.md` | 동등 대체 |
-  | `explain-diff` | 이관 | `.agents/skills/explain-diff/SKILL.md` | 동등 대체 |
-  | `perf-measure` | 이관 | `.agents/skills/perf-measure/SKILL.md` | 동일 유지 |
+  | `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | 동등 대체 |
+  | `explain-diff` | 제거 | Codex 기본 역량 | 제거 |
+  | `perf-measure` | 제거 | Codex 기본 역량 | 제거 |
   | `tdd` | 통합 | `superpowers:test-driven-development` | 동등 대체 |
   | `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | 의도적 단순화 |
   | `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | 보류 |
@@ -251,85 +248,81 @@
   git commit -m "docs: Codex 지침 계층 추가"
   ```
 
-## Task 3: 프로젝트 스킬 이관과 Superpowers 통합 기록
+## Task 3: 프로젝트 스킬 결정 단순화
 
 **Files:**
 
-- Create: `.agents/skills/ner-debug-triage/SKILL.md`
-- Create: `.agents/skills/explain-diff/SKILL.md`
-- Create: `.agents/skills/perf-measure/SKILL.md`
+- Modify: `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
+- Modify: `docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md`
 - Modify: `tests/migration/test_codex_migration.py`
 - Modify: `docs/superpowers/specs/codex-migration-inventory.md`
 
 **Interfaces:**
 
-- Consumes: Task 1의 스킬 결정표, 설치된 Superpowers 스킬 이름
-- Produces: Codex가 발견할 수 있는 프로젝트 스킬 3개와 중복·보류 결정 3개
+- Consumes: Task 1의 스킬 결정표, 설치된 Superpowers 스킬 이름, debug·diff·perf baseline 보고서
+- Produces: 통합 3개, 제거 2개, 보류 1개의 결정과 중복 프로젝트 스킬 부재 계약
 
-- [ ] **Step 1: 스킬 발견 계약 테스트를 작성한다**
+- [ ] **Step 1: 결정 일관성과 중복 자산 부재 테스트를 작성한다**
 
   ```python
-  import re
-
-  import pytest
-
-  MIGRATED_SKILLS = {
-      "ner-debug-triage": "Systematic NER-specific debugging",
-      "explain-diff": "rich explanation",
-      "perf-measure": "Measure-first performance",
+  SKILL_DECISIONS = {
+      "debug-triage": "통합",
+      "explain-diff": "제거",
+      "perf-measure": "제거",
+      "tdd": "통합",
+      "refuter": "통합",
+      "lessons-digest": "보류",
   }
 
-  @pytest.mark.parametrize(("name", "description_fragment"), MIGRATED_SKILLS.items())
-  def test_migrated_skill_has_valid_frontmatter(name, description_fragment):
-      path = REPO_ROOT / ".agents" / "skills" / name / "SKILL.md"
-      text = path.read_text()
-      assert text.startswith("---\n")
-      assert re.search(rf"(?m)^name: {re.escape(name)}$", text)
-      assert description_fragment.lower() in text.lower()
-
-  @pytest.mark.parametrize("name", ("tdd", "refuter", "lessons-digest"))
-  def test_integrated_or_deferred_skills_are_not_duplicated(name):
+  @pytest.mark.parametrize("name", (*SKILL_DECISIONS, "ner-debug-triage"))
+  def test_legacy_skills_are_not_duplicated_in_codex(name):
       assert not (REPO_ROOT / ".agents" / "skills" / name).exists()
   ```
 
-- [ ] **Step 2: 테스트가 스킬 파일 부재로 실패하는지 확인한다**
+- [ ] **Step 2: 테스트가 기존 이관표 결정 불일치로 실패하는지 확인한다**
 
   Run: `uv run pytest tests/migration/test_codex_migration.py -q`
 
-  Expected: 이관 대상 3개 사례가 `FileNotFoundError`로 FAIL한다.
+  Expected: debug-triage, explain-diff, perf-measure의 기존 `이관` 값 때문에 FAIL한다.
 
-- [ ] **Step 3: ner-debug-triage 스킬을 작성한다**
+- [ ] **Step 3: baseline 근거와 여섯 결정을 문서에 반영한다**
 
-  frontmatter의 `name`은 `ner-debug-triage`, description은 `Systematic NER-specific debugging`을 포함한다. 본문은 먼저 `superpowers:systematic-debugging`을 사용하도록 요구하고, NER 추가 점검을 백엔드, 데이터 로더, 프롬프트, BIO 정렬, 평가 경계로 제한한다. 재현 명령은 `uv run pytest <node-id> -x -q`와 실제 모듈의 `uv run python -m ...` 형식을 사용하며 `PYTHONPATH`를 설정하지 않는다.
+  debug baseline은 `systematic-debugging`과 `AGENTS.md`만으로 재현, 증거 보존,
+  경계 관측, 2x2 원인 격리, 회귀 검증을 제시했다. diff baseline은 별도 스킬 없이
+  비전문가 대상 설명 문서의 입력, 구성, 예시, 검증 계약을 제시했다. perf baseline은
+  고정 조건, 반복, 처리량·지연·신뢰성·자원·품질 지표, 단일 변수 실험과 채택 게이트를
+  제시했다. 이 근거로 통합 3개, 제거 2개, 보류 1개를 기록하고 `.agents/skills/`는 만들지 않는다.
 
-- [ ] **Step 4: explain-diff와 perf-measure 스킬을 작성한다**
-
-  `explain-diff`는 변경 범위, 배경, 직관, 코드 흐름, 위험, 검증, 퀴즈와 정답을 포함하는 한국어 Markdown 보고서를 `/tmp/YYYY-MM-DD-explanation-<slug>.md`에 작성하도록 한다. `perf-measure`는 고정 데이터·모델·시드·샘플 수에서 baseline과 candidate의 wall time, 처리량, GPU 메모리, F1을 함께 기록하고 한 번에 한 변수만 변경하도록 한다.
-
-- [ ] **Step 5: Claude 전용 의존성과 스킬 구조를 검증한다**
+- [ ] **Step 4: 결정과 프로젝트 스킬 부재를 검증한다**
 
   Run: `uv run pytest tests/migration/test_codex_migration.py -q`
 
   Expected: 전체 PASS한다.
 
-  Run: `rg -n 'PYTHONPATH=|\.claude/|CLAUDE\.md|\.omc/|AskUserQuestion|/tdd' .agents/skills`
+  Run: `test ! -d .agents/skills`
 
-  Expected: 출력이 없다.
+  Expected: 종료 코드 0이다.
 
-- [ ] **Step 6: 이관표 상태를 갱신하고 사용자 검토를 요청한다**
+- [ ] **Step 5: 변경 범위와 원본 보존을 검증한다**
 
-  이관 대상 3개는 `작성됨`, 통합 대상 2개는 `Superpowers 통합`, lessons-digest는 `보류`로 갱신한다. 각 행의 검증 열에는 대응 스킬 또는 정적 테스트를 기록한다.
+  Run: `uv run ruff check tests/migration/test_codex_migration.py`
+
+  Run: `rg -n 'T''BD|TO''DO|PLACE''HOLDER' docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md docs/superpowers/specs/codex-migration-inventory.md tests/migration/test_codex_migration.py`
+
+  Run: `git diff -- .claude CLAUDE.md ':(glob)**/CLAUDE.md'`
 
   Run: `git diff --check`
 
-  Expected: 종료 코드 0이다. 스킬별 결정과 검증 결과를 사용자에게 제시하고 멈춘다.
+  Expected: 모든 명령이 성공하고 네 소유 파일 밖의 변경이 없다.
 
-- [ ] **Step 7: 사용자 승인 후 Task 3을 커밋한다**
+- [ ] **Step 6: Task 3을 커밋한다**
 
   ```bash
-  git add .agents/skills tests/migration/test_codex_migration.py \
-    docs/superpowers/specs/codex-migration-inventory.md
-  git commit -m "feat: Codex 프로젝트 스킬 추가"
+  git add docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md \
+    docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md \
+    docs/superpowers/specs/codex-migration-inventory.md \
+    tests/migration/test_codex_migration.py
+  git commit -m "docs: Codex 스킬 이관 단순화"
   ```
 
 ## Task 4: 상태 없는 Codex PreToolUse 커밋 게이트 구현
@@ -630,7 +623,7 @@
 
 - [ ] **Step 2: 병행 검증 문서를 작성한다**
 
-  다음 행을 `검증 항목 | Claude 동작 | Codex 동작 | 관찰된 차이 | 채택 판정 | 근거` 열로 기록한다: 루트 지침, `src/ner`, `src/server`, `docker`, `tests/ner`, 프로젝트 스킬 발견, 정상 커밋, Ruff 위반, 테스트 무결성 위반, 기준 파일 변경, protected certified JSON 변경, certified 인용 수치, 파일 쓰기 전 차단 범위, 독립 reviewer, 완료 검증. 실제로 실행하지 않은 새 세션 항목은 `미실행`, 채택 판정은 `보류`로 유지한다. reviewer의 지적 개수나 표현 방식은 이 표에 넣지 않는다.
+  다음 행을 `검증 항목 | Claude 동작 | Codex 동작 | 관찰된 차이 | 채택 판정 | 근거` 열로 기록한다: 루트 지침, `src/ner`, `src/server`, `docker`, `tests/ner`, 프로젝트 스킬 결정, 정상 커밋, Ruff 위반, 테스트 무결성 위반, 기준 파일 변경, protected certified JSON 변경, certified 인용 수치, 파일 쓰기 전 차단 범위, 독립 reviewer, 완료 검증. 실제로 실행하지 않은 새 세션 항목은 `미실행`, 채택 판정은 `보류`로 유지한다. reviewer의 지적 개수나 표현 방식은 이 표에 넣지 않는다.
 
 - [ ] **Step 3: 저장소 자동 검증을 모두 실행한다**
 
@@ -648,7 +641,7 @@
 
 - [ ] **Step 4: 새 Codex 세션이 필요한 수동 smoke test를 기록한다**
 
-  저장소 루트, `src/ner`, `src/server`, `docker`, `tests/ner`에서 각각 새 세션을 시작해 적용 지침 요약을 요청하고 예상 규칙과 비교한다. `/skills`에서 세 프로젝트 스킬의 이름과 description을 확인한다. 결과와 실행 일시를 병행 검증 문서에 기록한다.
+  저장소 루트, `src/ner`, `src/server`, `docker`, `tests/ner`에서 각각 새 세션을 시작해 적용 지침 요약을 요청하고 예상 규칙과 비교한다. 프로젝트 스킬이 추가되지 않았으며 debug-triage 요구가 `systematic-debugging`과 저장소 지침으로 처리되는지 확인한다. 결과와 실행 일시를 병행 검증 문서에 기록한다.
 
 - [ ] **Step 5: verification-before-completion과 독립 reviewer를 실행한다**
 
@@ -681,7 +674,7 @@ Task 6까지 완료해도 사용자 수준 Codex 설정은 바뀌지 않는다. 
 
 1. `tests/migration/test_codex_migration.py`와 `tests/hooks/test_gate.py`가 통과한다.
 2. 주요 디렉터리별 새 Codex 세션 지침 smoke test가 통과한다.
-3. 저장소 프로젝트 스킬 3개가 Codex에서 발견된다.
+3. 통합·제거·보류 결정이 이관표와 테스트 상수에서 일치하고 중복 프로젝트 스킬이 없다.
 4. 정상 커밋과 네 종류의 위반 사례에서 Claude·Codex 동작 차이가 기록되고, 각 차이에 사용자가 수용한 판정이 있다.
 5. reviewer가 읽기 전용으로 동작하고 최종 Verdict가 PASS이다.
 6. `.claude/**`와 모든 `CLAUDE.md`의 diff가 비어 있다.

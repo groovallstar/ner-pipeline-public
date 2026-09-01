@@ -44,13 +44,15 @@ ROOT_REQUIRED_TERMS = (
 )
 
 SKILL_DECISIONS: dict[str, str] = {
-    "debug-triage": "이관",
-    "explain-diff": "이관",
-    "perf-measure": "이관",
+    "debug-triage": "통합",
+    "explain-diff": "제거",
+    "perf-measure": "제거",
     "tdd": "통합",
     "refuter": "통합",
     "lessons-digest": "보류",
 }
+
+PROJECT_SKILL_NAMES = (*SKILL_DECISIONS, "ner-debug-triage")
 
 
 @pytest.mark.parametrize(("source", "target"), INSTRUCTION_PAIRS)
@@ -70,3 +72,21 @@ def test_root_codex_instruction_keeps_required_project_policy():
     text = (REPO_ROOT / "AGENTS.md").read_text()
     for term in ROOT_REQUIRED_TERMS:
         assert term in text, term
+
+
+def test_skill_decisions_match_inventory():
+    rows = (REPO_ROOT / "docs/superpowers/specs/codex-migration-inventory.md").read_text()
+    inventory_decisions = {
+        columns[0].strip("`"): columns[1]
+        for line in rows.splitlines()
+        if line.startswith("| `")
+        and (columns := [column.strip() for column in line.strip("|").split("|")])
+        and columns[0].strip("`") in SKILL_DECISIONS
+    }
+
+    assert inventory_decisions == SKILL_DECISIONS
+
+
+@pytest.mark.parametrize("name", PROJECT_SKILL_NAMES)
+def test_legacy_skills_are_not_duplicated_in_codex(name):
+    assert not (REPO_ROOT / ".agents" / "skills" / name).exists()

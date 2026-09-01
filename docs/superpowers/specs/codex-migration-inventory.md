@@ -29,13 +29,25 @@
 
 ## 프로젝트 스킬 결정
 
+### 프로젝트 스킬 없는 baseline 관찰
+
+근거 원문은 `.superpowers/sdd/2026-09-01-claude-to-codex-migration/`의
+`task-3-baseline-debug.md`, `task-3-baseline-diff.md`,
+`task-3-baseline-perf.md`에 보존한다.
+
+| baseline | 관찰 | 결정에 준 근거 |
+| --- | --- | --- |
+| debug-triage | `systematic-debugging`과 `AGENTS.md`만 적용한 응답이 원본 증거 보존, 단일 재현, BIO와 vLLM 경계별 관측, 프롬프트·adapter 2x2 격리, 회귀 검증 순서를 모두 제시했다. | NER 전용 스킬을 추가하지 않아도 진단 목적을 충족하므로 기존 절차에 통합한다. |
+| explain-diff | 별도 프로젝트 스킬 없는 응답이 비전문가용 변경 설명에 필요한 입력 근거, 문서 구성, 전후·경계·비변경 예시, 품질 수치와 재현 근거의 검증 계약을 제시했다. | Codex 기본 역량이 요구 산출물을 충족하므로 중복 스킬을 제거한다. |
+| perf-measure | 별도 프로젝트 스킬 없는 응답이 데이터·모델·환경 고정, 반복 측정, 처리량·지연·신뢰성·자원·품질 지표, 단일 변수 실험과 품질 게이트를 제시했다. | Codex 기본 역량이 측정 계획을 충족하므로 중복 스킬을 제거한다. |
+
 | 원본 스킬 | 결정 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `debug-triage` | 이관 | `.agents/skills/ner-debug-triage/SKILL.md` | NER 전용 진단 체크리스트를 직접 제공 | `systematic-debugging`에 NER 점검만 추가 | 공통 디버깅 절차를 중복하지 않음 | 진단 순서는 달라져도 NER 특화 원인 격리는 유지됨 | 동등 대체 | 공통 절차 재사용 설계에 따른 예상 판정이며 Task 3 smoke test와 Task 6 실사용 비교 후 확정 | 계획됨 | Task 3 frontmatter 및 smoke test |
-| `explain-diff` | 이관 | `.agents/skills/explain-diff/SKILL.md` | 한국어 변경 설명 보고서와 세부 표현 계약을 제공 | 핵심 보고서 구조를 저장소 스킬로 제공 | 원본의 표현 계약 전체를 복제하지 않음 | 보고서의 강조점과 세부 문구는 달라질 수 있으나 변경 이해 목적은 유지됨 | 동등 대체 | 핵심 산출물 유지에 따른 예상 판정이며 Task 3 smoke test와 Task 6 실제 보고서 비교 후 확정 | 계획됨 | Task 3 frontmatter 및 smoke test |
-| `perf-measure` | 이관 | `.agents/skills/perf-measure/SKILL.md` | 고정 조건의 성능·품질 측정을 안내 | 같은 측정 절차를 저장소 스킬로 제공 | 발견 경로만 바뀜 | 측정 변수와 비교 결과에는 영향이 없음 | 동일 유지 | 절차와 산출물 계약을 유지하는 예상 판정이며 Task 3 smoke test와 Task 6 실사용 비교 후 확정 | 계획됨 | Task 3 frontmatter 및 smoke test |
-| `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라도 테스트 우선 집행은 유지됨 | 동등 대체 | 설치 스킬의 실제 절차 비교에 따른 예상 판정이며 Task 3 중복 부재 검사와 Task 6 실사용 후 확정 | 계획됨 | Task 3 중복 프로젝트 스킬 부재 확인 |
-| `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 필요 시 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | 상태 없는 검토를 택한 예상 판정이며 Task 5 reviewer smoke test와 Task 6 호출 누락·병행 검증 후 확정 | 계획됨 | Task 5 reviewer 계약 및 Task 6 병행 검증 |
+| `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | NER 전용 진단 체크리스트를 직접 제공 | 공통 디버깅 절차와 저장소 지침을 함께 적용 | 별도 NER 스킬과 고정 체크리스트를 만들지 않음 | 진단 표현은 달라도 재현·증거 보존·원인 격리·회귀 검증이 유지됨 | 동등 대체 | 프로젝트 스킬 없는 debug baseline이 요구 절차를 충족함 | 통합 | baseline 보고서와 `tests/migration/test_codex_migration.py` |
+| `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 세부 표현 계약을 제공 | 요청과 diff 근거로 필요한 설명 문서를 직접 구성 | 고정 템플릿과 스킬 호출이 사라짐 | 요청별 구성은 달라질 수 있으나 근거·예시·검증 계약은 유지됨 | 제거 | 프로젝트 스킬 없는 diff baseline이 요구 산출물을 충족함 | 제거 | baseline 보고서와 `tests/migration/test_codex_migration.py` |
+| `perf-measure` | 제거 | Codex 기본 역량 | 고정 조건의 성능·품질 측정을 안내 | 요청과 저장소 지침으로 비교 가능한 측정 계획을 직접 구성 | 고정 스킬 호출이 사라짐 | 계획 표현은 달라질 수 있으나 고정 조건·지표·품질 게이트는 유지됨 | 제거 | 프로젝트 스킬 없는 perf baseline이 요구 산출물을 충족함 | 제거 | baseline 보고서와 `tests/migration/test_codex_migration.py` |
+| `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라도 테스트 우선 집행은 유지됨 | 동등 대체 | 설치된 Superpowers 절차가 동일 목적을 제공함 | 통합 | `tests/migration/test_codex_migration.py` |
+| `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 필요 시 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | 상태 없는 검토와 최신 검증 증거를 채택함 | 통합 | Task 5 reviewer 계약 및 Task 6 병행 검증 |
 | `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | Stop 알림과 refuter 상태에서 반복 지적을 수집 | 자동 수집을 유지할지 제거할지 결정하지 않음 | Claude·OMC 상태 의존성을 그대로 만들지 않음 | 반복 지적의 자동 축적과 알림이 사라질 수 있음 | 보류 | 필요성과 대체 근거가 부족하므로 Task 6 병행 기록 검토 또는 별도 설계 승인 시 확정 | 보류 | Task 6 병행 검증 기록 |
 
 ## 활성화 상태

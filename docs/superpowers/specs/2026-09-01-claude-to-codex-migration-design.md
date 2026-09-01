@@ -16,9 +16,9 @@
 | Claude 설정 | 1 | 제한 허용 명령, 민감 경로 쓰기 거부, PreToolUse와 Stop 훅 등록 | 권한 모델을 새로 설계하고 결정적 PreToolUse 검사만 이관 |
 | 훅 진입점 | 3 | 커밋 게이트, 반박자 게이트, lessons 알림 | 커밋 게이트만 Codex 훅 어댑터와 회귀 테스트로 이관 |
 | 훅 공통 로직 | 1 | diff 검사, 승인 상태, 반박자 상태 | 커밋 검증에 필요한 순수 로직만 재사용하고 반박자 상태는 이관하지 않음 |
-| 프로젝트 스킬 | 6 | debug-triage, explain-diff, lessons-digest, perf-measure, refuter, tdd | `.agents/skills/`에 Codex 형식으로 이관 또는 기존 기능과 중복되면 보류 |
+| 프로젝트 스킬 | 6 | debug-triage, explain-diff, lessons-digest, perf-measure, refuter, tdd | baseline으로 기본 역량과 Superpowers 대체 가능성을 확인한 뒤 통합·제거·보류 |
 
-Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업 디렉터리까지의 `AGENTS.md`를 순서대로 합친다. 따라서 루트와 하위 디렉터리의 지침 계층을 모두 보존해야 모듈별 제약이 사라지지 않는다. Codex는 저장소의 각 상위 디렉터리에서 `.agents/skills/`도 탐색하므로 프로젝트 스킬은 이 경로에 둔다.
+Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업 디렉터리까지의 `AGENTS.md`를 순서대로 합친다. 따라서 루트와 하위 디렉터리의 지침 계층을 모두 보존해야 모듈별 제약이 사라지지 않는다. 세 Task 3 baseline은 별도 프로젝트 스킬 없이 요구 동작을 충족했으므로 `.agents/skills/`는 만들지 않는다.
 
 ## 범위
 
@@ -28,7 +28,7 @@ Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업
 - 각 지침의 Claude 또는 OMC 전용 표현을 Codex 네이티브 기능 또는 Superpowers의 실제 동작으로 재설계한다.
 - `.claude/hooks`의 커밋 게이트만 Codex `PreToolUse` 훅 호환 버전으로 만든다.
 - 새 커밋 훅의 입력과 출력, 차단 동작, 기존 `tests/hooks/`의 회귀 검사를 검증한다.
-- 6개 프로젝트 스킬을 Codex의 `.agents/skills/` 형식으로 검토하고 이관 결과를 기록한다.
+- 6개 프로젝트 스킬을 Codex 기본 역량과 Superpowers에 대조하고 통합·제거·보류 결과를 기록한다.
 - Superpowers의 코드 리뷰와 완료 검증 절차를 Codex용 하네스에 결합한다.
 - 병행 기간 중 두 설정의 차이를 확인할 수 있는 이관표와 smoke test를 제공한다.
 
@@ -50,7 +50,7 @@ Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업
 3. 안전 우선: Claude `permissions.deny`에 있던 사람 승인 파일과 `certified/**/*.json` 보호는 먼저 명시적으로 시험한다. 재현할 수 없는 보호는 이관 완료로 표기하지 않는다.
 4. 단계적 활성화: 새 훅은 단위·통합 검증 후에만 Codex 설정에 연결한다. 처음부터 자동 차단을 켜지 않는다.
 5. 단일 책임: 지침은 컨텍스트와 작업 절차를 설명하고, 지속 정책 차단은 Rules, 실행 시 검사는 Hooks, 반복 절차는 Skills에 둔다.
-6. 플러그인 최소화: OMX는 사용하지 않는다. Codex의 `AGENTS.md`, Rules, Hooks, 저장소 스킬, 네이티브 subagent와 Superpowers 절차 스킬만 사용한다.
+6. 플러그인 최소화: OMX는 사용하지 않는다. Codex의 `AGENTS.md`, Rules, Hooks, 네이티브 subagent와 Superpowers 절차 스킬만 사용한다.
 7. 검토 분리: 반박 검토는 Stop 훅이 아니라 `requesting-code-review`가 요청한 읽기 전용 Codex reviewer subagent가 수행한다. 최종 완료 주장은 `verification-before-completion`의 새 검증 출력으로 뒷받침한다.
 
 ## 동작 비교와 판정 기준
@@ -95,7 +95,6 @@ Superpowers는 Codex에서 제공되는 절차 스킬로 유지한다. 반면 �
 | --- | --- |
 | `AGENTS.md` | 최상위 프로젝트 개요, 개발 환경, 안전·검증·문서·커밋 규칙 |
 | `docker/**/AGENTS.md`, `src/**/AGENTS.md`, `tests/ner/AGENTS.md` | 기존 하위 `CLAUDE.md`의 모듈별 지침을 Codex 계층에 제공 |
-| `.agents/skills/<name>/SKILL.md` | 이관이 유효한 프로젝트 전용 반복 작업 |
 | `.codex/hooks/` | Codex PreToolUse 입력을 받아 커밋 검증 로직으로 연결하는 어댑터 |
 | `.codex/agents/reviewer.toml` | 요구사항·회귀·테스트 위험을 읽기 전용으로 검토하는 Codex subagent 정의 |
 | `tests/hooks/` | Claude와 Codex PreToolUse 입력에 대한 커밋 게이트 회귀 검사 |
@@ -154,15 +153,15 @@ Codex Rules와 훅 설정은 사용자 수준 파일이므로, 실제 활성화 
 
 ## 스킬 이관 방식
 
-`.claude/skills/`의 6개 스킬은 모두 `name`, `description`, 지시문, 참조 파일, 스크립트 의존성을 조사한다. 결과는 다음 세 상태 중 하나로 이관표에 기록한다.
+`.claude/skills/`의 6개 스킬은 모두 `name`, `description`, 지시문, 참조 파일, 스크립트 의존성과 별도 스킬 없는 baseline 결과를 조사한다. 결과는 다음 세 상태 중 하나로 이관표에 기록한다.
 
 | 상태 | 기준 | 조치 |
 | --- | --- | --- |
-| 이관 | 프로젝트 특화 작업이며 Codex 도구로 실행 가능 | `.agents/skills/<name>/`에 Codex 형식으로 작성하고 프롬프트 smoke test 추가 |
 | 통합 | Codex 또는 설치된 스킬이 같은 기능을 제공 | 중복 파일을 만들지 않고 대응 스킬과 차이를 기록 |
+| 제거 | Codex 기본 역량만으로 필요한 결과를 내며 별도 절차 자산의 유지 가치가 없음 | 중복 파일을 만들지 않고 baseline 근거를 기록 |
 | 보류 | Claude 전용 명령·도구·권한의 영향이나 Codex에서의 필요성을 아직 결정하지 못함 | 원본은 유지하고 비교 근거와 재설계 또는 제거 후보를 기록 |
 
-`tdd`는 Superpowers `test-driven-development`로 통합하고, `refuter`는 `requesting-code-review`와 `verification-before-completion`으로 통합한다. `lessons-digest`는 보류한다. `debug-triage`는 Superpowers `systematic-debugging`과의 중복 및 NER 특화 절차를 비교해 이관 여부를 결정한다. 자동 실행이나 외부 서비스 호출을 숨기는 방식으로 이관하지 않는다.
+`debug-triage`는 baseline에서 `systematic-debugging`과 `AGENTS.md`만으로 NER 원인 격리 절차가 충족되어 동등 대체로 통합한다. `explain-diff`와 `perf-measure`는 Codex 기본 역량만으로 각각 변경 설명 계약과 측정 계획을 충족했으므로 제거한다. `tdd`는 Superpowers `test-driven-development`로 통합하고, `refuter`는 `requesting-code-review`와 `verification-before-completion`으로 통합하되 자동 상태 루프 제거를 의도적 단순화로 기록한다. `lessons-digest`는 보류한다. 여섯 결정 모두 새 프로젝트 스킬을 만들지 않는다.
 
 ## 구현 단계와 전환 기준
 
@@ -178,10 +177,10 @@ Codex Rules와 훅 설정은 사용자 수준 파일이므로, 실제 활성화 
 ### 단계 2: 스킬 이관
 
 1. 각 스킬의 의존성과 중복을 분류한다.
-2. 이관 대상으로 확정한 스킬을 `.agents/skills/`에 작성한다.
-3. Codex가 저장소 스킬을 발견하는지와 명시 호출이 작동하는지를 새 세션에서 확인한다.
+2. debug-triage, explain-diff, perf-measure 요구를 프로젝트 스킬 없이 baseline으로 실행한다.
+3. 통합·제거·보류 결정을 이관표에 기록하고 중복 프로젝트 스킬 부재를 정적 검사한다.
 
-완료 조건은 이관표의 모든 스킬이 이관·통합·보류 중 하나로 결정되고, 이관된 스킬이 Claude 전용 도구를 요구하지 않는 것이다.
+완료 조건은 이관표의 모든 스킬이 통합·제거·보류 중 하나로 결정되고, 여섯 legacy 이름과 `ner-debug-triage`의 프로젝트 스킬 디렉터리가 없는 것이다.
 
 ### 단계 3: 커밋 훅 포팅과 reviewer 설정
 
@@ -206,7 +205,7 @@ Claude 자산의 제거는 이 설계 범위 밖이며, 병행 검증 기록을 
 | --- | --- | --- |
 | 지침 계층 | 각 주요 하위 디렉터리에서 새 Codex 세션으로 지침 요약 요청 | 해당 경로의 프로젝트 규칙이 빠지지 않음 |
 | 문서 변환 | `rg`로 Claude·OMC 전용 명령, 옛 파일 경로, 누락 대응 파일 검색 | 의도적으로 보존한 원본 외 대상 파일에 잔존하지 않음 |
-| 스킬 발견 | `/skills`와 명시 호출 | 이관 스킬이 나타나고 설명과 실행 범위가 맞음 |
+| 스킬 결정 | 이관표와 테스트 상수 비교, 프로젝트 스킬 경로 부재 검사 | 여섯 결정이 일치하고 중복 프로젝트 스킬이 없음 |
 | PreToolUse | JSON fixture와 임시 Git 저장소 | 위반 명령은 실행 전 차단, 정상 명령은 통과 |
 | reviewer 절차 | 요구사항·diff·검증 출력을 준 읽기 전용 subagent 검토 | 구현자와 분리된 결함 보고를 받고, 코드 수정 없음 |
 | 프로젝트 회귀 | `uv run pytest tests/hooks/ -v`, 변경 범위에 맞는 `ruff`와 pytest | 기존 게이트와 새 어댑터의 테스트가 모두 통과 |
