@@ -52,4 +52,17 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | --- | --- | --- |
 | Codex 전역 설정 | 비활성 | 저장소 자산 검증과 사용자 별도 승인 전에는 `/home/rkim/.codex/config.toml`을 변경하지 않음 |
 | Codex Rules | 비활성 | 최소 명령 prefix 정책과 실제 영향 범위를 후속 활성화 체크리스트에서 검토 |
-| Codex Hooks | 비활성 | 단위·통합 테스트와 dry-run이 끝난 뒤 저장소 범위 활성화를 별도로 승인 |
+| Codex custom commit hook | 제거 | Bash 문자열의 indirect Git execution을 완전 판별할 수 없어 활성화 후보에서 제외 |
+
+## 커밋 시점 집행 결정
+
+Claude의 automatic commit-time deterministic enforcement는 Codex에 이관하지 않는다.
+custom Bash parser는 `$IFS`, 변수 executable, `eval`, nested shell, Python과 다른
+wrapper를 통한 Git 실행을 완전하게 식별할 수 없어 부분 차단을 안전 보장처럼 보이게
+하는 false security가 생긴다. 따라서 `.codex/hooks/commit_gate.py`와
+`.codex/hooks/gate_core.py`는 제거 상태로 유지한다.
+
+Codex에서는 `AGENTS.md` 안전 규칙, 명시적으로 호출하는 읽기 전용 reviewer,
+`verification-before-completion`, 기준 파일 reviewer 보고 후 사용자가 훅 밖에서
+커밋하는 정책으로 대체한다. 자동 집행 상실과 사람 절차 누락 가능성은 잔여 위험이며,
+Task 6 병행 검증과 activation checklist에 미채택 차이로 기록한다.

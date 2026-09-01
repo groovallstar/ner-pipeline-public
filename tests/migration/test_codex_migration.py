@@ -53,6 +53,10 @@ SKILL_DECISIONS: dict[str, str] = {
 }
 
 PROJECT_SKILL_NAMES = (*SKILL_DECISIONS, "ner-debug-triage")
+REMOVED_CODEX_HOOKS = (
+    ".codex/hooks/commit_gate.py",
+    ".codex/hooks/gate_core.py",
+)
 
 
 @pytest.mark.parametrize(("source", "target"), INSTRUCTION_PAIRS)
@@ -98,3 +102,8 @@ def test_skill_decisions_match_inventory():
 @pytest.mark.parametrize("name", PROJECT_SKILL_NAMES)
 def test_legacy_skills_are_not_duplicated_in_codex(name):
     assert not (REPO_ROOT / ".agents" / "skills" / name).exists()
+
+
+@pytest.mark.parametrize("path", REMOVED_CODEX_HOOKS)
+def test_custom_codex_commit_gate_is_not_present(path):
+    assert not (REPO_ROOT / path).exists()

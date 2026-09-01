@@ -4,9 +4,9 @@
 
 **Goal:** Claude Code 설정을 보존한 채 두 하네스의 실제 동작을 비교하고, 유지·대체·단순화·제거하기로 결정한 Codex용 자산만 추가한다.
 
-**Architecture:** `CLAUDE.md`와 `.claude/**`는 병행 기간의 원본으로 유지하고, Codex 전용 파일을 `AGENTS.md`, `.codex/hooks/`, `.codex/agents/`에 새로 추가한다. 프로젝트 스킬은 writing-skills authoring gate에서 임시 관찰하되 Task 3에서는 추가하지 않는다. 커밋 게이트는 Claude의 상태·Stop·refuter 결합부를 복제하지 않고 순수 검사만 독립 구현하며, 독립 반박 검토와 완료 검증은 Codex reviewer subagent와 Superpowers 절차로 수행한다. 사용자 수준 Codex 설정은 저장소 자산 검증이 끝난 뒤 별도 승인으로만 활성화한다.
+**Architecture:** `CLAUDE.md`와 `.claude/**`는 병행 기간의 원본으로 유지하고, Codex 전용 파일을 `AGENTS.md`와 `.codex/agents/`에 추가한다. 프로젝트 스킬은 writing-skills authoring gate에서 임시 관찰하되 Task 3에서는 추가하지 않는다. custom commit gate는 arbitrary Bash indirection을 완전 판별할 수 없어 제거하며, 독립 반박 검토와 완료 검증은 Codex reviewer subagent와 Superpowers 절차로 수행한다. 사용자 수준 Codex 설정은 저장소 자산 검증이 끝난 뒤 별도 승인으로만 활성화한다.
 
-**Tech Stack:** Python 3.13, pytest 9, Ruff, TOML (`tomllib`), Codex `AGENTS.md`·Hooks·custom agents, Superpowers
+**Tech Stack:** Python 3.13, pytest 9, Ruff, TOML (`tomllib`), Codex `AGENTS.md`·custom agents, Superpowers
 
 **Spec:** `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
 
@@ -21,7 +21,7 @@
 - Claude와 같은 절차량이나 reviewer 지적량을 Codex 품질 목표로 삼지 않는다.
 - 동작을 구현하는 Task는 실패 테스트, 최소 구현, 대상 테스트, Ruff 순서로 검증한다.
 - 각 Task는 reviewer 검토와 사용자 확인이 끝난 뒤에만 독립 커밋한다.
-- 전역 Codex 훅·Rules 활성화는 Task 6의 산출물을 검토한 뒤 별도 작업으로 진행한다.
+- 전역 Codex Rules 활성화는 Task 6의 산출물을 검토한 뒤 별도 작업으로 진행하며 custom commit hook은 활성화 후보에서 제외한다.
 
 ---
 
@@ -32,10 +32,8 @@
 | `docs/superpowers/specs/codex-migration-inventory.md` | 원본 16개 지침과 6개 스킬의 대상·상태·검증 근거를 기록한다. |
 | `tests/migration/test_codex_migration.py` | 파일 대응, 금지 표현, 원본 보존, TOML·스킬 구조를 정적으로 검증한다. |
 | `AGENTS.md`와 하위 15개 `AGENTS.md` | 현재 디렉터리에 적용되는 Codex 프로젝트·모듈 지침을 제공한다. |
-| `.codex/hooks/gate_core.py` | `.omx`·refuter 상태 없이 diff 기반 결정적 검사를 수행한다. |
-| `.codex/hooks/commit_gate.py` | Codex `PreToolUse` JSON을 파싱하고 커밋 생성 명령만 검사한다. |
 | `.codex/agents/reviewer.toml` | 소스 수정 권한이 없는 독립 반박 reviewer 역할을 정의한다. |
-| `docs/superpowers/specs/codex-activation-checklist.md` | 전역 설정에 적용할 훅·Rules 초안, 수동 검증, 롤백 절차를 기록한다. |
+| `docs/superpowers/specs/codex-activation-checklist.md` | custom commit hook 미채택, Rules 후보, 수동 검증과 잔여 차이를 기록한다. |
 | `docs/superpowers/specs/codex-parallel-validation.md` | Claude와 Codex의 병행 검증 결과와 전환 미충족 항목을 기록한다. |
 
 ## Task 1: 이관표와 정적 계약 작성
@@ -107,7 +105,8 @@
   | `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | 의도적 단순화 |
   | `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | 보류 |
 
-  문서 끝에는 전역 설정, Rules, Hooks 활성화 상태를 `비활성`으로 기록한다.
+  문서 끝에는 전역 설정과 Rules를 `비활성`으로 기록하고, custom commit hook은
+  Task 4에서 이관 여부를 최종 결정한다고 명시한다.
 
 - [ ] **Step 4: 이관표 자체를 검증한다**
 
@@ -326,191 +325,70 @@
   git commit -m "docs: Codex 스킬 제거 근거 정리"
   ```
 
-## Task 4: 상태 없는 Codex PreToolUse 커밋 게이트 구현
+## Task 4: custom Codex 커밋 게이트 제거 결정
 
 **Files:**
 
-- Create: `.codex/hooks/gate_core.py`
-- Create: `.codex/hooks/commit_gate.py`
-- Modify: `tests/hooks/test_gate.py`
+- Modify: `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
+- Modify: `docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md`
 - Modify: `docs/superpowers/specs/codex-migration-inventory.md`
+- Modify: `tests/migration/test_codex_migration.py`
 
-**Interfaces:**
+**Decision:**
 
-- Consumes: Codex hook JSON의 `tool_name: str`, `tool_input.command: str`, `cwd: str | None`
-- Produces: `creates_a_commit(command: str | None) -> bool`, `evaluate(project_dir: str) -> GateResult`, `main() -> None`
-- Produces: `GateResult`는 `NamedTuple`이며 `allowed: bool`, `check: str`, `reason: str`, `findings: tuple[str, ...]` 필드를 가진다.
+Bash 문자열 parser는 `$IFS`, 변수 executable, `eval`, nested shell, Python과
+다른 wrapper의 indirect Git execution을 완전하게 판별할 수 없다. 부분 parser는
+automatic enforcement라는 false security를 만들므로 custom Codex commit gate를
+제거한다.
 
-- [ ] **Step 1: Codex 어댑터의 실패 테스트를 작성한다**
+- [ ] **Step 1: 구현 커밋을 recoverable revert한다**
 
-  기존 `_load_hook`을 경로 인수를 받도록 확장하고 `.codex/hooks/commit_gate.py`를 별도 모듈 이름으로 적재한다.
+  Task 4 구현과 두 fix 커밋을 최신순으로 `git revert --no-edit`한다. 결과는
+  `.codex/hooks/commit_gate.py`와 `.codex/hooks/gate_core.py`가 없고
+  `tests/hooks/test_gate.py`가 Task 4 이전 상태와 같아야 한다.
 
-  ```python
-  def _load_hook(name, root=".claude/hooks"):
-      path = REPO_ROOT / root / f"{name}.py"
-      spec = importlib.util.spec_from_file_location(f"{root}-{name}", path)
-      module = importlib.util.module_from_spec(spec)
-      spec.loader.exec_module(module)
-      return module
+- [ ] **Step 2: hook 비존재 계약을 추가한다**
 
-  codex_commit_gate = _load_hook("commit_gate", ".codex/hooks")
+  `tests/migration/test_codex_migration.py`에 두 custom hook 파일이 존재하지
+  않는다는 정적 검사를 추가한다. Claude 원본 hook과 기존 `tests/hooks/`는
+  변경하지 않는다.
 
-  def _run_codex_hook(proj, payload):
-      proc = subprocess.run(
-          [sys.executable, REPO_ROOT / ".codex/hooks/commit_gate.py"],
-          cwd=proj,
-          input=json.dumps(payload),
-          capture_output=True,
-          text=True,
-          check=True,
-      )
-      return json.loads(proc.stdout) if proc.stdout.strip() else {}
+- [ ] **Step 3: 설계와 이관표에 제거 영향을 기록한다**
 
-  def test_codex_hook_denies_a_ruler_commit(repo):
-      _seed_ruler(repo)
-      _write(repo, RULER_DOC, SCHEMA_BEFORE.replace("ORG", "ORG PROD"))
-      _sh(repo, "git", "add", "-A")
-      out = _run_codex_hook(repo, {
-          "tool_name": "Bash",
-          "tool_input": {"command": "git commit -m schema"},
-          "cwd": repo,
-      })
-      decision = out["hookSpecificOutput"]
-      assert decision["hookEventName"] == "PreToolUse"
-      assert decision["permissionDecision"] == "deny"
-      assert "independent reviewer" in decision["permissionDecisionReason"]
-      assert ".omx" not in decision["permissionDecisionReason"]
+  custom Codex commit gate 상태를 `제거`로 기록한다. Claude의 automatic
+  commit-time deterministic enforcement가 사라지는 영향과 AGENTS 안전 규칙,
+  explicit read-only reviewer, `verification-before-completion`, 사용자
+  outside-hook commit policy라는 대체 경계를 명시한다.
 
-  def test_codex_hook_allows_a_read_only_git_command(repo):
-      out = _run_codex_hook(repo, {
-          "tool_name": "Bash",
-          "tool_input": {"command": "git status"},
-          "cwd": repo,
-      })
-      assert out == {}
+- [ ] **Step 4: 후속 Task에서 hook 활성화 요구를 제거한다**
 
-  def test_codex_hook_denies_certified_json_changes(repo):
-      _write(repo, "certified/result.json", '{"score": 0.91}\n')
-      _sh(repo, "git", "add", "-A")
-      out = _run_codex_hook(repo, {
-          "tool_name": "Bash",
-          "tool_input": {"command": "git commit -m result"},
-          "cwd": repo,
-      })
-      decision = out["hookSpecificOutput"]
-      assert decision["permissionDecision"] == "deny"
-      assert "certified/result.json" in decision["permissionDecisionReason"]
-  ```
+  Task 5는 reviewer 계약만 구현한다. Task 6 activation checklist는 custom commit
+  hook 등록·dry-run·rollback을 요구하지 않고 미채택과 잔여 차이를 기록한다.
+  병행 검증은 자동 커밋 차단 상실과 사람 절차 누락 가능성을 비교한다.
 
-- [ ] **Step 2: 테스트가 Codex 훅 파일 부재로 실패하는지 확인한다**
+- [ ] **Step 5: 제거 상태를 검증한다**
 
-  Run: `uv run pytest tests/hooks/test_gate.py -k 'codex_hook' -q`
-
-  Expected: `.codex/hooks/commit_gate.py` 부재로 수집 단계에서 FAIL한다.
-
-- [ ] **Step 3: 상태 없는 결정적 gate_core를 구현한다**
-
-  `.claude/hooks/gate_core.py`에서 Git 실행, diff 수집, 기준 경로 판정, 변경 Python Ruff, 테스트 무결성, certified 수치 출처, 훅 자기 테스트 함수만 옮긴다. 여기에 staged 또는 unstaged diff의 `certified/*.json`과 `certified/**/*.json` 변경을 찾는 `check_protected_paths(project_dir: str) -> list[str]`를 추가한다. 다음 이름은 이관하지 않는다: `state_dir`, `allow_file`, `human_allowed`, `verdict_path`, `read_verdict`, `spawn_instructions`, `pass_notice`, refuter 판정·라운드·로그 함수.
-
-  검사 순서는 다음 코드로 고정한다.
-
-  ```python
-  from typing import NamedTuple
-
-  class GateResult(NamedTuple):
-      allowed: bool
-      check: str
-      reason: str
-      findings: tuple[str, ...]
-
-  def evaluate(project_dir: str) -> GateResult:
-      self_test = tuple(check_self_tests(project_dir))
-      if self_test:
-          return GateResult(False, "self-test", "Codex gate self-tests failed", self_test)
-
-      protected = tuple(check_protected_paths(project_dir))
-      if protected:
-          return GateResult(
-              False,
-              "protected-path",
-              "Protected certified JSON files changed; Codex must not commit these files.",
-              protected,
-          )
-
-      ruff = tuple(check_ruff(project_dir))
-      if ruff:
-          return GateResult(False, "ruff", "Ruff failed for changed Python files", ruff)
-
-      ruler = tuple(check_ruler_touched(project_dir))
-      if ruler:
-          return GateResult(
-              False,
-              "ruler-lock",
-              "Protected criteria changed; obtain an independent reviewer report and let the user perform the commit outside this hook.",
-              ruler,
-          )
-
-      hard = tuple(check_test_integrity(project_dir) + check_cited_metrics(project_dir))
-      if hard:
-          return GateResult(False, "hard", "Deterministic integrity checks failed", hard)
-
-      return GateResult(True, "pass", "", ())
-  ```
-
-  `evaluate()` 내부의 Git, Ruff, pytest, diff 파싱을 포함한 결정적 검사 실행에서 예외가 발생하면 `GateResult(False, "internal-error", "Codex gate checks could not complete", (진단,))`로 변환한다. 검사 실행 오류는 진단을 포함해 커밋을 차단하며 정상 통과로 취급하지 않는다. `.codex/hooks/` 또는 `tests/hooks/`가 바뀐 경우에만 훅 자기 테스트를 실행한다.
-
-- [ ] **Step 4: Codex PreToolUse 어댑터를 구현한다**
-
-  `creates_a_commit`은 기존의 commit, cherry-pick, revert, am, rebase, merge 감지와 abort, quit, skip 예외를 보존한다. `main()`은 JSON 입력을 먼저 파싱하며 파싱 실패나 필수 필드 형식 오류는 `input-error` 진단을 포함한 deny로 fail-closed한다. 유효한 입력에서 Bash가 아닌 도구와 커밋 생성이 아닌 명령만 출력 없이 통과시킨다. 커밋 생성 명령은 빈 diff를 포함해 `evaluate()`를 호출하고, 검사 결과 또는 실행 예외가 허용을 명시하지 않으면 deny한다. 차단 결과는 다음 형식만 출력한다.
-
-  ```python
-  def deny(result):
-      print(json.dumps({
-          "hookSpecificOutput": {
-              "hookEventName": "PreToolUse",
-              "permissionDecision": "deny",
-              "permissionDecisionReason": (
-                  f"[{result.check}] {result.reason}\n"
-                  + "\n".join(f"- {item}" for item in result.findings)
-              ),
-          }
-      }, ensure_ascii=False))
-  ```
-
-- [ ] **Step 5: 상태 제거와 회귀 사례를 추가한다**
-
-  Codex 훅 테스트에 정상 변경 통과, Ruff 오류 차단, 테스트 삭제 차단, protected certified JSON 변경 차단, certified 인용 수치 오류 차단, malformed JSON 차단, 필수 필드 형식 오류 차단, 결정적 검사 실행 예외 차단, Bash 외 도구 통과, 커밋 생성이 아닌 명령 통과를 추가한다. 오류 차단 사례는 `permissionDecision == "deny"`와 진단 문자열을 모두 검증한다. 기준 파일 차단 메시지에는 `human-allow`, `verdict`, `.omx`, `.codex/state`가 없어야 한다.
-
-- [ ] **Step 6: 대상 테스트와 정적 검사를 실행한다**
+  Run: `uv run pytest tests/migration/test_codex_migration.py -q`
 
   Run: `uv run pytest tests/hooks/test_gate.py -q`
 
-  Expected: 기존 Claude 게이트와 새 Codex 어댑터 사례가 모두 PASS한다.
+  Run: `uv run ruff check tests/migration/test_codex_migration.py tests/hooks/test_gate.py`
 
-  Run: `uv run ruff check .codex/hooks tests/hooks/test_gate.py`
-
-  Expected: 종료 코드 0이다.
-
-  Run: `rg -n '\.omx|\.codex/state|human-allow|verdict|refuter_gate|Stop' .codex/hooks`
-
-  Expected: 출력이 없다.
-
-- [ ] **Step 7: 이관표를 갱신하고 사용자 검토를 요청한다**
-
-  커밋 게이트 상태를 `구현됨, 비활성`으로 기록하고, 기준 파일 예외 커밋은 reviewer 보고 후 사용자가 훅 밖에서 수행한다는 제한을 명시한다.
-
-  Run: `git diff --check`
+  Run: `test ! -e .codex/hooks/commit_gate.py && test ! -e .codex/hooks/gate_core.py`
 
   Run: `git diff -- .claude CLAUDE.md ':(glob)**/CLAUDE.md'`
 
-  Expected: 두 명령 모두 출력이 없다. 테스트 결과와 의도적인 제한을 사용자에게 제시하고 멈춘다.
+  Expected: migration 계약과 기존 Claude hook 회귀가 통과하고 custom Codex hook과
+  Claude 원본 diff가 없다.
 
-- [ ] **Step 8: 사용자 승인 후 Task 4를 커밋한다**
+- [ ] **Step 6: 제거 결정을 커밋한다**
 
   ```bash
-  git add .codex/hooks tests/hooks/test_gate.py \
-    docs/superpowers/specs/codex-migration-inventory.md
-  git commit -m "feat: Codex 커밋 게이트 추가"
+  git add docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md \
+    docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md \
+    docs/superpowers/specs/codex-migration-inventory.md \
+    tests/migration/test_codex_migration.py
+  git commit -m "docs: Codex 커밋 게이트 제거 결정"
   ```
 
 ## Task 5: 읽기 전용 reviewer 설정과 검토 계약 추가
@@ -620,11 +498,11 @@
 
 - [ ] **Step 1: 활성화 체크리스트를 작성한다**
 
-  체크리스트에는 현재 `/home/rkim/.codex/config.toml`과 Rules를 읽기 전용으로 백업·비교하는 명령, 저장소 경로 한정 훅 등록 초안, 정상 명령과 차단 명령의 dry-run, 설정 제거를 통한 롤백을 기록한다. Rules는 명령 prefix 정책으로만 사용하며 경로 기반 파일 쓰기 보호를 보장한다고 기록하지 않는다. `apply_patch`를 포함한 파일 편집 도구가 PreToolUse 대상과 payload를 공식 문서 및 실제 dry-run으로 확인할 수 없으면, `certified/**/*.json` 보호가 커밋 시점 차단과 reviewer 검토까지만 제공된다는 차이를 기록하고, 그것을 수용할지 보강할지 별도로 판정한다. 실제 사용자 수준 파일을 수정하는 명령에는 `사용자 별도 승인 후 실행` 표식을 붙이고 이 Task에서는 실행하지 않는다.
+  체크리스트에는 현재 `/home/rkim/.codex/config.toml`과 Rules를 읽기 전용으로 백업·비교하는 명령, custom commit hook 미채택, 사용자 수준 hook 등록을 하지 않는다는 결정, 수동 검증과 잔여 차이를 기록한다. Rules는 명령 prefix 정책으로만 사용하며 경로 기반 파일 쓰기나 commit-time deterministic enforcement를 보장한다고 기록하지 않는다. `certified/**/*.json`과 기준 파일 보호가 AGENTS, reviewer, 완료 검증, 사용자 outside-hook commit 정책에 의존한다는 차이를 기록하고 수용 여부를 별도로 판정한다. 실제 사용자 수준 파일을 수정하는 명령에는 `사용자 별도 승인 후 실행` 표식을 붙이고 이 Task에서는 실행하지 않는다.
 
 - [ ] **Step 2: 병행 검증 문서를 작성한다**
 
-  다음 행을 `검증 항목 | Claude 동작 | Codex 동작 | 관찰된 차이 | 채택 판정 | 근거` 열로 기록한다: 루트 지침, `src/ner`, `src/server`, `docker`, `tests/ner`, 프로젝트 스킬 결정, 정상 커밋, Ruff 위반, 테스트 무결성 위반, 기준 파일 변경, protected certified JSON 변경, certified 인용 수치, 파일 쓰기 전 차단 범위, 독립 reviewer, 완료 검증. 실제로 실행하지 않은 새 세션 항목은 `미실행`, 채택 판정은 `보류`로 유지한다. reviewer의 지적 개수나 표현 방식은 이 표에 넣지 않는다.
+  다음 행을 `검증 항목 | Claude 동작 | Codex 동작 | 관찰된 차이 | 채택 판정 | 근거` 열로 기록한다: 루트 지침, `src/ner`, `src/server`, `docker`, `tests/ner`, 프로젝트 스킬 결정, custom commit hook 미채택, 정상 커밋, Ruff 위반, 테스트 무결성 위반, 기준 파일 변경, protected certified JSON 변경, certified 인용 수치, 파일 쓰기 전 차단 범위, 독립 reviewer, 완료 검증. commit 관련 행은 Codex의 automatic commit-time enforcement가 없고 사람 절차에 의존한다는 잔여 차이를 명시한다. 실제로 실행하지 않은 새 세션 항목은 `미실행`, 채택 판정은 `보류`로 유지한다. reviewer의 지적 개수나 표현 방식은 이 표에 넣지 않는다.
 
 - [ ] **Step 3: 저장소 자동 검증을 모두 실행한다**
 
@@ -632,7 +510,7 @@
 
   Expected: 전체 PASS한다.
 
-  Run: `uv run ruff check .codex/hooks tests/hooks/test_gate.py tests/migration/test_codex_migration.py`
+  Run: `uv run ruff check tests/hooks/test_gate.py tests/migration/test_codex_migration.py`
 
   Expected: 종료 코드 0이다.
 
@@ -676,7 +554,7 @@ Task 6까지 완료해도 사용자 수준 Codex 설정은 바뀌지 않는다. 
 1. `tests/migration/test_codex_migration.py`와 `tests/hooks/test_gate.py`가 통과한다.
 2. 주요 디렉터리별 새 Codex 세션 지침 smoke test가 통과한다.
 3. 통합·제거·보류 결정이 이관표와 테스트 상수에서 일치하고 중복 프로젝트 스킬이 없다.
-4. 정상 커밋과 네 종류의 위반 사례에서 Claude·Codex 동작 차이가 기록되고, 각 차이에 사용자가 수용한 판정이 있다.
+4. custom commit hook 미채택과 automatic commit-time enforcement 상실이 기록되고 사용자가 잔여 차이를 검토한다.
 5. reviewer가 읽기 전용으로 동작하고 최종 Verdict가 PASS이다.
 6. `.claude/**`와 모든 `CLAUDE.md`의 diff가 비어 있다.
-7. 사용자가 영향 범위와 롤백 절차를 검토한다.
+7. 사용자가 Rules 영향 범위와 롤백 절차를 검토한다.
