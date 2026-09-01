@@ -11,6 +11,53 @@
 - 한국어·일본어·베트남어 동일 셋업:
   `docs/reports/{korean,japanese,vietnamese}-bert-classifier-benchmark.md`
 
+## 이 표의 수치가 속한 gold 세대
+
+**바로 아래 §현행 gold 의 `roberta-base` baseline 을 뺀 이 리포트의 모든 수치는
+gold 세대 1 로 잰 것이며 현행 코퍼스로는 재현되지 않는다.** 측정 뒤 정답이 두 번
+바뀌었다.
+
+| 언제 | 무엇이 바뀌었나 | 이 표에 미치는 영향 |
+|---|---|---|
+| 2026-08-26 (#225) | 엔티티 밖 문장부호를 엔티티 안으로 라벨하던 결함을 없앴다 (전수 80,288건) | 같은 예측이 다르게 채점된다. `dataset_fingerprint` 는 안 바뀌므로 비교 유효성 게이트가 이 경계를 못 잡는다 |
+| 2026-08-31 (#236·#239) | 원본 `FAC` 를 전량 `ORG` 로 태우던 것을 표면별로 `ORG`·`LOC`·삭제로 갈랐다 | `LOC` +274 · `ORG` −289 span. `dataset_fingerprint` 가 `39cb0f9e9c16f265` → `258166d6972c8144` 로 바뀌어 새 런과의 비교는 자동 거부된다 |
+
+데이터 경로도 그 사이 `pii_all.jsonl` 에서 `origin.jsonl` 로 개명됐다(#238).
+아래 본문은 측정 당시 표기를 그대로 둔다 — 조건을 사후에 고쳐 적으면 이 표가
+어느 조건에서 나왔는지가 흐려지기 때문이다.
+
+현행 코퍼스의 지문은 `258166d6972c8144` 이고, 파일별 sha256 과 `FAC` 재라벨로
+손댄 span 은 `src/ner/augmenters/ontonotes_en/data/fac_disk_migration_ledger.json`
+에 있다. 그 원장이 디스크의 실물과 어긋나지 않는지는
+`tests/ner/augmenters/ontonotes_en/test_fac_disk_migration_ledger.py` 가 본다.
+
+## 현행 gold 의 `roberta-base` baseline
+
+아래 백본 비교는 gold 세대 1 로 잰 것이라 현행 코퍼스에서 그대로 쓸 수 없다.
+그래서 #244 가 **`roberta-base` 한 종만** 세대 3 gold 로 같은 레시피(epochs 5 ·
+lr 5e-5 · max_length 256 · bf16 · batch 16 · `--group-key orig` · 분할 seed 42)
+로 다시 3-seed 돌려 현행 baseline 을 세웠다. 세 run 모두
+`data_fingerprint = 258166d6972c8144` 다.
+
+<!-- certified: classifier/en/roberta-3seed -->
+
+| 백본 | seed | **NER-5 median** | std | min | max | macro | (참고)PII5 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `roberta-base` | 42·43·44 | **0.8956** | 0.0077 | 0.8884 | 0.9039 | 0.8089 | 0.9476 |
+
+<!-- certified: classifier/en/roberta-3seed -->
+
+| 타입 | PER | LOC | ORG | PROD | EVT |
+|---|---:|---:|---:|---:|---:|
+| median strict F1 | 0.9486 | 0.9145 | 0.8574 | 0.5794 | 0.7615 |
+
+**이 값과 아래 세대 1 표를 대소로 읽지 않는다.** gold 가 두 번 바뀌어 재는 자가
+다르므로, 두 수치는 같은 축 위에 있지 않다. 세대 3 에서 백본 순위가 어떻게
+되는지는 #244 가 `roberta-base` 만 재서 측정하지 않았고, `roberta-base` 가
+현행 gold 에서도 최선이라는 것은 증거 없는 승계 가정으로 남아 있다.
+
+천장이 여전히 **PROD·EVT** 에 있다는 그림은 세대 1 과 같다.
+
 ## 요약
 
 - **baseline = `roberta-base`** — NER-5 strict micro-F1 median **0.8795**,
@@ -84,8 +131,6 @@ DAT 만 ~0.85(날짜 표현 다양성). 백본 변별력이 작아 **선정 기�
 
 ## NER-5 결과 (3-seed median, strict)
 
-<!-- certified: classifier/en/backbone-bench -->
-
 | 모델 | 계열 | 파라미터 | **median** | std | min | max | macro | (참고)PII5 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | **`roberta-base`** | mono | 124M | **0.8795** | **0.0051** | 0.8734 | 0.8836 | **0.8106** | 0.9462 |
@@ -96,8 +141,6 @@ DAT 만 ~0.85(날짜 표현 다양성). 백본 변별력이 작아 **선정 기�
 | ~~`microsoft/deberta-v3-base`~~ | mono | 184M | — | — | — | — | **학습불가** | — |
 
 ### per-entity strict F1 (NER-5, median)
-
-<!-- certified: classifier/en/backbone-bench -->
 
 | 모델 | PER | LOC | ORG | PROD | EVT |
 |---|---:|---:|---:|---:|---:|
@@ -113,8 +156,6 @@ DAT 만 ~0.85(날짜 표현 다양성). 백본 변별력이 작아 **선정 기�
 ### baseline `roberta-base` 전체 per-entity P/R/F1 (10종)
 
 median seed(44)의 값이다. overall-10 F1 0.9221 (P 0.9049 / R 0.9399).
-
-<!-- certified: classifier/en/backbone-bench/roberta_base_seed44 -->
 
 | Entity | support | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|
@@ -136,8 +177,6 @@ median seed(44)의 값이다. overall-10 F1 0.9221 (P 0.9049 / R 0.9399).
 ## seed 하나로는 순위를 못 정한다
 
 ### 무엇이 흔들리나
-
-<!-- certified: classifier/en/backbone-bench -->
 
 | 모델 | seed 42 | seed 43 | seed 44 | median | 폭 |
 |---|---:|---:|---:|---:|---:|
@@ -351,7 +390,8 @@ CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
 
 | 무엇 | 경로 |
 |---|---|
-| 원장(인용 근거) | `certified/classifier/en/backbone-bench/` — run 16개 `metrics.json` + `median_summary.json` |
+| 원장(인용 근거) | **없다** — 세대 1 원장 `certified/classifier/en/backbone-bench/` 는 #244 가 지웠다. 아래 백본 비교표는 대조 상대가 없는 기록이다 |
+| 현행 baseline 원장 | `certified/classifier/en/roberta-3seed/` — §현행 gold 의 `roberta-base` baseline 이 인용하는 곳 |
 | scratch | `results/classifier/en_bench/` (gitignore·휘발) |
 | 학습시간 재측 | `results/classifier/en_bench/time_1ep/` (gitignore·휘발) |
 | 병합 도구 | `src/ner/augmenters/ontonotes_en/merge_splits.py` |

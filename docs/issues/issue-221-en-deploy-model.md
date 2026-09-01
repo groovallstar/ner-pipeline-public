@@ -149,7 +149,11 @@ ja·vi 는 원본이 작아(5,270·37,706행) 100문장이 불가피했지만 en
 - 배포 스크립트 실측: `./src/ner/scripts/eval_en_ner_test.sh --limit 300 --show 4`
   — 모델+토크나이저 로드 0.646초, 추론 300문장 1.177초(문장당 3.9ms)
 
-<!-- certified: classifier/en -->
+> **이 절의 수치는 gold 세대 1 로 잰 옛 배포본의 것이다.** #244 가 현행 gold 로
+> 재학습해 `/data/ner/en/` 을 교체했고, 그때 이 표의 대조 상대이던 원장
+> `certified/classifier/en/deploy-trainseed42`·`backbone-bench` 도 함께 지웠다.
+> 그래서 출처 선언을 뗐다. 현행 배포본의 수치는
+> `docs/reports/english-bert-classifier-benchmark.md` 와 새 원장에 있다.
 
 배포 체크포인트 test 성능(7,637문장, strict span):
 
@@ -180,8 +184,8 @@ NER 5종 strict F1 을 원장 backbone-bench 3-seed 와 나란히 둔다. 같은
 
 ## 후속 작업
 
-- **en 재학습·재배포** — #225 가 정답표 경계 결함을 고쳤고, 지금 배포 패키지는
-  그 결함이 있는 라벨로 학습돼 새 정렬과 불일치한다. 재학습 전에는 수정된 코드와
-  함께 서비스하면 안 된다.
+- ~~**en 재학습·재배포**~~ — #244 에서 끝냈다. #225 의 경계 수정과 #236·#239 의
+  `FAC` 표면별 판정이 반영된 gold 로 `roberta-base` 를 3-seed 재학습하고
+  `/data/ner/en/` 을 교체했다.
 - 서버 서빙(`SUPPORTED_LANGS`·`detect.py`) — `detect.py` 의 양성 감지 원칙을
   어떻게 할지가 선행 결정이다.
