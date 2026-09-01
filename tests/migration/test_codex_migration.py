@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 import pytest
 
@@ -78,6 +79,19 @@ def test_root_codex_instruction_keeps_required_project_policy():
     text = (REPO_ROOT / "AGENTS.md").read_text()
     for term in ROOT_REQUIRED_TERMS:
         assert term in text, term
+
+
+def test_reviewer_agent_is_read_only_and_adversarial():
+    path = REPO_ROOT / ".codex/agents/reviewer.toml"
+    data = tomllib.loads(path.read_text())
+
+    assert data["sandbox_mode"] == "read-only"
+    assert data["model_reasoning_effort"] == "high"
+    assert "model" not in data
+
+    instructions = data["developer_instructions"]
+    for term in ("Findings", "Verification gaps", "Verdict", "Do not modify"):
+        assert term in instructions
 
 
 def test_skill_decisions_match_inventory():

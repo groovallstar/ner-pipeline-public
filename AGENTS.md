@@ -69,8 +69,12 @@ FastAPI 추론 서비스와 Docker 배포이다.
 - 기준 파일이나 주요 런타임을 변경하면 완료 전에
   `requesting-code-review`를 사용해 읽기 전용 reviewer가 요구사항, 회귀,
   측정 타당성을 검토하게 한다.
-- reviewer는 제품 파일이나 증거를 수정하지 않으며, 구현자는 지적을 직접
-  검증한 뒤 반영한다.
+- reviewer에는 원래 요구사항 또는 승인된 spec, `git diff HEAD`, 이번 작업에서
+  새로 실행한 검증 명령과 출력을 함께 제공한다.
+- reviewer는 제품 파일이나 증거를 수정하거나 승인 산출물을 만들지 않고 결과만
+  반환한다. BLOCK이면 구현자가 지적을 직접 검증하고 수정한 뒤 새 diff와 새 검증
+  출력으로 다시 검토를 요청한다.
+- reviewer의 PASS는 기계 검증을 대신하지 않는다.
 - 최종 완료 보고 전에는 `verification-before-completion`을 사용해 모든 성공
   주장에 대응하는 최신 명령 출력과 diff를 확인한다.
 

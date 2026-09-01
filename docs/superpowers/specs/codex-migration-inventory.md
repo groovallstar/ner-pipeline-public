@@ -43,7 +43,7 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 목차·diagram·문답 편의 계약을 제공 | 필요할 때 요청에 맞는 변경 설명을 직접 구성 | 고정 스킬과 편의 형식의 자동 보장을 제거 | 요청에 명시하지 않은 편의 형식은 생략될 수 있음 | 제거 | Claude 편의 계약을 동일하게 유지할 필요가 없다는 사용자 승인과 중복 자산 유지 비용에 따른 Codex-native 단순화 | 제거 | `tests/migration/test_codex_migration.py`와 Task 6 차이·수용 기록 |
 | `perf-measure` | 제거 | Codex 기본 역량 | 고정 조건의 성능·품질 측정 절차를 안내 | 필요할 때 저장소 맥락에 맞는 측정 계획을 요청 | 고정 프로젝트 스킬의 자동 안내를 제거 | 측정 조건은 각 요청에서 명시하거나 검토해야 함 | 제거 | Claude 절차를 동일하게 보장하지 않고 일반 요청으로 처리하는 사용자 승인과 중복 유지 비용에 따른 단순화 | 제거 | `tests/migration/test_codex_migration.py`와 Task 6 차이·수용 기록 |
 | `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라질 수 있음 | 의도적 단순화 | 설치된 Superpowers 절차를 재사용해 프로젝트 중복 자산을 제거함 | 통합 | `tests/migration/test_codex_migration.py` |
-| `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 필요 시 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | 설치된 검토·검증 절차를 재사용하고 자동 상태 루프의 유지 비용을 제거하는 사용자 승인 단순화 | 통합 | Task 5 reviewer 계약 및 Task 6 병행 검증 |
+| `refuter` | 통합 | `.codex/agents/reviewer.toml`, `superpowers:requesting-code-review`, `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 프로젝트의 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | 설치된 검토·검증 절차와 프로젝트 reviewer를 사용하고 자동 상태 루프의 유지 비용을 제거하는 사용자 승인 단순화 | 구현됨, 프로젝트 설정 | Task 5 reviewer 계약 및 Task 6 병행 검증 |
 | `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | Stop 알림과 refuter 상태에서 반복 지적을 수집 | 자동 수집을 유지할지 제거할지 결정하지 않음 | Claude·OMC 상태 의존성을 그대로 만들지 않음 | 반복 지적의 자동 축적과 알림이 사라질 수 있음 | 보류 | 필요성과 대체 근거가 부족해 사용자 승인 전에는 중복 상태 수집을 만들지 않음 | 보류 | Task 6 병행 검증 기록 |
 
 ## 활성화 상태
@@ -53,6 +53,7 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | Codex 전역 설정 | 비활성 | 저장소 자산 검증과 사용자 별도 승인 전에는 `/home/rkim/.codex/config.toml`을 변경하지 않음 |
 | Codex Rules | 비활성 | 최소 명령 prefix 정책과 실제 영향 범위를 후속 활성화 체크리스트에서 검토 |
 | Codex custom commit hook | 제거 | Bash 문자열의 indirect Git execution을 완전 판별할 수 없어 활성화 후보에서 제외 |
+| Codex read-only reviewer | 구현됨, 프로젝트 설정 | 주요 변경에서 요구사항, `git diff HEAD`, 최신 검증 출력을 입력으로 명시적으로 호출하며 자동 커밋 집행은 하지 않음 |
 
 ## 커밋 시점 집행 결정
 
@@ -63,6 +64,6 @@ wrapper를 통한 Git 실행을 완전하게 식별할 수 없어 부분 차단�
 `.codex/hooks/gate_core.py`는 제거 상태로 유지한다.
 
 Codex에서는 `AGENTS.md` 안전 규칙, 명시적으로 호출하는 읽기 전용 reviewer,
-`verification-before-completion`, 기준 파일 reviewer 보고 후 사용자가 훅 밖에서
-커밋하는 정책으로 대체한다. 자동 집행 상실과 사람 절차 누락 가능성은 잔여 위험이며,
+`verification-before-completion`으로 보완한다. reviewer는 automatic commit gate나
+기계 검증을 대신하지 않는다. 자동 집행 상실과 사람 절차 누락 가능성은 잔여 위험이며,
 Task 6 병행 검증과 activation checklist에 미채택 차이로 기록한다.
