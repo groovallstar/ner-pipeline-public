@@ -82,7 +82,7 @@ OMX의 별도 런타임·상태 관리·팀 오케스트레이션은 이관하�
 | 완료 검증 | Superpowers `verification-before-completion` | 테스트 출력 또는 명시적 검증 공백을 근거로 보고 |
 | 독립적 반박 검토 | Superpowers `requesting-code-review` + 읽기 전용 Codex reviewer subagent | 구현자와 분리된 컨텍스트에서 요구사항·diff·테스트 위험 검토 |
 | 장기 진행 기록 | 저장소의 설계·계획 문서와 Git 이력 | 별도 런타임 상태 디렉터리를 만들지 않음 |
-| 지속 정책과 실행 검사 | Codex Rules와 Hooks | 자연어 지시와 분리하고 테스트로 검증 |
+| 지속 안전 정책과 검증 | `AGENTS.md`, 최소 Codex Rules, explicit reviewer, `verification-before-completion` | custom commit hook 없이 규칙·검토·최신 검증 근거를 조합 |
 
 Superpowers는 Codex에서 제공되는 절차 스킬로 유지한다. 반면 프로젝트 `AGENTS.md`에는 Superpowers 내부 동작을 복제하지 않고, 이 저장소에서 지켜야 할 도메인·품질·안전 규칙만 기록한다.
 

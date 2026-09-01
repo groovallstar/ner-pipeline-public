@@ -53,6 +53,8 @@ SKILL_DECISIONS: dict[str, str] = {
 }
 
 PROJECT_SKILL_NAMES = (*SKILL_DECISIONS, "ner-debug-triage")
+CUSTOM_COMMIT_GATE_ITEM = "Codex custom commit hook"
+CUSTOM_COMMIT_GATE_DECISION = "제거"
 REMOVED_CODEX_HOOKS = (
     ".codex/hooks/commit_gate.py",
     ".codex/hooks/gate_core.py",
@@ -107,3 +109,44 @@ def test_legacy_skills_are_not_duplicated_in_codex(name):
 @pytest.mark.parametrize("path", REMOVED_CODEX_HOOKS)
 def test_custom_codex_commit_gate_is_not_present(path):
     assert not (REPO_ROOT / path).exists()
+
+
+def test_custom_commit_gate_decision_matches_inventory():
+    path = REPO_ROOT / "docs/superpowers/specs/codex-migration-inventory.md"
+    rows = []
+    for line in path.read_text().splitlines():
+        if not line.startswith("|"):
+            continue
+        columns = [column.strip() for column in line.strip("|").split("|")]
+        if columns and columns[0] == CUSTOM_COMMIT_GATE_ITEM:
+            rows.append(columns)
+
+    assert len(rows) == 1
+    assert len(rows[0]) == 3
+    assert rows[0][1] == CUSTOM_COMMIT_GATE_DECISION
+
+
+def test_followup_tasks_do_not_reintroduce_custom_commit_hook():
+    path = REPO_ROOT / "docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md"
+    text = path.read_text()
+    task_5 = text.split("## Task 5:", 1)[1].split("## Task 6:", 1)[0]
+    task_6 = text.split("## Task 6:", 1)[1]
+
+    assert ".codex/agents/reviewer.toml" in task_5
+    assert ".codex/hooks" not in task_5
+    assert "PreToolUse" not in task_5
+
+    for required in (
+        "custom commit hook 미채택",
+        "사용자 수준 hook 등록을 하지 않는다는 결정",
+        "automatic commit-time enforcement가 없고",
+    ):
+        assert required in task_6
+    for removed_requirement in (
+        "저장소 경로 한정 훅 등록 초안",
+        "정상 명령과 차단 명령의 dry-run",
+        "설정 제거를 통한 롤백",
+        ".codex/hooks/commit_gate.py",
+        "uv run ruff check .codex/hooks",
+    ):
+        assert removed_requirement not in task_6
