@@ -52,9 +52,4 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | --- | --- | --- |
 | Codex 전역 설정 | 비활성 | 저장소 자산 검증과 사용자 별도 승인 전에는 `/home/rkim/.codex/config.toml`을 변경하지 않음 |
 | Codex Rules | 비활성 | 최소 명령 prefix 정책과 실제 영향 범위를 후속 활성화 체크리스트에서 검토 |
-| Codex Hooks | 구현됨, 비활성 | 상태 없는 PreToolUse 커밋 게이트를 저장소 자산으로 구현했으나 사용자 전역 설정에는 연결하지 않음 |
-
-Codex 커밋 게이트는 Git diff, Ruff, 훅 회귀 테스트, 테스트 무결성, 인용 수치와
-`certified/**/*.json` 보호를 결정적으로 검사한다. 기준 파일 변경은 훅 내부의
-상태나 예외 승인으로 해제하지 않는다. independent reviewer 보고를 받은 뒤 사용자가
-훅 밖에서 직접 커밋하는 의도적 단순화를 적용한다.
+| Codex Hooks | 비활성 | 단위·통합 테스트와 dry-run이 끝난 뒤 저장소 범위 활성화를 별도로 승인 |

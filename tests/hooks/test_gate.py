@@ -25,11 +25,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUFF = REPO_ROOT / '.venv/bin/ruff'
 
 
-def _load_hook(name, root='.claude/hooks'):
-    """훅 디렉터리는 설치 패키지가 아니라 파일 경로로 직접 적재한다 —
+def _load_hook(name):
+    """`.claude/hooks/` 는 설치 패키지가 아니라 훅 스크립트 디렉토리다 —
     import 경로에 없으므로 파일 경로로 직접 적재한다."""
-    path = REPO_ROOT / root / f'{name}.py'
-    spec = importlib.util.spec_from_file_location(f'{root}-{name}', path)
+    path = REPO_ROOT / f'.claude/hooks/{name}.py'
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -38,9 +38,7 @@ def _load_hook(name, root='.claude/hooks'):
 core = _load_hook('gate_core')
 stop_hook = _load_hook('refuter_gate')
 commit_gate = _load_hook('commit_gate')
-codex_commit_gate = _load_hook('commit_gate', '.codex/hooks')
 STOP_HOOK_PATH = REPO_ROOT / '.claude/hooks/refuter_gate.py'
-CODEX_COMMIT_HOOK_PATH = REPO_ROOT / '.codex/hooks/commit_gate.py'
 
 RULER_DOC = 'docs/manual/data/canonical-entity-schema.md'
 SCHEMA_BEFORE = '# 스키마\n\n## 정의\n\nPER LOC ORG\n\n## 변경 이력\n\n- 최초\n'
@@ -114,40 +112,6 @@ def _seed_ruler(proj):
     _write(proj, RULER_DOC, SCHEMA_BEFORE)
     _sh(proj, 'git', 'add', '-A')
     _sh(proj, 'git', 'commit', '-qm', 'schema')
-
-
-def _run_codex_hook(proj, payload):
-    proc = subprocess.run(
-        [sys.executable, str(CODEX_COMMIT_HOOK_PATH)],
-        cwd=proj,
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return json.loads(proc.stdout) if proc.stdout.strip() else {}
-
-
-def _run_codex_hook_raw(proj, payload):
-    proc = subprocess.run(
-        [sys.executable, str(CODEX_COMMIT_HOOK_PATH)],
-        cwd=proj,
-        input=payload,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return json.loads(proc.stdout)
-
-
-def _codex_commit_payload(proj, **overrides):
-    payload = {
-        'tool_name': 'Bash',
-        'tool_input': {'command': 'git commit -m test'},
-        'cwd': proj,
-    }
-    payload.update(overrides)
-    return payload
 
 
 # ── 기준 파일(정답·채점규칙·분할) 잠금 ────────────────────────────────
@@ -739,169 +703,6 @@ def test_aborting_is_not_gated():
 def test_read_only_commands_are_not_gated():
     for cmd in ('git status', 'git log --oneline', 'git diff HEAD'):
         assert not commit_gate.creates_a_commit(cmd), cmd
-
-
-# ── Codex PreToolUse 커밋 게이트 ─────────────────────────────────────
-
-def test_codex_hook_denies_a_ruler_commit(repo):
-    _seed_ruler(repo)
-    _write(repo, RULER_DOC, SCHEMA_BEFORE.replace('ORG', 'ORG PROD'))
-    _sh(repo, 'git', 'add', '-A')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    decision = out['hookSpecificOutput']
-    assert decision['hookEventName'] == 'PreToolUse'
-    assert decision['permissionDecision'] == 'deny'
-    reason = decision['permissionDecisionReason']
-    assert 'independent reviewer' in reason
-    for forbidden in ('.omx', '.codex/state', 'human-allow', 'verdict'):
-        assert forbidden not in reason
-
-
-def test_codex_hook_allows_a_normal_change(repo):
-    _write(repo, 'README.md', 'seed\nmore\n')
-    _sh(repo, 'git', 'add', '-A')
-
-    assert _run_codex_hook(repo, _codex_commit_payload(repo)) == {}
-
-
-def test_codex_hook_denies_certified_json_changes(repo):
-    _write(repo, 'certified/result.json', '{"score": 0.91}\n')
-    _sh(repo, 'git', 'add', '-A')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    decision = out['hookSpecificOutput']
-    assert decision['permissionDecision'] == 'deny'
-    assert '[protected-path]' in decision['permissionDecisionReason']
-    assert 'certified/result.json' in decision['permissionDecisionReason']
-
-
-@pytest.mark.skipif(not RUFF.exists(), reason='ruff not installed in .venv')
-def test_codex_hook_denies_ruff_errors(repo):
-    venv_bin = Path(repo) / '.venv/bin'
-    venv_bin.mkdir(parents=True)
-    shutil.copy(RUFF, venv_bin / 'ruff')
-    _write(repo, 'bad.py', 'import os\n')
-    _sh(repo, 'git', 'add', '-A')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[ruff]' in reason
-    assert 'F401' in reason
-
-
-def test_codex_hook_denies_deleted_tests(repo):
-    _write(repo, 'tests/test_a.py', 'def test_one():\n    assert 1\n')
-    _sh(repo, 'git', 'add', '-A')
-    _sh(repo, 'git', 'commit', '-qm', 'tests')
-    _write(repo, 'tests/test_a.py', '')
-    _sh(repo, 'git', 'add', '-A')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[hard]' in reason
-    assert 'test function' in reason
-
-
-def test_codex_hook_denies_uncertified_cited_metrics(repo):
-    _write(repo, 'certified/run/metrics.json', json.dumps({'f1': 0.9312}))
-    _sh(repo, 'git', 'add', '-A')
-    _sh(repo, 'git', 'commit', '-qm', 'ledger')
-    _write(
-        repo,
-        'docs/reports/result.md',
-        '<!-- certified: run/metrics.json -->\n\n'
-        '| 타입 | F1 |\n|---|---|\n| ALL | 0.7700 |\n',
-    )
-    _sh(repo, 'git', 'add', '-A')
-
-    out = _run_codex_hook(repo, _codex_commit_payload(repo))
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[hard]' in reason
-    assert '0.7700' in reason
-
-
-def test_codex_hook_denies_malformed_json(repo):
-    out = _run_codex_hook_raw(repo, '{not json')
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert out['hookSpecificOutput']['permissionDecision'] == 'deny'
-    assert '[input-error]' in reason
-    assert 'JSON' in reason
-
-
-@pytest.mark.parametrize(
-    'overrides, diagnostic',
-    [
-        ({'tool_name': ['Bash']}, 'tool_name'),
-        ({'tool_input': {}}, 'tool_input.command'),
-        ({'tool_input': {'command': 123}}, 'tool_input.command'),
-        ({'cwd': 123}, 'cwd'),
-    ],
-)
-def test_codex_hook_denies_invalid_required_field_types(
-    repo, overrides, diagnostic,
-):
-    out = _run_codex_hook(
-        repo,
-        _codex_commit_payload(repo, **overrides),
-    )
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[input-error]' in reason
-    assert diagnostic in reason
-
-
-def test_codex_hook_denies_when_checks_cannot_run(tmp_path):
-    notrepo = tmp_path / 'notrepo'
-    notrepo.mkdir()
-
-    out = _run_codex_hook(
-        str(notrepo),
-        _codex_commit_payload(str(notrepo)),
-    )
-
-    reason = out['hookSpecificOutput']['permissionDecisionReason']
-    assert '[internal-error]' in reason
-    assert 'git diff' in reason
-
-
-def test_codex_hook_allows_a_non_bash_tool(repo):
-    payload = _codex_commit_payload(repo, tool_name='Read', tool_input={})
-    assert _run_codex_hook(repo, payload) == {}
-
-
-def test_codex_hook_allows_a_read_only_git_command(repo):
-    payload = _codex_commit_payload(
-        repo,
-        tool_input={'command': 'git status'},
-    )
-    assert _run_codex_hook(repo, payload) == {}
-
-
-def test_codex_commit_detection_preserves_abort_exceptions():
-    for cmd in (
-        'git commit -m x',
-        'git cherry-pick abc123',
-        'git revert HEAD',
-        'git am patch.mbox',
-        'git rebase --continue',
-        'git merge --continue',
-    ):
-        assert codex_commit_gate.creates_a_commit(cmd), cmd
-    for cmd in (
-        'git rebase --abort',
-        'git merge --abort',
-        'git cherry-pick --skip',
-        'git am --quit',
-        'git status',
-    ):
-        assert not codex_commit_gate.creates_a_commit(cmd), cmd
 
 
 # ── 확인마다 집행 주체가 있는가 ───────────────────────────────────────
