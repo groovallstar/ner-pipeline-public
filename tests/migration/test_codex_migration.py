@@ -28,6 +28,7 @@ FORBIDDEN_TARGET_TERMS = (
     ".claude/",
     "CLAUDE.md",
     ".omc/",
+    ".omx/",
     "oh-my-codex",
     "refuter_gate.py",
     "AskUserQuestion",

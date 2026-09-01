@@ -23,6 +23,14 @@ FastAPI 추론 서비스와 Docker 배포이다.
 - 실행 예시는 `uv run python -m ner.llm_eval --help`,
   `uv run pytest tests/ner -q`, `uv run ruff check src tests`처럼 작성한다.
 
+## 코드와 문서 언어
+
+- `print()`, `logger.*`, 예외 메시지, argparse `help`는 영문으로 작성한다.
+- 함수·클래스·모듈 docstring과 인라인 주석은 한국어로 작성한다.
+- 코드·주석·식별자에 이슈·PR 번호, 날짜, 사람 이름을 넣지 않는다. 영구
+  맥락은 커밋 메시지나 `docs/issues/`에 기록한다.
+- 상세 규칙은 `docs/specs/coding-conventions.md`를 따른다.
+
 ## 안전 경계
 
 - gold 스키마, metric, 유효성 판정, split 로직은 실험의 평가 기준이다. 이를

@@ -7,8 +7,8 @@ relaxed char-offset span F1을 산출한다. 증강, LLM 라벨링, HF Hub 업�
 추론 서빙은 이 패키지의 책임이 아니다.
 
 - 입력 label은 canonical 10종이어야 하며 오프셋은 `[start_char, end_char)`이다.
-- 모든 3-way와 K-fold 학습은 `--group-key`를 명시한다. JA는 `id`, VI는
-  `orig`, 형제 행이 없는 KO는 `id` 또는 `none`을 사용한다.
+- 모든 3-way와 K-fold 학습은 `--group-key`를 명시한다. JA는 `id`, VI와
+  EN은 `orig`, 형제 행이 없는 KO는 `id` 또는 `none`을 사용한다.
 - `none`은 누출 미측정 선언이며 누출 0으로 바꾸지 않는다.
 - fast, PhoBERT, JA slow tokenizer 정렬 경로를 각각 보존한다.
 - metric은 `ner.metrics.span_metrics`를 재사용하고 평가 모델은 float32로 로드한다.

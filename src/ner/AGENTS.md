@@ -29,8 +29,7 @@
 - 언어별 규칙은 `labelers/<lang>/`, 데이터 변환과 주입은 `augmenters/`,
   학습은 `classifier/`에 둔다.
 - 여러 패키지를 조합하는 얇은 실행 진입점만 `scripts/`에 둔다.
-- 타입 힌트와 표준 `logging`을 사용한다. 로그·예외·CLI help는 영문,
-  docstring과 인라인 주석은 한국어로 작성한다.
+- 타입 힌트와 표준 `logging`을 사용한다.
 
 ## 금지사항
 
@@ -40,6 +39,5 @@
 
 ## 검증
 
-- 변경한 하위 모듈의 가장 가까운 테스트를 먼저 실행한다.
 - 공용 경계 변경은 `uv run pytest tests/ner -q`와
   `uv run ruff check src/ner tests/ner`로 검증한다.
