@@ -43,6 +43,11 @@ ROOT_REQUIRED_TERMS = (
     "requesting-code-review",
     "verification-before-completion",
 )
+RUNTIME_CHANGE_POLICY_CLAUSES = (
+    "런타임 동작을 변경하는 작업은 main이 아닌 브랜치에서 진행한다.",
+    "구현 전에 이슈 또는 승인된 spec에 문제, acceptance criteria, 필요한 테스트, "
+    "문서 영향을 기록한다.",
+)
 
 SKILL_DECISIONS: dict[str, str] = {
     "debug-triage": "통합",
@@ -79,12 +84,16 @@ def test_root_codex_instruction_keeps_required_project_policy():
     text = (REPO_ROOT / "AGENTS.md").read_text()
     for term in ROOT_REQUIRED_TERMS:
         assert term in text, term
+    normalized_text = " ".join(text.split())
+    for clause in RUNTIME_CHANGE_POLICY_CLAUSES:
+        assert clause in normalized_text, clause
 
 
 def test_reviewer_agent_is_read_only_and_adversarial():
     path = REPO_ROOT / ".codex/agents/reviewer.toml"
     data = tomllib.loads(path.read_text())
 
+    assert data["name"] == "reviewer"
     assert data["sandbox_mode"] == "read-only"
     assert data["model_reasoning_effort"] == "high"
     assert "model" not in data

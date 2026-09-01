@@ -12,7 +12,7 @@
 
 | 원본 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CLAUDE.md` | `AGENTS.md` | 프로젝트 규칙과 Claude·OMC 작업 절차를 함께 로드 | 도메인·안전 규칙은 로드하고 작업 절차는 Codex·Superpowers에 위임 | OMC 역할·명령과 자동 절차를 복제하지 않음 | 자동 절차가 줄어 호출 누락 가능성이 생기지만 저장소 규칙은 유지됨 | 의도적 단순화 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
+| `CLAUDE.md` | `AGENTS.md` | 런타임 변경을 이슈·브랜치·수락 기준으로 추적하고 프로젝트 규칙과 작업 절차를 함께 로드 | 런타임 동작 변경은 main이 아닌 브랜치에서 진행하고, 구현 전에 이슈 또는 승인된 spec에 문제·acceptance criteria·필요한 테스트·문서 영향을 기록 | Claude·OMC 전용 workflow 명령과 자동 절차는 복제하지 않음 | 작업 추적 정책은 유지되지만 branch·문서 준비를 자동 집행하지 않아 사람 절차 누락 가능성이 있음 | 의도적 단순화 | 정적 계약은 검증됐고 정책을 포함한 새 세션 loader smoke 후 확정 | 재검증 필요 | `tests/migration/test_codex_migration.py`와 controller exact loader smoke 재실행 |
 | `docker/CLAUDE.md` | `docker/AGENTS.md` | Docker 공통 배포 경계와 운영 지침을 로드 | 같은 배포 경계를 Codex 계층에서 로드 | 지침 파일명과 로더만 다름 | 운영 경계에는 영향이 없고 발견 방식만 달라짐 | 동등 대체 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
 | `docker/server/CLAUDE.md` | `docker/server/AGENTS.md` | REST API 컨테이너 설정·헬스체크·번역 의존성을 안내 | 같은 입력·준비성 계약을 현재 경로 기준으로 안내 | Claude 전용 실행 표현을 제거 | 제품 기동 계약은 유지되고 에이전트별 표현만 사라짐 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `docker/vllm/CLAUDE.md` | `docker/vllm/AGENTS.md` | compose 역할과 GPU·모델별 운영 주의를 안내 | 같은 서비스 책임과 안전 범위를 안내 | 공통 Docker 설명의 중복을 줄임 | 세부 지침 탐색 시 상위 문서도 함께 읽어야 함 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
@@ -45,7 +45,7 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 목차·diagram·문답 편의 계약을 제공 | 필요할 때 요청에 맞는 변경 설명을 직접 구성 | 고정 스킬과 편의 형식의 자동 보장을 제거 | 요청에 명시하지 않은 편의 형식은 생략될 수 있음 | 제거 | 제거·부재 계약은 검증됐고 actual-diff 새 세션 smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `perf-measure` | 제거 | Codex 기본 역량 | 고정 조건의 성능·품질 측정 절차를 안내 | 필요할 때 저장소 맥락에 맞는 측정 계획을 요청 | 고정 프로젝트 스킬의 자동 안내를 제거 | 측정 조건은 각 요청에서 명시하거나 검토해야 함 | 제거 | 사용자 승인 단순화와 프로젝트 스킬 부재가 정적 검사에서 일치함 | 검증됨 | `tests/migration/test_codex_migration.py` |
 | `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라질 수 있음 | 의도적 단순화 | 설치된 Superpowers 통합과 프로젝트 스킬 부재가 정적 검사에서 일치함 | 검증됨 | `tests/migration/test_codex_migration.py` |
-| `refuter` | 통합 | `.codex/agents/reviewer.toml`, `superpowers:requesting-code-review`, `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 프로젝트의 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | 정적 계약과 controller smoke가 PASS했고 작업 트리가 바뀌지 않음 | 검증됨 | Task 5 reviewer 계약과 controller smoke |
+| `refuter` | 통합 | `.codex/agents/reviewer.toml`, `superpowers:requesting-code-review`, `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 프로젝트의 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | `name = "reviewer"`를 포함한 정적 계약은 검증됐고 exact runtime smoke 후 확정 | 재검증 필요 | Task 5 reviewer 계약과 controller exact runtime smoke 재실행 |
 | `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | Stop 알림과 refuter 상태에서 반복 지적을 수집 | 자동 수집을 유지할지 제거할지 결정하지 않음 | Claude·OMC 상태 의존성을 그대로 만들지 않음 | 반복 지적의 자동 축적과 알림이 사라질 수 있음 | 보류 | 필요성과 대체 근거가 부족해 사용자 승인 전에는 중복 상태 수집을 만들지 않음 | 보류 | Task 6 병행 검증 기록 |
 
 ## 활성화 상태
@@ -55,13 +55,13 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | Codex 전역 설정 | 비활성 | 저장소 자산 검증과 사용자 별도 승인 전에는 `/home/rkim/.codex/config.toml`을 변경하지 않음 |
 | Codex Rules | 비활성 | 최소 명령 prefix 정책과 실제 영향 범위를 후속 활성화 체크리스트에서 검토 |
 | Codex custom commit hook | 제거 | Bash 문자열의 indirect Git execution을 완전 판별할 수 없어 활성화 후보에서 제외 |
-| Codex read-only reviewer | 구현됨, 프로젝트 설정 | 주요 변경에서 요구사항, `git diff HEAD`, 최신 검증 출력을 입력으로 명시적으로 호출하며 자동 커밋 집행은 하지 않음 |
+| Codex read-only reviewer | 구현됨, runtime 재검증 필요 | `name = "reviewer"`를 포함한 프로젝트 설정을 추가했으며 controller exact runtime smoke 전에는 동작 검증으로 간주하지 않음 |
 
 ## 전환 상태
 
 | 항목 | 상태 | 근거 |
 | --- | --- | --- |
-| Codex 자산 | 후보 | 정적 검증과 reviewer smoke는 완료됨 |
+| Codex 자산 | 후보 | 정적 검증은 완료됐고 reviewer exact runtime smoke는 재검증 필요 |
 | Codex 전환 | 보류 | loader smoke는 통과했고 스킬·actual-diff smoke와 사용자 잔여 차이 수용이 남음 |
 | Claude 자산 삭제 | 범위 밖 | 병행 운영 원본을 보존함 |
 | 기본 도구 전환 | 범위 밖 | 사용자 별도 승인 범위임 |
