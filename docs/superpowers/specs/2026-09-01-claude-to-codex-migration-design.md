@@ -128,9 +128,9 @@ Codex의 사용자 수준 설정은 `/home/rkim/.codex/config.toml`에 남는다
 
 ### 커밋 게이트
 
-`commit_gate.py`는 Codex `PreToolUse`의 `Bash` 이벤트에서 실행한다. Codex 입력은 `tool_name`과 `tool_input.command`를 제공하므로, 어댑터는 이 필드로 커밋을 만드는 Git 명령을 판별한다. 유효한 비대상 도구와 커밋 생성이 아닌 명령만 통과하며, 입력 파싱 또는 결정적 검사 실행이 실패하면 진단을 포함해 fail-closed한다. 차단 시에는 `hookSpecificOutput.permissionDecision = "deny"`와 이유를 반환한다.
+`commit_gate.py`는 Codex `PreToolUse`의 `Bash` 이벤트에서 실행한다. 지원 범위는 직접 실행하는 단일 `git commit`과 literal path를 사용하는 `git -C <path> commit`이다. exact standalone abort·quit·skip 종료 명령만 비대상으로 통과한다. 그 밖의 history operation, wrapper, 환경 변수 assignment, `cd`, shell operator, target expansion 또는 모호한 Git 명령은 임의 shell semantics를 근사하지 않고 진단과 함께 차단한다. 사용자는 명령을 분리하거나 검토 후 훅 밖에서 history operation을 수행한다. 입력 파싱 또는 결정적 검사 실행이 실패해도 fail-closed하며, 차단 시에는 `hookSpecificOutput.permissionDecision = "deny"`와 이유를 반환한다.
 
-기존 `gate_core.py`의 diff 검사와 승인 파일 지문 계산은 재사용한다. Codex 고유 JSON을 이 공통 로직이 직접 알지 않도록, 새 어댑터에서 표준 명령 문자열과 작업 디렉터리로 변환한다.
+기존 `gate_core.py`의 순수 diff 검사만 독립 이관하고 승인 파일이나 판정 상태는 재사용하지 않는다. certified root와 모든 catalog file의 canonical containment를 검사하며 symlink root·directory·file을 근거로 허용하지 않는다. Codex 고유 JSON은 어댑터에서 검증하고 core에는 검사할 확정 작업 디렉터리만 전달한다.
 
 ### 반박 검토와 lessons
 
@@ -185,7 +185,8 @@ Codex Rules와 훅 설정은 사용자 수준 파일이므로, 실제 활성화 
 ### 단계 3: 커밋 훅 포팅과 reviewer 설정
 
 1. Codex 이벤트 JSON fixture와 어댑터 단위 테스트를 먼저 작성한다.
-2. `PreToolUse` 커밋 차단을 dry-run으로 실행하여 허용·차단·오류 사례를 비교한다.
+2. `PreToolUse` 커밋 차단을 dry-run으로 실행하여 direct commit 허용·차단,
+   unsupported history operation, wrapper, 경로와 검사 오류 사례를 비교한다.
 3. `.codex/agents/reviewer.toml`을 읽기 전용으로 작성하고, 요구사항과 diff를 입력한 검토 보고서 형식을 시험한다.
 4. 사용자 수준 Codex 훅 설정 초안을 검토한 뒤, 이 저장소에서만 커밋 훅이 활성화되는지 확인한다.
 
@@ -193,7 +194,8 @@ Codex Rules와 훅 설정은 사용자 수준 파일이므로, 실제 활성화 
 
 ### 단계 4: 병행 운영과 전환 결정
 
-1. 실작업을 Claude와 Codex에서 각각 수행해 지침·스킬·게이트 결과를 비교한다.
+1. 실작업을 Claude와 Codex에서 각각 수행해 지침·스킬·게이트 결과를 비교하고,
+   Codex의 direct commit-only 및 history operation 제한 차이를 기록한다.
 2. 차이는 이관표에 원인과 결정을 기록한다.
 3. 모든 항목에 관찰된 차이와 채택 판정이 있고, 유지하기로 한 안전·품질 정책이 검증된 경우에만 전환 후보로 표시한다.
 
@@ -217,6 +219,7 @@ Claude 자산의 제거는 이 설계 범위 밖이며, 병행 검증 기록을 
 | --- | --- | --- |
 | 지침을 두 번 관리하면서 내용이 갈라짐 | Claude와 Codex의 작업 결과가 달라짐 | 이관표에 원본·대상·검토 일자를 기록하고 변경 시 쌍으로 검토 |
 | 훅 입력 형식 차이 | 차단 누락 또는 정상 작업 차단 | 어댑터 경계를 분리하고 실제 Codex JSON fixture로 회귀 테스트 |
+| direct commit-only 제한 | 복합 명령과 history operation을 Codex 훅 안에서 실행할 수 없음 | 명령을 분리하고 Task 6에서 Claude 대비 차이를 검증한 뒤 필요한 작업은 사용자가 훅 밖에서 수행 |
 | 전역 Codex 설정 변경 | 다른 저장소의 작업이 영향을 받음 | 저장소 자산 검증 후 최소 규칙만 별도 활성화 승인으로 적용 |
 | 권한을 1:1 복사 | 과도한 권한 또는 보호 상실 | Rules, Hooks, sandbox, approval을 각 역할에 맞게 재설계 |
 | Claude 전용 스킬 의존성 | Codex에서 실행 실패 | 의존성과 유지 비용을 검사하고 통합·제거·보류 상태를 명시 |
