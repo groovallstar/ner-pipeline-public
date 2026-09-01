@@ -4,7 +4,6 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_BASELINE_DOC = Path("docs/superpowers/specs/codex-skill-baselines.md")
 
 INSTRUCTION_PAIRS: tuple[tuple[str, str], ...] = (
     ("CLAUDE.md", "AGENTS.md"),
@@ -94,22 +93,6 @@ def test_skill_decisions_match_inventory():
     }
 
     assert inventory_decisions == SKILL_DECISIONS
-
-
-def test_skill_decisions_link_to_baseline_audit():
-    baseline_path = REPO_ROOT / SKILL_BASELINE_DOC
-    assert baseline_path.is_file()
-
-    inventory = (
-        REPO_ROOT / "docs/superpowers/specs/codex-migration-inventory.md"
-    ).read_text()
-    audit = baseline_path.read_text()
-    for name, decision in SKILL_DECISIONS.items():
-        inventory_row = next(
-            line for line in inventory.splitlines() if line.startswith(f"| `{name}` |")
-        )
-        assert SKILL_BASELINE_DOC.name in inventory_row
-        assert f"| `{name}` | {decision} |" in audit
 
 
 @pytest.mark.parametrize("name", PROJECT_SKILL_NAMES)

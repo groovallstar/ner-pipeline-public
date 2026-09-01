@@ -16,9 +16,9 @@
 | Claude 설정 | 1 | 제한 허용 명령, 민감 경로 쓰기 거부, PreToolUse와 Stop 훅 등록 | 권한 모델을 새로 설계하고 결정적 PreToolUse 검사만 이관 |
 | 훅 진입점 | 3 | 커밋 게이트, 반박자 게이트, lessons 알림 | 커밋 게이트만 Codex 훅 어댑터와 회귀 테스트로 이관 |
 | 훅 공통 로직 | 1 | diff 검사, 승인 상태, 반박자 상태 | 커밋 검증에 필요한 순수 로직만 재사용하고 반박자 상태는 이관하지 않음 |
-| 프로젝트 스킬 | 6 | debug-triage, explain-diff, lessons-digest, perf-measure, refuter, tdd | baseline으로 기본 역량과 Superpowers 대체 가능성을 확인한 뒤 통합·제거·보류 |
+| 프로젝트 스킬 | 6 | debug-triage, explain-diff, lessons-digest, perf-measure, refuter, tdd | 설치된 Superpowers, 중복 유지 비용과 사용자 승인에 따라 통합·제거·보류 |
 
-Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업 디렉터리까지의 `AGENTS.md`를 순서대로 합친다. 따라서 루트와 하위 디렉터리의 지침 계층을 모두 보존해야 모듈별 제약이 사라지지 않는다. 세 Task 3 baseline은 별도 프로젝트 스킬 없이 요구 동작을 충족했으므로 `.agents/skills/`는 만들지 않는다.
+Codex는 시작 시 전역 지침 다음에 저장소 루트부터 현재 작업 디렉터리까지의 `AGENTS.md`를 순서대로 합친다. 따라서 루트와 하위 디렉터리의 지침 계층을 모두 보존해야 모듈별 제약이 사라지지 않는다. Task 3의 임시 authoring 관찰은 새 프로젝트 스킬을 만들지 않는 결정을 보조했으며 장기 감사나 기능 동등성 증거로 유지하지 않는다.
 
 ## 범위
 
@@ -153,15 +153,15 @@ Codex Rules와 훅 설정은 사용자 수준 파일이므로, 실제 활성화 
 
 ## 스킬 이관 방식
 
-`.claude/skills/`의 6개 스킬은 모두 `name`, `description`, 지시문, 참조 파일, 스크립트 의존성과 별도 스킬 없는 baseline 결과를 조사한다. 결과는 다음 세 상태 중 하나로 이관표에 기록한다.
+`.claude/skills/`의 6개 스킬은 `name`, `description`, 지시문, 참조 파일, 스크립트 의존성과 Codex에서의 유지 비용을 조사한다. 결과는 다음 세 상태 중 하나로 이관표에 기록한다.
 
 | 상태 | 기준 | 조치 |
 | --- | --- | --- |
-| 통합 | Codex 또는 설치된 스킬이 같은 기능을 제공 | 중복 파일을 만들지 않고 대응 스킬과 차이를 기록 |
-| 제거 | Codex 기본 역량만으로 필요한 결과를 내며 별도 절차 자산의 유지 가치가 없음 | 중복 파일을 만들지 않고 baseline 근거를 기록 |
+| 통합 | Codex 또는 설치된 스킬을 채택하는 편이 프로젝트 스킬 중복보다 단순함 | 중복 파일을 만들지 않고 대응 수단과 의도적 차이를 기록 |
+| 제거 | 사용자가 Claude 편의 계약의 동일 재현을 요구하지 않고 유지 비용이 효용보다 큼 | 중복 파일을 만들지 않고 필요할 때 일반 요청으로 수행 |
 | 보류 | Claude 전용 명령·도구·권한의 영향이나 Codex에서의 필요성을 아직 결정하지 못함 | 원본은 유지하고 비교 근거와 재설계 또는 제거 후보를 기록 |
 
-`debug-triage`는 baseline에서 `systematic-debugging`과 `AGENTS.md`만으로 NER 원인 격리 절차가 충족되어 동등 대체로 통합한다. `explain-diff`와 `perf-measure`는 Codex 기본 역량만으로 각각 변경 설명 계약과 측정 계획을 충족했으므로 제거한다. `tdd`는 Superpowers `test-driven-development`로 통합하고, `refuter`는 `requesting-code-review`와 `verification-before-completion`으로 통합하되 자동 상태 루프 제거를 의도적 단순화로 기록한다. `lessons-digest`는 보류한다. 여섯 결정 모두 새 프로젝트 스킬을 만들지 않는다.
+`debug-triage`는 별도 NER 스킬을 유지하지 않고 설치된 `systematic-debugging`과 `AGENTS.md`를 채택한다. `explain-diff`와 `perf-measure`는 Claude 편의 형식을 동일하게 보장하는 프로젝트 스킬의 유지 비용을 피하고 Codex 기본 역량에 일반 요청으로 맡긴다. `tdd`는 Superpowers `test-driven-development`로 통합하고, `refuter`는 `requesting-code-review`와 `verification-before-completion`으로 통합하되 자동 상태 루프 제거를 의도적 단순화로 기록한다. `lessons-digest`는 보류한다. 이는 기능 동등성 증명이 아니라 사용자가 승인한 Codex-native 단순화이며, 여섯 결정 모두 새 프로젝트 스킬을 만들지 않는다.
 
 ## 구현 단계와 전환 기준
 
@@ -177,7 +177,7 @@ Codex Rules와 훅 설정은 사용자 수준 파일이므로, 실제 활성화 
 ### 단계 2: 스킬 이관
 
 1. 각 스킬의 의존성과 중복을 분류한다.
-2. debug-triage, explain-diff, perf-measure 요구를 프로젝트 스킬 없이 baseline으로 실행한다.
+2. writing-skills authoring gate에서 프로젝트 스킬 없는 동작을 임시 관찰한다.
 3. 통합·제거·보류 결정을 이관표에 기록하고 중복 프로젝트 스킬 부재를 정적 검사한다.
 
 완료 조건은 이관표의 모든 스킬이 통합·제거·보류 중 하나로 결정되고, 여섯 legacy 이름과 `ner-debug-triage`의 프로젝트 스킬 디렉터리가 없는 것이다.
@@ -219,8 +219,8 @@ Claude 자산의 제거는 이 설계 범위 밖이며, 병행 검증 기록을 
 | 훅 입력 형식 차이 | 차단 누락 또는 정상 작업 차단 | 어댑터 경계를 분리하고 실제 Codex JSON fixture로 회귀 테스트 |
 | 전역 Codex 설정 변경 | 다른 저장소의 작업이 영향을 받음 | 저장소 자산 검증 후 최소 규칙만 별도 활성화 승인으로 적용 |
 | 권한을 1:1 복사 | 과도한 권한 또는 보호 상실 | Rules, Hooks, sandbox, approval을 각 역할에 맞게 재설계 |
-| Claude 전용 스킬 의존성 | Codex에서 실행 실패 | baseline과 의존성을 검사하고 통합·제거·보류 상태를 명시 |
-| 제거한 스킬의 표현 계약 누락 | 핵심 정책 결과는 유지되어도 목차·diagram·문답 형식 같은 사용성이 낮아질 수 있음 | 실제 입력 baseline과 Task 6 smoke로 영향과 유지 비용을 비교하고 제거 판정을 확정 |
+| Claude 전용 스킬 의존성 | Codex에서 실행 실패 | 의존성과 유지 비용을 검사하고 통합·제거·보류 상태를 명시 |
+| 제거한 스킬의 편의 계약 누락 | 목차·diagram·문답 형식 같은 자동 편의가 사라짐 | 필요하면 일반 사용자 요청으로 생성하고 Task 6에서 실제 Codex 차이와 수용 여부를 기록 |
 
 ## 승인 후 다음 산출물
 

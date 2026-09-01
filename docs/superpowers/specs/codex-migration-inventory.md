@@ -29,25 +29,22 @@
 
 ## 프로젝트 스킬 결정
 
-### 프로젝트 스킬 없는 baseline 관찰
+### 프로젝트 스킬 없는 임시 관찰
 
-독립 재현 가능한 실행 조건, 요청, 사전 수락 기준과 전체 관찰은
-[Codex 프로젝트 스킬 baseline 감사 기록](codex-skill-baselines.md)에 보존한다.
-
-| baseline | 관찰 | 결정에 준 근거 |
-| --- | --- | --- |
-| debug-triage | `systematic-debugging`과 `AGENTS.md`만 적용한 응답이 원본 증거 보존, 단일 재현, BIO와 vLLM 경계별 관측, 프롬프트·adapter 2x2 격리, 회귀 검증 순서를 모두 제시했다. | NER 전용 스킬을 추가하지 않아도 진단 목적을 충족하므로 기존 절차에 통합한다. |
-| explain-diff | 초기 응답은 설명 문서 계약을 제시했고, Task 2 실제 diff 응답은 self-contained 한국어 Markdown으로 배경·직관·변화·위험·검증·이해 질문 5개를 제공했다. 목차, diagram, 객관식 선택지와 answer key는 없었다. | 핵심 이해 목적은 충족하고 고정 표현 자산의 유지 비용이 더 커 중복 스킬을 제거한다. 표현 차이는 Task 6 actual-diff smoke에서 확정한다. |
-| perf-measure | 별도 프로젝트 스킬 없는 응답이 데이터·모델·환경 고정, 반복 측정, 처리량·지연·신뢰성·자원·품질 지표, 단일 변수 실험과 품질 게이트를 제시했다. | Codex 기본 역량이 측정 계획을 충족하므로 중복 스킬을 제거한다. |
+writing-skills authoring gate에서는 새 프로젝트 스킬을 사용하지 않은 Codex 응답을
+임시로 관찰했다. 이 관찰은 새 스킬을 배포하지 않는 결정을 보조했을 뿐 장기 감사,
+eval 산출물 또는 Claude 기능과의 동등성 증거가 아니다. `explain-diff`의 목차,
+Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필요하면 일반 사용자
+요청으로 생성할 수 있지만 프로젝트 스킬이 자동 보장하지 않는다.
 
 | 원본 스킬 | 결정 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | NER 전용 진단 체크리스트를 직접 제공 | 공통 디버깅 절차와 저장소 지침을 함께 적용 | 별도 NER 스킬과 고정 체크리스트를 만들지 않음 | 진단 표현은 달라도 재현·증거 보존·원인 격리·회귀 검증이 유지됨 | 동등 대체 | [baseline 감사 기록](codex-skill-baselines.md)의 debug 실행이 요구 절차를 충족함 | 통합 | 감사 기록과 `tests/migration/test_codex_migration.py` |
-| `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 세부 표현 계약을 제공 | 요청과 diff 근거로 필요한 설명 문서를 직접 구성 | 목차, diagram, 객관식 선택지, answer key와 고정 스킬 호출을 제거 | 핵심 이해·위험·검증은 유지되지만 표현 차이의 사용성은 실제 작업에서 확인해야 함 | 제거 | [baseline 감사 기록](codex-skill-baselines.md)의 actual diff가 핵심 기준을 충족했고 고정 표현 자산의 유지 비용이 더 큼; Task 6 actual-diff smoke에서 확정 | 제거 | 감사 기록과 Task 6 actual-diff smoke |
-| `perf-measure` | 제거 | Codex 기본 역량 | 고정 조건의 성능·품질 측정을 안내 | 요청과 저장소 지침으로 비교 가능한 측정 계획을 직접 구성 | 고정 스킬 호출이 사라짐 | 계획 표현은 달라질 수 있으나 고정 조건·지표·품질 게이트는 유지됨 | 제거 | [baseline 감사 기록](codex-skill-baselines.md)의 perf 실행이 측정 정책을 충족함 | 제거 | 감사 기록과 `tests/migration/test_codex_migration.py` |
-| `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라도 테스트 우선 집행은 유지됨 | 동등 대체 | [baseline 감사 기록](codex-skill-baselines.md)에 설치 스킬 대체 근거를 기록함 | 통합 | 감사 기록과 `tests/migration/test_codex_migration.py` |
-| `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 필요 시 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | [baseline 감사 기록](codex-skill-baselines.md)에 상태 없는 검토와 최신 검증 증거의 대체 근거를 기록함 | 통합 | 감사 기록, Task 5 reviewer 계약 및 Task 6 병행 검증 |
-| `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | Stop 알림과 refuter 상태에서 반복 지적을 수집 | 자동 수집을 유지할지 제거할지 결정하지 않음 | Claude·OMC 상태 의존성을 그대로 만들지 않음 | 반복 지적의 자동 축적과 알림이 사라질 수 있음 | 보류 | [baseline 감사 기록](codex-skill-baselines.md)에 근거 부족과 보류 조건을 기록함 | 보류 | 감사 기록과 Task 6 병행 검증 기록 |
+| `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | NER 전용 진단 체크리스트를 직접 제공 | 설치된 디버깅 절차와 저장소 지침을 사용 | 별도 NER 스킬과 고정 체크리스트를 유지하지 않음 | Claude 절차와 표현이 달라질 수 있음 | 의도적 단순화 | 설치된 Superpowers 대체 수단을 재사용하는 편이 중복 프로젝트 스킬 유지보다 단순하며 사용자가 차이를 승인함 | 통합 | `tests/migration/test_codex_migration.py`와 Task 6 병행 검증 |
+| `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 목차·diagram·문답 편의 계약을 제공 | 필요할 때 요청에 맞는 변경 설명을 직접 구성 | 고정 스킬과 편의 형식의 자동 보장을 제거 | 요청에 명시하지 않은 편의 형식은 생략될 수 있음 | 제거 | Claude 편의 계약을 동일하게 유지할 필요가 없다는 사용자 승인과 중복 자산 유지 비용에 따른 Codex-native 단순화 | 제거 | `tests/migration/test_codex_migration.py`와 Task 6 차이·수용 기록 |
+| `perf-measure` | 제거 | Codex 기본 역량 | 고정 조건의 성능·품질 측정 절차를 안내 | 필요할 때 저장소 맥락에 맞는 측정 계획을 요청 | 고정 프로젝트 스킬의 자동 안내를 제거 | 측정 조건은 각 요청에서 명시하거나 검토해야 함 | 제거 | Claude 절차를 동일하게 보장하지 않고 일반 요청으로 처리하는 사용자 승인과 중복 유지 비용에 따른 단순화 | 제거 | `tests/migration/test_codex_migration.py`와 Task 6 차이·수용 기록 |
+| `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라질 수 있음 | 의도적 단순화 | 설치된 Superpowers 절차를 재사용해 프로젝트 중복 자산을 제거함 | 통합 | `tests/migration/test_codex_migration.py` |
+| `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | 필요 시 읽기 전용 reviewer를 명시적으로 호출하고 최종 검증을 분리 | 자동 Stop 루프와 판정 상태를 제거 | 명시적 호출 누락 가능성과 집행력 감소가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | 설치된 검토·검증 절차를 재사용하고 자동 상태 루프의 유지 비용을 제거하는 사용자 승인 단순화 | 통합 | Task 5 reviewer 계약 및 Task 6 병행 검증 |
+| `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | Stop 알림과 refuter 상태에서 반복 지적을 수집 | 자동 수집을 유지할지 제거할지 결정하지 않음 | Claude·OMC 상태 의존성을 그대로 만들지 않음 | 반복 지적의 자동 축적과 알림이 사라질 수 있음 | 보류 | 필요성과 대체 근거가 부족해 사용자 승인 전에는 중복 상태 수집을 만들지 않음 | 보류 | Task 6 병행 검증 기록 |
 
 ## 활성화 상태
 
