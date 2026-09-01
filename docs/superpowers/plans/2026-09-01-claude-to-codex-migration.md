@@ -100,10 +100,10 @@
 
   | 원본 스킬 | 결정 | Codex 대상 | 판정 |
   | --- | --- | --- | --- |
-  | `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | 동등 대체 |
+  | `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | 의도적 단순화 |
   | `explain-diff` | 제거 | Codex 기본 역량 | 제거 |
   | `perf-measure` | 제거 | Codex 기본 역량 | 제거 |
-  | `tdd` | 통합 | `superpowers:test-driven-development` | 동등 대체 |
+  | `tdd` | 통합 | `superpowers:test-driven-development` | 의도적 단순화 |
   | `refuter` | 통합 | `superpowers:requesting-code-review`와 `superpowers:verification-before-completion` | 의도적 단순화 |
   | `lessons-digest` | 보류 | 상태 기반 자동 수집을 유지할지 제거할지 별도 판단 | 보류 |
 
