@@ -4,9 +4,9 @@
 
 **Goal:** Claude Code 설정을 보존한 채 두 하네스의 실제 동작을 비교하고, 유지·대체·단순화·제거하기로 결정한 Codex용 자산만 추가한다.
 
-**Architecture:** `CLAUDE.md`와 `.claude/**`는 병행 기간의 원본으로 유지하고, Codex 전용 파일을 `AGENTS.md`와 `.codex/agents/`에 추가한다. 프로젝트 스킬은 writing-skills authoring gate에서 임시 관찰하되 Task 3에서는 추가하지 않는다. custom commit gate는 arbitrary Bash indirection을 완전 판별할 수 없어 제거하며, 독립 반박 검토와 완료 검증은 Codex reviewer subagent와 Superpowers 절차로 수행한다. 사용자 수준 Codex 설정은 저장소 자산 검증이 끝난 뒤 별도 승인으로만 활성화한다.
+**Architecture:** `CLAUDE.md`와 `.claude/**`는 병행 기간의 원본으로 유지하고, Codex 전용 지침은 `AGENTS.md`에 추가한다. 프로젝트 스킬은 writing-skills authoring gate에서 임시 관찰하되 Task 3에서는 추가하지 않는다. custom commit gate와 project custom reviewer는 runtime 근거에 따라 제거하며, 독립 반박 검토와 완료 검증은 native `code-reviewer` 또는 generic read-only subagent와 Superpowers 절차로 수행한다. 사용자 수준 Codex 설정과 agent 정의는 변경하지 않는다.
 
-**Tech Stack:** Python 3.13, pytest 9, Ruff, TOML (`tomllib`), Codex `AGENTS.md`·custom agents, Superpowers
+**Tech Stack:** Python 3.13, pytest 9, Ruff, Codex `AGENTS.md`·native subagents, Superpowers
 
 **Spec:** `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
 
@@ -30,9 +30,8 @@
 | 경로 | 책임 |
 | --- | --- |
 | `docs/superpowers/specs/codex-migration-inventory.md` | 원본 16개 지침과 6개 스킬의 대상·상태·검증 근거를 기록한다. |
-| `tests/migration/test_codex_migration.py` | 파일 대응, 금지 표현, 원본 보존, TOML·스킬 구조를 정적으로 검증한다. |
+| `tests/migration/test_codex_migration.py` | 파일 대응, 금지 표현, 원본 보존, reviewer·스킬 구조를 정적으로 검증한다. |
 | `AGENTS.md`와 하위 15개 `AGENTS.md` | 현재 디렉터리에 적용되는 Codex 프로젝트·모듈 지침을 제공한다. |
-| `.codex/agents/reviewer.toml` | 소스 수정 권한이 없는 독립 반박 reviewer 역할을 정의한다. |
 | `docs/superpowers/specs/codex-activation-checklist.md` | custom commit hook 미채택, Rules 후보, 수동 검증과 잔여 차이를 기록한다. |
 | `docs/superpowers/specs/codex-parallel-validation.md` | Claude와 Codex의 병행 검증 결과와 전환 미충족 항목을 기록한다. |
 
@@ -391,11 +390,10 @@ automatic enforcement라는 false security를 만들므로 custom Codex commit g
   git commit -m "docs: Codex 커밋 게이트 제거 결정"
   ```
 
-## Task 5: 읽기 전용 reviewer 설정과 검토 계약 추가
+## Task 5: 읽기 전용 reviewer 호출 계약 추가
 
 **Files:**
 
-- Create: `.codex/agents/reviewer.toml`
 - Modify: `tests/migration/test_codex_migration.py`
 - Modify: `AGENTS.md`
 - Modify: `docs/superpowers/specs/codex-migration-inventory.md`
@@ -403,64 +401,58 @@ automatic enforcement라는 false security를 만들므로 custom Codex commit g
 **Interfaces:**
 
 - Consumes: 요구사항 문서 경로, 현재 diff, 실행한 검증 명령과 출력
-- Produces: 심각도 순서의 `Findings`, 확인하지 못한 `Verification gaps`, 차단 여부인 `Verdict`를 반환하는 읽기 전용 reviewer 역할
+- Produces: 심각도 순서의 `Findings`, 확인하지 못한 `Verification gaps`, 차단 여부인
+  `Verdict`를 반환하는 읽기 전용 reviewer 호출
 
-- [ ] **Step 1: reviewer 설정 계약 테스트를 작성한다**
+**Runtime result:** native `code-reviewer` smoke는 PASS했고 custom `reviewer` type은
+collaboration과 fresh ephemeral Codex에서 모두 `unknown agent_type`을 반환했다. 따라서
+project custom-agent는 제거하며 native type이 없는 환경은 generic read-only subagent와
+exact prompt를 사용한다.
+
+- [ ] **Step 1: reviewer 호출 계약 테스트를 작성한다**
 
   ```python
-  import tomllib
-
-  def test_reviewer_agent_is_read_only_and_adversarial():
-      path = REPO_ROOT / ".codex/agents/reviewer.toml"
-      data = tomllib.loads(path.read_text())
-      assert data["sandbox_mode"] == "read-only"
-      instructions = data["developer_instructions"]
-      for term in ("Findings", "Verification gaps", "Verdict", "Do not modify"):
-          assert term in instructions
-      assert "model" not in data
+  def test_reviewer_uses_native_or_generic_read_only_subagent_contract():
+      text = (REPO_ROOT / "AGENTS.md").read_text()
+      for term in REVIEWER_REQUIRED_TERMS:
+          assert term in text
   ```
 
-- [ ] **Step 2: 테스트가 reviewer 설정 부재로 실패하는지 확인한다**
+- [ ] **Step 2: 테스트가 기존 custom reviewer 주장 때문에 실패하는지 확인한다**
 
   Run: `uv run pytest tests/migration/test_codex_migration.py -k reviewer -q`
 
-  Expected: `.codex/agents/reviewer.toml` 부재로 FAIL한다.
+  Expected: project custom-agent 파일 존재 또는 root 호출 계약 누락으로 FAIL한다.
 
-- [ ] **Step 3: reviewer.toml을 작성한다**
+- [ ] **Step 3: project custom-agent를 제거한다**
 
-  ```toml
-  description = "Read-only adversarial reviewer for requirements, regressions, and false-green tests"
-  sandbox_mode = "read-only"
-  model_reasoning_effort = "high"
-  developer_instructions = """
-  Review the supplied requirements, diff, and fresh verification output adversarially.
-  Look for unmet acceptance criteria, regressions, weakened assertions, unexecuted paths,
-  unsafe changes to evaluation criteria, and claims unsupported by the evidence.
-  Do not modify files, create approval artifacts, or broaden the requested scope.
-  Return exactly three sections: Findings, Verification gaps, and Verdict.
-  Findings are ordered by severity and include file references. Verification gaps list
-  evidence that was required but unavailable. Verdict is BLOCK when any material defect
-  or required evidence gap remains; otherwise it is PASS.
-  """
-  ```
+  project custom reviewer 파일을 삭제한다. custom `reviewer` type은 collaboration spawn과
+  fresh ephemeral Codex에서 모두 `unknown agent_type`이므로 자동 발견이나 등록을 요구하지
+  않는다. 사용자 수준 agent와 config는 변경하지 않는다.
 
-- [ ] **Step 4: 루트 검토 절차를 reviewer 계약과 맞춘다**
+- [ ] **Step 4: 루트 검토 절차를 runtime-verified 계약과 맞춘다**
 
-  `AGENTS.md`의 독립 검토 절에 reviewer 입력 세 가지를 명시한다: 원래 요구사항 또는 승인된 spec, `git diff HEAD`, 이번 Task에서 새로 실행한 검증 출력. reviewer는 파일을 수정하지 않고 결과만 반환하며, BLOCK이면 수정 후 새 diff와 새 검증 출력으로 다시 요청한다. PASS는 기계 검증을 대신하지 않는다.
+  native `code-reviewer`를 사용할 수 있으면 호출하고, 없으면 generic read-only
+  subagent에 같은 exact prompt를 제공한다. 입력은 원래 요구사항 또는 승인된 spec,
+  `git diff HEAD`, 최신 검증 출력이다. 출력은 `Findings`, `Verification gaps`,
+  `Verdict` 세 절이며 파일과 승인 산출물을 수정하지 않는다. BLOCK은 재검토하고 PASS는
+  기계 검증을 대신하지 않는다.
 
-- [ ] **Step 5: 설정과 지침 테스트를 실행한다**
+- [ ] **Step 5: 부재 계약과 지침 테스트를 실행한다**
 
   Run: `uv run pytest tests/migration/test_codex_migration.py -q`
 
   Expected: 전체 PASS한다.
 
-  Run: `rg -n '\.omx|refuter_gate|Stop hook|verdict.*json|human-allow' .codex/agents AGENTS.md`
+  Run: migration test의 project custom reviewer 부재 검사
 
-  Expected: 출력이 없다.
+  Expected: 종료 코드 0이다.
 
 - [ ] **Step 6: 실제 읽기 전용 reviewer smoke test를 수행한다**
 
-  Codex 네이티브 subagent에 이 Task의 요구사항, `git diff HEAD`, 위 테스트 출력을 제공한다. reviewer가 `Findings`, `Verification gaps`, `Verdict` 세 절을 반환하고 작업 트리를 수정하지 않았는지 확인한다.
+  native `code-reviewer`에 이 Task의 요구사항, `git diff HEAD`, 위 테스트 출력을
+  제공한다. 해당 type이 없는 환경에서는 generic read-only subagent에 exact prompt를
+  제공한다. 세 절을 반환하고 작업 트리를 수정하지 않았는지 확인한다.
 
   Run before and after: `git status --short`
 
@@ -468,7 +460,8 @@ automatic enforcement라는 false security를 만들므로 custom Codex commit g
 
 - [ ] **Step 7: 이관표를 갱신하고 사용자 검토를 요청한다**
 
-  reviewer 상태를 `구현됨, 프로젝트 설정`으로 기록하고 Stop 자동 실행이 아니라 주요 변경의 명시적 검토 절차임을 적는다.
+  native `code-reviewer` smoke PASS와 generic fallback 계약을 기록한다. project custom-agent
+  등록은 미채택·제거이며 Stop 자동 실행이 아니라 주요 변경의 명시적 검토 절차임을 적는다.
 
   Run: `git diff --check`
 
@@ -477,8 +470,7 @@ automatic enforcement라는 false security를 만들므로 custom Codex commit g
 - [ ] **Step 8: 사용자 승인 후 Task 5를 커밋한다**
 
   ```bash
-  git add .codex/agents/reviewer.toml AGENTS.md \
-    tests/migration/test_codex_migration.py \
+  git add AGENTS.md tests/migration/test_codex_migration.py \
     docs/superpowers/specs/codex-migration-inventory.md
   git commit -m "feat: Codex reviewer 절차 추가"
   ```
@@ -498,7 +490,7 @@ automatic enforcement라는 false security를 만들므로 custom Codex commit g
 
 - [ ] **Step 1: 활성화 체크리스트를 작성한다**
 
-  체크리스트에는 현재 `/home/rkim/.codex/config.toml`과 Rules를 읽기 전용으로 백업·비교하는 명령, custom commit hook 미채택, 사용자 수준 hook 등록을 하지 않는다는 결정, 수동 검증과 잔여 차이를 기록한다. Rules는 명령 prefix 정책으로만 사용하며 경로 기반 파일 쓰기나 commit-time deterministic enforcement를 보장한다고 기록하지 않는다. `certified/**/*.json`과 기준 파일 보호가 AGENTS, reviewer, 완료 검증, 사용자 outside-hook commit 정책에 의존한다는 차이를 기록하고 수용 여부를 별도로 판정한다. 실제 사용자 수준 파일을 수정하는 명령에는 `사용자 별도 승인 후 실행` 표식을 붙이고 이 Task에서는 실행하지 않는다.
+  체크리스트에는 현재 `/home/rkim/.codex/config.toml`과 Rules를 읽기 전용으로 백업·비교하는 명령, 사용자 수준 agents와 config 무변경, custom commit hook과 project custom-agent 미채택, 사용자 수준 hook 등록을 하지 않는다는 결정, 수동 검증과 잔여 차이를 기록한다. Rules는 명령 prefix 정책으로만 사용하며 경로 기반 파일 쓰기나 commit-time deterministic enforcement를 보장한다고 기록하지 않는다. `certified/**/*.json`과 기준 파일 보호가 AGENTS, reviewer, 완료 검증, 사용자 outside-hook commit 정책에 의존한다는 차이를 기록하고 수용 여부를 별도로 판정한다. 실제 사용자 수준 파일을 수정하는 명령에는 `사용자 별도 승인 후 실행` 표식을 붙이고 이 Task에서는 실행하지 않는다.
 
 - [ ] **Step 2: 병행 검증 문서를 작성한다**
 

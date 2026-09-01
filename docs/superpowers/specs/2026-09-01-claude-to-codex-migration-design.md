@@ -94,11 +94,11 @@ Superpowers는 Codex에서 제공되는 절차 스킬로 유지한다. 반면 �
 | --- | --- |
 | `AGENTS.md` | 최상위 프로젝트 개요, 개발 환경, 안전·검증·문서·커밋 규칙 |
 | `docker/**/AGENTS.md`, `src/**/AGENTS.md`, `tests/ner/AGENTS.md` | 기존 하위 `CLAUDE.md`의 모듈별 지침을 Codex 계층에 제공 |
-| `.codex/agents/reviewer.toml` | 요구사항·회귀·테스트 위험을 읽기 전용으로 검토하는 Codex subagent 정의 |
 | `docs/superpowers/specs/...` | 이 설계와 이관표 |
 | `docs/superpowers/plans/...` | 승인된 구현 세부 단계와 검증 명령 |
 
-Codex의 사용자 수준 설정은 `/home/rkim/.codex/config.toml`에 남는다. 이 저장소와 무관한 세션에 영향을 주지 않도록 그 파일에 custom commit hook 등록이나 기본 권한 변경을 하지 않는다.
+Codex의 사용자 수준 설정과 agent 정의는 `/home/rkim/.codex/`에 남는다. 이 저장소와
+무관한 세션에 영향을 주지 않도록 `config.toml`과 `agents/`를 변경하지 않는다.
 
 ## 지침 이관 방식
 
@@ -140,7 +140,14 @@ parser는 automatic enforcement라는 false security를 만든다.
 
 Claude의 `refuter_gate.py`와 `lessons_nudge.py`는 Codex Stop 훅으로 이식하지 않는다. Stop 훅이 reviewer를 직접 생성하지 못하고 판정 상태·재진입 제어라는 별도 커스텀 하네스를 요구하기 때문이다.
 
-반박 검토는 Superpowers `requesting-code-review`가 호출하는 읽기 전용 Codex reviewer subagent로 대체한다. 프로젝트 `AGENTS.md`는 기준 파일 변경과 주요 런타임 변경에서 이 절차를 요구한다. reviewer는 요구사항, 기준 diff, 변경된 테스트, 검증 출력을 입력으로 받아 결함·회귀·테스트 공백만 보고하며 구현을 수정하지 않는다. Stop 훅의 자동 호출을 제거하므로 명시적 호출을 빠뜨릴 수 있고 집행력이 낮아질 수 있다. 이 의도적 단순화 판정은 Task 5의 reviewer smoke test와 Task 6의 병행 검증에서 누락 방지 절차와 실제 호출 증거를 확인한 뒤 확정한다.
+반박 검토는 Superpowers `requesting-code-review`가 호출하는 native `code-reviewer`로
+대체한다. 해당 agent type을 사용할 수 없는 환경에서는 generic read-only subagent에
+같은 exact prompt를 제공한다. 프로젝트 `AGENTS.md`는 요구사항 또는 승인된 spec,
+`git diff HEAD`, 최신 검증 출력을 입력하고 `Findings`, `Verification gaps`, `Verdict`
+세 절만 반환하는 계약을 요구한다. reviewer는 파일과 승인 산출물을 수정하지 않는다.
+project custom-agent 자동 발견은 runtime에서 확인되지 않아 채택하지 않는다. Stop 훅의
+자동 호출을 제거하므로 명시적 호출 누락과 generic fallback의 환경 의존성은 잔여
+위험이다.
 
 최종 완료 전에는 Superpowers `verification-before-completion`을 사용해 테스트·린트·문서·설정 검증의 새 출력을 확인한다. lessons-digest는 기존 Claude·OMC 상태 의존성이 있어 병행 기간에는 보류하고, 반복 지적의 사람 주도 승격 원칙만 문서 규칙으로 유지한다.
 
@@ -186,15 +193,18 @@ Codex Rules와 사용자 설정은 사용자 수준 파일이므로, 실제 활�
 
 완료 조건은 이관표의 모든 스킬이 통합·제거·보류 중 하나로 결정되고, 여섯 legacy 이름과 `ner-debug-triage`의 프로젝트 스킬 디렉터리가 없는 것이다.
 
-### 단계 3: custom hook 제거 결정과 reviewer 설정
+### 단계 3: custom hook과 project custom-agent 제거 결정
 
 1. custom commit hook의 Bash indirection 한계와 automatic enforcement 상실을 기록한다.
 2. `.codex/hooks` 구현 파일의 비존재를 정적 테스트로 고정한다.
-3. `.codex/agents/reviewer.toml`을 읽기 전용으로 작성하고, 요구사항과 diff를 입력한 검토 보고서 형식을 시험한다.
-4. activation checklist에는 custom commit hook 미채택과 잔여 차이만 기록한다.
+3. project custom reviewer agent를 만들지 않고 native `code-reviewer`와 generic
+   read-only fallback의 명시적 prompt 계약을 시험한다.
+4. activation checklist에는 custom commit hook과 project custom-agent 미채택,
+   잔여 차이를 기록한다.
 
-완료 조건은 custom Codex commit hook이 없고 reviewer가 소스 파일을 수정하지 않으며,
-완료 검증과 사용자 outside-hook commit 경계가 문서에 명시된 것이다.
+완료 조건은 custom Codex commit hook과 project custom reviewer 파일이 없고,
+reviewer가 소스 파일을 수정하지 않으며 완료 검증과 사용자 outside-hook commit 경계가
+문서에 명시된 것이다.
 
 ### 단계 4: 병행 운영과 전환 결정
 
@@ -212,7 +222,7 @@ Claude 자산의 제거는 이 설계 범위 밖이며, 병행 검증 기록을 
 | 문서 변환 | `rg`로 Claude·OMC 전용 명령, 옛 파일 경로, 누락 대응 파일 검색 | 의도적으로 보존한 원본 외 대상 파일에 잔존하지 않음 |
 | 스킬 결정 | 이관표와 테스트 상수 비교, 프로젝트 스킬 경로 부재 검사 | 여섯 결정이 일치하고 중복 프로젝트 스킬이 없음 |
 | custom commit hook 제거 | 정적 파일 비존재 검사와 이관표 | 두 hook 구현 파일이 없고 자동 집행 상실이 기록됨 |
-| reviewer 절차 | 요구사항·diff·검증 출력을 준 읽기 전용 subagent 검토 | 구현자와 분리된 결함 보고를 받고, 코드 수정 없음 |
+| reviewer 절차 | native `code-reviewer` 또는 exact prompt를 받은 generic read-only subagent 검토 | 구현자와 분리된 세 절의 결함 보고를 받고, 파일과 승인 산출물 수정 없음 |
 | 프로젝트 회귀 | 기존 `tests/hooks/`와 migration tests, 변경 범위 Ruff | Claude 게이트 회귀와 Codex 비존재 계약이 모두 통과 |
 | 원본 보존 | `git diff -- .claude CLAUDE.md '**/CLAUDE.md'` | 병행 기간 동안 원본 변경 없음 |
 
@@ -222,6 +232,7 @@ Claude 자산의 제거는 이 설계 범위 밖이며, 병행 검증 기록을 
 | --- | --- | --- |
 | 지침을 두 번 관리하면서 내용이 갈라짐 | Claude와 Codex의 작업 결과가 달라짐 | 이관표에 원본·대상·검토 일자를 기록하고 변경 시 쌍으로 검토 |
 | automatic commit-time enforcement 상실 | 기준·원장·테스트 위반이 커밋 직전에 자동 차단되지 않음 | AGENTS, 읽기 전용 reviewer, 완료 검증, 사용자 outside-hook commit 정책을 적용하고 Task 6에 잔여 위험 기록 |
+| native `code-reviewer` 부재 | generic subagent의 역할 preset을 보장할 수 없음 | read-only sandbox와 exact prompt를 명시하고 출력·작업 트리 불변을 확인 |
 | 전역 Codex 설정 변경 | 다른 저장소의 작업이 영향을 받음 | 저장소 자산 검증 후 최소 규칙만 별도 활성화 승인으로 적용 |
 | 권한을 1:1 복사 | 과도한 권한 또는 보호 상실 | Rules, sandbox, approval, reviewer를 각 역할에 맞게 재설계 |
 | Claude 전용 스킬 의존성 | Codex에서 실행 실패 | 의존성과 유지 비용을 검사하고 통합·제거·보류 상태를 명시 |

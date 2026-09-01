@@ -23,16 +23,18 @@ Codex reviewer의 지적 수, 문체, 절차량은 parity metric이 아니다. `
 | protected `certified` JSON 변경 | Claude Write/Edit permission deny가 JSON 쓰기를 막고 shell 경로는 열어 둠 | AGENTS, reviewer, 완료 검증, 사용자 outside-hook commit 정책에 의존 | Codex에는 동일한 경로 기반 Write/Edit 차단이 없고 Rules도 이를 보장하지 않음 | 수용 여부 보류 | `.claude/settings.json`, 이관 설계, 활성화 체크리스트 |
 | certified 인용 수치 | 리포트·이슈 표의 새 수치를 선언한 certified 원장과 commit gate에서 대조 | 출처 명시를 AGENTS가 요구하며 reviewer와 완료 검증에서 확인 | Codex는 대조를 커밋 시 자동 실행하지 않음 | 수용 여부 보류 | Claude cited-metric 테스트 PASS, 루트 안전 계약 |
 | 파일 쓰기 전 차단 범위 | permission deny가 지정된 Write/Edit 경로에 사전 적용되고 shell 쓰기는 범위 밖 | 현재 사용자 Rules 변경이 없고 저장소 지침은 도구 호출 전 경로 차단기가 아님 | Codex Rules는 명령 prefix 정책이며 경로 기반 파일 쓰기 보장이 아님 | 수용 여부 보류 | `.claude/settings.json`, OpenAI Rules 문서, 활성화 체크리스트 |
-| 독립 reviewer | Stop refuter loop가 상태와 판정을 자동 결합 | `name = "reviewer"`인 `.codex/agents/reviewer.toml`을 명시적으로 호출하며 파일을 수정하지 않음 | 자동 Stop 호출과 상태 연속성이 없고 호출 누락 가능성이 있으며 기존 smoke는 필수 name 누락 설정으로 실행됨 | 재검증 필요 | 정적 reviewer 계약 PASS, controller exact runtime smoke 재실행 필요 |
+| 독립 reviewer | Stop refuter loop가 상태와 판정을 자동 결합 | native `code-reviewer`를 명시적으로 호출하고, unavailable 환경에서는 generic read-only subagent에 exact prompt 제공 | 자동 Stop 호출·상태 연속성·project custom-agent 등록이 없으며 generic fallback은 역할 preset을 보장하지 않음 | 의도적 단순화 채택 | native `code-reviewer` smoke PASS, custom `reviewer`는 두 runtime 경로에서 `unknown agent_type` |
 | 완료 검증 | Claude hook과 작업 절차가 일부 검사를 자동·수동 결합 | `verification-before-completion`으로 성공 주장마다 최신 명령 출력을 확인 | 명시적 호출이며 automatic commit gate를 대신하지 않음 | 의도적 단순화 채택 | 루트 `AGENTS.md`, 이번 Task의 최신 대상 검증 |
 
 ## 자동 검증 결과
 
 - Task 5 시점 migration 테스트: `46 passed`.
 - Task 4 시점 기존 Claude hook 테스트: `51 passed`.
-- 프로젝트 reviewer: `name = "reviewer"`를 포함한 정적 계약은 PASS했다. 이전
-  controller smoke는 필수 name 누락 설정으로 실행되어 runtime 증거로 인정하지 않으며,
-  commit 후 exact runtime smoke 재실행이 필요하다.
+- reviewer runtime: native `code-reviewer` smoke는 세 절과 PASS를 반환했고 작업 트리가
+  바뀌지 않았다. collaboration의 `agent_type=reviewer`와 fresh ephemeral Codex의
+  `agent_type=reviewer`는 모두 `unknown agent_type`을 반환했다. 따라서 repository
+  custom reviewer TOML은 제거하고 generic read-only fallback의 exact prompt 계약을
+  root 지침에 둔다.
 - 원본 Claude 자산: `.claude/**`와 모든 `CLAUDE.md`의 diff가 없다.
 - 전체 suite known gap: 이관과 무관한 EN 배포 package와 ledger fingerprint
   mismatch 2건이 남아 있다. 이 결과를 이번 이관의 PASS로 바꾸거나 숨기지 않는다.
@@ -52,6 +54,22 @@ prompt는 도구를 호출하지 않고 자동 적용된 지침에서 root commo
 규칙을 분리해 반환했다. PATH에 bubblewrap가 없어 bundled bubblewrap fallback
 warning이 발생했지만 각 실행의 sandbox 표시는 `read-only`였다. 이 경고는 loader
 결과를 바꾸지 않았으며 sandbox 구현 선택의 관찰 사항으로 남긴다.
+
+## reviewer runtime 실행 결과
+
+controller는 collaboration spawn에서 `agent_type=reviewer`를 호출했고
+`unknown agent_type`을 받았다. 이어 다음 조건의 fresh session에서도 같은 결과를
+확인했다.
+
+```text
+codex exec --ephemeral --ignore-user-config --ignore-rules \
+  --sandbox read-only --model gpt-5.6-sol --enable multi_agent
+```
+
+두 경로의 실패는 repository `.codex/agents/reviewer.toml`이 custom type으로 자동
+발견된다는 가정을 반증한다. 반면 제공되는 native `code-reviewer` smoke는 PASS했다.
+따라서 project custom-agent registration은 미채택·제거하고, native type이 없는
+환경에서는 generic read-only subagent에 root 지침의 exact prompt를 제공한다.
 
 ## 남은 미실행 수동 smoke
 

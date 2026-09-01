@@ -1,5 +1,4 @@
 from pathlib import Path
-import tomllib
 
 import pytest
 
@@ -48,6 +47,19 @@ RUNTIME_CHANGE_POLICY_CLAUSES = (
     "구현 전에 이슈 또는 승인된 spec에 문제, acceptance criteria, 필요한 테스트, "
     "문서 영향을 기록한다.",
 )
+REVIEWER_REQUIRED_TERMS = (
+    "code-reviewer",
+    "generic read-only subagent",
+    "원래 요구사항 또는 승인된 spec",
+    "git diff HEAD",
+    "새로 실행한 검증 명령과 출력",
+    "Findings",
+    "Verification gaps",
+    "Verdict",
+    "파일을 수정하거나 승인 산출물을 만들지",
+    "BLOCK",
+    "PASS는 기계 검증을 대신하지 않는다",
+)
 
 SKILL_DECISIONS: dict[str, str] = {
     "debug-triage": "통합",
@@ -89,18 +101,12 @@ def test_root_codex_instruction_keeps_required_project_policy():
         assert clause in normalized_text, clause
 
 
-def test_reviewer_agent_is_read_only_and_adversarial():
-    path = REPO_ROOT / ".codex/agents/reviewer.toml"
-    data = tomllib.loads(path.read_text())
+def test_reviewer_uses_native_or_generic_read_only_subagent_contract():
+    assert not (REPO_ROOT / ".codex/agents/reviewer.toml").exists()
 
-    assert data["name"] == "reviewer"
-    assert data["sandbox_mode"] == "read-only"
-    assert data["model_reasoning_effort"] == "high"
-    assert "model" not in data
-
-    instructions = data["developer_instructions"]
-    for term in ("Findings", "Verification gaps", "Verdict", "Do not modify"):
-        assert term in instructions
+    text = " ".join((REPO_ROOT / "AGENTS.md").read_text().split())
+    for term in REVIEWER_REQUIRED_TERMS:
+        assert term in text, term
 
 
 def test_skill_decisions_match_inventory():
@@ -149,13 +155,15 @@ def test_custom_commit_gate_decision_matches_inventory():
     assert rows[0][1] == CUSTOM_COMMIT_GATE_DECISION
 
 
-def test_followup_tasks_do_not_reintroduce_custom_commit_hook():
+def test_followup_tasks_do_not_reintroduce_removed_customizations():
     path = REPO_ROOT / "docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md"
     text = path.read_text()
     task_5 = text.split("## Task 5:", 1)[1].split("## Task 6:", 1)[0]
     task_6 = text.split("## Task 6:", 1)[1]
 
-    assert ".codex/agents/reviewer.toml" in task_5
+    assert ".codex/agents/reviewer.toml" not in task_5
+    assert "code-reviewer" in task_5
+    assert "generic read-only subagent" in task_5
     assert ".codex/hooks" not in task_5
     assert "PreToolUse" not in task_5
 

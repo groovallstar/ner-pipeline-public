@@ -3,20 +3,24 @@
 ## 현재 결론
 
 이 저장소의 Codex 이관은 아직 활성화 후보이며 전환은 보류한다. 이 Task에서는
-`/home/rkim/.codex/config.toml`, `/home/rkim/.codex/rules/`, 사용자 수준 hook
-등록을 수정하지 않는다. 정확한 설정 초안은 다음과 같다.
+`/home/rkim/.codex/config.toml`, `/home/rkim/.codex/rules/`,
+`/home/rkim/.codex/agents/`, 사용자 수준 hook 등록을 수정하지 않는다. 정확한 설정
+초안은 다음과 같다.
 
 | 사용자 수준 항목 | 초안 | 상태 |
 | --- | --- | --- |
 | `/home/rkim/.codex/config.toml` | 현재 파일을 그대로 유지 | 비활성, 변경 없음 |
 | `/home/rkim/.codex/rules/` | 새 Rule을 추가하지 않고 현재 상태를 유지 | 비활성, 변경 없음 |
+| `/home/rkim/.codex/agents/` | agent 정의를 추가하거나 변경하지 않음 | 비활성, 변경 없음 |
 | custom commit hook | 등록하지 않음 | 제거 결정 유지 |
+| project custom reviewer | 등록하지 않음 | runtime 자동 발견 실패로 제거 |
 | 기본 도구 전환 | 수행하지 않음 | 범위 밖 |
 | Claude 자산 삭제 | 수행하지 않음 | 범위 밖 |
 
-프로젝트의 16개 `AGENTS.md`와 `.codex/agents/reviewer.toml`은 저장소 자산이다.
-다섯 주요 경로의 새 세션 loader smoke는 통과했다. 스킬·actual-diff smoke와 잔여
-차이 수용이 끝나기 전에는 이 자산을 전역 전환 완료로 간주하지 않는다.
+프로젝트의 16개 `AGENTS.md`가 저장소 지침 자산이다. project custom reviewer 파일은
+두 runtime 경로에서 자동 발견되지 않아 제거했다. 다섯 주요 경로의 새 세션 loader
+smoke는 통과했다. 스킬·actual-diff smoke와 잔여 차이 수용이 끝나기 전에는 이 자산을
+전역 전환 완료로 간주하지 않는다.
 
 ## 읽기 전용 사전 조사와 백업
 
@@ -62,17 +66,21 @@ fi
 - automatic commit-time deterministic enforcement
 
 custom Codex commit hook은 Bash indirection bypass를 완전 판별할 수 없으므로
-등록하지 않는다. Codex에서는 `AGENTS.md`, 명시적으로 호출하는 읽기 전용 reviewer,
-`verification-before-completion`, 사용자가 hook 밖에서 커밋 전에 검증 결과와 diff를
-확인하는 정책을 사용한다. 이 네 수단은 automatic commit gate와 동등하지 않으며,
-명시적 호출 또는 사람 절차가 누락될 수 있다.
+등록하지 않는다. project custom reviewer도 runtime 자동 발견이 확인되지 않아
+등록하지 않는다. Codex에서는 `AGENTS.md`, native `code-reviewer` 또는 exact prompt를
+받은 generic read-only subagent, `verification-before-completion`, 사용자가 hook 밖에서
+커밋 전에 검증 결과와 diff를 확인하는 정책을 사용한다. native type이 없는 환경에서는
+generic fallback의 역할 preset을 보장하지 못한다. 이 수단들은 automatic commit gate와
+동등하지 않으며, 명시적 호출 또는 사람 절차가 누락될 수 있다.
 
 ## 활성화 전 판정 체크리스트
 
 - [x] migration 테스트 46개와 기존 Claude hook 테스트 51개의 이전 PASS 근거가 있다.
 - [x] custom Codex commit hook 구현과 등록을 활성화 후보에서 제거했다.
-- [x] 프로젝트 reviewer의 정적 계약과 controller smoke가 PASS했고 작업 트리가
-  바뀌지 않았다.
+- [x] project custom reviewer의 두 runtime 호출이 `unknown agent_type reviewer`를
+  반환해 repository TOML을 제거했다.
+- [x] native `code-reviewer` smoke가 PASS했고 작업 트리가 바뀌지 않았다. 사용할 수
+  없는 환경의 generic read-only fallback 계약은 root `AGENTS.md`에 명시했다.
 - [x] `.claude/**`와 모든 `CLAUDE.md`를 보존한다.
 - [x] 루트, `src/ner`, `src/server`, `docker`, `tests/ner`의 read-only ephemeral
   Codex 세션에서 root common 규칙과 path-specific 규칙을 구분해 확인했다.

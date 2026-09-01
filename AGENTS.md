@@ -70,14 +70,14 @@ FastAPI 추론 서비스와 Docker 배포이다.
 ## 독립 검토
 
 - 기준 파일이나 주요 런타임을 변경하면 완료 전에
-  `requesting-code-review`를 사용해 읽기 전용 reviewer가 요구사항, 회귀,
-  측정 타당성을 검토하게 한다.
-- reviewer에는 원래 요구사항 또는 승인된 spec, `git diff HEAD`, 이번 작업에서
-  새로 실행한 검증 명령과 출력을 함께 제공한다.
-- reviewer는 제품 파일이나 증거를 수정하거나 승인 산출물을 만들지 않고 결과만
-  반환한다. BLOCK이면 구현자가 지적을 직접 검증하고 수정한 뒤 새 diff와 새 검증
-  출력으로 다시 검토를 요청한다.
-- reviewer의 PASS는 기계 검증을 대신하지 않는다.
+  `requesting-code-review`를 사용한다. native `code-reviewer`를 사용할 수 있으면
+  호출하고, 없으면 generic read-only subagent에 같은 exact prompt를 제공한다.
+- 입력은 원래 요구사항 또는 승인된 spec, `git diff HEAD`, 이번 작업에서 새로 실행한
+  검증 명령과 출력이다.
+- 출력은 정확히 `Findings`, `Verification gaps`, `Verdict` 세 절로 제한한다.
+  reviewer는 파일을 수정하거나 승인 산출물을 만들지 않는다.
+- `Verdict`가 BLOCK이면 구현자가 지적을 직접 검증하고 수정한 뒤 새 diff와 새 검증
+  출력으로 다시 검토를 요청한다. PASS는 기계 검증을 대신하지 않는다.
 - 최종 완료 보고 전에는 `verification-before-completion`을 사용해 모든 성공
   주장에 대응하는 최신 명령 출력과 diff를 확인한다.
 
