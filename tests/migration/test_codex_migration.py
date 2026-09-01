@@ -4,6 +4,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SKILL_BASELINE_DOC = Path("docs/superpowers/specs/codex-skill-baselines.md")
 
 INSTRUCTION_PAIRS: tuple[tuple[str, str], ...] = (
     ("CLAUDE.md", "AGENTS.md"),
@@ -75,16 +76,40 @@ def test_root_codex_instruction_keeps_required_project_policy():
 
 
 def test_skill_decisions_match_inventory():
-    rows = (REPO_ROOT / "docs/superpowers/specs/codex-migration-inventory.md").read_text()
+    text = (REPO_ROOT / "docs/superpowers/specs/codex-migration-inventory.md").read_text()
+    rows_by_skill = {name: [] for name in SKILL_DECISIONS}
+    for line in text.splitlines():
+        if not line.startswith("| `"):
+            continue
+        columns = [column.strip() for column in line.strip("|").split("|")]
+        name = columns[0].strip("`")
+        if name in rows_by_skill:
+            rows_by_skill[name].append(columns)
+
+    assert {name: len(rows) for name, rows in rows_by_skill.items()} == {
+        name: 1 for name in SKILL_DECISIONS
+    }
     inventory_decisions = {
-        columns[0].strip("`"): columns[1]
-        for line in rows.splitlines()
-        if line.startswith("| `")
-        and (columns := [column.strip() for column in line.strip("|").split("|")])
-        and columns[0].strip("`") in SKILL_DECISIONS
+        name: rows[0][1] for name, rows in rows_by_skill.items()
     }
 
     assert inventory_decisions == SKILL_DECISIONS
+
+
+def test_skill_decisions_link_to_baseline_audit():
+    baseline_path = REPO_ROOT / SKILL_BASELINE_DOC
+    assert baseline_path.is_file()
+
+    inventory = (
+        REPO_ROOT / "docs/superpowers/specs/codex-migration-inventory.md"
+    ).read_text()
+    audit = baseline_path.read_text()
+    for name, decision in SKILL_DECISIONS.items():
+        inventory_row = next(
+            line for line in inventory.splitlines() if line.startswith(f"| `{name}` |")
+        )
+        assert SKILL_BASELINE_DOC.name in inventory_row
+        assert f"| `{name}` | {decision} |" in audit
 
 
 @pytest.mark.parametrize("name", PROJECT_SKILL_NAMES)

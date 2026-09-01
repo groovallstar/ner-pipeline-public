@@ -254,13 +254,14 @@
 
 - Modify: `docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md`
 - Modify: `docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md`
+- Create: `docs/superpowers/specs/codex-skill-baselines.md`
 - Modify: `tests/migration/test_codex_migration.py`
 - Modify: `docs/superpowers/specs/codex-migration-inventory.md`
 
 **Interfaces:**
 
-- Consumes: Task 1의 스킬 결정표, 설치된 Superpowers 스킬 이름, debug·diff·perf baseline 보고서
-- Produces: 통합 3개, 제거 2개, 보류 1개의 결정과 중복 프로젝트 스킬 부재 계약
+- Consumes: Task 1의 스킬 결정표, 설치된 Superpowers 스킬 이름, debug·initial diff contract·actual diff·perf baseline
+- Produces: 독립 재현 가능한 영구 baseline 감사 기록, 통합 3개·제거 2개·보류 1개의 결정, 중복 프로젝트 스킬 부재 계약
 
 - [ ] **Step 1: 결정 일관성과 중복 자산 부재 테스트를 작성한다**
 
@@ -287,11 +288,12 @@
 
 - [ ] **Step 3: baseline 근거와 여섯 결정을 문서에 반영한다**
 
-  debug baseline은 `systematic-debugging`과 `AGENTS.md`만으로 재현, 증거 보존,
-  경계 관측, 2x2 원인 격리, 회귀 검증을 제시했다. diff baseline은 별도 스킬 없이
-  비전문가 대상 설명 문서의 입력, 구성, 예시, 검증 계약을 제시했다. perf baseline은
-  고정 조건, 반복, 처리량·지연·신뢰성·자원·품질 지표, 단일 변수 실험과 채택 게이트를
-  제시했다. 이 근거로 통합 3개, 제거 2개, 보류 1개를 기록하고 `.agents/skills/`는 만들지 않는다.
+  `codex-skill-baselines.md`에 네 실행의 요청 입력과 프롬프트 요지, 모델·reasoning·
+  fresh context·활성 지침·프로젝트 스킬 부재·read-only 조건, 사전 수락 기준,
+  관찰과 결정을 기록한다. actual diff는 핵심 설명 기준을 충족했지만 목차, diagram,
+  객관식 선택지와 answer key가 없었던 표현 차이도 기록한다. 이 차이는 유지 비용과
+  비교해 의도적으로 제거하고 Task 6 actual-diff smoke에서 확정한다. 이 근거로 통합
+  3개, 제거 2개, 보류 1개를 기록하며 `.agents/skills/`는 만들지 않는다.
 
 - [ ] **Step 4: 결정과 프로젝트 스킬 부재를 검증한다**
 
@@ -307,7 +309,7 @@
 
   Run: `uv run ruff check tests/migration/test_codex_migration.py`
 
-  Run: `rg -n 'T''BD|TO''DO|PLACE''HOLDER' docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md docs/superpowers/specs/codex-migration-inventory.md tests/migration/test_codex_migration.py`
+  Run: `rg -n 'T''BD|TO''DO|PLACE''HOLDER' docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md docs/superpowers/specs/codex-migration-inventory.md docs/superpowers/specs/codex-skill-baselines.md tests/migration/test_codex_migration.py`
 
   Run: `git diff -- .claude CLAUDE.md ':(glob)**/CLAUDE.md'`
 
@@ -321,8 +323,9 @@
   git add docs/superpowers/specs/2026-09-01-claude-to-codex-migration-design.md \
     docs/superpowers/plans/2026-09-01-claude-to-codex-migration.md \
     docs/superpowers/specs/codex-migration-inventory.md \
+    docs/superpowers/specs/codex-skill-baselines.md \
     tests/migration/test_codex_migration.py
-  git commit -m "docs: Codex 스킬 이관 단순화"
+  git commit -m "docs: Codex 스킬 비교 근거 보존"
   ```
 
 ## Task 4: 상태 없는 Codex PreToolUse 커밋 게이트 구현
@@ -641,7 +644,7 @@
 
 - [ ] **Step 4: 새 Codex 세션이 필요한 수동 smoke test를 기록한다**
 
-  저장소 루트, `src/ner`, `src/server`, `docker`, `tests/ner`에서 각각 새 세션을 시작해 적용 지침 요약을 요청하고 예상 규칙과 비교한다. 프로젝트 스킬이 추가되지 않았으며 debug-triage 요구가 `systematic-debugging`과 저장소 지침으로 처리되는지 확인한다. 결과와 실행 일시를 병행 검증 문서에 기록한다.
+  저장소 루트, `src/ner`, `src/server`, `docker`, `tests/ner`에서 각각 새 세션을 시작해 적용 지침 요약을 요청하고 예상 규칙과 비교한다. 프로젝트 스킬이 추가되지 않았으며 debug-triage 요구가 `systematic-debugging`과 저장소 지침으로 처리되는지 확인한다. 또한 Task 2 review package와 같은 actual diff 입력으로 설명을 다시 생성해 배경·직관·변화·위험·검증·이해 질문 5개 충족 여부와 목차·diagram·객관식 선택지·answer key 부재의 사용성 영향을 기록한다. 이 actual-diff smoke에서 `explain-diff` 제거 판정을 확정하거나 재검토한다. 결과와 실행 일시를 병행 검증 문서에 기록한다.
 
 - [ ] **Step 5: verification-before-completion과 독립 reviewer를 실행한다**
 
