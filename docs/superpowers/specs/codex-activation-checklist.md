@@ -15,8 +15,8 @@
 | Claude 자산 삭제 | 수행하지 않음 | 범위 밖 |
 
 프로젝트의 16개 `AGENTS.md`와 `.codex/agents/reviewer.toml`은 저장소 자산이다.
-새 세션 loader smoke와 잔여 차이 수용이 끝나기 전에는 이 자산을 전역 전환 완료로
-간주하지 않는다.
+다섯 주요 경로의 새 세션 loader smoke는 통과했다. 스킬·actual-diff smoke와 잔여
+차이 수용이 끝나기 전에는 이 자산을 전역 전환 완료로 간주하지 않는다.
 
 ## 읽기 전용 사전 조사와 백업
 
@@ -74,15 +74,16 @@ custom Codex commit hook은 Bash indirection bypass를 완전 판별할 수 없�
 - [x] 프로젝트 reviewer의 정적 계약과 controller smoke가 PASS했고 작업 트리가
   바뀌지 않았다.
 - [x] `.claude/**`와 모든 `CLAUDE.md`를 보존한다.
-- [ ] 루트, `src/ner`, `src/server`, `docker`, `tests/ner`의 새 Codex 세션에서
-  적용 지침을 확인한다.
+- [x] 루트, `src/ner`, `src/server`, `docker`, `tests/ner`의 read-only ephemeral
+  Codex 세션에서 root common 규칙과 path-specific 규칙을 구분해 확인했다.
 - [ ] 프로젝트 스킬 부재, `systematic-debugging` 통합, actual-diff 설명 동작을
   새 세션에서 확인한다.
 - [ ] 사용자가 automatic commit-time enforcement 상실과 보호 파일 영향 범위를
   검토하고 잔여 차이의 수용 여부를 명시한다.
 - [ ] 사용자가 전역 활성화를 별도로 승인한다.
 
-위 미완료 항목이 남아 있으므로 현재 채택 판정은 `후보`, 전환 상태는 `보류`이다.
+loader smoke는 통과했지만 위 미완료 항목이 남아 있으므로 현재 채택 판정은 `후보`,
+전환 상태는 `보류`이다.
 
 ## 별도 승인 후 실행 경계
 

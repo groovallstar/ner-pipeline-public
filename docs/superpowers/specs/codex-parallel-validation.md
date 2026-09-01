@@ -8,11 +8,11 @@ Codex reviewer의 지적 수, 문체, 절차량은 parity metric이 아니다. `
 
 | 검증 항목 | Claude 동작 | Codex 동작 | 관찰된 차이 | 채택 판정 | 근거 |
 | --- | --- | --- | --- | --- | --- |
-| 루트 지침 | `CLAUDE.md`가 도메인 규칙과 Claude·OMC 절차를 함께 제공 | `AGENTS.md`가 저장소 범위, 개발 환경, 안전, 검증, reviewer 계약을 제공 | 정적 내용 검사는 PASS. 새 루트 세션의 loader 동작은 미실행 | 보류 | migration 46 PASS, 새 세션 smoke 미실행 |
-| `src/ner` 지침 | 루트와 `src/ner/CLAUDE.md`에서 NER 계약을 로드 | 루트와 `src/ner/AGENTS.md`에서 canonical label, 패키지, metric 경계를 로드 | 정적 대응은 확인. 새 세션의 계층 합성은 미실행 | 보류 | migration 지침 대응 검사 PASS, 새 세션 smoke 미실행 |
-| `src/server` 지침 | 서버 API, 동시성, 준비성 계약을 로드 | 같은 제품 계약과 NER 큐·번역 즉시 429 차이를 로드 | 정적 대응은 확인. 새 세션 loader 동작은 미실행 | 보류 | migration 지침 대응 검사 PASS, 새 세션 smoke 미실행 |
-| `docker` 지침 | Docker 공통·서비스별 배포 경계를 로드 | 상위와 하위 `AGENTS.md`로 GPU, 캐시, compose 책임을 합성 | 정적 대응은 확인. 새 세션 loader 동작은 미실행 | 보류 | migration 지침 대응 검사 PASS, 새 세션 smoke 미실행 |
-| `tests/ner` 지침 | fixture, 테스트 무결성, 실행 규칙을 로드 | 같은 테스트 계약과 `uv run` 검증 명령을 로드 | 정적 대응은 확인. 새 세션 loader 동작은 미실행 | 보류 | migration 지침 대응 검사 PASS, 새 세션 smoke 미실행 |
+| 루트 지침 | `CLAUDE.md`가 도메인 규칙과 Claude·OMC 절차를 함께 제공 | `AGENTS.md`가 저장소 범위, 개발 환경, 안전, 검증, reviewer 계약을 제공 | 새 루트 세션이 root common 규칙과 root 고유 규칙을 구분해 반환 | 동등 대체 검증됨 | migration PASS, read-only ephemeral loader smoke exit 0 |
+| `src/ner` 지침 | 루트와 `src/ner/CLAUDE.md`에서 NER 계약을 로드 | 루트와 `src/ner/AGENTS.md`에서 canonical label, 패키지, metric 경계를 로드 | 새 세션이 root common 2개와 NER path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `src/ner` read-only ephemeral loader smoke exit 0 |
+| `src/server` 지침 | 서버 API, 동시성, 준비성 계약을 로드 | 같은 제품 계약과 NER 큐·번역 즉시 429 차이를 로드 | 새 세션이 root common 2개와 server path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `src/server` read-only ephemeral loader smoke exit 0 |
+| `docker` 지침 | Docker 공통·서비스별 배포 경계를 로드 | 상위와 하위 `AGENTS.md`로 GPU, 캐시, compose 책임을 합성 | 새 세션이 root common 2개와 Docker path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `docker` read-only ephemeral loader smoke exit 0 |
+| `tests/ner` 지침 | fixture, 테스트 무결성, 실행 규칙을 로드 | 같은 테스트 계약과 `uv run` 검증 명령을 로드 | 새 세션이 root common 2개와 test path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `tests/ner` read-only ephemeral loader smoke exit 0 |
 | 프로젝트 스킬 결정 | 6개 Claude 프로젝트 스킬을 명시적으로 제공 | 새 프로젝트 스킬을 만들지 않고 debug와 TDD, refuter는 Superpowers에 통합하며 explain과 perf는 제거하고 lessons는 보류 | 이름 기반 발견성과 고정 편의 형식이 줄어듦. debug 통합과 actual-diff 새 세션 관찰은 미실행 | 후보 채택, 일부 보류 | migration 결정·부재 검사 PASS, 이관표 결정, 새 세션 smoke 미실행 |
 | custom commit hook 미채택 | Bash PreToolUse commit gate를 등록 | known Bash indirection bypass 때문에 custom Codex commit hook을 완전 제거 | Codex에는 automatic commit-time enforcement가 없음 | 의도적 단순화 후보, 잔여 차이 수용 보류 | hook 구현 비존재 migration 검사, 설계와 이관표 |
 | 정상 커밋 | 직접 감지한 커밋 명령에서 결정적 검사 후 통과 | 일반 Git 실행이며 Codex 전용 commit gate가 개입하지 않음 | 정상 경로의 추가 gate 비용은 없지만 커밋 전 검증 실행도 자동 보장되지 않음 | 사용자 절차 조건부 후보 | Claude hook 테스트 51 PASS, Codex hook 비존재 검사 |
@@ -35,22 +35,36 @@ Codex reviewer의 지적 수, 문체, 절차량은 parity metric이 아니다. `
 - 전체 suite known gap: 이관과 무관한 EN 배포 package와 ledger fingerprint
   mismatch 2건이 남아 있다. 이 결과를 이번 이관의 PASS로 바꾸거나 숨기지 않는다.
 
-## 미실행 수동 smoke
+## loader smoke 실행 결과
 
-다음 항목은 모두 `미실행`이며 채택 판정은 `보류`이다.
+controller는 codex-cli 0.151.0에서 다음 공통 조건으로 다섯 새 세션을 실행했다.
 
-1. 저장소 루트 새 Codex 세션에서 적용 지침 요약 확인
-2. `src/ner`, `src/server`, `docker`, `tests/ner` 각각의 새 세션에서 상위·하위
-   `AGENTS.md` 계층 합성 확인
-3. 프로젝트 스킬이 추가되지 않았고 debug 요청이
+```text
+codex exec --ephemeral --ignore-user-config --ignore-rules \
+  --sandbox read-only --model gpt-5.6-luna
+```
+
+prompt는 도구를 호출하지 않고 자동 적용된 지침에서 root common 규칙 2개와 현재
+경로의 path-specific 규칙 3개를 구분해 요약하도록 요청했다. 저장소 루트,
+`src/ner`, `src/server`, `docker`, `tests/ner`가 모두 exit 0이었고 각각 두 범주의
+규칙을 분리해 반환했다. PATH에 bubblewrap가 없어 bundled bubblewrap fallback
+warning이 발생했지만 각 실행의 sandbox 표시는 `read-only`였다. 이 경고는 loader
+결과를 바꾸지 않았으며 sandbox 구현 선택의 관찰 사항으로 남긴다.
+
+## 남은 미실행 수동 smoke
+
+다음 항목은 `미실행`이며 채택 판정은 `보류`이다.
+
+1. 프로젝트 스킬이 추가되지 않았고 debug 요청이
    `superpowers:systematic-debugging`과 저장소 지침으로 처리되는지 확인
-4. 실제 diff 설명에서 필요한 변경 요약을 제공하는지 확인
+2. 실제 diff 설명에서 필요한 변경 요약을 제공하는지 확인
 
 마지막 항목은 Claude `explain-diff`의 목차, diagram, 객관식 선택지, answer key를
 모두 재현하는 gate가 아니다. 실제 기능과 사용자의 수용 여부만 기록한다.
 
 ## 전환 상태
 
-Codex 자산은 활성화 후보이지만 전환은 보류한다. 새 세션 smoke와 사용자의 잔여
-차이 수용, 별도 전역 활성화 승인이 남아 있다. Claude 자산 삭제와 기본 도구 전환은
-범위 밖이며 이 문서가 이를 승인하지 않는다.
+Codex 자산은 활성화 후보이지만 전환은 보류한다. 다섯 loader smoke는 통과했지만
+스킬·actual-diff smoke, 사용자의 잔여 차이 수용, 별도 전역 활성화 승인이 남아
+있다. Claude 자산 삭제와 기본 도구 전환은 범위 밖이며 이 문서가 이를 승인하지
+않는다.

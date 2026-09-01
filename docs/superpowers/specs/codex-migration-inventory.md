@@ -6,16 +6,17 @@
 
 ## 프로젝트 지침
 
-프로젝트 지침 16개는 Codex 계층으로 작성되었고 정적 계약은 검증되었다. 각 행의
-새 세션 loader smoke는 아직 실행하지 않았으므로 상태를 `수동 검증 필요`로 둔다.
+프로젝트 지침 16개는 Codex 계층으로 작성되었고 정적 계약은 검증되었다. 루트,
+`src/ner`, `src/server`, `docker`, `tests/ner`의 새 세션 loader smoke는 통과했다.
+직접 smoke하지 않은 하위 경로는 `수동 검증 필요`로 유지한다.
 
 | 원본 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CLAUDE.md` | `AGENTS.md` | 프로젝트 규칙과 Claude·OMC 작업 절차를 함께 로드 | 도메인·안전 규칙은 로드하고 작업 절차는 Codex·Superpowers에 위임 | OMC 역할·명령과 자동 절차를 복제하지 않음 | 자동 절차가 줄어 호출 누락 가능성이 생기지만 저장소 규칙은 유지됨 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
-| `docker/CLAUDE.md` | `docker/AGENTS.md` | Docker 공통 배포 경계와 운영 지침을 로드 | 같은 배포 경계를 Codex 계층에서 로드 | 지침 파일명과 로더만 다름 | 운영 경계에는 영향이 없고 발견 방식만 달라짐 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
+| `CLAUDE.md` | `AGENTS.md` | 프로젝트 규칙과 Claude·OMC 작업 절차를 함께 로드 | 도메인·안전 규칙은 로드하고 작업 절차는 Codex·Superpowers에 위임 | OMC 역할·명령과 자동 절차를 복제하지 않음 | 자동 절차가 줄어 호출 누락 가능성이 생기지만 저장소 규칙은 유지됨 | 의도적 단순화 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
+| `docker/CLAUDE.md` | `docker/AGENTS.md` | Docker 공통 배포 경계와 운영 지침을 로드 | 같은 배포 경계를 Codex 계층에서 로드 | 지침 파일명과 로더만 다름 | 운영 경계에는 영향이 없고 발견 방식만 달라짐 | 동등 대체 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
 | `docker/server/CLAUDE.md` | `docker/server/AGENTS.md` | REST API 컨테이너 설정·헬스체크·번역 의존성을 안내 | 같은 입력·준비성 계약을 현재 경로 기준으로 안내 | Claude 전용 실행 표현을 제거 | 제품 기동 계약은 유지되고 에이전트별 표현만 사라짐 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `docker/vllm/CLAUDE.md` | `docker/vllm/AGENTS.md` | compose 역할과 GPU·모델별 운영 주의를 안내 | 같은 서비스 책임과 안전 범위를 안내 | 공통 Docker 설명의 중복을 줄임 | 세부 지침 탐색 시 상위 문서도 함께 읽어야 함 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
-| `src/ner/CLAUDE.md` | `src/ner/AGENTS.md` | NER 모듈·라벨·import 규칙을 로드 | 같은 도메인 불변조건을 Codex 계층에서 로드 | 지침 파일명과 로더만 다름 | 모듈 작업 계약에는 영향이 없고 발견 방식만 달라짐 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
+| `src/ner/CLAUDE.md` | `src/ner/AGENTS.md` | NER 모듈·라벨·import 규칙을 로드 | 같은 도메인 불변조건을 Codex 계층에서 로드 | 지침 파일명과 로더만 다름 | 모듈 작업 계약에는 영향이 없고 발견 방식만 달라짐 | 동등 대체 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
 | `src/ner/augmenters/CLAUDE.md` | `src/ner/augmenters/AGENTS.md` | 증강 모드·gold 보존·대상 테스트를 안내 | 같은 입력·출력과 gold 보호를 안내 | 실행 예시를 `uv run`으로 정규화 | `PYTHONPATH` 오염을 피하면서 증강 안전 계약은 유지됨 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `src/ner/classifier/CLAUDE.md` | `src/ner/classifier/AGENTS.md` | 학습 CLI·group split·metric·산출물 계약을 안내 | 같은 누출 방지와 평가 경계를 안내 | 현재 CLI·테스트 경로만 유지 | 오래된 설명은 줄지만 세부 예시 일부가 제공되지 않을 수 있음 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `src/ner/labelers/CLAUDE.md` | `src/ner/labelers/AGENTS.md` | 공통 LLM 라벨링과 언어별 처리 규칙을 함께 안내 | 공통 계약만 상위에 두고 언어별 규칙은 하위 계층에서 로드 | 중복 설명을 줄임 | 단일 파일만 읽으면 언어별 세부 사항이 보이지 않지만 계층 합성 시 보존됨 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
@@ -25,8 +26,8 @@
 | `src/ner/llm_eval/CLAUDE.md` | `src/ner/llm_eval/AGENTS.md` | 프롬프트 실행·span 평가·산출물 계약을 안내 | 같은 평가 입력·출력과 재현 경로를 안내 | Claude 역할 표현을 제거 | 평가 결과 계약에는 영향이 없음 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `src/ner/scripts/CLAUDE.md` | `src/ner/scripts/AGENTS.md` | 보조 스크립트와 wrapper 규약을 안내 | 실제 스크립트 경로와 패키지 실행만 안내 | 실행 형식을 `uv run`으로 단순화 | 임의 실행 방식은 줄고 재현 가능한 패키지 실행으로 제한됨 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `src/ner/validity/CLAUDE.md` | `src/ner/validity/AGENTS.md` | fold·분산·baseline 판정과 기준 보호를 안내 | 같은 측정 불변조건과 판정 경계를 안내 | 하네스 절차보다 측정 정책에 집중 | 자동 절차 설명은 줄지만 측정 자 보호 규칙은 유지됨 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
-| `src/server/CLAUDE.md` | `src/server/AGENTS.md` | API·오류·백엔드·관측성 계약을 안내 | 같은 서비스 계약과 설정 검증을 안내 | Claude 전용 작업 표현을 제거 | API 런타임 계약에는 영향이 없음 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
-| `tests/ner/CLAUDE.md` | `tests/ner/AGENTS.md` | 테스트 구조·fixture·안전 주의를 안내 | 같은 테스트 범위와 `uv run pytest` 실행법을 안내 | 공통 규칙을 루트에 위임 | 하위 문서만 읽으면 공통 규칙이 보이지 않지만 계층 합성 시 유지됨 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
+| `src/server/CLAUDE.md` | `src/server/AGENTS.md` | API·오류·백엔드·관측성 계약을 안내 | 같은 서비스 계약과 설정 검증을 안내 | Claude 전용 작업 표현을 제거 | API 런타임 계약에는 영향이 없음 | 동등 대체 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
+| `tests/ner/CLAUDE.md` | `tests/ner/AGENTS.md` | 테스트 구조·fixture·안전 주의를 안내 | 같은 테스트 범위와 `uv run pytest` 실행법을 안내 | 공통 규칙을 루트에 위임 | 하위 문서만 읽으면 공통 규칙이 보이지 않지만 계층 합성 시 유지됨 | 의도적 단순화 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
 
 ## 프로젝트 스킬 결정
 
@@ -61,7 +62,7 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 | 항목 | 상태 | 근거 |
 | --- | --- | --- |
 | Codex 자산 | 후보 | 정적 검증과 reviewer smoke는 완료됨 |
-| Codex 전환 | 보류 | 주요 디렉터리 새 세션 smoke와 사용자 잔여 차이 수용이 남음 |
+| Codex 전환 | 보류 | loader smoke는 통과했고 스킬·actual-diff smoke와 사용자 잔여 차이 수용이 남음 |
 | Claude 자산 삭제 | 범위 밖 | 병행 운영 원본을 보존함 |
 | 기본 도구 전환 | 범위 밖 | 사용자 별도 승인 범위임 |
 
