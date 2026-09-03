@@ -89,3 +89,5 @@ docker/dev/config/.env
 results/
 # 슬래시 없이 — 워크트리는 data 를 심링크로 두고, `/data/` 는 디렉토리만 잡는다
 /data
+# OMC 변종이 만드는 로컬 상태 (설정·HUD). .omc/ 와 같은 성격
+.omx/
