@@ -2,14 +2,13 @@
 
 ## 현재 결론
 
-이 저장소의 Codex 이관은 아직 활성화 후보이며 전환은 보류한다. 이 Task에서는
-`/home/rkim/.codex/config.toml`, `/home/rkim/.codex/rules/`,
-`/home/rkim/.codex/agents/`, 사용자 수준 hook 등록을 수정하지 않는다. 정확한 설정
-초안은 다음과 같다.
+이 저장소의 Codex 이관은 활성화되었다. 사용자 승인에 따라
+`/home/rkim/.codex/config.toml`의 `[features]`에 `plugins = true`를 명시했고,
+Rules, agent 정의, 사용자 수준 hook 등록은 추가하지 않았다. 적용 상태는 다음과 같다.
 
 | 사용자 수준 항목 | 초안 | 상태 |
 | --- | --- | --- |
-| `/home/rkim/.codex/config.toml` | 현재 파일을 그대로 유지 | 비활성, 변경 없음 |
+| `/home/rkim/.codex/config.toml` | `[features]`의 `plugins = true` | 활성, strict config 파싱과 새 세션 smoke 확인 |
 | `/home/rkim/.codex/rules/` | 새 Rule을 추가하지 않고 현재 상태를 유지 | 비활성, 변경 없음 |
 | `/home/rkim/.codex/agents/` | agent 정의를 추가하거나 변경하지 않음 | 비활성, 변경 없음 |
 | custom commit hook | 등록하지 않음 | 제거 결정 유지 |
@@ -18,9 +17,10 @@
 | Claude 자산 삭제 | 수행하지 않음 | 범위 밖 |
 
 프로젝트의 16개 `AGENTS.md`가 저장소 지침 자산이다. project custom reviewer 파일은
-두 runtime 경로에서 자동 발견되지 않아 제거했다. 다섯 주요 경로의 새 세션 loader
-smoke는 통과했다. 스킬·actual-diff smoke와 잔여 차이 수용이 끝나기 전에는 이 자산을
-전역 전환 완료로 간주하지 않는다.
+두 runtime 경로에서 자동 발견되지 않아 제거했다. 다섯 주요 경로와 최종 root
+작업 추적성 loader smoke가 통과했다. 전역 플러그인 활성화 후 debug skill과
+actual-diff smoke도 통과했으며, 사용자는 automatic commit-time enforcement 상실을
+포함한 잔여 차이를 검토한 뒤 활성화 진행을 승인했다.
 
 ## 읽기 전용 사전 조사와 백업
 
@@ -41,8 +41,8 @@ find /home/rkim/.codex/rules -type f -print0 2>/dev/null \
   | xargs -0 -r sha256sum
 ```
 
-현재 초안은 변경 없음이므로 다음 비교는 출력이 없어야 한다. 별도 활성화 계획에서
-후보 파일을 만들면 같은 명령으로 실제 차이를 검토한다.
+이번 활성화에서는 다음 비교가 `[features]` 아래의 `plugins = true` 한 줄만 보여야
+한다. 후속 설정 변경에서도 같은 명령으로 실제 차이를 검토한다.
 
 ```bash
 diff -u "$codex_activation_audit/config.toml.before" \
@@ -75,7 +75,8 @@ generic fallback의 역할 preset을 보장하지 못한다. 이 수단들은 au
 
 ## 활성화 전 판정 체크리스트
 
-- [x] migration 테스트 46개와 기존 Claude hook 테스트 51개의 이전 PASS 근거가 있다.
+- [x] 활성화 후 migration 테스트와 기존 Claude hook 테스트를 함께 재실행해
+  `97 passed`를 확인하고 Ruff와 `git diff --check`도 통과했다.
 - [x] custom Codex commit hook 구현과 등록을 활성화 후보에서 제거했다.
 - [x] project custom reviewer의 두 runtime 호출이 `unknown agent_type reviewer`를
   반환해 repository TOML을 제거했다.
@@ -84,22 +85,23 @@ generic fallback의 역할 preset을 보장하지 못한다. 이 수단들은 au
 - [x] `.claude/**`와 모든 `CLAUDE.md`를 보존한다.
 - [x] 루트, `src/ner`, `src/server`, `docker`, `tests/ner`의 read-only ephemeral
   Codex 세션에서 root common 규칙과 path-specific 규칙을 구분해 확인했다.
-- [ ] 프로젝트 스킬 부재, `systematic-debugging` 통합, actual-diff 설명 동작을
-  새 세션에서 확인한다.
-- [ ] 사용자가 automatic commit-time enforcement 상실과 보호 파일 영향 범위를
-  검토하고 잔여 차이의 수용 여부를 명시한다.
-- [ ] 사용자가 전역 활성화를 별도로 승인한다.
+- [x] 프로젝트 스킬 부재 상태에서 전역 Superpowers 플러그인의
+  `systematic-debugging` 통합과 actual-diff 설명 동작을 새 세션에서 확인했다.
+- [x] 사용자가 automatic commit-time enforcement 상실과 보호 파일 영향 범위를
+  검토한 뒤 남은 작업 진행을 지시하여 잔여 차이를 수용했다.
+- [x] 사용자 승인에 따라 전역 `plugins = true`를 적용하고 플래그 없는 새 세션에서
+  skill 로딩을 재검증했다.
 
-loader smoke는 통과했지만 위 미완료 항목이 남아 있으므로 현재 채택 판정은 `후보`,
-전환 상태는 `보류`이다.
+활성화 판정에 필요한 loader, reviewer, debug skill, actual-diff smoke가 통과했다.
+현재 채택 판정은 `채택`, 전환 상태는 `활성`이다. 직접 smoke하지 않은 세부 하위
+경로와 전체 suite의 기존 EN fingerprint 불일치 2건은 별도 잔여 항목으로 유지한다.
 
-## 별도 승인 후 실행 경계
+## 후속 설정 변경 경계
 
-현재 초안에는 사용자 수준 파일을 수정하는 활성화 명령이 없다. 이후 계획에서
-`config.toml` 또는 Rules 변경이 필요해지면 실제 후보 파일, `diff`, Rule의
+이번 활성화에서 사용자 수준 변경은 `plugins = true` 한 줄뿐이다. 이후 계획에서
+추가 `config.toml` 또는 Rules 변경이 필요해지면 실제 후보 파일, `diff`, Rule의
 `match`와 `not_match`, `codex execpolicy check` 결과를 먼저 제시한다. 다음 형태의
-설치 명령은 반드시 `사용자 별도 승인 후 실행` 대상으로 표시하고 이 Task에서는
-실행하지 않는다.
+설치 명령은 반드시 사용자 별도 승인 대상으로 유지한다.
 
 ```bash
 # 사용자 별도 승인 후 실행
@@ -117,21 +119,36 @@ commit hook 등록은 이후 후보에도 포함하지 않는다.
 
 ## 롤백
 
-현재 초안은 사용자 파일을 바꾸지 않으므로 현재 Task의 롤백은 새 Codex 세션을
-종료하고 Claude 병행 운영을 계속하는 것이다. 이후 별도 승인으로 사용자 파일을
-바꾼 경우에는 활성화 직전 사본의 지문과 대상을 다시 확인한 뒤 다음 복구를 쓴다.
+이번 활성화의 롤백 대상은 `[features]`의 `plugins = true` 한 줄뿐이다. 먼저 현재
+설정에서 그 한 줄을 제외한 내용이 활성화 직전 사본과 같은지 확인한다. 다른 변경이
+있으면 자동 롤백을 중단하고 diff를 검토한다.
+
+```bash
+test "$(rg -n '^plugins = true$' /home/rkim/.codex/config.toml | wc -l)" -eq 1
+cmp \
+  <(sed '/^plugins = true$/d' /home/rkim/.codex/config.toml) \
+  "$codex_activation_audit/config.toml.before"
+```
+
+사전 검사가 통과한 뒤 다음 변경 단계는 사용자 별도 승인 후 실행한다. 변경 직전에도
+같은 조건을 다시 확인하며, 실패하면 `sed -i`를 실행하지 않는다.
 
 ```bash
 # 사용자 별도 승인 후 실행
-install -m 600 "$codex_activation_audit/config.toml.before" \
-  /home/rkim/.codex/config.toml
-
-# 사용자 별도 승인 후 실행
-if test -d "$codex_activation_audit/rules.before"; then
-  cp -a "$codex_activation_audit/rules.before/." /home/rkim/.codex/rules/
+if test "$(rg -n '^plugins = true$' /home/rkim/.codex/config.toml | wc -l)" -eq 1 \
+  && cmp \
+    <(sed '/^plugins = true$/d' /home/rkim/.codex/config.toml) \
+    "$codex_activation_audit/config.toml.before"; then
+  sed -i '/^plugins = true$/d' /home/rkim/.codex/config.toml
+  cmp /home/rkim/.codex/config.toml \
+    "$codex_activation_audit/config.toml.before"
+  codex --strict-config --version
+else
+  echo "Codex config changed after activation; rollback aborted." >&2
+  exit 1
 fi
 ```
 
-복구 후 Codex를 재시작하고 `diff`와 `sha256sum`으로 원본과 일치하는지 확인한다.
-별도 활성화에서 새 Rule 파일을 만들었다면 복구 계획에는 그 정확한 파일만 제거하는
-명령을 추가한다. 넓은 디렉터리 삭제나 custom hook 제거 명령은 사용하지 않는다.
+두 지문이 일치하면 Codex를 재시작한다. 이번 활성화에서는 Rules를 변경하지 않았으므로
+롤백도 Rules를 수정하지 않는다. 향후 Rule 파일을 만들면 해당 변경에 정확한 파일별
+롤백을 별도로 기록하며 넓은 디렉터리 삭제나 custom hook 제거 명령은 사용하지 않는다.

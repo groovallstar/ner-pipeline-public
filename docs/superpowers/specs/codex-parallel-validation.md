@@ -8,21 +8,21 @@ Codex reviewer의 지적 수, 문체, 절차량은 parity metric이 아니다. `
 
 | 검증 항목 | Claude 동작 | Codex 동작 | 관찰된 차이 | 채택 판정 | 근거 |
 | --- | --- | --- | --- | --- | --- |
-| 루트 지침 | `CLAUDE.md`가 도메인 규칙과 Claude·OMC 절차를 함께 제공 | `AGENTS.md`가 저장소 범위, 개발 환경, 안전, 검증, reviewer 계약을 제공 | 기존 loader smoke는 정책 복원 전 실행되어 새 root 계약을 증명하지 않음 | 재검증 필요 | migration 정적 계약과 controller exact loader smoke 재실행 |
-| 런타임 변경 추적성 | 런타임 변경을 이슈와 main 외 branch에서 진행하고 문제·수락 기준·테스트·문서 영향을 추적 | main이 아닌 브랜치에서 진행하고 구현 전에 이슈 또는 승인된 spec에 문제·acceptance criteria·필요한 테스트·문서 영향을 기록 | Codex는 정책을 유지하지만 Claude·OMC workflow 명령과 branch·문서 준비의 자동 집행은 복제하지 않음 | 의도적 단순화, loader 재검증 필요 | root `AGENTS.md`, migration 정적 계약, controller exact loader smoke 재실행 |
+| 루트 지침 | `CLAUDE.md`가 도메인 규칙과 Claude·OMC 절차를 함께 제공 | `AGENTS.md`가 저장소 범위, 개발 환경, 안전, 검증, reviewer 계약을 제공 | 전역 활성화 후 새 세션이 branch·issue/spec·acceptance criteria·테스트·문서 영향 조건을 반환 | 검증됨 | migration 정적 계약과 activation root loader smoke |
+| 런타임 변경 추적성 | 런타임 변경을 이슈와 main 외 branch에서 진행하고 문제·수락 기준·테스트·문서 영향을 추적 | main이 아닌 브랜치에서 진행하고 구현 전에 이슈 또는 승인된 spec에 문제·acceptance criteria·필요한 테스트·문서 영향을 기록 | Codex는 정책을 유지하지만 Claude·OMC workflow 명령과 branch·문서 준비의 자동 집행은 복제하지 않음 | 의도적 단순화 채택 | root `AGENTS.md`, migration 정적 계약, activation root loader smoke |
 | `src/ner` 지침 | 루트와 `src/ner/CLAUDE.md`에서 NER 계약을 로드 | 루트와 `src/ner/AGENTS.md`에서 canonical label, 패키지, metric 경계를 로드 | 새 세션이 root common 2개와 NER path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `src/ner` read-only ephemeral loader smoke exit 0 |
 | `src/server` 지침 | 서버 API, 동시성, 준비성 계약을 로드 | 같은 제품 계약과 NER 큐·번역 즉시 429 차이를 로드 | 새 세션이 root common 2개와 server path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `src/server` read-only ephemeral loader smoke exit 0 |
 | `docker` 지침 | Docker 공통·서비스별 배포 경계를 로드 | 상위와 하위 `AGENTS.md`로 GPU, 캐시, compose 책임을 합성 | 새 세션이 root common 2개와 Docker path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `docker` read-only ephemeral loader smoke exit 0 |
 | `tests/ner` 지침 | fixture, 테스트 무결성, 실행 규칙을 로드 | 같은 테스트 계약과 `uv run` 검증 명령을 로드 | 새 세션이 root common 2개와 test path-specific 3개를 구분해 반환 | 동등 대체 검증됨 | migration PASS, `tests/ner` read-only ephemeral loader smoke exit 0 |
-| 프로젝트 스킬 결정 | 6개 Claude 프로젝트 스킬을 명시적으로 제공 | 새 프로젝트 스킬을 만들지 않고 debug와 TDD, refuter는 Superpowers에 통합하며 explain과 perf는 제거하고 lessons는 보류 | 이름 기반 발견성과 고정 편의 형식이 줄어듦. debug 통합과 actual-diff 새 세션 관찰은 미실행 | 후보 채택, 일부 보류 | migration 결정·부재 검사 PASS, 이관표 결정, 새 세션 smoke 미실행 |
-| custom commit hook 미채택 | Bash PreToolUse commit gate를 등록 | known Bash indirection bypass 때문에 custom Codex commit hook을 완전 제거 | Codex에는 automatic commit-time enforcement가 없음 | 의도적 단순화 후보, 잔여 차이 수용 보류 | hook 구현 비존재 migration 검사, 설계와 이관표 |
-| 정상 커밋 | 직접 감지한 커밋 명령에서 결정적 검사 후 통과 | 일반 Git 실행이며 Codex 전용 commit gate가 개입하지 않음 | 정상 경로의 추가 gate 비용은 없지만 커밋 전 검증 실행도 자동 보장되지 않음 | 사용자 절차 조건부 후보 | Claude hook 테스트 51 PASS, Codex hook 비존재 검사 |
-| Ruff 위반 | 변경 Python의 Ruff 위반을 감지한 직접 커밋을 차단 | AGENTS가 Ruff를 요구하지만 커밋 시 자동 차단하지 않음 | automatic commit-time enforcement 상실. 사람 검증 누락 시 위반을 커밋할 수 있음 | 수용 여부 보류 | `tests/hooks/test_gate.py::test_ruff_failure_cannot_be_waived`, Codex hook 제거 결정 |
-| 테스트 무결성 위반 | test 함수·assert 순삭제와 무조건 skip·xfail을 커밋 게이트에서 검사 | AGENTS, reviewer, 완료 검증이 위반을 찾도록 요구하나 자동 커밋 차단은 없음 | 사람 절차와 명시적 호출에 의존하며 reviewer와 verification은 gate와 동등하지 않음 | 수용 여부 보류 | Claude hook 무결성 회귀 테스트 PASS, 루트와 `tests/ner/AGENTS.md` |
-| 기준 파일 변경 | ruler 변경에 승인과 refuter PASS를 요구 | 같은 기준으로 재평가하고 주요 변경 reviewer를 호출하도록 지시 | Codex는 커밋 직전 승인 지문과 verdict를 자동 강제하지 않음 | 수용 여부 보류 | Claude ruler-lock 테스트 PASS, 루트 안전·독립 검토 계약 |
-| protected `certified` JSON 변경 | Claude Write/Edit permission deny가 JSON 쓰기를 막고 shell 경로는 열어 둠 | AGENTS, reviewer, 완료 검증, 사용자 outside-hook commit 정책에 의존 | Codex에는 동일한 경로 기반 Write/Edit 차단이 없고 Rules도 이를 보장하지 않음 | 수용 여부 보류 | `.claude/settings.json`, 이관 설계, 활성화 체크리스트 |
-| certified 인용 수치 | 리포트·이슈 표의 새 수치를 선언한 certified 원장과 commit gate에서 대조 | 출처 명시를 AGENTS가 요구하며 reviewer와 완료 검증에서 확인 | Codex는 대조를 커밋 시 자동 실행하지 않음 | 수용 여부 보류 | Claude cited-metric 테스트 PASS, 루트 안전 계약 |
-| 파일 쓰기 전 차단 범위 | permission deny가 지정된 Write/Edit 경로에 사전 적용되고 shell 쓰기는 범위 밖 | 현재 사용자 Rules 변경이 없고 저장소 지침은 도구 호출 전 경로 차단기가 아님 | Codex Rules는 명령 prefix 정책이며 경로 기반 파일 쓰기 보장이 아님 | 수용 여부 보류 | `.claude/settings.json`, OpenAI Rules 문서, 활성화 체크리스트 |
+| 프로젝트 스킬 결정 | 6개 Claude 프로젝트 스킬을 명시적으로 제공 | 새 프로젝트 스킬을 만들지 않고 debug와 TDD, refuter는 Superpowers에 통합하며 explain과 perf는 제거하고 lessons는 보류 | 이름 기반 발견성과 고정 편의 형식은 줄었지만 debug skill과 actual-diff 동작을 새 세션에서 확인 | 채택, `lessons-digest`만 보류 | migration 결정·부재 검사 PASS와 activation smoke |
+| custom commit hook 미채택 | Bash PreToolUse commit gate를 등록 | known Bash indirection bypass 때문에 custom Codex commit hook을 완전 제거 | Codex에는 automatic commit-time enforcement가 없음 | 의도적 단순화 채택, 사용자가 잔여 차이를 수용 | hook 구현 비존재 migration 검사, 설계와 이관표 |
+| 정상 커밋 | 직접 감지한 커밋 명령에서 결정적 검사 후 통과 | 일반 Git 실행이며 Codex 전용 commit gate가 개입하지 않음 | 정상 경로의 추가 gate 비용은 없지만 커밋 전 검증 실행도 자동 보장되지 않음 | 사용자 절차 조건부 채택 | Claude hook 테스트 51 PASS, Codex hook 비존재 검사 |
+| Ruff 위반 | 변경 Python의 Ruff 위반을 감지한 직접 커밋을 차단 | AGENTS가 Ruff를 요구하지만 커밋 시 자동 차단하지 않음 | automatic commit-time enforcement 상실. 사람 검증 누락 시 위반을 커밋할 수 있음 | 잔여 위험 수용 | `tests/hooks/test_gate.py::test_ruff_failure_cannot_be_waived`, Codex hook 제거 결정 |
+| 테스트 무결성 위반 | test 함수·assert 순삭제와 무조건 skip·xfail을 커밋 게이트에서 검사 | AGENTS, reviewer, 완료 검증이 위반을 찾도록 요구하나 자동 커밋 차단은 없음 | 사람 절차와 명시적 호출에 의존하며 reviewer와 verification은 gate와 동등하지 않음 | 잔여 위험 수용 | Claude hook 무결성 회귀 테스트 PASS, 루트와 `tests/ner/AGENTS.md` |
+| 기준 파일 변경 | ruler 변경에 승인과 refuter PASS를 요구 | 같은 기준으로 재평가하고 주요 변경 reviewer를 호출하도록 지시 | Codex는 커밋 직전 승인 지문과 verdict를 자동 강제하지 않음 | 잔여 위험 수용 | Claude ruler-lock 테스트 PASS, 루트 안전·독립 검토 계약 |
+| protected `certified` JSON 변경 | Claude Write/Edit permission deny가 JSON 쓰기를 막고 shell 경로는 열어 둠 | AGENTS, reviewer, 완료 검증, 사용자 outside-hook commit 정책에 의존 | Codex에는 동일한 경로 기반 Write/Edit 차단이 없고 Rules도 이를 보장하지 않음 | 잔여 위험 수용 | `.claude/settings.json`, 이관 설계, 활성화 체크리스트 |
+| certified 인용 수치 | 리포트·이슈 표의 새 수치를 선언한 certified 원장과 commit gate에서 대조 | 출처 명시를 AGENTS가 요구하며 reviewer와 완료 검증에서 확인 | Codex는 대조를 커밋 시 자동 실행하지 않음 | 잔여 위험 수용 | Claude cited-metric 테스트 PASS, 루트 안전 계약 |
+| 파일 쓰기 전 차단 범위 | permission deny가 지정된 Write/Edit 경로에 사전 적용되고 shell 쓰기는 범위 밖 | 현재 사용자 Rules 변경이 없고 저장소 지침은 도구 호출 전 경로 차단기가 아님 | Codex Rules는 명령 prefix 정책이며 경로 기반 파일 쓰기 보장이 아님 | 잔여 위험 수용 | `.claude/settings.json`, OpenAI Rules 문서, 활성화 체크리스트 |
 | 독립 reviewer | Stop refuter loop가 상태와 판정을 자동 결합 | native `code-reviewer`를 명시적으로 호출하고, unavailable 환경에서는 generic read-only subagent에 exact prompt 제공 | 자동 Stop 호출·상태 연속성·project custom-agent 등록이 없으며 generic fallback은 역할 preset을 보장하지 않음 | 의도적 단순화 채택 | native `code-reviewer` smoke PASS, custom `reviewer`는 두 runtime 경로에서 `unknown agent_type` |
 | 완료 검증 | Claude hook과 작업 절차가 일부 검사를 자동·수동 결합 | `verification-before-completion`으로 성공 주장마다 최신 명령 출력을 확인 | 명시적 호출이며 automatic commit gate를 대신하지 않음 | 의도적 단순화 채택 | 루트 `AGENTS.md`, 이번 Task의 최신 대상 검증 |
 
@@ -30,6 +30,12 @@ Codex reviewer의 지적 수, 문체, 절차량은 parity metric이 아니다. `
 
 - Task 5 시점 migration 테스트: `46 passed`.
 - Task 4 시점 기존 Claude hook 테스트: `51 passed`.
+- 전역 활성화 후 migration과 기존 Claude hook 통합 재검증:
+  `97 passed`.
+- `uv run ruff check tests/migration/test_codex_migration.py`: PASS.
+- `git diff --check`: PASS.
+- `codex --strict-config --version`: `codex-cli 0.151.0`.
+- `codex plugin list`: `superpowers@openai-curated`가 installed, enabled 상태.
 - reviewer runtime: native `code-reviewer` smoke는 세 절과 PASS를 반환했고 작업 트리가
   바뀌지 않았다. collaboration의 `agent_type=reviewer`와 fresh ephemeral Codex의
   `agent_type=reviewer`는 모두 `unknown agent_type`을 반환했다. 따라서 repository
@@ -71,20 +77,26 @@ codex exec --ephemeral --ignore-user-config --ignore-rules \
 따라서 project custom-agent registration은 미채택·제거하고, native type이 없는
 환경에서는 generic read-only subagent에 root 지침의 exact prompt를 제공한다.
 
-## 남은 미실행 수동 smoke
+## 전역 활성화 smoke
 
-다음 항목은 `미실행`이며 채택 판정은 `보류`이다.
+사용자 설정을 백업한 뒤 `/home/rkim/.codex/config.toml`의 `[features]`에
+`plugins = true`를 명시했다. 설정 diff가 이 한 줄뿐임을 확인하고,
+`codex --strict-config --version`과 `codex plugin list`로 설정 파싱과
+Superpowers 설치·활성 상태를 확인했다.
 
-1. 프로젝트 스킬이 추가되지 않았고 debug 요청이
-   `superpowers:systematic-debugging`과 저장소 지침으로 처리되는지 확인
-2. 실제 diff 설명에서 필요한 변경 요약을 제공하는지 확인
+1. 플래그 없는 새 세션이 `systematic-debugging`을 읽고 오류 확인, 재현, 최근 변경,
+   구성 요소 경계, 역방향 추적의 Phase 1 순서를 반환했다.
+2. 실제 `git diff a538591..HEAD`를 표준 입력으로 받은 새 세션이 기능 변화, 검증 결과,
+   잔여 위험을 실제 파일 경로와 함께 구분했다.
+3. 최종 root loader 세션이 main 외 브랜치, issue 또는 승인된 spec, acceptance
+   criteria, 테스트·문서 영향의 네 준비 조건을 반환했다.
 
-마지막 항목은 Claude `explain-diff`의 목차, diagram, 객관식 선택지, answer key를
-모두 재현하는 gate가 아니다. 실제 기능과 사용자의 수용 여부만 기록한다.
+actual-diff 검증은 Claude `explain-diff`의 목차, diagram, 객관식 선택지, answer key를
+재현하는 gate가 아니다. 실제 변경 설명 기능과 사용자의 수용 여부만 검증했다.
 
 ## 전환 상태
 
-Codex 자산은 활성화 후보이지만 전환은 보류한다. 다섯 loader smoke는 통과했지만
-스킬·actual-diff smoke, 사용자의 잔여 차이 수용, 별도 전역 활성화 승인이 남아
-있다. Claude 자산 삭제와 기본 도구 전환은 범위 밖이며 이 문서가 이를 승인하지
-않는다.
+Codex 자산은 채택되었고 전환 상태는 활성이다. 주요 경로와 최종 root loader,
+native reviewer, debug skill, actual-diff smoke가 통과했다. 사용자는 automatic
+commit-time enforcement 상실과 보호 파일 범위 차이를 검토한 뒤 활성화를 승인했다.
+Claude 자산 삭제는 범위 밖이며 병행 운영 원본으로 계속 보존한다.

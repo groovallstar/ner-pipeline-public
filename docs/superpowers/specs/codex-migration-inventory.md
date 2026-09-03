@@ -8,11 +8,12 @@
 
 프로젝트 지침 16개는 Codex 계층으로 작성되었고 정적 계약은 검증되었다. 루트,
 `src/ner`, `src/server`, `docker`, `tests/ner`의 새 세션 loader smoke는 통과했다.
+전역 `plugins = true` 적용 후 루트 작업 추적성 규칙도 새 세션에서 재검증했다.
 직접 smoke하지 않은 하위 경로는 `수동 검증 필요`로 유지한다.
 
 | 원본 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CLAUDE.md` | `AGENTS.md` | 런타임 변경을 이슈·브랜치·수락 기준으로 추적하고 프로젝트 규칙과 작업 절차를 함께 로드 | 런타임 동작 변경은 main이 아닌 브랜치에서 진행하고, 구현 전에 이슈 또는 승인된 spec에 문제·acceptance criteria·필요한 테스트·문서 영향을 기록 | Claude·OMC 전용 workflow 명령과 자동 절차는 복제하지 않음 | 작업 추적 정책은 유지되지만 branch·문서 준비를 자동 집행하지 않아 사람 절차 누락 가능성이 있음 | 의도적 단순화 | 정적 계약은 검증됐고 정책을 포함한 새 세션 loader smoke 후 확정 | 재검증 필요 | `tests/migration/test_codex_migration.py`와 controller exact loader smoke 재실행 |
+| `CLAUDE.md` | `AGENTS.md` | 런타임 변경을 이슈·브랜치·수락 기준으로 추적하고 프로젝트 규칙과 작업 절차를 함께 로드 | 런타임 동작 변경은 main이 아닌 브랜치에서 진행하고, 구현 전에 이슈 또는 승인된 spec에 문제·acceptance criteria·필요한 테스트·문서 영향을 기록 | Claude·OMC 전용 workflow 명령과 자동 절차는 복제하지 않음 | 작업 추적 정책은 유지되지만 branch·문서 준비를 자동 집행하지 않아 사람 절차 누락 가능성이 있음 | 의도적 단순화 | 정적 계약과 전역 활성화 후 새 세션 loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 root loader smoke |
 | `docker/CLAUDE.md` | `docker/AGENTS.md` | Docker 공통 배포 경계와 운영 지침을 로드 | 같은 배포 경계를 Codex 계층에서 로드 | 지침 파일명과 로더만 다름 | 운영 경계에는 영향이 없고 발견 방식만 달라짐 | 동등 대체 | 정적 계약과 read-only ephemeral loader smoke가 PASS | 검증됨 | `tests/migration/test_codex_migration.py`와 Task 6 loader smoke |
 | `docker/server/CLAUDE.md` | `docker/server/AGENTS.md` | REST API 컨테이너 설정·헬스체크·번역 의존성을 안내 | 같은 입력·준비성 계약을 현재 경로 기준으로 안내 | Claude 전용 실행 표현을 제거 | 제품 기동 계약은 유지되고 에이전트별 표현만 사라짐 | 동등 대체 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
 | `docker/vllm/CLAUDE.md` | `docker/vllm/AGENTS.md` | compose 역할과 GPU·모델별 운영 주의를 안내 | 같은 서비스 책임과 안전 범위를 안내 | 공통 Docker 설명의 중복을 줄임 | 세부 지침 탐색 시 상위 문서도 함께 읽어야 함 | 의도적 단순화 | 정적 계약은 검증됐고 새 세션 loader smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
@@ -41,8 +42,8 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 
 | 원본 스킬 | 결정 | Codex 대상 | Claude 동작 | Codex 후보 동작 | 관찰 또는 예상 차이 | 차이의 영향 | 판정 | 판정 근거·확정 시점 | 상태 | 검증 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | NER 전용 진단 체크리스트를 직접 제공 | 설치된 디버깅 절차와 저장소 지침을 사용 | 별도 NER 스킬과 고정 체크리스트를 유지하지 않음 | Claude 절차와 표현이 달라질 수 있음 | 의도적 단순화 | 정적 통합·부재 계약은 검증됐고 새 세션 debug smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
-| `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 목차·diagram·문답 편의 계약을 제공 | 필요할 때 요청에 맞는 변경 설명을 직접 구성 | 고정 스킬과 편의 형식의 자동 보장을 제거 | 요청에 명시하지 않은 편의 형식은 생략될 수 있음 | 제거 | 제거·부재 계약은 검증됐고 actual-diff 새 세션 smoke 후 확정 | 수동 검증 필요 | `tests/migration/test_codex_migration.py`와 Task 6 새 세션 smoke |
+| `debug-triage` | 통합 | `superpowers:systematic-debugging`과 `AGENTS.md` | NER 전용 진단 체크리스트를 직접 제공 | 설치된 디버깅 절차와 저장소 지침을 사용 | 별도 NER 스킬과 고정 체크리스트를 유지하지 않음 | Claude 절차와 표현이 달라질 수 있음 | 의도적 단순화 | 전역 `plugins = true` 적용 후 새 세션이 `systematic-debugging`을 읽고 Phase 1 순서를 반환 | 검증됨 | `tests/migration/test_codex_migration.py`와 activation debug smoke |
+| `explain-diff` | 제거 | Codex 기본 역량 | 한국어 변경 설명 보고서와 목차·diagram·문답 편의 계약을 제공 | 필요할 때 요청에 맞는 변경 설명을 직접 구성 | 고정 스킬과 편의 형식의 자동 보장을 제거 | 요청에 명시하지 않은 편의 형식은 생략될 수 있음 | 제거 | 실제 `a538591..HEAD` diff를 입력한 새 세션이 기능 변화·검증·잔여 위험을 근거와 함께 구분 | 검증됨 | `tests/migration/test_codex_migration.py`와 activation actual-diff smoke |
 | `perf-measure` | 제거 | Codex 기본 역량 | 고정 조건의 성능·품질 측정 절차를 안내 | 필요할 때 저장소 맥락에 맞는 측정 계획을 요청 | 고정 프로젝트 스킬의 자동 안내를 제거 | 측정 조건은 각 요청에서 명시하거나 검토해야 함 | 제거 | 사용자 승인 단순화와 프로젝트 스킬 부재가 정적 검사에서 일치함 | 검증됨 | `tests/migration/test_codex_migration.py` |
 | `tdd` | 통합 | `superpowers:test-driven-development` | 프로젝트 TDD 스킬이 RED·GREEN·REFACTOR를 안내 | 설치된 Superpowers TDD 절차를 사용 | 중복 프로젝트 스킬을 만들지 않음 | 적용 범위 표현은 달라질 수 있음 | 의도적 단순화 | 설치된 Superpowers 통합과 프로젝트 스킬 부재가 정적 검사에서 일치함 | 검증됨 | `tests/migration/test_codex_migration.py` |
 | `refuter` | 통합 | native `code-reviewer` 또는 generic read-only subagent, `superpowers:requesting-code-review`, `superpowers:verification-before-completion` | Stop 훅·상태 파일·반박자 루프를 자동 결합 | native reviewer를 명시적으로 호출하고, type이 없으면 generic read-only subagent에 exact prompt를 제공 | 자동 Stop 루프·판정 상태·project custom-agent 등록을 제거 | 명시적 호출 누락 가능성, 집행력 감소, generic fallback의 역할 preset 부재가 있으며 검토 이력의 자동 연속성도 사라짐 | 의도적 단순화 | native `code-reviewer` smoke PASS와 custom `reviewer`의 `unknown agent_type`을 runtime에서 확인 | 검증됨 | Task 5 native smoke와 project custom-agent 부재 migration 검사 |
@@ -52,8 +53,8 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 
 | 항목 | 상태 | 비고 |
 | --- | --- | --- |
-| Codex 전역 설정 | 비활성 | 저장소 자산 검증과 사용자 별도 승인 전에는 `/home/rkim/.codex/config.toml`을 변경하지 않음 |
-| Codex Rules | 비활성 | 최소 명령 prefix 정책과 실제 영향 범위를 후속 활성화 체크리스트에서 검토 |
+| Codex 전역 설정 | 활성 | `/home/rkim/.codex/config.toml`의 `[features]`에 `plugins = true`를 명시하고 strict config 파싱과 새 세션 skill smoke를 확인 |
+| Codex Rules | 비활성 | 이번 활성화에서는 추가하지 않았으며 향후 변경은 실제 영향 검증과 별도 승인을 거침 |
 | Codex custom commit hook | 제거 | Bash 문자열의 indirect Git execution을 완전 판별할 수 없어 활성화 후보에서 제외 |
 | Codex project custom reviewer | 제거 | repository TOML은 자동 발견되지 않아 두 runtime 경로에서 `unknown agent_type reviewer`를 반환 |
 | Codex read-only reviewer 절차 | 구현됨 | native `code-reviewer` smoke PASS, unavailable 환경은 generic read-only subagent와 exact prompt 사용 |
@@ -62,8 +63,8 @@ Mermaid, 객관식 선택지와 answer key는 제거된 편의 계약이다. 필
 
 | 항목 | 상태 | 근거 |
 | --- | --- | --- |
-| Codex 자산 | 후보 | custom reviewer 파일 부재와 root 호출 계약은 정적 검증됐고 native `code-reviewer` smoke는 PASS |
-| Codex 전환 | 보류 | loader smoke는 통과했고 스킬·actual-diff smoke와 사용자 잔여 차이 수용이 남음 |
+| Codex 자산 | 채택 | root·주요 경로 loader, native reviewer, debug skill, actual-diff smoke가 PASS |
+| Codex 전환 | 활성 | 사용자가 automatic commit-time enforcement 상실을 포함한 잔여 차이를 검토한 뒤 전역 활성화 진행을 승인 |
 | Claude 자산 삭제 | 범위 밖 | 병행 운영 원본을 보존함 |
 | 기본 도구 전환 | 범위 밖 | 사용자 별도 승인 범위임 |
 
@@ -77,5 +78,5 @@ wrapper를 통한 Git 실행을 완전하게 식별할 수 없어 부분 차단�
 
 Codex에서는 `AGENTS.md` 안전 규칙, 명시적으로 호출하는 읽기 전용 reviewer,
 `verification-before-completion`으로 보완한다. reviewer는 automatic commit gate나
-기계 검증을 대신하지 않는다. 자동 집행 상실과 사람 절차 누락 가능성은 잔여 위험이며,
-Task 6 병행 검증과 activation checklist에 미채택 차이로 기록한다.
+기계 검증을 대신하지 않는다. 자동 집행 상실과 사람 절차 누락 가능성은 사용자가
+검토하고 수용한 잔여 위험으로 병행 검증과 activation checklist에 기록한다.
