@@ -30,8 +30,6 @@ flowchart TD
 
 이 결함을 처음 발견한 계기는 `roberta-base` 3-seed 의 EMAIL strict F1 이 크게 갈린 것이었으나, 원장이 그 귀속을 지지하지 않는다. `certified/classifier/en/backbone-bench/` 의 16개 런은 전부 같은 결함을 안고 학습됐는데(`offset_trim=True`, 동일 `data_fingerprint`) 백본별로 결과가 갈린다.
 
-<!-- certified: classifier/en/backbone-bench -->
-
 | 백본 | seed 42 | seed 43 | seed 44 |
 |---|---|---|---|
 | bert_base_cased | 0.9849 | 0.9826 | 0.9855 |
@@ -69,7 +67,7 @@ flowchart TD
 
 - 수정은 `_trim_offset` 한 함수, 3줄이다. 변경 표면을 그 함수로 한정했다.
 - 서버 추론(`src/server/inference.py`)은 `encode_row` 를 거쳐 같은 정렬 경로를 쓰지만, 서버가 지원하는 두 언어는 이 경로를 타지 않는다 — ja 는 `_encode_ja`(slow), vi 는 배포 모델이 PhobertTokenizer 라 `_encode_phobert` 로 간다. 운영 중인 REST API 는 영향을 받지 않는다.
-- en 배포 패키지(`/data/ner/en/`)만 영향권이다. 그 체크포인트는 결함 라벨로 학습돼 새 정렬과 불일치하므로, **재학습 전에는 이 코드와 함께 서비스하면 안 된다.** 서버의 `SUPPORTED_LANGS` 는 현재 `('ja', 'vi')` 라 아직 연결돼 있지 않다.
+- en 배포 패키지(`/data/ner/en/`)만 영향권이다. 그 체크포인트는 결함 라벨로 학습돼 새 정렬과 불일치하므로, **재학습 전에는 이 코드와 함께 서비스하면 안 된다.** 서버의 `SUPPORTED_LANGS` 는 현재 `('ja', 'vi')` 라 아직 연결돼 있지 않다. (#244 가 재학습·재출하로 이 조건을 풀었다.)
 - `tests/ner/labelers/test_ko_locorg_ledger.py::test_live_gold_matches_the_ledger` 가 실패한다. `data/` 의 KO gold 파일 지문이 커밋된 원장과 달라서인데, 이 이슈의 diff 에는 그 gold 도 원장 파일도 없다. develop 의 pytest 경로 수정이 들어오면서 이제야 수집돼 드러난 기존 실패라 손대지 않았다.
 
 ## 결정 로그 (append-only)
@@ -90,8 +88,6 @@ flowchart TD
 
 ### 경계 위반과 왕복 상한
 
-<!-- certified: classifier/en/issue225-offset-audit -->
-
 | 타입 | 수정 전 상한 | 수정 후 상한 |
 |---|---|---|
 | LOC | 0.9395 | 0.9788 |
@@ -108,8 +104,6 @@ en 코퍼스 76,378행 / 엔티티 167,871 전수. 경계 위반 라벨은 80,28
 **위반이 아닌데 라벨을 잃은 토큰도 832개 있다.** 엔티티 라벨을 받은 토큰 수가 81,114개 줄었는데 그중 80,282개가 위반이고 나머지가 이들이다. `Inc.,` 처럼 토크나이저가 문장부호 둘을 한 토큰으로 병합해 그 토큰이 엔티티 종료 경계를 가로지르는 경우다 — 앞 부호는 엔티티 안이고 뒤 부호는 밖이라, 원래 offset 을 돌려받으면 엔티티 밖 char 를 물어 라벨에서 떨어진다. 표면형은 `.,` 811건과 `..` 21건 둘뿐이다. 두 자 어디에서도 디코드된 span 은 그 토큰 앞에서 끝나므로 왕복 복원에는 영향이 없고, 실제로 열 타입 상한이 모두 올랐다.
 
 ### 자 변경 효과
-
-<!-- certified: classifier/en/issue225-ruler-shift -->
 
 | | 수정 전 자 | 수정 후 자 |
 |---|---|---|
@@ -149,7 +143,7 @@ en 회귀 테스트 네 건을 `tests/ner/classifier/test_encode.py` 에 `robert
 ## 후속 작업
 
 - en 배포 모델 재학습·재출하. 지금 패키지는 결함 라벨로 학습돼 새 정렬과 불일치한다.
-- **자 세대를 기록하는 필드 추가.** `ner.validity.comparability` 의 `RULER_FIELDS` 는 `("lang", "data_fingerprint", "kfold", "group_key", "seed", "stratify")` 뿐이라 **정렬 세대를 아예 보지 않는다.** `data_fingerprint` 는 test gold 의 내용 지문이라 이 수정으로 안 바뀌고, `metrics.json` 이 적는 `offset_trim` 은 수정 전후 모두 `True` 인 데다 애초에 비교 판정에 안 쓰인다. 그래서 재학습한 런과 결함 라벨로 학습된 backbone-bench 런을 나란히 놓아도 비교가능성 검사가 "같은 자"로 통과시킨다. 지금은 이 이슈 문서가 그 사실을 적어 두는 것이 유일한 방어이고 집행 주체는 사람뿐이다. 재학습 이슈의 수락 기준에 **정렬 리비전 필드를 `RULER_FIELDS` 에 추가**하는 항목을 넣어야 한다 — 필드를 만들기만 하고 `RULER_FIELDS` 에 넣지 않으면 게이트가 읽지 않아 아무것도 집행되지 않는다.
+- **자 세대를 기록하는 필드 추가.** `ner.validity.comparability` 의 `RULER_FIELDS` 는 `("lang", "data_fingerprint", "kfold", "group_key", "seed", "stratify")` 뿐이라 **정렬 세대를 아예 보지 않는다.** `data_fingerprint` 는 test gold 의 내용 지문이라 이 수정으로 안 바뀌고, `metrics.json` 이 적는 `offset_trim` 은 수정 전후 모두 `True` 인 데다 애초에 비교 판정에 안 쓰인다. 그래서 재학습한 런과 결함 라벨로 학습된 backbone-bench 런을 나란히 놓아도 비교가능성 검사가 "같은 자"로 통과시킨다. 지금은 이 이슈 문서가 그 사실을 적어 두는 것이 유일한 방어이고 집행 주체는 사람뿐이다. 재학습 이슈의 수락 기준에 **정렬 리비전 필드를 `RULER_FIELDS` 에 추가**하는 항목을 넣어야 한다 — 필드를 만들기만 하고 `RULER_FIELDS` 에 넣지 않으면 게이트가 읽지 않아 아무것도 집행되지 않는다. (#244 가 이 항목을 검토하고 **하지 않기로** 했다. 탐지 장치가 원래 문제보다 커져, 자가 바뀌면 그 자로 잰 원장을 지우는 쪽으로 갈음했다. 근거는 `docs/issues/issue-244-en-retrain-redeploy-new-gold.md` §정렬 세대 필드를 안 만드는 이유.)
 - vi·ko 는 다음에 학습할 때 새 정렬이 적용된다. 배포 중인 vi 모델은 PhoBERT 경로라 이 수정과 무관하다.
 
 ## 관련 커밋

@@ -11,15 +11,61 @@
 - 한국어·일본어·베트남어 동일 셋업:
   `docs/reports/{korean,japanese,vietnamese}-bert-classifier-benchmark.md`
 
+## 이 표의 수치가 속한 gold 세대
+
+**바로 아래 §현행 gold 의 `roberta-base` baseline 을 뺀 이 리포트의 모든 수치는
+gold 세대 1 로 잰 것이며 현행 코퍼스로는 재현되지 않는다.** 측정 뒤 정답이 두 번
+바뀌었다.
+
+| 언제 | 무엇이 바뀌었나 | 이 표에 미치는 영향 |
+|---|---|---|
+| 2026-08-26 (#225) | 엔티티 밖 문장부호를 엔티티 안으로 라벨하던 결함을 없앴다 (전수 80,288건) | 같은 예측이 다르게 채점된다. `dataset_fingerprint` 는 안 바뀌므로 비교 유효성 게이트가 이 경계를 못 잡는다 |
+| 2026-08-31 (#236·#239) | 원본 `FAC` 를 전량 `ORG` 로 태우던 것을 표면별로 `ORG`·`LOC`·삭제로 갈랐다 | `LOC` +274 · `ORG` −289 span. `dataset_fingerprint` 가 `39cb0f9e9c16f265` → `258166d6972c8144` 로 바뀌어 새 런과의 비교는 자동 거부된다 |
+
+데이터 경로도 그 사이 `pii_all.jsonl` 에서 `origin.jsonl` 로 개명됐다(#238).
+아래 본문은 측정 당시 표기를 그대로 둔다 — 조건을 사후에 고쳐 적으면 이 표가
+어느 조건에서 나왔는지가 흐려지기 때문이다.
+
+현행 코퍼스의 지문은 `258166d6972c8144` 이고, 파일별 sha256 과 `FAC` 재라벨로
+손댄 span 은 `src/ner/augmenters/ontonotes_en/data/fac_disk_migration_ledger.json`
+에 있다. 그 원장이 디스크의 실물과 어긋나지 않는지는
+`tests/ner/augmenters/ontonotes_en/test_fac_disk_migration_ledger.py` 가 본다.
+
+## 현행 gold 의 `roberta-base` baseline
+
+아래 백본 비교는 gold 세대 1 로 잰 것이라 현행 코퍼스에서 그대로 쓸 수 없다.
+그래서 #244 가 **`roberta-base` 한 종만** 세대 3 gold 로 같은 레시피(epochs 5 ·
+lr 5e-5 · max_length 256 · bf16 · batch 16 · `--group-key orig` · 분할 seed 42)
+로 다시 3-seed 돌려 현행 baseline 을 세웠다. 세 run 모두
+`data_fingerprint = 258166d6972c8144` 다.
+
+<!-- certified: classifier/en/roberta-3seed -->
+
+| 백본 | seed | **NER-5 median** | std | min | max | macro | (참고)PII5 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `roberta-base` | 42·43·44 | **0.8956** | 0.0077 | 0.8884 | 0.9039 | 0.8089 | 0.9476 |
+
+<!-- certified: classifier/en/roberta-3seed -->
+
+| 타입 | PER | LOC | ORG | PROD | EVT |
+|---|---:|---:|---:|---:|---:|
+| median strict F1 | 0.9486 | 0.9145 | 0.8574 | 0.5794 | 0.7615 |
+
+**이 값과 아래 세대 1 표를 대소로 읽지 않는다.** gold 가 두 번 바뀌어 재는 자가
+다르므로, 두 수치는 같은 축 위에 있지 않다. 세대 3 에서 백본 순위가 어떻게
+되는지는 #244 가 `roberta-base` 만 재서 측정하지 않았고, `roberta-base` 가
+현행 gold 에서도 최선이라는 것은 증거 없는 승계 가정으로 남아 있다.
+
+천장이 여전히 **PROD·EVT** 에 있다는 그림은 세대 1 과 같다.
+
 ## 요약
 
 - **baseline = `roberta-base`** — NER-5 strict micro-F1 median **0.8795**,
-  macro **0.8106**.
+  macro **0.8106**. 채택을 정한 것은 macro 와 저빈도 타입이고, 근거 사슬은
+  §채택 결론에 있다.
 - **micro 단독으로는 1위를 못 가른다.** 상위 세 후보가 0.23pp 안에 몰려
   있는데 같은 후보의 seed 표준편차가 0.40~0.51pp 다. 순위 간격보다 한 후보
-  안의 흔들림이 크므로, micro 만 보고 우열을 말할 수 없다. 갈림은 macro 와
-  저빈도 타입에서 났고 `roberta-base` 가 **macro 최고 · PROD 최고 · std 최소**
-  로 셋 다 앞선다.
+  안의 흔들림이 크므로, micro 만 보고 우열을 말할 수 없다.
 - **단일 seed 였다면 다른 결론을 적었다.** seed 42 만 보면 순위가
   `bert-base-cased` > `xlm-roberta-base` > `ModernBERT-base` > `roberta-base`
   인데, median 으로는 `xlm-roberta-base` 가 최하위로 내려가고 `roberta-base`
@@ -84,20 +130,16 @@ DAT 만 ~0.85(날짜 표현 다양성). 백본 변별력이 작아 **선정 기�
 
 ## NER-5 결과 (3-seed median, strict)
 
-<!-- certified: classifier/en/backbone-bench -->
-
 | 모델 | 계열 | 파라미터 | **median** | std | min | max | macro | (참고)PII5 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| **`roberta-base`** | mono | 124M | **0.8795** | **0.0051** | 0.8734 | 0.8836 | **0.8106** | 0.9462 |
-| `bert-base-cased` | mono | 108M | 0.8791 | 0.0040 | 0.8751 | 0.8831 | 0.7899 | 0.9405 |
+| **`roberta-base`** | mono | 124M | **0.8795** | 0.0051 | 0.8734 | 0.8836 | **0.8106** | 0.9462 |
+| `bert-base-cased` | mono | 108M | 0.8791 | **0.0040** | 0.8751 | 0.8831 | 0.7899 | 0.9405 |
 | `answerdotai/ModernBERT-base` | mono | 150M | 0.8772 | 0.0048 | 0.8692 | 0.8778 | 0.8001 | 0.9370 |
 | `google/electra-base-discriminator` | mono | 109M | 0.8656 | 0.0109 | 0.8475 | 0.8673 | 0.7718 | 0.9475 |
 | `xlm-roberta-base` | **multi** | 278M | 0.8610 | 0.0129 | 0.8577 | 0.8815 | 0.7835 | 0.9386 |
 | ~~`microsoft/deberta-v3-base`~~ | mono | 184M | — | — | — | — | **학습불가** | — |
 
 ### per-entity strict F1 (NER-5, median)
-
-<!-- certified: classifier/en/backbone-bench -->
 
 | 모델 | PER | LOC | ORG | PROD | EVT |
 |---|---:|---:|---:|---:|---:|
@@ -113,8 +155,6 @@ DAT 만 ~0.85(날짜 표현 다양성). 백본 변별력이 작아 **선정 기�
 ### baseline `roberta-base` 전체 per-entity P/R/F1 (10종)
 
 median seed(44)의 값이다. overall-10 F1 0.9221 (P 0.9049 / R 0.9399).
-
-<!-- certified: classifier/en/backbone-bench/roberta_base_seed44 -->
 
 | Entity | support | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|
@@ -136,8 +176,6 @@ median seed(44)의 값이다. overall-10 F1 0.9221 (P 0.9049 / R 0.9399).
 ## seed 하나로는 순위를 못 정한다
 
 ### 무엇이 흔들리나
-
-<!-- certified: classifier/en/backbone-bench -->
 
 | 모델 | seed 42 | seed 43 | seed 44 | median | 폭 |
 |---|---:|---:|---:|---:|---:|
@@ -294,6 +332,48 @@ F1 은 1 epoch 짜리라 순위 판정에 쓰지 않았고 어디에도 인용�
 돌지만 추론은 순전파만 하므로, 이 표의 배수가 추론 지연에 그대로 옮겨가지
 않는다. baseline 선정은 이 표를 쓰지 않았다 — 갈림은 macro 와 PROD 에서 났다.
 
+## 채택 결론
+
+**세대 1 백본 비교가 `roberta-base` 를 고른 근거는 macro F1 과 PROD F1 둘이다.**
+micro 와 seed 안정성은 근거가 아니다. 아래 값은 모두 이 문서의 세대 1 표에서
+옮긴 것이고, 그 표의 원장은 #244 가 지워 대조 상대가 없다(§산출물 위치).
+
+| 지표 | `roberta-base` | 2위 | 채택 근거 |
+|---|---:|---:|---|
+| micro median | 0.8795 | 0.8791 (`bert-base-cased`) | ✕ 후보를 못 가른다 |
+| **macro median** | **0.8106** | 0.8001 (`ModernBERT-base`) | ○ |
+| **PROD** | **0.640** | 0.607 (`ModernBERT-base`) | ○ |
+| seed std | 0.0051 | 0.0040 (`bert-base-cased`) | ✕ 다섯 중 3위 |
+
+**micro 를 근거로 쓸 수 없는 것은 후보 사이의 간격이 한 후보 안의 흔들림보다
+좁기 때문이다.** 상위 세 후보가 0.23pp 안에 들어 있는데, 모델은 그대로 두고
+seed 만 바꿔 돌린 값의 표준편차가 0.40~0.51pp 다. 눈금 간격이 자의 떨림보다
+좁으면 그 자로 잰 순위는 실력이 아니라 추첨 결과다(§seed 하나로는 순위를 못
+정한다).
+
+**갈린 자리는 저빈도 타입 하나로 모인다.** macro 와 PROD 는 따로 센 두 근거처럼
+보이지만 실은 겹친다 — 2위 `ModernBERT-base` 와의 타입별 median 차를 다섯 개
+모두 더하면 4.3pp 인데 그중 3.3pp 가 PROD 한 타입에서 나온다. macro 가 micro 와
+다른 답을 내는 이유도 같다. PROD·EVT 는 합쳐서 test support 의 4.9%(319/6,488
+span)뿐이라 span 을 한 통에 붓는 micro 에서는 묻히고, 타입마다 5분의 1 씩 주는
+macro 에서는 40%를 차지한다. 즉 채택 근거는 **저빈도 타입을 덜 놓친다** 한
+문장으로 줄어든다.
+
+**seed 안정성은 채택 근거가 아니다.** `roberta-base` 의 std 0.0051 은 다섯 후보
+중 3위이고, seed 폭 1.02pp 도 `bert-base-cased`(0.80pp)·`ModernBERT-base`(0.86pp)
+보다 크다. 흔들림이 뚜렷하게 큰 것은 `electra-base`(1.98pp)와
+`xlm-roberta-base`(2.38pp) 둘뿐이라, 안정성은 이 둘을 떨어뜨리는 데만 쓰였고
+1·2·3위를 가르는 데는 쓰이지 않았다.
+
+**이 근거는 세대 3 에서 다시 확인되지 않았다.** #244 가 현행 gold 로 다시 돌린
+것은 `roberta-base` 한 종뿐이라, 채택을 정했던 macro·PROD 우위가 현행 코퍼스에서도
+유지되는지는 재지 않았다. 그래서 이후 en 분류기 변경의 회귀 비교는 이 표가 아니라
+§현행 gold 의 `roberta-base` baseline 값과 나란히 놓는다.
+
+**올려야 할 곳은 백본이 아니라 PROD·EVT 의 데이터·증강이다.** 세대 1 에서 1위와
+최하위의 micro 차가 1.85pp 인 반면 PROD 한 타입의 후보 간 차가 12.7pp 였고, 세대
+3 에서도 가장 낮은 타입은 PROD(0.5794)다.
+
 ## 한계
 
 - **단일 split** — 분할은 하나이고 seed 만 셋이다. 따라서 std 가 재는 것은
@@ -351,7 +431,8 @@ CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
 
 | 무엇 | 경로 |
 |---|---|
-| 원장(인용 근거) | `certified/classifier/en/backbone-bench/` — run 16개 `metrics.json` + `median_summary.json` |
+| 원장(인용 근거) | **없다** — 세대 1 원장 `certified/classifier/en/backbone-bench/` 는 #244 가 지웠다. 아래 백본 비교표는 대조 상대가 없는 기록이다 |
+| 현행 baseline 원장 | `certified/classifier/en/roberta-3seed/` — §현행 gold 의 `roberta-base` baseline 이 인용하는 곳 |
 | scratch | `results/classifier/en_bench/` (gitignore·휘발) |
 | 학습시간 재측 | `results/classifier/en_bench/time_1ep/` (gitignore·휘발) |
 | 병합 도구 | `src/ner/augmenters/ontonotes_en/merge_splits.py` |
