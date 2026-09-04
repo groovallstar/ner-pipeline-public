@@ -10,8 +10,12 @@
 표를 되짚기 위해서이고, 표가 gold 를 정한다. 어휘를 고쳐도 gold 는 안
 움직인다 — 어긋나면 이 파일이 붉어질 뿐이다.
 
-코퍼스 없이도 도는 검사와 코퍼스가 있어야 도는 검사를 가른다. `data/` 는
-gitignore 라 클론 직후에는 원본이 없고, 그때도 표가 반증되어야 한다.
+**원본을 읽던 검사는 내렸다.** `data/ontonotes_en/` 이 다른 언어 폴더와
+같은 구성으로 정리되며 `raw/` 가 디스크에서 내려갔고, 표와 원본을 양방향으로
+맞춰 보던 두 검사도 함께 지웠다 — 원본이 없으면 언제나 skip 이라 통과 수만
+세어지고 무엇이 반증되는지가 흐려진다. 대신 표가 스스로 반증되는 몫만 남는다:
+아래 골든 수(`GOLDEN_SOURCE_FAC`)는 원본에서 직접 센 값을 손으로 박아 둔
+것이라 표를 고치면 여기서 먼저 붉어진다.
 """
 import json
 import re
@@ -19,20 +23,11 @@ from pathlib import Path
 
 import pytest
 
-from ner.augmenters.ontonotes_en.convert import decode_bio, load_id2label
-
 _ROOT = Path(__file__).resolve().parents[4]
 TABLE_PATH = (
     _ROOT / 'src' / 'ner' / 'augmenters' / 'ontonotes_en'
     / 'data' / 'fac_labels.json'
 )
-RAW_DIR = _ROOT / 'data' / 'ontonotes_en' / 'raw'
-SPLIT_FILES = {
-    'train': ['train00.json', 'train01.json', 'train02.json', 'train03.json'],
-    'valid': ['valid.json'],
-    'test': ['test.json'],
-}
-
 # 원본 태그에서 직접 센 값 — 매핑·표와 독립이라 표가 바뀌어도 안 움직인다.
 GOLDEN_SOURCE_FAC = {'train': 860, 'valid': 115, 'test': 135}
 
@@ -136,7 +131,6 @@ def by_surface(table):
     return {e['surface']: e for e in table['entries']}
 
 
-# ── 코퍼스 없이 도는 검사 ─────────────────────────────────────────────
 
 def test_table_declares_its_criterion_and_population(table):
     """표가 자기 판정 기준과 모집단을 문장으로 갖는다."""
@@ -304,48 +298,3 @@ def test_separate_entity_surfaces_are_listed_with_their_verdict(
     for x in listed:
         assert x['why'].strip(), x
         assert by_surface[x['surface']]['verdict'] == x['verdict'], x
-
-
-# ── 코퍼스가 있어야 도는 검사 ─────────────────────────────────────────
-
-@pytest.fixture(scope='module')
-def source_surfaces():
-    if not RAW_DIR.exists():
-        pytest.skip(f'source corpus not present at {RAW_DIR}')
-    id2label = load_id2label(RAW_DIR / 'label.json')
-    found: dict[str, dict[str, int]] = {}
-    for split, files in SPLIT_FILES.items():
-        for name in files:
-            with (RAW_DIR / name).open(encoding='utf-8') as fh:
-                for line in fh:
-                    if not line.strip():
-                        continue
-                    row = json.loads(line)
-                    tokens = row['tokens']
-                    for start, end, src in decode_bio(row['tags'], id2label):
-                        if src != 'FAC':
-                            continue
-                        surface = ' '.join(tokens[start:end + 1])
-                        bucket = found.setdefault(
-                            surface, {'train': 0, 'valid': 0, 'test': 0},
-                        )
-                        bucket[split] += 1
-    return found
-
-
-def test_table_covers_the_corpus_both_ways(table, source_surfaces):
-    """표와 원본이 양쪽 방향으로 맞는다.
-
-    한쪽만 보면 죽은 줄을 놓친다 — 표에만 있는 이름은 원본 스냅샷이
-    바뀌었거나 표면 생성 규칙이 갈렸다는 신호다.
-    """
-    in_table = {e['surface'] for e in table['entries']}
-    in_source = set(source_surfaces)
-    assert not (in_source - in_table), sorted(in_source - in_table)[:20]
-    assert not (in_table - in_source), sorted(in_table - in_source)[:20]
-
-
-def test_inventory_matches_the_corpus(table, source_surfaces):
-    """표에 적힌 등장 수가 원본에서 다시 센 값과 같다."""
-    for e in table['entries']:
-        assert e['occurrences'] == source_surfaces[e['surface']], e['surface']
