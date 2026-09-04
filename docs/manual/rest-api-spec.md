@@ -103,7 +103,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 |---|---|---|---|
 | `text` | string | 택일 | 단일 텍스트. `texts`와 상호배타 |
 | `texts` | string[] | 택일 | 배치 텍스트. `text`와 상호배타 |
-| `lang` | string | 선택 | `ja`\|`vi`. 생략 시 텍스트별 자동 감지. 지원 외 값 → 400 |
+| `lang` | string | 선택 | `ja`\|`ko`\|`vi`. 생략 시 텍스트별 자동 감지. 지원 외 값 → 400 |
 
 신뢰도 임계값은 모델이 임계값 파일을 로드한 경우 **자동 적용**된다(요청
 파라미터 없음). 임계값 파일이 없는 배포·언어는 raw span을 그대로 반환한다.
@@ -131,6 +131,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 {
   "results": [
     {"lang": "ja", "entities": [/* ... */]},
+    {"lang": "ko", "entities": [/* ... */]},
     {"lang": "vi", "entities": [/* ... */]}
   ]
 }
@@ -188,7 +189,8 @@ language-detection-benchmark.md`.
   "status": "ok",           // 요청된 모든 언어가 loaded면 "ok", 아니면 "degraded"
   "langs": {
     "ja": {"loaded": true,  "thresholds": true},
-    "vi": {"loaded": true,  "thresholds": false}
+    "vi": {"loaded": true,  "thresholds": false},
+    "ko": {"loaded": true,  "thresholds": false}
   }
 }
 ```
@@ -206,7 +208,7 @@ language-detection-benchmark.md`.
 브라우저가 CORS 없이 `POST /v1/ner`를 직접 호출한다 — 별도 정적 호스팅·빌드
 스텝·신규 의존성이 없다(`python -m server` 하나로 API + UI 동시 제공).
 
-- **입력**: 텍스트 1건 + 언어 셀렉터(`자동감지`/`ja`/`vi`). 수동 선택 시
+- **입력**: 텍스트 1건 + 언어 셀렉터(`자동감지`/`ja`/`ko`/`vi`). 수동 선택 시
   요청에 `lang`을 실어 자동감지를 우회한다(무부호 vi·romaji ja 대응).
 - **출력**: 추출 개체를 원문 위 라벨별 색상 하이라이트로 표시(canonical 10종
   색상 맵 + 범례). 표시 텍스트를 **NFC 정규화**해 하이라이트 offset이 서버
@@ -385,8 +387,9 @@ curl -s -X POST localhost:8008/v1/ner \
 # 배치(혼합 언어, 텍스트별 감지)
 curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
-  -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
-# → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
+  -d '{"texts":["トヨタは日本の会社です。","삼성전자는 수원에 있다.","Hà Nội là thủ đô."]}'
+# → {"results":[{"lang":"ja","entities":[...]},{"lang":"ko","entities":[...]},
+#               {"lang":"vi","entities":[...]}]}
 
 # 언어 명시(자동 감지 대신 직접 지정)
 curl -s -X POST 'localhost:8008/v1/ner' \

@@ -182,8 +182,8 @@ curl -s -X POST 'http://{host}:{port}/v1/ner' \
 
 # 400 — 지원하지 않는 lang 명시
 curl -s -X POST 'http://{host}:{port}/v1/ner' \
-  -H 'Content-Type: application/json' -d '{"text":"a","lang":"ko"}'
-# → {"error":{"status":400,"message":"unsupported lang 'ko'"}}
+  -H 'Content-Type: application/json' -d '{"text":"a","lang":"en"}'
+# → {"error":{"status":400,"message":"unsupported lang 'en'"}}
 
 # 404 — 존재하지 않는 경로
 curl -s -X POST 'http://{host}:{port}/v1/nonexistent' \

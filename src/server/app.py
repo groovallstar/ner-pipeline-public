@@ -298,7 +298,7 @@ def create_app(registry, config: Optional[ServerConfig] = None,
         추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
         max_concurrency 로 묶고 과부하(큐/타임아웃 초과)는 429 로 거절한다.
         검증·언어감지는 guard 밖에서 빠르게 처리하고, 자동감지 `unsupported`
-        (ja·vi 신호 부재)는 모델을 호출하지 않고 200 으로 빈 결과를 준다.
+        (ja·ko·vi 신호 부재)는 모델을 호출하지 않고 200 으로 빈 결과를 준다.
         배치는 지원 언어 항목만 언어별 forward 로 묶고(predict_batch) 미지원은
         빈 결과로 둬 입력 순서·lang 1:1 을 보존한다(부분 성공).
 
