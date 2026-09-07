@@ -85,3 +85,38 @@ def test_sentence_entities_stay_within_chunks():
         e = s + len(surface)
         assert any(cs <= s and e <= ce for cs, ce in spans), \
             f'entity {surface!r} straddles a chunk boundary'
+
+
+class ByteLevelTok:
+    """공백도 토큰으로 세는 가짜 fast 토크나이저 — ByteLevel BPE 를 모사.
+
+    en 이 쓰는 RobertaTokenizer 가 이쪽이다. 나머지 세 언어의 토크나이저는
+    공백만 있는 텍스트를 0 토큰으로 세지만, ByteLevel BPE 는 공백 하나를 토큰
+    하나로 센다(실측: 공백 2000 자 = 2000 토큰). 그래서 이 계열에서만 "내용은
+    없는데 토큰 예산을 넘는" 입력이 성립한다.
+    """
+
+    is_fast = True
+
+    def __call__(self, text, add_special_tokens=False):
+        return {'input_ids': list(text)}
+
+
+def test_whitespace_only_overlong_text_yields_no_chunks():
+    """공백뿐인데 예산을 넘는 입력은 청크가 하나도 안 나온다.
+
+    `_sentences` 가 공백뿐인 조각을 버리기 때문이다. 짧은 입력은 예산 안이라
+    통째로 한 청크가 되지만, 예산을 넘으면 분할 경로로 내려가 전부 버려진다.
+    호출 쪽은 빈 청크 리스트를 받을 수 있어야 한다 — `LangModel._infer_encoded`
+    의 빈 `feats` 가드가 그래서 있다(없으면 forward 가 IndexError 로 터진다).
+    """
+    tok = ByteLevelTok()
+    assert split_for_length(' ' * 2000, tok, max_length=256) == []
+    assert split_for_length('\t' * 2000, tok, max_length=256) == []
+    assert split_for_length('\n' * 2000, tok, max_length=256) == []
+
+
+def test_whitespace_only_short_text_still_yields_one_chunk():
+    """같은 공백 입력도 예산 안이면 통째로 한 청크다(위 경로와의 경계)."""
+    tok = ByteLevelTok()
+    assert split_for_length('   ', tok, max_length=256) == [('   ', 0)]

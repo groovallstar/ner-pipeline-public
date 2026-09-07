@@ -12,6 +12,7 @@ score}` — `.jsonl` 데이터 관례와 일치해 API 결과를 파이프라인
 
 import logging
 import os
+import threading
 import unicodedata
 from typing import Dict, List, Optional, Tuple
 
@@ -91,6 +92,9 @@ class LangModel:
         self.thresholds = (load_thresholds(thresholds_path)
                            if os.path.exists(thresholds_path) else {})
         self.has_thresholds = bool(self.thresholds)
+        # 토크나이저 접근을 직렬화하는 잠금 — 사유는 `_tokenize`. 인스턴스마다
+        # 따로라 언어끼리는 경합하지 않는다.
+        self._tok_lock = threading.Lock()
 
     def _encode_chunks(self, chunks: List[Tuple[str, int]]):
         """chunks → (feats, offs_list, bases) — 토큰 인코딩(CPU)."""
@@ -103,6 +107,29 @@ class LangModel:
             offs_list.append(offs)
             bases.append(base)
         return feats, offs_list, bases
+
+    def _tokenize(self, text: str):
+        """text → (feats, offs_list, bases) — 토크나이저 접근은 직렬화한다.
+
+        HF fast 토크나이저는 Rust 객체를 `RefCell` 로 감싸고 있고, 인코딩은
+        `no_truncation()` 처럼 그 객체의 상태를 **바꾸는** 호출을 지난다. 서버는
+        추론을 `run_in_threadpool` 로 돌리므로 최대 `max_concurrency` 스레드가
+        언어당 하나뿐인 이 토크나이저에 동시에 들어오는데, 그러면 두 번째
+        borrow 가 `RuntimeError: Already borrowed` 로 터져 요청이 500 이 된다
+        (실측: 동시 2 요청만으로 ko·en 의 40~50% 가 실패).
+
+        분할(`split_for_length`)도 토큰 수를 세느라 같은 객체를 만지므로 인코딩과
+        한 잠금 안에 둔다. slow 토크나이저(ja)는 이 경로가 아니지만 함께 잠근다 —
+        MeCab 은 스레드 안전이 검증된 바 없고, `is_fast` 로 갈라 두면 잠기는
+        언어와 아닌 언어가 조용히 어긋난다. 잠금이 인스턴스마다 따로라 ja 를
+        잠가도 다른 언어의 처리량에는 닿지 않는다.
+
+        forward 는 잠금 밖이다 — GPU 구간이 길어 여기까지 직렬화하면 동시성
+        상한이 무의미해진다.
+        """
+        with self._tok_lock:
+            chunks = split_for_length(text, self.tokenizer, self.max_length)
+            return self._encode_chunks(chunks)
 
     def _forward_feats(self, feats: List[dict]):
         """feats(list) → (pred_ids, confs) numpy [N, max_length].
@@ -137,14 +164,15 @@ class LangModel:
             spans.append(shifted)
         return spans
 
-    def _infer_chunks(self, chunks: List[Tuple[str, int]]) -> List[dict]:
-        """여러 (substring, base_offset) chunk 를 한 forward 로 묶어 추론하고
-        글로벌 offset 내부 span({type,start,end,score})으로 병합한다.
+    def _infer_encoded(self, feats: List[dict], offs_list, bases) -> List[dict]:
+        """인코딩된 chunk 들을 한 forward 로 묶어 추론하고 글로벌 offset 내부
+        span({type,start,end,score})으로 병합한다 — 토크나이저를 만지지 않는다.
 
         chunk 1개면 배치 차원 1 로 단건 추론과 동일한 결과를 내고
         (behavior-invariant), 장문에서만 GPU 가 chunk 들을 병렬 처리한다.
         """
-        feats, offs_list, bases = self._encode_chunks(chunks)
+        if not feats:
+            return []
         pred_np, conf_np = self._forward_feats(feats)
         spans: List[dict] = []
         for i, (offs, base) in enumerate(zip(offs_list, bases)):
@@ -166,8 +194,7 @@ class LangModel:
         texts = [unicodedata.normalize('NFC', t) for t in texts]
         feats, offs_list, bases, owners = [], [], [], []
         for ti, text in enumerate(texts):
-            chunks = split_for_length(text, self.tokenizer, self.max_length)
-            f, o, b = self._encode_chunks(chunks)
+            f, o, b = self._tokenize(text)
             feats.extend(f)
             offs_list.extend(o)
             bases.extend(b)
@@ -197,8 +224,7 @@ class LangModel:
         (offset 은 정규화된 텍스트 기준).
         """
         text = unicodedata.normalize('NFC', text)
-        chunks = split_for_length(text, self.tokenizer, self.max_length)
-        spans = self._infer_chunks(chunks)
+        spans = self._infer_encoded(*self._tokenize(text))
         # 임계값은 canonical 변환 전 내부 span({type,...})에 적용한다 —
         # confidence_threshold.apply_thresholds 가 type 필드로 필터하며,
         # 이는 학습-시점 eval 경로와 동일하다(parity 보장). decode 가 동일
