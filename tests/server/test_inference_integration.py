@@ -18,6 +18,7 @@ ja 만 `_load_tokenizer` 가 이름으로 특례 두고, vi 는 fast 를 요청�
 import json
 import os
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -657,3 +658,127 @@ def test_en_nfd_input_matches_nfc():
            for s in model.predict(unicodedata.normalize('NFD', text))]
     assert nfc == nfd                        # 정규화로 두 형태가 일치
     assert nfc, 'expected at least one entity'
+
+
+# ---------- 동시 추론 (실모델) ----------
+
+_CONCURRENCY_TEXTS = {
+    'ja': '田中さんは東京の株式会社ソニーで働いています。',
+    'vi': 'Nguyen Van A lam viec tai cong ty Samsung o Ha Noi.',
+    'ko': '김철수는 서울에 있는 삼성전자에서 일한다.',
+    'en': 'John Smith works at Microsoft in Seattle.',
+}
+
+
+def _assert_concurrent_matches_sequential(lang, model_dir):
+    """`max_concurrency` 만큼 동시에 predict 해도 예외 0 · 순차 결과와 일치.
+
+    서버가 추론을 `run_in_threadpool` 로 돌리므로 언어당 하나뿐인 토크나이저에
+    여러 스레드가 동시에 들어온다. fast 토크나이저는 그때 `Already borrowed`
+    로 터졌고(실측: 동시 2 요청에 ko·en 의 40~50% 가 500), `LangModel._tokenize`
+    의 잠금이 그걸 막는다. 예외뿐 아니라 span 동일성까지 보는 것은 조용한
+    오염(잘못된 토큰화가 200 으로 나가는 경우)을 배제하기 위해서다.
+
+    `test_tokenizer_lock.py` 가 같은 불변식을 stub 으로 결정적으로 고정한다 —
+    여기는 실제 HF 토크나이저로 그 처방이 듣는지 확인하는 겹이다.
+    """
+    model = LangModel(lang, model_dir, _CONFIG.thresholds_path(lang),
+                      _CONFIG.max_length)
+    text = _CONCURRENCY_TEXTS[lang]
+    expected = model.predict(text)
+
+    n = ServerConfig().max_concurrency
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        futures = [ex.submit(model.predict, text) for _ in range(n)]
+        errors, results = [], []
+        for f in futures:
+            try:
+                results.append(f.result())
+            except Exception as exc:            # noqa: BLE001 — 수집이 목적
+                errors.append(repr(exc))
+
+    assert errors == [], f'{lang}: 동시 추론에서 예외 {len(errors)}건 — {errors[:2]}'
+    assert len(results) == n
+    for got in results:
+        assert got == expected, f'{lang}: 동시 결과가 순차와 다르다'
+
+
+@pytest.mark.skipif(not os.path.isdir(_JA_DIR),
+                    reason=f'ja model dir not present: {_JA_DIR}')
+def test_ja_concurrent_predict_matches_sequential():
+    """ja(slow 토크나이저)도 동시 추론에서 예외 0 · 순차와 일치."""
+    _assert_concurrent_matches_sequential('ja', _JA_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_VI_DIR),
+                    reason=f'vi model dir not present: {_VI_DIR}')
+def test_vi_concurrent_predict_matches_sequential():
+    """vi(PhoBERT)도 동시 추론에서 예외 0 · 순차와 일치."""
+    _assert_concurrent_matches_sequential('vi', _VI_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_KO_DIR),
+                    reason=f'ko model dir not present: {_KO_DIR}')
+def test_ko_concurrent_predict_matches_sequential():
+    """ko(fast) — 잠금 없이는 여기서 `Already borrowed` 가 났다."""
+    _assert_concurrent_matches_sequential('ko', _KO_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_concurrent_predict_matches_sequential():
+    """en(roberta-base fast) — 잠금 없이는 여기서 `Already borrowed` 가 났다."""
+    _assert_concurrent_matches_sequential('en', _EN_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_concurrent_predict_many_matches_sequential():
+    """배치 경로(`predict_many`)도 같은 토크나이저를 지나므로 함께 본다.
+
+    `/v1/ner` 은 `text`(단건)와 `texts`(배치)를 한 엔드포인트로 받고, 배치는
+    `predict_many` 로 간다. 단건만 고치고 배치를 두면 절반만 낫는다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    texts = [_CONCURRENCY_TEXTS['en'], 'Acme Corp opened an office in Paris.']
+    expected = model.predict_many(texts)
+
+    n = ServerConfig().max_concurrency
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        futures = [ex.submit(model.predict_many, texts) for _ in range(n)]
+        errors, results = [], []
+        for f in futures:
+            try:
+                results.append(f.result())
+            except Exception as exc:            # noqa: BLE001 — 수집이 목적
+                errors.append(repr(exc))
+
+    assert errors == [], f'배치 동시 추론에서 예외 {len(errors)}건 — {errors[:2]}'
+    for got in results:
+        assert got == expected
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_whitespace_only_overlong_input_returns_empty():
+    """공백뿐인 장문이 예외 없이 빈 결과를 낸다 — en 전용 경로다.
+
+    en 의 RobertaTokenizer 는 ByteLevel BPE 라 공백 하나가 토큰 하나다(실측:
+    공백 2000 자 = 2000 토큰). 그래서 토큰 예산을 넘고, `split_for_length` 는
+    분할 경로에서 공백뿐인 조각을 전부 버려 **청크를 하나도 안 돌려준다**.
+    나머지 세 언어는 같은 입력을 0 토큰으로 세 예산 안에 들어가 이 경로가
+    없다.
+
+    `LangModel._infer_encoded` 의 빈 `feats` 가드가 여기를 받는다. 가드를
+    지우면 `_forward_feats([])` 가 `IndexError` 로 터져 요청이 500 이 된다 —
+    토크나이저 잠금과는 별개인 두 번째 500 경로이며, `lang='en'` 을 명시하면
+    `max_chars` 안이라 API 로도 닿는다(자동 감지는 라틴 글자가 없어
+    `unsupported` 로 먼저 빠진다).
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    for text in (' ' * 2000, '\t' * 2000, '\n' * 2000):
+        assert model.predict(text) == []
+    assert model.predict_many([' ' * 2000, 'John Smith works at Microsoft.']) \
+        == [[], model.predict('John Smith works at Microsoft.')]
