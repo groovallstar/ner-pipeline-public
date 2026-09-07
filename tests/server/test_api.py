@@ -4,17 +4,25 @@
 lang 에코·감지·에러·인증·헬스)만 검증한다.
 """
 
+import re
+
 from fastapi.testclient import TestClient
 
 from server.app import create_app
 from server.config import SUPPORTED_LANGS, ServerConfig
 from server.inference import ModelUnavailable
 
+# 미지원 언어 픽스처 — 실재하되 지원 계획이 없는 코드. 리터럴을 파일 곳곳에
+# 흩어 두면 언어를 늘릴 때 조용히 뜻을 잃으므로 한 곳에 모으고, 전제를 이
+# 파일이 스스로 단언한다.
+_UNSUPPORTED_LANG = 'th'
+assert _UNSUPPORTED_LANG not in SUPPORTED_LANGS
+
 
 class StubRegistry:
     """결정적 stub — 첫 단어를 PER span 으로 반환(순서·offset 검증)."""
 
-    def __init__(self, langs=('ja', 'vi', 'ko'), unavailable=()):
+    def __init__(self, langs=('ja', 'vi', 'ko', 'en'), unavailable=()):
         self._langs = langs
         self._unavailable = set(unavailable)
 
@@ -117,22 +125,33 @@ def test_ko_explicit_lang_accepted():
     assert r.json()['entities'][0]['text'] == '김민준'
 
 
-def test_batch_mixes_three_langs_in_order():
-    """ja·ko·vi 혼합 배치가 언어별로 갈려도 입력 순서·lang 이 1:1."""
+def test_batch_mixes_four_langs_in_order():
+    """ja·ko·vi·en 혼합 배치가 언어별로 갈려도 입력 순서·lang 이 1:1."""
     r = _client().post('/v1/ner', json={'texts': [
         'テスト x',      # ja (가나)
         '김민준 y',      # ko (한글)
         'Hà Nội z',      # vi (dot-below)
+        'Alice w',       # en (라틴 폴백)
     ]})
     results = r.json()['results']
-    assert [it['lang'] for it in results] == ['ja', 'ko', 'vi']
+    assert [it['lang'] for it in results] == ['ja', 'ko', 'vi', 'en']
     assert [it['entities'][0]['text'] for it in results] == [
-        'テスト', '김민준', 'Hà']
+        'テスト', '김민준', 'Hà', 'Alice']
+
+
+def test_en_explicit_lang_accepted():
+    """명시 lang:'en' 이 200 으로 받아들여지고 lang 을 그대로 에코한다."""
+    r = _client().post('/v1/ner', json={'text': 'Alice went to Paris.',
+                                        'lang': 'en'})
+    assert r.status_code == 200
+    body = r.json()
+    assert body['lang'] == 'en'
+    assert body['entities'][0]['text'] == 'Alice'
 
 
 def test_unsupported_autodetect_single():
     """자동감지 미지원 → 200 + {lang:'unsupported', entities:[]} (에러 아님)."""
-    r = _client().post('/v1/ner', json={'text': 'Bonjour à tous'})
+    r = _client().post('/v1/ner', json={'text': '東京都千代田区'})
     assert r.status_code == 200
     assert r.json() == {'lang': 'unsupported', 'entities': []}
 
@@ -144,7 +163,7 @@ def test_unsupported_bypasses_model_predict():
             raise AssertionError('predict called for unsupported input')
 
     r = _client(registry=_Raising()).post(
-        '/v1/ner', json={'text': 'hello world'})
+        '/v1/ner', json={'text': '東京都千代田区'})
     assert r.status_code == 200
     assert r.json() == {'lang': 'unsupported', 'entities': []}
 
@@ -152,9 +171,9 @@ def test_unsupported_bypasses_model_predict():
 def test_batch_per_item_partial_unsupported():
     """배치 부분 성공 — 미지원 항목은 빈 결과, 순서·lang 1:1 보존."""
     r = _client().post('/v1/ner', json={'texts': [
-        'テスト x',     # ja
-        'hello world',  # unsupported
-        'Hà Nội y',     # vi (dot-below ộ)
+        'テスト x',       # ja
+        '東京都千代田区',  # unsupported (한자만 — 라틴 글자도 없다)
+        'Hà Nội y',       # vi (dot-below ộ)
     ]})
     results = r.json()['results']
     assert [it['lang'] for it in results] == ['ja', 'unsupported', 'vi']
@@ -164,8 +183,9 @@ def test_batch_per_item_partial_unsupported():
 
 
 def test_explicit_unsupported_lang_still_400():
-    """명시 lang 이 미지원(en)이면 자동감지와 달리 400(클라이언트 계약)."""
-    r = _client().post('/v1/ner', json={'text': 'Hà Nội', 'lang': 'en'})
+    """명시 lang 이 미지원이면 자동감지와 달리 400(클라이언트 계약)."""
+    r = _client().post('/v1/ner',
+                       json={'text': 'Hà Nội', 'lang': _UNSUPPORTED_LANG})
     assert r.status_code == 400
 
 
@@ -182,7 +202,8 @@ def test_both_text_and_texts_400():
 
 
 def test_invalid_lang_400():
-    r = _client().post('/v1/ner', json={'text': 'a', 'lang': 'en'})
+    r = _client().post('/v1/ner',
+                       json={'text': 'a', 'lang': _UNSUPPORTED_LANG})
     assert r.status_code == 400
     assert r.json()['error']['status'] == 400
 
@@ -276,7 +297,7 @@ def test_health_shape():
     assert r.status_code == 200
     body = r.json()
     assert body['status'] == 'ok'
-    assert set(body['langs']) == {'ja', 'vi', 'ko'}
+    assert set(body['langs']) == set(SUPPORTED_LANGS)
 
 
 def test_health_no_auth_required():
@@ -293,10 +314,38 @@ def test_ui_page_served():
     assert r.headers['content-type'].startswith('text/html')
     html = r.text
     assert '<textarea' in html
-    # 동일 출처 fetch 대상·언어 셀렉터 옵션이 페이지에 있어야 한다.
+    # 동일 출처 fetch 대상이 페이지에 있어야 한다. 셀렉터 옵션 목록의
+    # 정합은 test_ui_selector_options_match_supported_langs 가 본다.
     assert '/v1/ner' in html
-    for opt in ('value="auto"', 'value="ja"', 'value="vi"'):
-        assert opt in html
+
+
+def test_ui_selector_options_match_supported_langs():
+    """웹 UI 언어 셀렉터가 서버 지원 목록과 어긋나면 실패한다.
+
+    UI 는 서버 목록의 하드코딩 복제본을 쥐고 있고, 어긋남의 증상이 에러가
+    아니라 "버튼이 안 뜸" 이라 조용하다. 실제로 ko 서빙을 넣을 때 이 자리가
+    낡은 채 남아 있었다.
+    """
+    html = _client().get('/').text
+    m = re.search(r'<select id="lang">(.*?)</select>', html, re.S)
+    assert m, 'web UI has no language selector'
+    opts = set(re.findall(r'<option value="([a-z]+)"', m.group(1)))
+    # 뺄셈이 아니라 합집합으로 비교한다 — `opts - {'auto'}` 는 auto 옵션이
+    # 사라져도 참이라, 자동감지를 고르는 유일한 UI 경로가 조용히 없어진다.
+    assert opts == set(SUPPORTED_LANGS) | {'auto'}
+
+
+def test_ui_unsupported_guidance_names_every_supported_lang():
+    """미지원 안내 문구가 지원 언어를 전부 이름과 코드로 담는지.
+
+    문구가 낡으면 에러가 아니라 안내가 거짓말이 된다 — 지원하는 언어를
+    "지원하지 않는다" 고 읽는 사용자가 생긴다.
+    """
+    html = _client().get('/').text
+    m = re.search(r'const UNSUPPORTED_HINT =(.*?);', html, re.S)
+    assert m, 'index.html has no UNSUPPORTED_HINT constant'
+    for lang in SUPPORTED_LANGS:
+        assert f'({lang})' in m.group(1), lang
 
 
 def test_ui_page_no_auth_required():

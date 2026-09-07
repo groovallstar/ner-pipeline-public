@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 DEFAULT_MODEL_ROOT = '/data/ner'
-SUPPORTED_LANGS: Tuple[str, ...] = ('ja', 'vi', 'ko')
+SUPPORTED_LANGS: Tuple[str, ...] = ('ja', 'vi', 'ko', 'en')
 
 
 @dataclass

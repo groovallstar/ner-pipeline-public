@@ -1,4 +1,4 @@
-# server — ja·ko·vi NER REST API 배포
+# server — ja·ko·vi·en NER REST API 배포
 
 `src/server` 추론 서버를 컨테이너로 빌드·기동한다. CUDA 베이스
 (`pytorch:2.13.0-cuda13.0`)에서 uv 로 프로젝트(ner·server)를 설치하고
@@ -64,8 +64,19 @@ healthcheck 자체는 오케스트레이터(compose `depends_on`·swarm·k8s rea
 트래픽 투입을 게이팅하는 *신호*이지 직접 포트 접근을 막는 장치는 아니다. 일부
 언어 미로드면 `degraded` → unhealthy 로 정직 보고된다.
 
+**en 이 들어간 판부터는 `/data/ner/en/model` 마운트가 healthy 의 전제다.**
+지원 언어가 늘면 "전 언어 로드"의 뜻도 함께 넓어지기 때문이다. 마운트 없이
+이미지만 올리면 `status` 가 `degraded` 로 굳어 healthcheck 가 계속 실패하고,
+readiness 로 트래픽을 게이팅하는 배포에서는 영어뿐 아니라 **나머지 언어의
+트래픽까지** 끊긴다. 서버 설정에는 언어별 opt-out 이 없어 en 만 빼고 띄울
+수단도 없다.
+
+**올리는 순서는 `/data/ner/en/model` 마운트가 먼저, 이미지 교체가 나중이다.**
+반대로 하면 새 이미지가 뜨는 순간부터 마운트를 끝낼 때까지 전 언어 트래픽이
+끊긴 채로 남는다.
+
 ## 의존성·주의
 
-- NVIDIA Container Toolkit, 호스트 `/data/ner/{ja,ko,vi}/model` 존재
+- NVIDIA Container Toolkit, 호스트 `/data/ner/{ja,ko,vi,en}/model` 존재
 - 빌드 컨텍스트는 레포 루트(`../../`) — `.dockerignore` 가 `.venv`·산출물 제외
 - 모델은 마운트(이미지 미포함) — 재학습 모델 교체는 `/data` 갱신 후 재기동

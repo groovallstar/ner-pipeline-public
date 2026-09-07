@@ -1,13 +1,13 @@
 # docker/ — Docker 서비스 가이드
 
-vLLM 추론 서버(`vllm/`)·ja·ko·vi NER REST API 서버(`server/`) 두 서비스 계층을
-묶는다. 각 하위 디렉토리는 자체 `docker-compose.yml`·설정·라이프사이클
+vLLM 추론 서버(`vllm/`)·ja·ko·vi·en NER REST API 서버(`server/`) 두 서비스
+계층을 묶는다. 각 하위 디렉토리는 자체 `docker-compose.yml`·설정·라이프사이클
 스크립트로 자족한다. 개발은 호스트에서 직접 하며 개발 컨테이너는 두지 않는다.
 
 | 하위 | 용도 |
 |------|------|
 | `vllm/` | NER 라벨링용 vLLM 추론 서버 — 2모델·포트 8081/8082 (상세: `vllm/CLAUDE.md`) |
-| `server/` | ja·ko·vi NER REST API 추론 서버 — `/data` 모델 마운트·포트 8008 (상세: `server/CLAUDE.md`) |
+| `server/` | ja·ko·vi·en NER REST API 추론 서버 — `/data` 모델 마운트·포트 8008 (상세: `server/CLAUDE.md`) |
 
 ## vLLM 서비스 (docker/vllm/)
 

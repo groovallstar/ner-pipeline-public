@@ -45,7 +45,7 @@ _SENTINEL_TAG = f'PII{secrets.token_hex(3)}_'
 # 이름이 곧 자격이라 `TRANSLATABLE_LANGS` 를 여기서 유도한다: 프롬프트에
 # 넣을 이름이 없는 언어는 번역할 수단이 없다는 뜻이므로, 목록을 따로 두면
 # 한쪽만 늘어나 조용히 어긋난다.
-LANG_NAME = {'ja': '일본어', 'vi': '베트남어'}
+LANG_NAME = {'ja': '일본어', 'vi': '베트남어', 'en': '영어'}
 TRANSLATABLE_LANGS = frozenset(LANG_NAME)
 
 _PROMPT_TEMPLATE = (

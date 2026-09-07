@@ -1,4 +1,4 @@
-"""FastAPI 앱 — ja/ko/vi NER 단일·배치 엔드포인트.
+"""FastAPI 앱 — ja/ko/vi/en NER 단일·배치 엔드포인트.
 
 요청은 원문 텍스트(단일 `text` 또는 배치 `texts`) + 선택 `lang`. lang 생략
 시 텍스트별 자동 감지하고 응답에 감지 결과를 에코한다. 출력 span 은
@@ -79,7 +79,7 @@ class BatchResponse(BaseModel):
 
 
 class TranslateRequest(BaseModel):
-    """번역 요청 — 원문 `text` + `lang`(ja/vi) + `/v1/ner` 결과 `spans`.
+    """번역 요청 — 원문 `text` + `lang`(ja/vi/en) + `/v1/ner` 결과 `spans`.
 
     `lang` 이 받는 값은 **NER 지원 언어보다 좁다**(`TRANSLATABLE_LANGS`) —
     한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없다.
@@ -142,23 +142,27 @@ def _lang_summary(langs: List[str]) -> str:
 
 # OpenAPI/Swagger 노출용 — 외부 소비자를 위한 사용법만 담는다. 구현 세부는
 # 핸들러 docstring 에 두고, Swagger 에는 아래 요약·설명만 노출한다.
-_NER_SUMMARY = '텍스트에서 개체명 추출 (일본어·한국어·베트남어)'
+_NER_SUMMARY = '텍스트에서 개체명 추출 (일본어·한국어·베트남어·영어)'
 
 _NER_DESCRIPTION = (
-    '일본어(`ja`)·한국어(`ko`)·베트남어(`vi`) 텍스트에서 개체명(인물·장소·'
-    '조직 등)과 그 위치를 추출합니다.\n\n'
+    '일본어(`ja`)·한국어(`ko`)·베트남어(`vi`)·영어(`en`) 텍스트에서 '
+    '개체명(인물·장소·조직 등)과 그 위치를 추출합니다.\n\n'
     '**요청** — `text`(단일 문장) 또는 `texts`(여러 문장 배치) 중 하나를 '
     '보냅니다. 둘 다 넣거나 둘 다 비우면 400 입니다. `lang` 은 선택이며, '
-    '생략하면 자동 감지합니다(`ja`·`ko`·`vi` 외 값은 400).\n\n'
+    '생략하면 자동 감지합니다(`ja`·`ko`·`vi`·`en` 외 값은 400).\n\n'
     '**응답** — 개체마다 `label`(종류), `start_char`·`end_char`(원문 글자 '
     '위치, 시작 포함·끝 제외), `text`(해당 글자)를 돌려줍니다. 배치 응답 '
     '`results` 는 입력 순서와 1:1 입니다.\n\n'
-    '**참고** — 지원 언어가 아닌 텍스트는 에러가 아니라 '
-    '`{"lang":"unsupported","entities":[]}` (200) 로 응답합니다. 한자만 '
-    '있는 텍스트도 여기 해당합니다 — 일본어와 한국어가 한자를 공유해 '
-    '어느 쪽인지 가릴 수 없으므로, 그때는 `lang` 을 직접 지정하세요. 여러 '
-    '줄 텍스트는 문자열을 직접 잇지 말고 JSON 인코더로 보내세요(개행을 '
-    'escape 하지 않으면 400/422).'
+    '**자동 감지** — 가나가 있으면 `ja`, 한글이면 `ko`, 베트남어 변별 '
+    '부호가 있으면 `vi`, 그 셋이 모두 아니면서 라틴 글자가 있으면 `en`, '
+    '라틴 글자도 없으면 `unsupported` 입니다. 마지막은 에러가 아니라 '
+    '`{"lang":"unsupported","entities":[]}` (200) 로 응답합니다 — 한자만 '
+    '있는 텍스트가 여기 해당합니다(일본어와 한국어가 한자를 공유해 어느 '
+    '쪽인지 가릴 수 없습니다).\n\n'
+    '**폴백의 대가** — 앞 셋에 안 걸리고 라틴 글자가 있는 텍스트는 영어로 '
+    '봅니다. 부호를 뗀 베트남어와 로마자로 적은 일본어도 여기 걸리므로, 그런 '
+    '입력은 `lang` 을 직접 지정하세요. 여러 줄 텍스트는 문자열을 직접 잇지 '
+    '말고 JSON 인코더로 보내세요(개행을 escape 하지 않으면 400/422).'
 )
 
 # Swagger "Try it out" 용 실행 가능한 예제 — 각 항목은 text/texts 택일을
@@ -178,6 +182,10 @@ _NER_BODY_EXAMPLES = {
     'korean': {
         'summary': '단일 텍스트 — 언어 자동 감지(한국어)',
         'value': {'text': '김민준은 2019년에 서울대학교를 졸업했다.'},
+    },
+    'english': {
+        'summary': '단일 텍스트 — 라틴 폴백(영어)',
+        'value': {'text': 'Barack Obama was born in Hawaii in 1961.'},
     },
     'lang_specified': {
         'summary': '언어 명시(자동 감지 대신 직접 지정)',
@@ -298,7 +306,8 @@ def create_app(registry, config: Optional[ServerConfig] = None,
         추론은 전역 guard 안에서 run_in_threadpool 로 실행해 동시 in-flight 를
         max_concurrency 로 묶고 과부하(큐/타임아웃 초과)는 429 로 거절한다.
         검증·언어감지는 guard 밖에서 빠르게 처리하고, 자동감지 `unsupported`
-        (ja·ko·vi 신호 부재)는 모델을 호출하지 않고 200 으로 빈 결과를 준다.
+        (배타적 스크립트 신호도 라틴 글자도 없음)는 모델을 호출하지 않고
+        200 으로 빈 결과를 준다.
         배치는 지원 언어 항목만 언어별 forward 로 묶고(predict_batch) 미지원은
         빈 결과로 둬 입력 순서·lang 1:1 을 보존한다(부분 성공).
 

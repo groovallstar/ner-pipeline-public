@@ -17,7 +17,8 @@ spec.md`)에 **없다** — 웹 데모 전용이라 OpenAPI 에도 노출하지 
 
 ## 1. 설계 제약 — 왜 이 모양인가
 
-데모 UI 를 보는 사람이 ja·vi 를 못 읽으면 하이라이트가 맞는지 판단할 수 없다.
+데모 UI 를 보는 사람이 번역 대상 언어를 못 읽으면 하이라이트가 맞는지 판단할
+수 없다.
 "원문을 한국어로도 보여 준다"가 요구지만, 두 제약이 구현 형태를 거의 다 정한다.
 
 | 제약 | 따라오는 결론 |
@@ -407,14 +408,14 @@ flowchart TD
 
 | | |
 |---|---|
-| 요청 | `{text: str, lang: 'ja'\|'vi', spans: [Span]}` — `spans` 는 `/v1/ner` 결과 그대로 |
+| 요청 | `{text: str, lang: 'ja'\|'vi'\|'en', spans: [Span]}` — `spans` 는 `/v1/ner` 결과 그대로 |
 | 응답 | `{lang, translation}` |
 | 인증 | `require_key`(env `API_KEY` 설정 시에만 검증) |
 
 ```mermaid
 flowchart TD
     A["번역이 꺼져 있나 — translator 가 None"] -->|"그렇다"| E503["503 translation is not enabled"]
-    A -->|"아니다"| B["lang 이 ja·vi 인가"]
+    A -->|"아니다"| B["lang 이 번역 대상인가"]
     B -->|"아니다"| E400["400 unsupported lang"]
     B -->|"맞다"| C["텍스트가 max_chars 안인가"]
     C -->|"초과"| E413["413"]
@@ -466,7 +467,7 @@ NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B \
 | 억제 강도 | `test_repeat_suppression_on_by_default` · `test_too_small_suppression_raised_to_floor` · `test_repeat_suppression_can_be_disabled` | §5.3 하한 계산 |
 | 잠금 불변식 | `test_encode_holds_source_language_tag_under_concurrency` · `test_tokenizer_access_is_serialized_across_encode_and_decode` | 동시 인코딩 시 언어 태그 불변 · 인코딩↔디코딩 직렬화 |
 | 배치·통합(스텁) | `test_sentence_batches_bound_generate_size` · `test_all_sentences_reach_output` · `test_pii_restored_across_sentences` | 배치 상한 · 뒷문장 유실 없음 |
-| 실모델 | `test_real_model_preserves_pii_verbatim` · `test_real_model_keeps_trailing_sentence` | ja·vi PII 5종 verbatim · 뒷문장 유지(가중치 필요) |
+| 실모델 | `test_real_model_preserves_pii_verbatim` · `test_real_model_keeps_trailing_sentence` | ja·vi·en PII 5종 verbatim · 뒷문장 유지(ja, 가중치 필요) |
 
 > **참고 — 잠금 테스트는 뮤테이션으로 확인됐다.** 같은 시나리오를 no-op 잠금으로
 > 돌리면 인코딩 10건 중 5건이 상대 언어 태그로 인코딩되고, `_decode` 의 잠금만

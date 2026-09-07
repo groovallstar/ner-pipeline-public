@@ -35,6 +35,12 @@ from server.translate import (
     build_translator,
 )
 
+# 미지원 언어 픽스처 — 실재하되 지원 계획이 없는 코드. `TRANSLATABLE_LANGS
+# <= set(SUPPORTED_LANGS)` 가 아래에서 단언되므로 이 한 줄이 번역 미지원도
+# 함께 보장한다.
+_UNSUPPORTED_LANG = 'th'
+assert _UNSUPPORTED_LANG not in SUPPORTED_LANGS
+
 
 def _phone_record():
     """전화번호 1건이 든 (text, spans) 를 만든다."""
@@ -278,17 +284,33 @@ def test_translate_echo_preserves_pii_through_endpoint():
 
 
 def test_translate_unsupported_lang_400():
-    """ja/vi 외 lang → 400."""
+    """번역 대상 외 lang → 400."""
     r = _client(translator=_EchoTranslator()).post(
-        '/v1/translate', json={'text': 'hi', 'lang': 'en', 'spans': []})
+        '/v1/translate',
+        json={'text': 'hi', 'lang': _UNSUPPORTED_LANG, 'spans': []})
     assert r.status_code == 400
+
+
+def test_translate_accepts_en():
+    """lang:'en' 이 200 으로 받아들여지고 PII span 이 보존된다."""
+    phone = '010-1234-5678'
+    r = _client(translator=_EchoTranslator()).post('/v1/translate', json={
+        'text': f'Call Alice at {phone} tomorrow.',
+        'lang': 'en',
+        'spans': [{'label': 'PHONE', 'start_char': 14,
+                   'end_char': 14 + len(phone), 'text': phone}],
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body['lang'] == 'en'
+    assert phone in body['translation']
 
 
 def test_translate_rejects_ko_even_though_ner_supports_it():
     """NER 이 받는 ko 를 번역은 400 으로 거절한다.
 
     한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없다. `SUPPORTED_LANGS`
-    (ja·ko·vi)와 `TRANSLATABLE_LANGS`(ja·vi)가 갈리는 유일한 지점이고,
+    (ja·ko·vi·en)와 `TRANSLATABLE_LANGS`(ja·vi·en)가 갈리는 유일한 지점이고,
     같은 목록을 쓰면 ko 가 조용히 통과해 원문이 그대로 '번역'으로 나온다.
     """
     assert 'ko' in SUPPORTED_LANGS
@@ -319,6 +341,23 @@ def test_web_ui_translatable_list_matches_the_server():
     assert m, 'web UI has no TRANSLATABLE list'
     declared = set(re.findall(r'"([a-z]{2})"', m.group(1)))
     assert declared == set(TRANSLATABLE_LANGS)
+
+
+def test_web_ui_gloss_hint_names_every_translatable_lang():
+    """번역 안내 문구 두 곳이 번역 대상 언어 이름을 전부 담는지.
+
+    문구는 JS 상수와 정적 HTML 두 벌로 있어 한쪽만 고치기 쉽다. 어긋나도
+    에러가 아니라 안내가 거짓이 되므로 조용하다.
+    """
+    ui = (Path(server.__file__).parent / 'static' / 'index.html').read_text(
+        encoding='utf-8')
+    const = re.search(r'const GLOSS_HINT =(.*?);', ui, re.S)
+    assert const, 'index.html has no GLOSS_HINT constant'
+    static = re.search(r'<p[^>]*id="glossStatus"[^>]*>(.*?)</p>', ui, re.S)
+    assert static, 'index.html has no glossStatus paragraph'
+    for blob in (const.group(1), static.group(1)):
+        for name in LANG_NAME.values():
+            assert name in blob, name
 
 
 def test_translate_backend_unavailable_503():
