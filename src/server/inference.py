@@ -41,10 +41,13 @@ class ModelUnavailable(Exception):
 
 
 def _load_tokenizer(model_dir: str, lang: str):
-    """언어별 토크나이저 로드. ja 만 slow(MeCab), 나머지는 fast 우선·실패 시 slow.
+    """언어별 토크나이저 로드 — ja 만 slow 를 명시하고 나머지는 fast 를 요청한다.
 
     ja 를 이름으로 특례 두는 것은 BertJapaneseTokenizer 가 fast 판을 갖지
-    않기 때문이고, vi(PhoBERT)·ko(ELECTRA WordPiece)는 fast 로 열린다.
+    않기 때문이다. 나머지는 use_fast=True 로 요청하지만 **요청이 곧 결과는
+    아니다** — fast 판이 없는 모델이면 transformers 가 예외 없이 slow 를
+    돌려주므로 except 절도 안 탄다. 실제로 fast 로 열리는 것은 ko(WordPiece)
+    와 en(ByteLevel BPE)이고, PhoBERT 로 서빙하는 vi 는 slow 로 열린다.
     fast/slow 분기는 data_utils.encode_row 가 토크나이저 capability 로 다시
     판단하므로, 여기서는 로드 가능한 형태만 확보하면 된다.
     """

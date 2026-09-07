@@ -178,7 +178,7 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
   offset 정합·thresholds 부재 시 raw 동작·장문 청크 offset 과 후반 recall·
   청크 배치 parity·gold 엔티티 청크 경계 불가침·`predict_many` 등가·NFD 입력
   동일, 그리고 네 언어 인터리브 배치가 단건과 1:1. 계약 테스트는 stub 이라
-  모델을 안 부르므로 토크나이저 분기(ja 만 slow 이고 나머지 셋은 fast)·청킹
+  모델을 안 부르므로 토크나이저 분기(fast 는 ko 와 en 뿐이고 ja·vi 는 slow)·청킹
   경로(마침표로 끝나는 산문은 문장이 아니라 단어 경계로 쪼개진다)가 갈리는
   자리는 여기서만 잡힌다.
 - **배포 parity**: 서버 predict 로 잰 F1 을 배포 `metrics.json` 과 대조해

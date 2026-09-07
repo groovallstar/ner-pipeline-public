@@ -6,8 +6,9 @@
 
 네 언어를 같은 축으로 태운다. 계약 테스트(`test_api.py`)는 stub registry 라
 모델을 안 부르므로, 토크나이저 분기·청킹·배치화가 언어별로 갈리는 자리는
-여기서만 잡힌다 — ja 만 slow 토크나이저 특례이고 나머지 셋은 fast 경로다
-(en 은 roberta-base).
+여기서만 잡힌다 — fast 경로는 ko 와 en(roberta-base)이고 ja·vi 는 slow 다.
+ja 만 `_load_tokenizer` 가 이름으로 특례 두고, vi 는 fast 를 요청해도 PhoBERT
+에 fast 판이 없어 slow 가 돌아온다.
 
 `chunking._SENT_RE` 의 경계 문자 집합에는 언어 분기가 없고, 그 집합에 ASCII
 마침표가 없다. 그래서 마침표로 끝나는 산문은 ko 든 en 이든 문장 분할이 아니라
