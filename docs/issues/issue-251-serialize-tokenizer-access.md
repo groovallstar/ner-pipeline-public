@@ -1,7 +1,7 @@
 # issue-251: 동시 요청에서 fast 토크나이저 공유로 500
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/251
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/253
 - 브랜치: `fix/issue-251-serialize-tokenizer-access`
 - 승인일: 2026-09-07
 
@@ -206,4 +206,5 @@ ja·vi 둘뿐이다. 원인은 직렬화가 아니라 파이썬 스레드 모델
 
 ## 관련 커밋
 
-<!-- 커밋 후 채움 -->
+- `9dff8f9`: 토크나이저 접근 직렬화 + 동시성 검사 두 겹 + `bench.py
+  --concurrency` + 문서
