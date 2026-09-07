@@ -48,7 +48,8 @@ from server.translate import (
 logger = logging.getLogger(__name__)
 
 # FLORES-200 언어 태그.
-NLLB_LANG_CODE = {'ja': 'jpn_Jpan', 'vi': 'vie_Latn', 'ko': 'kor_Hang'}
+NLLB_LANG_CODE = {'ja': 'jpn_Jpan', 'vi': 'vie_Latn', 'ko': 'kor_Hang',
+                  'en': 'eng_Latn'}
 
 # NLLB 가 살려내는 표기 — 괄호만 ASCII 로 옮기고 nonce·번호는 그대로 둔다.
 ASCII_SENTINEL = SentinelFormat(left='[', right=']')
@@ -167,8 +168,8 @@ class NLLBTranslator:
 
         NLLB 토크나이저는 `src_lang` 을 인스턴스에 새겨 두고 인코딩할 때 그것을
         읽는다. 번역은 동시에 여럿 돌 수 있으므로(번역 전용 guard, 기본 2)
-        ja·vi 요청이 겹치면 한쪽이 **상대의 언어 태그로 인코딩**돼 조용히 엉뚱한
-        번역이 나온다 — 에러가 아니라 잘못된 출력이라 화면에 신호가 없다.
+        ja·vi·en 요청이 겹치면 한쪽이 **상대의 언어 태그로 인코딩**돼 조용히
+        엉뚱한 번역이 나온다 — 에러가 아니라 잘못된 출력이라 화면에 신호가 없다.
         """
         with self._tok_lock:
             self._tok.src_lang = NLLB_LANG_CODE[lang]

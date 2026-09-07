@@ -5,7 +5,7 @@
 - **모델 무의존**: 문장 분할과 마스킹→분할→합침→복원 배선. 분할이 새면 NLLB 가
   뒷문장을 통째로 버리고, 표기를 안 옮기면 PII 가 신호 없이 사라진다 — 둘 다
   에러를 내지 않는 실패라 테스트가 없으면 조용히 지나간다.
-- **실모델**(`NER_SERVER_TEST_NLLB_MODEL` 지정 시에만): ja·vi 인라인 픽스처로
+- **실모델**(`NER_SERVER_TEST_NLLB_MODEL` 지정 시에만): ja·vi·en 인라인 픽스처로
   PII 5종이 verbatim 보존되고 소실·잔여 sentinel 이 0 인지. 가중치가 필요해
   기본은 skip 이다.
 
@@ -28,6 +28,11 @@ from server.translate_nllb import (
     sentence_batches,
     split_sentences,
 )
+
+# 미지원 언어 픽스처 — 이 파일이 검사하는 것이 `NLLB_LANG_CODE` 의 부재이므로
+# 전제도 그 dict 에 건다(새 import 없이 정확한 단언).
+_UNSUPPORTED_LANG = 'th'
+assert _UNSUPPORTED_LANG not in NLLB_LANG_CODE
 
 # ---------- 문장 분할 ----------
 
@@ -285,9 +290,9 @@ def test_available_is_true_once_loaded():
 
 
 def test_unsupported_language_rejected():
-    """ja·vi 외 언어는 ValueError — 엔드포인트가 400 으로 매핑한다."""
+    """번역 대상 외 언어는 ValueError — 엔드포인트가 400 으로 매핑한다."""
     with pytest.raises(ValueError):
-        _StubNLLB().translate('hello', 'en', [])
+        _StubNLLB().translate('สวัสดี', _UNSUPPORTED_LANG, [])
 
 
 # ---------- 실모델(가중치 있을 때만) ----------
@@ -329,6 +334,18 @@ _VI_FIXTURE = (
 )
 
 
+# 영어 픽스처. `Inc.` 를 한 번 둬 다중 글자 약어가 문장 중간에서 잘리는
+# 기존 한계(vi 와 공유)를 관찰한다 — 잘려도 PII 회계가 통과하면 무해하고,
+# 깨지면 그때 별도 이슈로 정규식을 연다.
+_EN_FIXTURE = (
+    'Contact {} for details. The phone number is {}, member id {}. '
+    'Acme Inc. charged card {} on {}.',
+    [('EMAIL', 'john.doe@example.com'), ('PHONE', '+1-202-555-0143'),
+     ('ID_NUM', 'US-3391-7742'), ('CREDIT_CARD', '4111-2222-3333-4444'),
+     ('DAT', 'March 5, 2024')],
+)
+
+
 @pytest.fixture(scope='module')
 def loaded_translator():
     """실모델 1회 로드 — 가중치가 없으면 이 모듈의 실모델 테스트는 skip."""
@@ -337,7 +354,8 @@ def loaded_translator():
 
 @requires_model
 @pytest.mark.parametrize('lang,fixture', [('ja', _JA_FIXTURE),
-                                          ('vi', _VI_FIXTURE)])
+                                          ('vi', _VI_FIXTURE),
+                                          ('en', _EN_FIXTURE)])
 def test_real_model_preserves_pii_verbatim(loaded_translator, lang, fixture):
     """PII 5종이 원문 그대로 남고, 소실·잔여 sentinel 이 0 이다."""
     text, spans = _record(*fixture)

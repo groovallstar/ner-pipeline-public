@@ -1,4 +1,4 @@
-# ja·ko·vi NER REST API 추론 서버 — 단일 GPU, 호스트 /data 모델 마운트.
+# ja·ko·vi·en NER REST API 추론 서버 — 단일 GPU, 호스트 /data 모델 마운트.
 # 라이프사이클은 start.sh/stop.sh/logs.sh, 설정 표면은 .env.example 참조.
 # compose 는 같은 디렉토리의 .env 를 자동 로드한다.
 services:

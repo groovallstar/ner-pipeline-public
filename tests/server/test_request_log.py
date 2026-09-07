@@ -9,9 +9,13 @@ import logging
 from fastapi.testclient import TestClient
 
 from server.app import create_app
-from server.config import ServerConfig
+from server.config import SUPPORTED_LANGS, ServerConfig
 from server.inference import ModelUnavailable
 from server.request_log import _REASONS
+
+# 미지원 언어 픽스처 — 이 파일이 자기 전제를 스스로 단언한다.
+_UNSUPPORTED_LANG = 'th'
+assert _UNSUPPORTED_LANG not in SUPPORTED_LANGS
 
 _MW_LOGGER = 'server.request_log'
 
@@ -103,7 +107,8 @@ def test_success_batch_logged_at_debug(caplog):
 def test_reject_bad_request_warns(caplog):
     """400(잘못된 lang) → WARNING reason=bad_request."""
     with caplog.at_level(logging.INFO, logger=_MW_LOGGER):
-        r = _client().post('/v1/ner', json={'text': 'a', 'lang': 'en'})
+        r = _client().post('/v1/ner',
+                           json={'text': 'a', 'lang': _UNSUPPORTED_LANG})
     assert r.status_code == 400
     line = _one(caplog, _MW_LOGGER)
     assert line.levelno == logging.WARNING
