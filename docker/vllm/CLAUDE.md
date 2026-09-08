@@ -25,8 +25,7 @@ compose 자체 기본 포트는 8000 이다.
 | `docker-compose.yml` | vLLM 서비스 정의 — 모델·GPU·메모리·dtype·포트를 환경변수로 받는다. IPC host, HF 캐시 마운트 포함 |
 | `start-gemma4-31b-awq-8bit.sh` | gemma-4-31B-it-AWQ-8bit 기동 (GPU1, 8081). **`gpu_mem_util` 이 0.94 로 높다** — 가중치만 33.5 GiB 라 48 GB 카드에서 KV 캐시로 갈 여유가 10 GiB 남짓이고, 이 값을 낮추면 동시에 처리할 수 있는 요청 수가 그대로 줄어든다 |
 | `start-qwen3.8-27b-w4a16-awq.sh` | Qwen3.8-27B-W4A16-AWQ 기동 (GPU2, 8082) — dense 27.8B, hybrid attention + vision. `--enable-prefix-caching` 을 명시적으로 넘긴다(§prefix 캐시) |
-| `start-gemma2-9b.sh` | 웹 데모 번역용 gemma-2-9b-it-w4a16 기동. GPU·포트·메모리를 환경변수로 덮어쓸 수 있으나 **기본값이 GPU1·8081 이라 gemma-4 서버와 충돌한다** — 함께 띄우려면 둘 다 지정한다. **Ampere 이상에서만 뜬다** — bf16 전용 모델이라 fp16 은 거부되고 fp32 는 Marlin 커널에서 실패하므로 Turing 에서는 기동되지 않는다 |
-| `stop.sh` | vLLM 컨테이너 중지. 인자가 없으면 상시 운영 2종을 내린다. **`vllm-gemma2-9b` 는 그 기본 목록에 없다** — 이름을 직접 넘긴다(`stop.sh vllm-gemma2-9b`) |
+| `stop.sh` | vLLM 컨테이너 중지. 인자가 없으면 상시 운영 2종(gemma-4·Qwen3.8)을 내린다. 그 밖의 컨테이너는 이름을 직접 넘긴다 |
 | `logs.sh` | 로그 tail. 기본은 `vllm-gemma4-31b-awq-8bit` 이고, 다른 컨테이너는 인자로 넘긴다 |
 
 **`stop.sh` 에 넘기는 것은 compose 프로젝트 이름이라 컨테이너 이름과 다를 수 있다.**
