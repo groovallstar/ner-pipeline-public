@@ -1,7 +1,7 @@
 # issue-256: KO DAT 경계와 완전성의 canonical 집행
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/256
-- PR: <!-- develop 머지 시 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/258
 - 브랜치: `feat/issue-256-ko-dat-boundary-and-completeness`
 
 ## 배경 (왜)
