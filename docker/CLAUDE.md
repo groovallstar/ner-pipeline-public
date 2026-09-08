@@ -39,7 +39,7 @@ bash docker/vllm/logs.sh
 
 - HF 캐시는 환경변수가 아니라 **볼륨 마운트**로 정한다 — vLLM compose 가 호스트 고정 경로
   `/work/.huggingface` 를 컨테이너 `/root/.cache/huggingface` 에 박아 마운트한다(`HF_HOME` 미사용).
-  ner-server 는 `/data/ner/_hf_cache`.
+  ner-server 에는 이 마운트가 없다 — 모델을 `/data` 의 로컬 경로에서만 읽어 허브를 타지 않는다.
 - `OPENAI_API_KEY` — 레포 루트 `.env`에서 로드 (CLI `_load_env`)
 - `CUDA_VISIBLE_DEVICES` — vLLM 시작 스크립트에서 자동 설정
 

@@ -220,11 +220,10 @@ def create_app(registry, config: Optional[ServerConfig] = None,
     app.add_middleware(RequestLogMiddleware)
     guard = ConcurrencyGuard(config.max_concurrency, config.max_queue,
                              config.acquire_timeout_s)
-    # 번역 전용 guard — NER 과 예산을 나눠 갖는다. 인프로세스 백엔드(nllb)를
-    # 고르면 번역이 NER 과 같은 GPU 에서 돌아 "추론과 독립"이라는 전제가
-    # 깨지므로, 번역을 따로 bound 하지 않으면 한쪽이 다른 쪽 VRAM·지연을
-    # 잠식한다. 큐는 두지 않는다(0) — 번역은 웹 데모의 온디맨드 버튼이라
-    # 기다리게 하는 것보다 즉시 429 로 돌려보내는 편이 낫다.
+    # 번역 전용 guard — NER 과 예산을 나눠 갖는다. 번역 한 건은 원격 LLM 응답을
+    # 초 단위로 기다리므로, NER guard 를 함께 쓰면 그동안 추론 슬롯이 막힌다.
+    # 큐는 두지 않는다(0) — 번역은 웹 데모의 온디맨드 버튼이라 기다리게 하는
+    # 것보다 즉시 429 로 돌려보내는 편이 낫다.
     translate_guard = ConcurrencyGuard(
         config.translate_max_concurrency, max_queue=0,
         acquire_timeout_s=config.acquire_timeout_s)
@@ -375,9 +374,8 @@ def create_app(registry, config: Optional[ServerConfig] = None,
     async def translate(req: TranslateRequest = Body(...)):
         """마스킹-복원 번역. NER guard 가 아니라 번역 전용 guard 를 쓴다.
 
-        예산이 분리돼 번역 폭주가 NER 슬롯을 잠식하지 않고 그 반대도 없다 —
-        인프로세스 백엔드(nllb)면 둘이 같은 GPU 를 쓰므로 이 분리가 VRAM
-        가드이기도 하다. 동시 상한 초과는 429(대기 없음).
+        예산이 분리돼 번역 폭주가 NER 슬롯을 잠식하지 않고 그 반대도 없다.
+        동시 상한 초과는 429(대기 없음).
 
         translator 미주입(비활성) 시 503. 텍스트 크기는 NER 과 동일 상한을
         재사용한다. 백엔드 호출 실패는 503 으로 graceful degrade — 호출
@@ -413,11 +411,9 @@ def create_app(registry, config: Optional[ServerConfig] = None,
         """번역 가용성 — 웹 UI 가 페이지 로드 시 1회 조회해 버튼을 켠다.
 
         `enabled` = 서버 번역 토글. `available` = 토글 ON + 백엔드가 지금
-        번역할 수 있음인데, **무엇을 확인하는지는 백엔드가 정한다** — 원격
-        (`llm`)은 엔드포인트 liveness 를 실제로 찔러 보고, 인프로세스
-        (`nllb`)는 기동 때 로드에 성공했다는 사실 자체가 가용이라 항상 True 다
-        (로드 실패면 서버가 아예 안 뜬다). 폴링용이 아니라 로드 1회용이며,
-        OpenAPI 에는 노출하지 않는다(웹 UI 전용).
+        번역할 수 있음이며, 원격 엔드포인트 liveness 를 1회 찔러 확인한다.
+        폴링용이 아니라 로드 1회용이며, OpenAPI 에는 노출하지 않는다
+        (웹 UI 전용).
         """
         if translator is None:
             return {'enabled': False, 'available': False}

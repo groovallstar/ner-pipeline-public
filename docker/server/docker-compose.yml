@@ -24,24 +24,15 @@ services:
       - NER_SERVER_HOST=0.0.0.0
       - NER_SERVER_PORT=${NER_SERVER_PORT:-8008}
       # 번역 키에는 compose 기본값을 주지 않는다 — 여기서 값을 채우면 서버가
-      # "안 준 것"과 구별하지 못해, 고른 백엔드에 안 맞는 키가 조용히 실린다.
+      # "안 준 것"과 구별하지 못해, 안 쓰이는 값이 조용히 실린다.
       - NER_SERVER_TRANSLATE_ENABLED=${NER_SERVER_TRANSLATE_ENABLED:-false}
-      - NER_SERVER_TRANSLATE_BACKEND=${NER_SERVER_TRANSLATE_BACKEND:-}
       - NER_SERVER_TRANSLATE_MODEL=${NER_SERVER_TRANSLATE_MODEL:-}
       - NER_SERVER_TRANSLATE_MAX_CONCURRENCY=${NER_SERVER_TRANSLATE_MAX_CONCURRENCY:-2}
       - NER_SERVER_TRANSLATE_BASE_URL=${NER_SERVER_TRANSLATE_BASE_URL:-}
       - NER_SERVER_TRANSLATE_API_KEY=${NER_SERVER_TRANSLATE_API_KEY:-}
       - NER_SERVER_TRANSLATE_TIMEOUT_S=${NER_SERVER_TRANSLATE_TIMEOUT_S:-}
-      - NER_SERVER_TRANSLATE_DEVICE=${NER_SERVER_TRANSLATE_DEVICE:-}
-      - NER_SERVER_TRANSLATE_NO_REPEAT_NGRAM=${NER_SERVER_TRANSLATE_NO_REPEAT_NGRAM:-}
-      - HF_HOME=${HF_HOME:-/data/ner/_hf_cache}
     volumes:
       - ${NER_SERVER_DATA_DIR:-/data}:/data
-      # HF 캐시를 호스트에 고정한다 — backend=nllb 는 기동 때 허브에서 가중치를
-      # 내려받으므로(1.3B 기준 수 GB), 캐시가 컨테이너 안에만 있으면 다시 만들
-      # 때마다 다시 받는다. 기본 경로는 /data 안이라 위 마운트와 겹치는데,
-      # 캐시를 다른 디스크로 옮길 때 이 줄만 바꾸면 된다.
-      - ${NER_SERVER_HF_CACHE:-/data/ner/_hf_cache}:${HF_HOME:-/data/ner/_hf_cache}
     ports:
       - '${NER_SERVER_PORT:-8008}:${NER_SERVER_PORT:-8008}'
     # 컨테이너에서 호스트(published) 서비스에 닿기 위한 매핑 — 번역 백엔드

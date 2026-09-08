@@ -81,7 +81,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 `NER_SERVER_TRANSLATE_*`(웹 데모 번역)는 이 표에 없다 — 그 엔드포인트가 이
 계약(§3)에 없기 때문이다. 기본 비활성이며 켜도 `/v1/ner` 동작·응답은 바뀌지
 않는다(동시성 예산도 분리 — §8). 설정 표면은 `src/server/CLAUDE.md`, 구현
-레퍼런스(마스킹-복원·백엔드 선택)는 `docs/manual/web-demo-translation.md`.
+레퍼런스(마스킹-복원·설정 검증)는 `docs/manual/web-demo-translation.md`.
 
 ## 3. 엔드포인트 목록
 

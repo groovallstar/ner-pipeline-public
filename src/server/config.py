@@ -32,26 +32,17 @@ class ServerConfig:
     port: int = 8008
     log_level: str = 'INFO'        # 루트 로그 레벨(DEBUG 로 요청별 상세 켬)
     log_file: str = '/tmp/ner-server.log'  # 회전 파일 로그 경로(빈 값=stderr만)
-    # 웹 데모 UI용 한국어 번역(additive, 기본 비활성). 활성 시 백엔드를
-    # 명시해야 한다 — /v1/ner 코어와는 독립.
+    # 웹 데모 UI용 한국어 번역(additive, 기본 비활성) — /v1/ner 코어와는 독립.
     #
-    # 백엔드별 키는 **미설정(None)과 설정을 구별해야** 한다. 기본값을 여기서
-    # 채워버리면 "안 준 것"과 "그 값을 준 것"이 같아져, 백엔드에 안 맞는 키가
-    # 왔는지(기준: 설정만 보고 무엇을 부르는지 안다)를 볼 수 없다. 그래서
-    # 백엔드 전용 키는 None 으로 두고, 실효 기본값은 그 값을 아는 쪽이 넣는다 —
-    # timeout·device 는 `translate.py`, 반복 억제 하한은 토크나이저를 쥔
-    # `translate_nllb.py`(sentinel 토큰 길이에서 계산).
+    # 선택 키는 **미설정(None)과 설정을 구별해야** 한다. 기본값을 여기서
+    # 채워버리면 "안 준 것"과 "그 값을 준 것"이 같아지므로, None 으로 두고
+    # 실효 기본값은 그 값을 아는 쪽(`translate.py`)이 넣는다.
     translate_enabled: bool = False
-    translate_backend: str = ''    # 활성 시 필수 — 'llm' | 'nllb'(기본값 없음)
-    translate_model: str = ''      # 활성 시 필수(두 백엔드 공용 — "무슨 모델")
+    translate_model: str = ''      # 활성 시 필수 — "무슨 모델"
     translate_max_concurrency: int = 2  # 번역 동시 in-flight 상한(초과 429)
-    # backend=llm 전용
-    translate_base_url: Optional[str] = None  # llm 활성 시 필수
+    translate_base_url: Optional[str] = None  # 활성 시 필수 — 원격 엔드포인트
     translate_api_key: Optional[str] = None   # OpenAI 호환 키(vLLM 은 불필요)
     translate_timeout_s: Optional[float] = None  # LLM 호출 타임아웃(초)
-    # backend=nllb 전용
-    translate_device: Optional[str] = None    # 모델을 올릴 device
-    translate_no_repeat_ngram: Optional[int] = None  # 반복 억제(0=끔)
 
     @classmethod
     def from_env(cls) -> 'ServerConfig':
@@ -73,10 +64,6 @@ class ServerConfig:
         def _opt(name: str) -> Optional[str]:
             """미설정·빈 값이면 None — 설정 여부를 값으로 구별한다."""
             return os.environ.get(name) or None
-
-        def _opt_int(name: str) -> Optional[int]:
-            raw = _opt(name)
-            return int(raw) if raw is not None else None
 
         def _opt_float(name: str) -> Optional[float]:
             raw = _opt(name)
@@ -100,17 +87,12 @@ class ServerConfig:
             log_file=os.environ.get(
                 'NER_SERVER_LOG_FILE', '/tmp/ner-server.log'),
             translate_enabled=_bool('NER_SERVER_TRANSLATE_ENABLED', False),
-            translate_backend=os.environ.get(
-                'NER_SERVER_TRANSLATE_BACKEND', '').strip().lower(),
             translate_model=os.environ.get('NER_SERVER_TRANSLATE_MODEL', ''),
             translate_max_concurrency=_int(
                 'NER_SERVER_TRANSLATE_MAX_CONCURRENCY', 2),
             translate_base_url=_opt('NER_SERVER_TRANSLATE_BASE_URL'),
             translate_api_key=_opt('NER_SERVER_TRANSLATE_API_KEY'),
             translate_timeout_s=_opt_float('NER_SERVER_TRANSLATE_TIMEOUT_S'),
-            translate_device=_opt('NER_SERVER_TRANSLATE_DEVICE'),
-            translate_no_repeat_ngram=_opt_int(
-                'NER_SERVER_TRANSLATE_NO_REPEAT_NGRAM'),
         )
 
     def model_dir(self, lang: str) -> str:
