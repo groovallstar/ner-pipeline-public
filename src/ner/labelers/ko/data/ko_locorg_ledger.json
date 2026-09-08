@@ -1,7 +1,7 @@
 {
   "canonical_section": "### 2.5",
   "gold_path": "data/klue/origin.jsonl",
-  "gold_sha256": "993e405e645656934f643551cff854063046ff00708bd8087765bcc4d9ef8e2d",
+  "gold_sha256": "da87bdb0e5b6f7e2adb2e034b83320662428a62cc6707ef574c37076772b1718",
   "criterion": "labeled 의 타입 집합이 verdict 하나에 담겨야 한다 (non-entity 는 빈 집합). \"모든 등장이 라벨됐다\" 가 아니라 \"다른 타입으로 라벨된 적이 없다\" 이다 — 전자로 읽으면 미회수(백두산 1 등장 / 0 라벨)가 규칙 위반으로 잡혀, 회수 작업이 위반 목록을 늘리는 구조가 된다. known_divergence 에 오른 표면형은 이 검사에서 면제되며, 대신 실제로 어겨야 한다.",
   "population": "expect 는 §2.5 판정표의 예시, prose_expect 는 §2.5 가 마커로 이름 붙인 표면형(단독 표면형 · 시설 접미 예외 · 환유 건물명 allowlist)이다. 접미 판정(청·서·소)은 표면형이 아니라 접미라 모집단 밖이다.",
   "expect": [
