@@ -83,6 +83,7 @@ def _scan_files():
             found.add(path)
     for rel in ('docs/manual/rest-api-spec.md',
                 'docs/manual/rest-api-integration-guide.md',
+                'docs/manual/language-detection.md',
                 'CLAUDE.md', 'README.md', 'docker/CLAUDE.md',
                 'pyproject.toml'):
         path = _ROOT / rel

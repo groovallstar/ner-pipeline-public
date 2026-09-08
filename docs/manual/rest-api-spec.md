@@ -182,8 +182,8 @@ vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` → `vi`. 셋의
 
 `unsupported` 로 남는 것은 라틴 글자마저 없는 입력이다. **한자만 있는
 텍스트**가 대표적인데, ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않는
-데다 라틴 글자도 없기 때문이다. 근거: `docs/reports/
-language-detection-benchmark.md`.
+데다 라틴 글자도 없기 때문이다. 언어별 신호·코드포인트 구간·수용된 한계는
+`docs/manual/language-detection.md` 가 정본이다.
 
 **배포 전제** — 자동 감지가 라틴 텍스트를 `en` 으로 보내므로,
 `/data/ner/en/model` 이 없는 배포에서는 영어 입력이 200 이 아니라 503 이고
@@ -446,5 +446,6 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 ---
 
 **관련 문서**: 모듈 오리엔테이션 `src/server/CLAUDE.md` · 엔티티 스키마
-`docs/manual/data/canonical-entity-schema.md` · 언어 감지 벤치
+`docs/manual/data/canonical-entity-schema.md` · 언어 감지 규칙
+`docs/manual/language-detection.md` · 감지기 후보 비교 측정
 `docs/reports/language-detection-benchmark.md` · 배포 `docker/server/CLAUDE.md`.
