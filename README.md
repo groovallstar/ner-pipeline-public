@@ -35,14 +35,14 @@ vLLM (로컬 GPU), HuggingFace BERT baseline.
 
 ```
 src/ner/
-├── labelers/{ko,ja,vi}/   # 언어별 LLM 라벨러
+├── labelers/{ko,ja,vi,en}/  # 언어별 LLM 라벨러
 ├── llm_eval/              # 벤치마크 오케스트레이션·리포트
 ├── augmenters/{pii,wikiann_vi}/  # 학습 데이터 증강
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
 ├── validity/              # K-fold 분산·비교타당성 게이트 (재학습 0회)
 └── scripts/               # 보조 스크립트
-src/server/                # ja·vi NER REST API 서비스 (FastAPI)
+src/server/                # ja·ko·vi·en NER REST API 서비스 (FastAPI)
 docker/{server,vllm}/      # REST API 배포 + vLLM
 results/                   # 벤치마크 산출물 scratch (gitignore·휘발)
 certified/                 # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
@@ -60,7 +60,7 @@ uv sync                # 또는: uv pip install -e .
 
 ## REST API 서비스
 
-학습된 ja·vi 분류기를 FastAPI 로 감싸 HTTP 추론을 제공한다.
+학습된 ja·ko·vi·en 분류기를 FastAPI 로 감싸 HTTP 추론을 제공한다.
 
 ```bash
 python -m server   # uvicorn 기동 (기본 0.0.0.0:8008)
@@ -73,8 +73,10 @@ python -m server   # uvicorn 기동 (기본 0.0.0.0:8008)
 | `GET /` | 웹 데모 UI |
 | `POST /v1/translate` · `GET /v1/translate/status` | 데모 전용 한국어 번역 (기본 비활성) |
 
-`lang` 을 안 주면 텍스트마다 자동감지하고, ja·vi 신호가 없으면 에러가 아니라
-빈 결과를 준다 — 배치에 다른 언어가 섞여도 나머지가 처리되게 하려는 것이다.
+`lang` 을 안 주면 텍스트마다 자동감지한다. 가나→ja, 한글→ko, 베트남어 변별
+부호→vi 로 잡고, 셋이 모두 실패하면 라틴 글자가 있는지 보고 en 으로 보낸다.
+라틴 글자마저 없으면 에러가 아니라 빈 결과를 준다 — 배치에 다른 언어가 섞여도
+나머지가 처리되게 하려는 것이다.
 데모 전용 둘은 소비자 계약을 `/v1/ner` 하나로 좁히려고 OpenAPI 에 안 내놓는다.
 
 스키마·상태코드는 [`docs/manual/rest-api-spec.md`](docs/manual/rest-api-spec.md),

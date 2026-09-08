@@ -6,12 +6,17 @@ threshold(apply_threshold) 까지 end-to-end 다. 입력은 배포 test set
 (`/data/ner/{lang}/data/test.jsonl`) 의 고정 분포를 쓴다.
 
 서빙은 fp32 로만 돈다(운영점 정합·결정성) — precision 은 벤치 인자가 아니다.
+
+`--concurrency N` 은 같은 작업량을 N 스레드로 나눠 돌린다. 서버가 추론을
+`run_in_threadpool` 로 돌리므로 운영에서는 이쪽이 실제 경로이고, 토크나이저
+직렬화처럼 **경합이 있어야 드러나는** 비용은 N=1 에서는 아예 측정되지 않는다.
 """
 
 import argparse
 import json
 import statistics
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 import torch
@@ -46,9 +51,30 @@ def _run_batch(lm: LangModel, texts: List[str], apply_threshold: bool,
                         apply_threshold=apply_threshold)
 
 
+def _run_concurrent(lm: LangModel, texts: List[str], apply_threshold: bool,
+                    mode: str, batch_size: int, concurrency: int) -> None:
+    """같은 텍스트 셋을 concurrency 스레드로 나눠 돌린다(총 작업량 불변).
+
+    스레드마다 다른 몫을 맡아 전체 셋을 정확히 한 번 처리하므로, N=1 과 N=8 의
+    전체 처리시간을 그대로 견줄 수 있다. 나누기는 stride(`texts[i::N]`)라 길이
+    분포가 스레드에 고르게 퍼진다 — 앞뒤로 자르면 긴 문장이 한 스레드에 몰려
+    꼬리가 전체 시간을 지배한다.
+    """
+    def shard(texts_part: List[str]) -> None:
+        if mode == 'batch':
+            _run_batch(lm, texts_part, apply_threshold, batch_size)
+        else:
+            _run_seq(lm, texts_part, apply_threshold)
+
+    shards = [texts[i::concurrency] for i in range(concurrency)]
+    with ThreadPoolExecutor(max_workers=concurrency) as ex:
+        for _ in ex.map(shard, shards):
+            pass
+
+
 def measure(lm: LangModel, texts: List[str], apply_threshold: bool,
             warmup: int, reps: int, mode: str,
-            batch_size: int) -> List[float]:
+            batch_size: int, concurrency: int = 1) -> List[float]:
     """warmup 후 reps 회, 전체 셋 처리시간(ms) 분포를 잰다(seq|batch)."""
     def warm() -> None:
         if mode == 'batch':
@@ -58,7 +84,10 @@ def measure(lm: LangModel, texts: List[str], apply_threshold: bool,
             lm.predict(texts[0], apply_threshold=apply_threshold)
 
     def run() -> None:
-        if mode == 'batch':
+        if concurrency > 1:
+            _run_concurrent(lm, texts, apply_threshold, mode, batch_size,
+                            concurrency)
+        elif mode == 'batch':
             _run_batch(lm, texts, apply_threshold, batch_size)
         else:
             _run_seq(lm, texts, apply_threshold)
@@ -87,11 +116,13 @@ def count_tokens(lm: LangModel, texts: List[str]) -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description='NER server throughput bench')
-    ap.add_argument('--lang', required=True, choices=['ja', 'ko', 'vi'])
+    ap.add_argument('--lang', required=True, choices=['ja', 'ko', 'vi', 'en'])
     ap.add_argument('--mode', default='seq', choices=['seq', 'batch'])
     ap.add_argument('--batch-size', type=int, default=32)
     ap.add_argument('--apply-threshold', default='true',
                     choices=['true', 'false'])
+    ap.add_argument('--concurrency', type=int, default=1,
+                    help='threads sharing the model (server path uses >1)')
     ap.add_argument('--warmup', type=int, default=5)
     ap.add_argument('--reps', type=int, default=5)
     ap.add_argument('--out', default=None, help='write result JSON to path')
@@ -106,8 +137,10 @@ def main() -> None:
                    cfg.thresholds_path(args.lang), cfg.max_length)
     texts = load_test_texts(args.lang, cfg.model_root)
 
+    if args.concurrency < 1:
+        raise SystemExit('--concurrency must be >= 1')
     times = measure(lm, texts, apply_threshold, args.warmup, args.reps,
-                    args.mode, args.batch_size)
+                    args.mode, args.batch_size, args.concurrency)
     n = len(texts)
     med = statistics.median(times)
     tokens = count_tokens(lm, texts)
@@ -115,6 +148,7 @@ def main() -> None:
         'lang': args.lang,
         'config': {
             'mode': args.mode,
+            'concurrency': args.concurrency,
             'batch_size': args.batch_size if args.mode == 'batch' else None,
             'apply_threshold': apply_threshold,
             'thresholds_applied': lm.has_thresholds and apply_threshold,

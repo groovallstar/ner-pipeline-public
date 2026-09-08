@@ -25,7 +25,7 @@
 | 경로 | 무엇 | 상세 |
 |---|---|---|
 | `src/ner/` | NER 라이브러리 — `labelers`·`llm_eval`·`metrics`·`validity`·`augmenters`·`classifier`·`scripts` | `src/ner/CLAUDE.md` (모듈별 문서로 다시 분기) |
-| `src/server/` | ja·vi NER REST API — FastAPI · 웹 데모 UI(`static/`). `ner` 와 분리된 top-level 패키지 | `src/server/CLAUDE.md` |
+| `src/server/` | ja·ko·vi·en NER REST API — FastAPI · 웹 데모 UI(`static/`). `ner` 와 분리된 top-level 패키지 | `src/server/CLAUDE.md` |
 | `docker/` | vLLM 서비스 · server 배포 (개발 컨테이너는 없다) | `docker/CLAUDE.md` |
 | `tests/` | 테스트 (`hooks/` 는 검사 게이트 자체의 회귀 안전망) | `tests/ner/CLAUDE.md` · `tests/server/` · `tests/hooks/` |
 | `results/` | 벤치마크 산출물 scratch — gitignore·휘발 | §하네스 |

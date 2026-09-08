@@ -233,15 +233,15 @@ python -m ner.augmenters.pii --source jsonl --input data/klue/origin.jsonl \
 같은 라벨이 순수하다.
 
 **`--lang` 은 주입 세트를 바꾸지 않는다.** 언어별 기본값 분기가 없어
-`--lang ko` 를 줘도 플래그를 빼면 7종이 들어간다. 재생성 때 빠뜨리면 어떻게
-되는지는 언어마다 갈린다 — EN 은
-`tests/ner/augmenters/ontonotes_en/test_corpus_invariants.py` 의
-`test_injection_replays_exactly` 가 4종을 못 박은 채 주입을 재생해 산출물과
-대조하므로, 합성 `PER`·`LOC`·`DAT` span 이 재생 불가로 잡혀 시끄럽게 깨진다
-(주입 산출물이 있을 때만 도는 검사다). **KO 는 그 대조가 없어 gold 의 성격이
-조용히 뒤집힌다** — 플래그를 쓰는 두 언어 중 무방비인 쪽은 KO 하나다.
-JA·VI 는 기본 7종이 의도된 상태라 이 방향으로 뒤집힐 것이 없지만, 그쪽도
-동형 재생 대조는 없다.
+`--lang ko` 를 줘도 플래그를 빼면 7종이 들어간다. 재생성 때 빠뜨리면 합성
+`PER`·`LOC`·`DAT` 가 gold 에 섞여 들어가는데, **지금은 어느 언어에도 그것을
+잡는 재생 대조가 없다.** EN 에는 주입 산출물(`pii/`)을 읽어 4종을 못 박은 채
+주입을 재생하는 검사가 있었지만, 그 디렉토리가 디스크에서 내려가며 검사도
+함께 내렸다 — 언제나 skip 되는 검사를 남겨 두면 통과 수만 세어진다.
+그래서 재생성은 플래그를 사람이 확인해야 하는 자리이고, 사후에 남는 것은
+`origin.jsonl` 의 sha256 이 원장과 맞는지뿐이다
+(`test_fac_disk_migration_ledger.py`). JA·VI 는 기본 7종이 의도된 상태라 이
+방향으로 뒤집힐 것이 없다.
 
 ## 모드 선택 가이드
 

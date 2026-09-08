@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>개체명 인식(NER) — 일본어·한국어·베트남어</title>
+<title>개체명 인식(NER) — 일본어·한국어·베트남어·영어</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -74,13 +74,13 @@
 </head>
 <body>
 <main>
-  <h1>개체명 인식(NER) <small style="font-weight:400;color:#656d76;">일본어·한국어·베트남어</small></h1>
+  <h1>개체명 인식(NER) <small style="font-weight:400;color:#656d76;">일본어·한국어·베트남어·영어</small></h1>
   <p class="sub">텍스트를 입력하고 추론하면 개체명(인물·지명·조직 등)을 원문 위에
     라벨별 색상으로 표시합니다. 개체에 마우스를 올리면 유형 설명이 나타납니다.</p>
 
   <div class="card">
     <label class="field" for="text">입력 텍스트</label>
-    <textarea id="text" placeholder="예) 織田信長は東京都千代田区に住んでいた。&#10;예) 김민준은 2019년에 서울대학교를 졸업했다.&#10;예) Hà Nội là thủ đô của Việt Nam."></textarea>
+    <textarea id="text" placeholder="예) 織田信長は東京都千代田区に住んでいた。&#10;예) 김민준은 2019년에 서울대학교를 졸업했다.&#10;예) Hà Nội là thủ đô của Việt Nam.&#10;예) Barack Obama was born in Hawaii in 1961."></textarea>
     <div class="controls">
       <div>
         <label class="field" for="lang">언어</label>
@@ -89,10 +89,15 @@
           <option value="ja">일본어 (ja)</option>
           <option value="ko">한국어 (ko)</option>
           <option value="vi">베트남어 (vi)</option>
+          <option value="en">영어 (en)</option>
         </select>
       </div>
       <button id="run" type="button">추론</button>
     </div>
+    <p class="status" id="fallbackHint" style="margin:.6rem 0 0;">가나·한글·
+      베트남어 부호가 없고 라틴 글자만 있는 문장은 영어로 감지됩니다 — 무부호
+      베트남어·로마자 일본어도 여기 걸리므로 그때는 위에서 언어를 직접
+      지정하세요.</p>
   </div>
 
   <div class="card">
@@ -107,8 +112,8 @@
       <button id="translate" type="button" disabled>한국어 번역 보기</button>
     </div>
     <p class="status" id="glossStatus" style="margin-top:.7rem;">추론 후 원문을
-      한국어로 번역해 볼 수 있습니다(일본어·베트남어). 전화·카드 등 개인정보는
-      원문 그대로 보존됩니다.</p>
+      한국어로 번역해 볼 수 있습니다(일본어·베트남어·영어). 전화·카드 등
+      개인정보는 원문 그대로 보존됩니다.</p>
     <div class="gloss" id="gloss"></div>
   </div>
 </main>
@@ -147,14 +152,20 @@ let lastResult = null;
 // 버튼은 계속 비활성이다(폴링하지 않는다).
 let translateAvailable = false;
 const GLOSS_HINT = "추론 후 원문을 한국어로 번역해 볼 수 있습니다"
-  + "(일본어·베트남어). 전화·카드 등 개인정보는 원문 그대로 보존됩니다.";
+  + "(일본어·베트남어·영어). 전화·카드 등 개인정보는 원문 그대로 보존됩니다.";
 const GLOSS_UNAVAILABLE = "번역 백엔드(vLLM)를 사용할 수 없어 번역 기능이 "
   + "비활성화되었습니다.";
 const GLOSS_NOT_TRANSLATABLE = "원문이 이미 한국어라 번역할 것이 없습니다.";
 // 번역 대상 언어 — 서버 `translate.TRANSLATABLE_LANGS` 와 같은 목록이다.
-// NER 지원 언어(ja·ko·vi)보다 좁다: 한국어로 옮기는 기능이라 ko 원문은 옮길
-// 곳이 없고, 서버도 `lang:"ko"` 를 400 으로 거절한다.
-const TRANSLATABLE = new Set(["ja", "vi"]);
+// NER 지원 언어(ja·ko·vi·en)보다 좁다: 한국어로 옮기는 기능이라 ko 원문은
+// 옮길 곳이 없고, 서버도 `lang:"ko"` 를 400 으로 거절한다.
+const TRANSLATABLE = new Set(["ja", "vi", "en"]);
+// 자동감지가 unsupported 를 낼 때 띄우는 안내. 상수로 둬야 UI 목록 정합
+// 테스트가 걸 앵커가 생긴다.
+const UNSUPPORTED_HINT = "지원하지 않는 언어입니다. "
+  + "일본어(ja)·한국어(ko)·베트남어(vi)·영어(en)만 지원합니다. "
+  + "한자만 있는 문장처럼 가나·한글·베트남어 부호도 라틴 글자도 없는 입력이 "
+  + "여기 해당하니, 위 셀렉터에서 언어를 직접 지정하세요.";
 
 // 마지막 결과에 맞춰 번역 버튼을 켜거나·끄거나·감춘다. 감추는 것은 ko 처럼
 // 원리상 번역이 없는 경우다 — 눌러도 400 이 될 버튼을 회색으로 남겨 두면
@@ -286,10 +297,7 @@ async function run() {
       return;
     }
     if (data.lang === "unsupported") {
-      setStatus("지원하지 않는 언어입니다. 일본어(ja)·한국어(ko)·베트남어(vi)만 "
-        + "지원합니다. 한자만 있는 문장·무부호 베트남어·로마자 일본어는 위 "
-        + "셀렉터에서 언어를 직접 지정하세요.",
-        "warn");
+      setStatus(UNSUPPORTED_HINT, "warn");
       $output.replaceChildren(document.createTextNode(text));
       return;
     }

@@ -2,20 +2,18 @@
 
 `data/**` 는 gitignore 이고 주입 텍스트는 LLM 산출이라 다시 만들 수 없다.
 그래서 "어떤 span 이 왜 손대졌는가" 가 저장소에 남는 자리는 이 원장뿐이고,
-원장이 실물과 어긋나지 않는지를 여기서 본다.
+원장이 스스로 어긋나지 않는지를 여기서 본다.
 
-**지문이 없으면 역적용은 정의상 참이다.** 원장을 되돌려 나온 코퍼스를 원장이
-선언한 개수로 다시 재면, 역적용이 원장대로 뒤집었으니 차이가 언제나 원장 행
-수가 된다. 그래서 역적용의 대조 상대는 원장이 아니라 **마이그레이션 전 파일의
-SHA256** 이다 — 원장에 없는 변경이 섞였거나 있는 변경이 빠졌으면 그 해시가
-안 나온다. KO 원장이 `gold_sha256` 을 갖는 이유와 같다
-(`tests/ner/labelers/test_ko_locorg_ledger.py`).
+**원천·주입 산출물을 읽던 검사는 내렸다.** `data/ontonotes_en/` 은 다른 언어
+폴더와 같은 구성으로 정리돼 `raw/`·`pii/`·변환 직후 split 이 디스크에서
+내려갔다. 그 파일을 읽던 검사를 skip 으로 남겨 두면 통과 수만 세어지고 무엇이
+실제로 반증되는지가 흐려지므로 함께 지웠다 — 되살리려면 원천을 받아
+`ner.augmenters.ontonotes_en` 을 다시 돌리는 것이 전제라, 그때 검사도 함께
+되살리는 편이 맞다.
 
-후 지문은 반대편을 막는다 — gitignore 된 코퍼스를 나중에 조용히 편집하면
-원장은 그대로인데 실물만 달라지고, 그 어긋남이 여기서 붉어진다.
-
-변환 산출물(`{split}.jsonl`)은 원장이 손대지 않는다. 원천 + 코드에서 결정적
-으로 다시 만들어지므로 지문만 남겨 **재현성 앵커**로 쓴다.
+남은 것은 둘이다. 원장 자체의 형태·개수 등식은 데이터 없이 돌고, 병합 산출물
+(`origin.jsonl`)의 후 지문은 gitignore 된 코퍼스를 나중에 조용히 편집하는 것을
+막는다 — 원장은 그대로인데 실물만 달라지면 그 어긋남이 여기서 붉어진다.
 """
 import ast
 import hashlib
@@ -24,14 +22,10 @@ from pathlib import Path
 
 import pytest
 
-from ner.augmenters.ontonotes_en.__main__ import SPLIT_FILES, convert_one_split
-from ner.augmenters.ontonotes_en.convert import load_id2label
 from ner.scripts import migrate_en_fac_disk_corpus as migration
 
 _ROOT = Path(__file__).resolve().parents[4]
 DATA_DIR = _ROOT / 'data' / 'ontonotes_en'
-RAW_DIR = DATA_DIR / 'raw'
-PII_DIR = DATA_DIR / 'pii'
 LEDGER_PATH = (
     _ROOT / 'src' / 'ner' / 'augmenters' / 'ontonotes_en'
     / 'data' / 'fac_disk_migration_ledger.json'
@@ -75,34 +69,15 @@ def _span_key(entry):
             entry['start_char'], entry['end_char'], entry['verdict'])
 
 
-def _corpus_files(ledger):
-    return {
-        **{f'pii/{split}.jsonl': PII_DIR / f'{split}.jsonl'
-           for split in migration.SPLITS},
-        ledger['merged_name']: DATA_DIR / ledger['merged_name'],
-    }
-
-
-def _restore(path, ledger):
-    """현 파일에 원장을 역적용해 마이그레이션 전 바이트를 만든다."""
-    rows = migration.read_rows(path)
-    ids = {row['id'] for row in rows}
-    migration.reverse_apply_to_rows(
-        rows,
-        [e for e in ledger['move'] if e['id'] in ids],
-        [e for e in ledger['remove'] if e['id'] in ids],
-    )
-    return migration.dump_rows(rows).encode('utf-8')
-
-
 # ── 데이터 없이 도는 검사 ────────────────────────────────────────────────
 
 def test_the_migration_never_imports_the_replay_path():
     """수락 기준 1 — 스크립트가 주입 모듈을 import 하지 않는다.
 
     주입 산출물의 NER 엔티티를 `extract_spans`+`merge_entities` 로 다시
-    도출하면 `test_injection_replays_exactly` 가 항진명제가 된다 — 그 테스트가
-    바로 그 경로로 기대치를 만들어 산출물과 대조하기 때문이다.
+    도출하면 마이그레이션이 주입을 재생한 셈이 돼, 산출물과의 어떤 대조도
+    같은 코드가 만든 값끼리 맞춰 보는 항진명제가 된다. 판정 표를 읽어
+    옮기는 경로와 주입 경로는 끝까지 갈라져 있어야 한다.
 
     **문자열 검색이 아니라 AST 로 본다.** 스크립트 docstring 이 그 이름들을
     "안 쓴다" 고 적고 있어, 문면을 훑으면 설명하는 문장 자체가 걸린다.
@@ -166,116 +141,24 @@ def test_every_touched_span_is_listed_once():
     assert len(keys) == len(set(keys))
 
 
-# ── 원천이 있어야 도는 검사 ──────────────────────────────────────────────
+# ── 병합 산출물이 있어야 도는 검사 ──────────────────────────────────────
 
-raw_only = pytest.mark.skipif(
-    not (RAW_DIR / 'label.json').exists(),
-    reason=f'OntoNotes5 source not present at {RAW_DIR}',
+@pytest.mark.skipif(
+    not (DATA_DIR / 'origin.jsonl').exists(),
+    reason=f'EN merged corpus not present at {DATA_DIR}',
 )
+def test_the_merged_corpus_matches_the_after_fingerprint():
+    """수락 기준 3 — 마이그레이션 뒤 조용한 편집을 거부한다.
 
-
-@raw_only
-def test_the_ledger_population_comes_from_the_verdict_table():
-    """수락 기준 2 — 원장이 다루는 자리가 판정 표에서 나온다.
-
-    모집단을 손으로 고르게 두면 불리한 자리를 조용히 빼는 길이 열린다. 표를
-    고치면 이 검사가 먼저 붉어져 원장도 함께 고치게 된다.
-    """
-    targets, _ = migration.derive_targets(RAW_DIR)
-    derived = {
-        (t.split, t.id, t.start_char, t.end_char, t.verdict) for t in targets
-    }
-    listed = {_span_key(entry) for entry in _entries(_ledger())}
-    assert listed == derived, listed ^ derived
-
-
-@raw_only
-def test_the_conversion_output_is_reproducible_from_raw():
-    """수락 기준 3 — `{split}.jsonl` 이 현행 코드의 산물 그대로다.
-
-    원장이 이 파일들을 손대지 않는 대신 지문만 남기는 근거가 이것이다 —
-    원천 + 코드에서 결정적으로 다시 만들어지므로 원장 없이도 반증된다.
-    낡아 있으면 주입 쪽만 옮겨도 재생 대조가 어긋난다.
+    학습이 읽는 파일이 이것 하나라(`classifier` 의 `--data`) 여기만 봉인해도
+    gold 가 바뀌면 붉어진다. 주입 split 의 지문은 그 파일들이 디스크에서
+    내려가 대조할 상대가 없어졌다.
     """
     ledger = _ledger()
-    id2label = load_id2label(RAW_DIR / 'label.json')
-    for split in SPLIT_FILES:
-        records, problems, _, _ = convert_one_split(RAW_DIR, split, id2label)
-        assert problems == [], problems[:5]
-        digest = hashlib.sha256(
-            migration.dump_rows(records).encode('utf-8')
-        ).hexdigest()
-        assert digest == ledger['conversion_sha256'][split], split
-        assert digest == hashlib.sha256(
-            (DATA_DIR / f'{split}.jsonl').read_bytes()
-        ).hexdigest(), split
-
-
-# ── 주입 산출물이 있어야 도는 검사 ──────────────────────────────────────
-
-corpus_only = pytest.mark.skipif(
-    not all((PII_DIR / f'{s}.jsonl').exists() for s in migration.SPLITS)
-    or not (DATA_DIR / 'origin.jsonl').exists(),
-    reason=f'EN PII corpus not present at {PII_DIR}',
-)
-
-
-@corpus_only
-def test_the_corpus_matches_the_after_fingerprints():
-    """수락 기준 3 — 마이그레이션 뒤 조용한 편집을 거부한다."""
-    ledger = _ledger()
-    for name, path in _corpus_files(ledger).items():
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        assert digest == ledger['after_sha256'][name], (
-            f'{name} 가 원장이 기록한 판본과 다르다. 코퍼스를 바꿨다면 원장을'
-            f' 다시 떠서 그 변경을 커밋에 남겨라.'
-            f' ledger={ledger["after_sha256"][name][:12]} actual={digest[:12]}'
-        )
-
-
-@corpus_only
-def test_reverse_applying_the_ledger_reproduces_the_before_fingerprints():
-    """수락 기준 1·3 — 이 파일의 핵심 검사.
-
-    되돌린 결과가 **바이트 단위로** 마이그레이션 전 파일이어야 한다. 바이트를
-    요구하는 것이 요점이다 — 라벨만 맞추면 offset 을 다시 계산해 넣어도
-    지나가는데, 그 경로가 바로 수락 기준 1 이 막는 재생 경로다.
-    """
-    ledger = _ledger()
-    for name, path in _corpus_files(ledger).items():
-        digest = hashlib.sha256(_restore(path, ledger)).hexdigest()
-        assert digest == ledger['before_sha256'][name], (
-            f'{name}: 역적용이 마이그레이션 전 파일을 재현하지 못했다 —'
-            f' 원장에 없는 변경이 섞였거나 있는 변경이 빠졌다.'
-            f' ledger={ledger["before_sha256"][name][:12]} actual={digest[:12]}'
-        )
-
-
-@corpus_only
-def test_the_listed_spans_are_actually_in_the_corpus():
-    """원장이 가리키는 자리에 정말 그 엔티티가 있다.
-
-    지문 검사는 "전체가 그 판본이다" 만 말하고 어느 자리가 왜 그런지는 안
-    말한다. 여기서 행 안 자리까지 내려가 대조한다.
-    """
-    ledger = _ledger()
-    for split in migration.SPLITS:
-        rows = {r['id']: r
-                for r in migration.read_rows(PII_DIR / f'{split}.jsonl')}
-        for entry in ledger['move']:
-            if entry['split'] != split:
-                continue
-            entity = rows[entry['id']]['entities'][entry['entity_index']]
-            assert entity['label'] == entry['after'], entry
-            assert entity['text'] == entry['text'], entry
-            assert entity['start_char'] == entry['pii_start_char'], entry
-        for entry in ledger['not_applied']['absent_from_pii']:
-            if entry['split'] != split:
-                continue
-            row = rows.get(entry['id'])
-            hits = [] if row is None else [
-                e for e in row['entities']
-                if e['label'] == migration.LABEL_BEFORE
-                and e['text'] == entry['text']
-            ]
-            assert hits == [], entry
+    name = ledger['merged_name']
+    digest = hashlib.sha256((DATA_DIR / name).read_bytes()).hexdigest()
+    assert digest == ledger['after_sha256'][name], (
+        f'{name} 가 원장이 기록한 판본과 다르다. 코퍼스를 바꿨다면 원장을'
+        f' 다시 떠서 그 변경을 커밋에 남겨라.'
+        f' ledger={ledger["after_sha256"][name][:12]} actual={digest[:12]}'
+    )

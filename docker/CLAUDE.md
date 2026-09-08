@@ -1,13 +1,13 @@
 # docker/ — Docker 서비스 가이드
 
-vLLM 추론 서버(`vllm/`)·ja·vi NER REST API 서버(`server/`) 두 서비스 계층을
-묶는다. 각 하위 디렉토리는 자체 `docker-compose.yml`·설정·라이프사이클
+vLLM 추론 서버(`vllm/`)·ja·ko·vi·en NER REST API 서버(`server/`) 두 서비스
+계층을 묶는다. 각 하위 디렉토리는 자체 `docker-compose.yml`·설정·라이프사이클
 스크립트로 자족한다. 개발은 호스트에서 직접 하며 개발 컨테이너는 두지 않는다.
 
 | 하위 | 용도 |
 |------|------|
 | `vllm/` | NER 라벨링용 vLLM 추론 서버 — 2모델·포트 8081/8082 (상세: `vllm/CLAUDE.md`) |
-| `server/` | ja·vi NER REST API 추론 서버 — `/data` 모델 마운트·포트 8008 (상세: `server/CLAUDE.md`) |
+| `server/` | ja·ko·vi·en NER REST API 추론 서버 — `/data` 모델 마운트·포트 8008 (상세: `server/CLAUDE.md`) |
 
 ## vLLM 서비스 (docker/vllm/)
 
@@ -39,7 +39,7 @@ bash docker/vllm/logs.sh
 
 - HF 캐시는 환경변수가 아니라 **볼륨 마운트**로 정한다 — vLLM compose 가 호스트 고정 경로
   `/work/.huggingface` 를 컨테이너 `/root/.cache/huggingface` 에 박아 마운트한다(`HF_HOME` 미사용).
-  ner-server 는 `/data/ner/_hf_cache`.
+  ner-server 에는 이 마운트가 없다 — 모델을 `/data` 의 로컬 경로에서만 읽어 허브를 타지 않는다.
 - `OPENAI_API_KEY` — 레포 루트 `.env`에서 로드 (CLI `_load_env`)
 - `CUDA_VISIBLE_DEVICES` — vLLM 시작 스크립트에서 자동 설정
 

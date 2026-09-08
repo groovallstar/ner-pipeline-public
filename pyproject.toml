@@ -38,7 +38,7 @@ dependencies = [
     "requests",
     "lxml>=5.2,<6",
     "feedparser>=6.0,<7",
-    # Web API server (ja/vi NER REST API)
+    # Web API server (ja/ko/vi/en NER REST API)
     "fastapi",
     "uvicorn",
     # Korean sentence splitter

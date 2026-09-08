@@ -1,6 +1,6 @@
 # NER REST API 명세서
 
-> **이 문서가 하는 일**: `src/server/`가 제공하는 ja·ko·vi NER 추론 REST API의
+> **이 문서가 하는 일**: `src/server/`가 제공하는 ja·ko·vi·en NER 추론 REST API의
 > 계약(엔드포인트·요청/응답 스키마·상태 코드·에러·설정)을 한 곳에 고정한다.
 > **대상 코드**: `src/server/` (`app.py`·`config.py`·`inference.py`·
 > `detect.py`·`concurrency.py`·`chunking.py`)
@@ -35,8 +35,9 @@ FastAPI가 런타임에 자동 생성하는 OpenAPI 문서(`GET /docs`·`GET
 canonical span(`{label, start_char, end_char, text}`)으로 `.jsonl`
 데이터 관례와 1:1이라 API 결과를 파이프라인에 그대로 되먹일 수 있다.
 
-- **지원 언어**: `ja`(일본어)·`ko`(한국어)·`vi`(베트남어) 3종. `lang` 생략 시
-  텍스트별 자동 감지, 어느 신호도 없으면 `unsupported`(에러 아님, §4 참조).
+- **지원 언어**: `ja`(일본어)·`ko`(한국어)·`vi`(베트남어)·`en`(영어) 4종.
+  `lang` 생략 시 텍스트별 자동 감지, 배타적 스크립트 신호도 라틴 글자도
+  없으면 `unsupported`(에러 아님, §4 참조).
 - **핸들러 무상태**: 모든 가변 상태는 부팅 때 로드한 모델 registry 안에
   있고 요청은 그것을 읽기만 한다.
 - **포함**: 요청 검증 / 언어 감지 / 긴 입력 분할 / 배치 forward / BIO
@@ -80,7 +81,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 `NER_SERVER_TRANSLATE_*`(웹 데모 번역)는 이 표에 없다 — 그 엔드포인트가 이
 계약(§3)에 없기 때문이다. 기본 비활성이며 켜도 `/v1/ner` 동작·응답은 바뀌지
 않는다(동시성 예산도 분리 — §8). 설정 표면은 `src/server/CLAUDE.md`, 구현
-레퍼런스(마스킹-복원·백엔드 선택)는 `docs/manual/web-demo-translation.md`.
+레퍼런스(마스킹-복원·설정 검증)는 `docs/manual/web-demo-translation.md`.
 
 ## 3. 엔드포인트 목록
 
@@ -103,7 +104,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 |---|---|---|---|
 | `text` | string | 택일 | 단일 텍스트. `texts`와 상호배타 |
 | `texts` | string[] | 택일 | 배치 텍스트. `text`와 상호배타 |
-| `lang` | string | 선택 | `ja`\|`vi`. 생략 시 텍스트별 자동 감지. 지원 외 값 → 400 |
+| `lang` | string | 선택 | `ja`\|`ko`\|`vi`\|`en`. 생략 시 텍스트별 자동 감지. 지원 외 값 → 400 |
 
 신뢰도 임계값은 모델이 임계값 파일을 로드한 경우 **자동 적용**된다(요청
 파라미터 없음). 임계값 파일이 없는 배포·언어는 raw span을 그대로 반환한다.
@@ -131,6 +132,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 {
   "results": [
     {"lang": "ja", "entities": [/* ... */]},
+    {"lang": "ko", "entities": [/* ... */]},
     {"lang": "vi", "entities": [/* ... */]}
   ]
 }
@@ -157,25 +159,37 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 
 | 상황 | 결과 |
 |---|---|
-| `lang` 명시 = `ja`\|`ko`\|`vi` | 감지 없이 해당 모델로 추론 |
+| `lang` 명시 = `ja`\|`ko`\|`vi`\|`en` | 감지 없이 해당 모델로 추론 |
 | `lang` 명시 = 그 외 | **400** `unsupported lang '{lang}'` (클라이언트 계약 위반) |
-| `lang` 생략, 감지 = `ja`\|`ko`\|`vi` | 감지 언어로 추론, 응답에 에코 |
+| `lang` 생략, 감지 = `ja`\|`ko`\|`vi`\|`en` | 감지 언어로 추론, 응답에 에코 |
 | `lang` 생략, 감지 = `unsupported` | **200** `{lang:"unsupported", entities:[]}` — 모델 미호출 |
 
 배치에서 자동 감지 `unsupported` 항목은 빈 결과로 두고 지원 언어 항목만
 추론한다(**부분 성공** — 입력 순서·`lang` 1:1 보존).
 
-**자동 감지 규칙**(`detect.py`): 가나(히라가나·가타카나) → `ja`, 한글(음절
-또는 자모) → `ko`, vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` →
-`vi`, 그 외 → `unsupported`. 셋의 신호는 서로소이고, 한 문장에 둘 이상 있으면
-위 순서대로 먼저 맞은 언어가 이긴다.
+**자동 감지 규칙**(`detect.py`)은 두 단이다. 첫째 단은 배타적 스크립트의
+양성 감지다 — 가나(히라가나·가타카나) → `ja`, 한글(음절 또는 자모) → `ko`,
+vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` → `vi`. 셋의 신호는
+서로소이고, 한 문장에 둘 이상 있으면 위 순서대로 먼저 맞은 언어가 이긴다.
+셋이 모두 실패하면 둘째 단으로 내려가 라틴 글자가 있으면 → `en`, 라틴
+글자도 없으면 → `unsupported` 다.
 
-감지가 놓치는 자리가 둘 있다. **한자만 있는 텍스트**는 ja·ko 가 한자를 공유해
-어느 쪽도 가리키지 않으므로 `unsupported` 다 — 가나·한글이라는 *배타적*
-스크립트만 신호로 쓰기 때문이며, 그런 입력은 `lang` 을 직접 지정해야 한다.
-**부호를 뗀 베트남어**(không dấu)도 변별 신호가 없어 `unsupported` 로 떨어진다.
-둘 다 false-accept 를 0 으로 두기 위해 받아들인 한계다. 근거: `docs/reports/
+**둘째 단은 감지가 아니라 폴백이다.** 영어는 라틴 스크립트에 고유
+코드포인트가 없어 스크립트만으로 변별되지 않으므로, `en` 은 "영어 신호를
+봤다" 가 아니라 "지원 언어 신호가 없는데 라틴 글자는 있다" 를 뜻한다. 대가는
+오분류다 — **부호를 뗀 베트남어**(không dấu)와 **로마자로 적은 일본어**가
+`en` 으로 가 영어 모델을 탄다. 그런 입력은 `lang` 을 직접 지정해야 한다.
+
+`unsupported` 로 남는 것은 라틴 글자마저 없는 입력이다. **한자만 있는
+텍스트**가 대표적인데, ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않는
+데다 라틴 글자도 없기 때문이다. 근거: `docs/reports/
 language-detection-benchmark.md`.
+
+**배포 전제** — 자동 감지가 라틴 텍스트를 `en` 으로 보내므로,
+`/data/ner/en/model` 이 없는 배포에서는 영어 입력이 200 이 아니라 503 이고
+라틴 항목이 섞인 배치는 통째로 503 이다. §2 의 graceful 로드 서술과 위 배치
+부분 성공 서술 둘 다에 대해 새로 생긴 예외다 — 서버는 뜨지만 그 언어 요청이
+503 이고, 배치는 부분 성공이 아니라 통째로 실패한다.
 
 ## 5. `GET /health` — 상태
 
@@ -188,7 +202,9 @@ language-detection-benchmark.md`.
   "status": "ok",           // 요청된 모든 언어가 loaded면 "ok", 아니면 "degraded"
   "langs": {
     "ja": {"loaded": true,  "thresholds": true},
-    "vi": {"loaded": true,  "thresholds": false}
+    "vi": {"loaded": true,  "thresholds": false},
+    "ko": {"loaded": true,  "thresholds": false},
+    "en": {"loaded": true,  "thresholds": false}
   }
 }
 ```
@@ -206,8 +222,9 @@ language-detection-benchmark.md`.
 브라우저가 CORS 없이 `POST /v1/ner`를 직접 호출한다 — 별도 정적 호스팅·빌드
 스텝·신규 의존성이 없다(`python -m server` 하나로 API + UI 동시 제공).
 
-- **입력**: 텍스트 1건 + 언어 셀렉터(`자동감지`/`ja`/`vi`). 수동 선택 시
-  요청에 `lang`을 실어 자동감지를 우회한다(무부호 vi·romaji ja 대응).
+- **입력**: 텍스트 1건 + 언어 셀렉터(`자동감지`/`ja`/`ko`/`vi`/`en`). 수동
+  선택 시 요청에 `lang`을 실어 자동감지를 우회한다 — 무부호 vi·romaji ja 는
+  자동감지가 `en` 으로 보내므로 이 우회가 유일한 수단이다.
 - **출력**: 추출 개체를 원문 위 라벨별 색상 하이라이트로 표시(canonical 10종
   색상 맵 + 범례). 표시 텍스트를 **NFC 정규화**해 하이라이트 offset이 서버
   offset과 정합한다. 자동감지 `unsupported`는 안내 문구로 표시한다.
@@ -226,7 +243,7 @@ language-detection-benchmark.md`.
 | 상태 | 트리거 | `message` 예시 |
 |---|---|---|
 | **400** | `text`·`texts` 택일 위반 | `provide exactly one of 'text' or 'texts'` |
-| **400** | 명시 `lang`이 지원 외 | `unsupported lang 'en'` |
+| **400** | 명시 `lang`이 지원 외 | `unsupported lang 'th'` |
 | **401** | API-key 설정됐는데 헤더 불일치/누락 | `invalid or missing API key` |
 | **413** | 요청 바디가 `max_body_bytes` 초과(파싱·인증 전) | `request body exceeds max_body_bytes (2097152)` |
 | **413** | 텍스트 1건이 `max_chars` 초과 | `text exceeds max_chars (20000)` |
@@ -332,7 +349,7 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ## 10. 엔티티 라벨 셋
 
-`label`은 ja·ko·vi 공통 canonical **10종 평면** 중 하나다.
+`label`은 ja·ko·vi·en 공통 canonical **10종 평면** 중 하나다.
 
 | 구분 | 라벨 |
 |---|---|
@@ -357,7 +374,7 @@ flowchart TD
     VAL -->|위반| ERR["400 / 413"]
     VAL -->|통과| LANG{"언어 결정<br/>지정 or 자동감지"}
     LANG -->|unsupported| EMPTY["200 · 빈 결과<br/>모델 미호출"]
-    LANG -->|"ja·ko·vi"| GUARD["동시성 guard 진입<br/>큐/타임아웃 초과 → 429"]
+    LANG -->|"ja·ko·vi·en"| GUARD["동시성 guard 진입<br/>큐/타임아웃 초과 → 429"]
     GUARD --> INFER["추론: 긴 입력 분할 →<br/>배치 forward → BIO<br/>디코드"]
     INFER --> CANON["원문 offset 복원 +<br/>임계값 자동 적용 →<br/>canonical span"]
     CANON --> OK["200 · entities/results"]
@@ -385,16 +402,22 @@ curl -s -X POST localhost:8008/v1/ner \
 # 배치(혼합 언어, 텍스트별 감지)
 curl -s -X POST localhost:8008/v1/ner \
   -H 'Content-Type: application/json' \
-  -d '{"texts":["トヨタは日本の会社です。","Hà Nội là thủ đô."]}'
-# → {"results":[{"lang":"ja","entities":[...]},{"lang":"vi","entities":[...]}]}
+  -d '{"texts":["トヨタは日本の会社です。","삼성전자는 수원에 있다.","Hà Nội là thủ đô.","Barack Obama was born in Hawaii."]}'
+# → {"results":[{"lang":"ja","entities":[...]},{"lang":"ko","entities":[...]},
+#               {"lang":"vi","entities":[...]},{"lang":"en","entities":[...]}]}
 
 # 언어 명시(자동 감지 대신 직접 지정)
 curl -s -X POST 'localhost:8008/v1/ner' \
   -H 'Content-Type: application/json' -d '{"text":"...","lang":"ja"}'
 
-# 미지원 입력(영어 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
+# 단일(자동감지) — en (라틴 폴백)
 curl -s -X POST localhost:8008/v1/ner \
-  -H 'Content-Type: application/json' -d '{"text":"plain English"}'
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Barack Obama was born in Hawaii in 1961."}'
+
+# 미지원 입력(한자만 등) → 200 + 빈 결과(에러 아님, 모델 미호출)
+curl -s -X POST localhost:8008/v1/ner \
+  -H 'Content-Type: application/json' -d '{"text":"東京都千代田区"}'
 # → {"lang":"unsupported","entities":[]}
 
 # 계약 에러: 택일 위반 → 400 (status 코드만 확인)
@@ -412,7 +435,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 ## 13. 검증·테스트
 
 - **계약·전송 pytest**: `uv run pytest tests/server/` — stub registry로 모델
-  없이 CI 가능. 모델 통합(offset 정합·ja parity)은 `/data` 있을 때만 실행
+  없이 CI 가능. 모델 통합(offset 정합·ja·ko·vi·en parity)은 `/data` 있을 때만 실행
   (`pytest.skip` 가드).
 - **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
   --base-url http://localhost:8008` — 단일·배치·미지원·계약 에러

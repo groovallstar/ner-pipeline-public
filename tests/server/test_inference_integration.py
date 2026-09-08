@@ -1,19 +1,24 @@
-"""모델 통합 테스트 — 실제 /data/ner/{ja,ko,vi} 모델 의존(로컬 전용).
+"""모델 통합 테스트 — 실제 /data/ner/{ja,ko,vi,en} 모델 의존(로컬 전용).
 
 /data 는 gitignore 라 CI 에서 재현 불가하므로, 모델 디렉토리가 없으면
 `pytest.skip`(약화 아님 — 사유 출력). 핵심은 모델 품질이 아니라 **offset
 정합성**: 반환된 어떤 span 도 `text[start_char:end_char] == span['text']`.
 
-세 언어를 같은 축으로 태운다. 계약 테스트(`test_api.py`)는 stub registry 라
+네 언어를 같은 축으로 태운다. 계약 테스트(`test_api.py`)는 stub registry 라
 모델을 안 부르므로, 토크나이저 분기·청킹·배치화가 언어별로 갈리는 자리는
-여기서만 잡힌다 — ja 는 slow 토크나이저 특례, ko·vi 는 fast 경로이고,
-한국어 장문은 `chunking._SENT_RE` 의 경계 문자에 ASCII 마침표가 없어 문장
-분할이 아니라 단어 경계 폴백(`_char_windows`)을 탄다.
+여기서만 잡힌다 — fast 경로는 ko 와 en(roberta-base)이고 ja·vi 는 slow 다.
+ja 만 `_load_tokenizer` 가 이름으로 특례 두고, vi 는 fast 를 요청해도 PhoBERT
+에 fast 판이 없어 slow 가 돌아온다.
+
+`chunking._SENT_RE` 의 경계 문자 집합에는 언어 분기가 없고, 그 집합에 ASCII
+마침표가 없다. 그래서 마침표로 끝나는 산문은 ko 든 en 이든 문장 분할이 아니라
+단어 경계 폴백(`_char_windows`)을 탄다.
 """
 
 import json
 import os
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -27,18 +32,24 @@ _CONFIG = ServerConfig()
 _JA_DIR = _CONFIG.model_dir('ja')
 _VI_DIR = _CONFIG.model_dir('vi')
 _KO_DIR = _CONFIG.model_dir('ko')
+_EN_DIR = _CONFIG.model_dir('en')
 _JA_TEST = os.path.join(_CONFIG.model_root, 'ja', 'data', 'test.jsonl')
 _VI_TEST = os.path.join(_CONFIG.model_root, 'vi', 'data', 'test.jsonl')
 _KO_TEST = os.path.join(_CONFIG.model_root, 'ko', 'data', 'test.jsonl')
+_EN_TEST = os.path.join(_CONFIG.model_root, 'en', 'data', 'test.jsonl')
 _JA_METRICS = os.path.join(_CONFIG.model_root, 'ja', 'metrics.json')
 _KO_METRICS = os.path.join(_CONFIG.model_root, 'ko', 'metrics.json')
+_EN_METRICS = os.path.join(_CONFIG.model_root, 'en', 'metrics.json')
 _JA_PARITY_READY = (os.path.isdir(_JA_DIR) and os.path.isfile(_JA_TEST)
                     and os.path.isfile(_JA_METRICS))
 _KO_PARITY_READY = (os.path.isdir(_KO_DIR) and os.path.isfile(_KO_TEST)
                     and os.path.isfile(_KO_METRICS))
+_EN_PARITY_READY = (os.path.isdir(_EN_DIR) and os.path.isfile(_EN_TEST)
+                    and os.path.isfile(_EN_METRICS))
 _JA_CHUNK_READY = os.path.isdir(_JA_DIR) and os.path.isfile(_JA_TEST)
 _VI_CHUNK_READY = os.path.isdir(_VI_DIR) and os.path.isfile(_VI_TEST)
 _KO_CHUNK_READY = os.path.isdir(_KO_DIR) and os.path.isfile(_KO_TEST)
+_EN_CHUNK_READY = os.path.isdir(_EN_DIR) and os.path.isfile(_EN_TEST)
 
 
 def _assert_offsets_consistent(model, text):
@@ -143,6 +154,16 @@ def test_ko_offset_consistency():
     _assert_offsets_consistent(model, '김민준은 서울 강남구에 살고 있었다.')
 
 
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_offset_consistency():
+    """en(roberta-base): 반환 span offset 이 원문 표면형과 일치."""
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    _assert_offsets_consistent(
+        model, 'Barack Obama was born in Hawaii in 1961.')
+
+
 @pytest.mark.skipif(not os.path.isdir(_VI_DIR),
                     reason=f'vi model dir not present: {_VI_DIR}')
 def test_vi_graceful_raw_when_no_thresholds():
@@ -159,6 +180,35 @@ def test_ko_graceful_raw_when_no_thresholds():
     model = LangModel('ko', _KO_DIR, _CONFIG.thresholds_path('ko'),
                       _CONFIG.max_length)
     assert model.has_thresholds is False
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_graceful_raw_when_no_thresholds():
+    """en 도 thresholds.json 없이 출하돼 raw 로 동작.
+
+    vi·ko 와 **로드 경로만** 같다. 감지 경로는 다르다 — vi 는 고위 특이도
+    양성 신호로 도달하는데 en 은 신호의 부재로 도달하므로, raw 출력에
+    라우팅 오차가 곱해진다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    assert model.has_thresholds is False
+    assert model.thresholds == {}
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_health_reports_raw_serving():
+    """`/health` 가 en 을 loaded·thresholds False 로 보고한다.
+
+    `has_thresholds` 를 객체 속성이 아니라 **출하되는 응답**으로 단언해,
+    "en 은 raw 로 뜬다" 를 내부 사실이 아니라 소비자 계약으로 만든다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    health = ModelRegistry({'en': model}).health()
+    assert health['langs']['en'] == {'loaded': True, 'thresholds': False}
 
 
 @pytest.mark.skipif(not os.path.isdir(_JA_DIR),
@@ -210,6 +260,24 @@ def test_ko_long_input_chunk_offsets():
     _assert_latter_half_recall(model, text)
 
 
+@pytest.mark.skipif(not _EN_CHUNK_READY,
+                    reason='en model/test not present')
+def test_en_long_input_chunk_offsets():
+    """en: max_length 초과 입력도 후반 청크 엔티티를 회수하고 글로벌
+    offset 이 원문과 일치.
+
+    영어 산문은 ASCII 마침표로 끝나는데 경계 정규식이 그것을 안 잡으므로,
+    ko 와 같은 단어 경계 폴백을 탄다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_EN_TEST) if r['entities']][:30]
+    text, _ = _build_long_doc(rows)
+    chunks = split_for_length(text, model.tokenizer, model.max_length)
+    assert len(chunks) > 1
+    _assert_latter_half_recall(model, text)
+
+
 @pytest.mark.skipif(not _JA_CHUNK_READY,
                     reason='ja model/test not present')
 def test_ja_batched_chunks_match_per_chunk():
@@ -239,6 +307,17 @@ def test_ko_batched_chunks_match_per_chunk():
     model = LangModel('ko', _KO_DIR, _CONFIG.thresholds_path('ko'),
                       _CONFIG.max_length)
     rows = [r for r in load_jsonl(_KO_TEST) if r['entities']][:30]
+    text, _ = _build_long_doc(rows)
+    _assert_batched_matches_per_chunk(model, text)
+
+
+@pytest.mark.skipif(not _EN_CHUNK_READY,
+                    reason='en model/test not present')
+def test_en_batched_chunks_match_per_chunk():
+    """en: multi-chunk 배치 predict 가 chunk별 단건 forward 와 동일."""
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_EN_TEST) if r['entities']][:30]
     text, _ = _build_long_doc(rows)
     _assert_batched_matches_per_chunk(model, text)
 
@@ -290,6 +369,23 @@ def test_ko_gold_entities_never_straddle_chunk_boundary():
     for e in ents:
         assert any(cs <= e['start'] and e['end'] <= ce for cs, ce in spans), \
             f"ko entity {text[e['start']:e['end']]!r} straddles a boundary"
+
+
+@pytest.mark.skipif(not _EN_CHUNK_READY,
+                    reason='en model/test not present')
+def test_en_gold_entities_never_straddle_chunk_boundary():
+    """en: 실 test gold 엔티티 전수가 청크 경계를 가로지르지 않는다.
+
+    영어도 ko 와 같은 단어 경계 폴백을 타므로, 폴백이 어절 중간을 자르면
+    엔티티가 잘려 recall 이 떨어진다.
+    """
+    tok = _load_tokenizer(_EN_DIR, 'en')
+    text, ents = _build_long_doc(load_jsonl(_EN_TEST))
+    spans = _chunk_spans(text, tok, _CONFIG.max_length)
+    assert len(spans) > 1 and ents
+    for e in ents:
+        assert any(cs <= e['start'] and e['end'] <= ce for cs, ce in spans), \
+            f"en entity {text[e['start']:e['end']]!r} straddles a boundary"
 
 
 def _overall_f1(model, rows, apply_threshold):
@@ -365,6 +461,27 @@ def test_ko_parity_baseline_raw():
     assert got['support'] == expected['support']
 
 
+@pytest.mark.skipif(not _EN_PARITY_READY,
+                    reason='en model/test/metrics not all present')
+def test_en_parity_baseline_raw():
+    """en: 서버 predict 의 raw F1 이 배포 metrics.json 과 일치.
+
+    en 은 thresholds 없이 출하돼 raw 가 운영점이므로 대조 대상이 하나다
+    (ko 와 같은 모양). 양변 모두 fp32 라 정밀도 델타가 없다 —
+    `metrics.json` 의 `precision: "bf16"` 은 학습 혼합정밀도 기록이지 평가
+    정밀도가 아니다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    rows = load_jsonl(_EN_TEST)
+    expected = json.load(open(_EN_METRICS, encoding='utf-8'))['overall_strict']
+    got = _overall_f1(model, rows, apply_threshold=False)
+    assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
+    assert got['precision'] == pytest.approx(expected['precision'], abs=1e-6)
+    assert got['recall'] == pytest.approx(expected['recall'], abs=1e-6)
+    assert got['support'] == expected['support']
+
+
 def _mixed_length_texts(rows):
     """짧은 단건 + 장문(multi-chunk)을 섞은 텍스트 리스트(B≥2)."""
     short = [r['text'] for r in rows[:4]]
@@ -426,15 +543,26 @@ def test_ko_predict_many_matches_single():
     _assert_predict_many_matches_single(model, _mixed_length_texts(rows))
 
 
+@pytest.mark.skipif(not _EN_CHUNK_READY, reason='en model/test not present')
+def test_en_predict_many_matches_single():
+    """en: cross-text 배치(혼합 길이)가 단건 순차와 동일(배치화 등가)."""
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    rows = [r for r in load_jsonl(_EN_TEST) if r['entities']][:30]
+    _assert_predict_many_matches_single(model, _mixed_length_texts(rows))
+
+
 @pytest.mark.skipif(
-    not (_JA_CHUNK_READY and _VI_CHUNK_READY and _KO_CHUNK_READY),
-    reason='ja+vi+ko models/test not all present')
+    not (_JA_CHUNK_READY and _VI_CHUNK_READY and _KO_CHUNK_READY
+         and _EN_CHUNK_READY),
+    reason='ja+vi+ko+en models/test not all present')
 def test_predict_batch_mixed_lang_matches_single():
-    """이질 배치(ja·vi·ko 혼합·인터리브)가 순서·lang·offset 1:1로 단건과 동일.
+    """이질 배치(ja·vi·ko·en 혼합·인터리브)가 순서·lang·offset 1:1로 단건과
+    동일.
 
     registry.predict_batch 가 언어별로 묶어 forward 한 뒤 입력 순서로 복원
     하므로, 추론이 fp32 라 각 항목이 단건 predict 와 정확히 일치해야
-    한다 — 묶음/복원에서 순서·언어가 섞이면 깨진다. 세 언어를 인터리브하는
+    한다 — 묶음/복원에서 순서·언어가 섞이면 깨진다. 네 언어를 인터리브하는
     것은 묶음이 둘일 때보다 복원이 어긋날 자리가 많아서다.
     """
     ja_model = LangModel('ja', _JA_DIR, _CONFIG.thresholds_path('ja'),
@@ -443,21 +571,28 @@ def test_predict_batch_mixed_lang_matches_single():
                          _CONFIG.max_length)
     ko_model = LangModel('ko', _KO_DIR, _CONFIG.thresholds_path('ko'),
                          _CONFIG.max_length)
-    registry = ModelRegistry({'ja': ja_model, 'vi': vi_model, 'ko': ko_model})
+    en_model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                         _CONFIG.max_length)
+    registry = ModelRegistry({'ja': ja_model, 'vi': vi_model,
+                              'ko': ko_model, 'en': en_model})
     ja_rows = [r for r in load_jsonl(_JA_TEST) if r['entities']][:3]
     vi_rows = [r for r in load_jsonl(_VI_TEST) if r['entities']][:3]
     ko_rows = [r for r in load_jsonl(_KO_TEST) if r['entities']][:3]
+    en_rows = [r for r in load_jsonl(_EN_TEST) if r['entities']][:3]
     texts, langs = [], []
-    for jr, vr, kr in zip(ja_rows, vi_rows, ko_rows):  # ja·vi·ko 인터리브
+    for jr, vr, kr, er in zip(ja_rows, vi_rows, ko_rows,
+                              en_rows):  # ja·vi·ko·en 인터리브
         texts.append(jr['text'])
         langs.append('ja')
         texts.append(vr['text'])
         langs.append('vi')
         texts.append(kr['text'])
         langs.append('ko')
+        texts.append(er['text'])
+        langs.append('en')
     out = registry.predict_batch(texts, langs, apply_threshold=False)
     assert len(out) == len(texts)
-    assert set(langs) == {'ja', 'vi', 'ko'}  # 세 묶음이 실제로 만들어졌다
+    assert set(langs) == {'ja', 'vi', 'ko', 'en'}  # 네 묶음이 실제로 만들어졌다
     for i, (t, lang) in enumerate(zip(texts, langs)):
         _assert_spans_equal(
             out[i], registry.predict(t, lang, apply_threshold=False))
@@ -502,3 +637,148 @@ def test_ko_nfd_input_matches_nfc():
            for s in model.predict(unicodedata.normalize('NFD', text))]
     assert nfc == nfd                        # 정규화로 두 형태가 일치
     assert any(lbl == 'PER' for lbl, *_ in nfc)  # 엔티티가 실제로 잡힘
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_nfd_input_matches_nfc():
+    """NFD(분해형) 영어 입력이 NFC 와 같은 엔티티를 낸다.
+
+    영어라고 ASCII 만 오는 것이 아니다 — 차용 인명·지명에 붙은 결합부호가
+    NFD 로 갈리면 토크나이저가 낱개로 보고 offset 도 분해형 기준이라 원문
+    슬라이스와 어긋난다. vi 결합부호·ko 자모와 같은 가드가 필요한 이유다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    text = 'Renée Fleming performed in Zürich with the Orchestre National.'
+    assert len(unicodedata.normalize('NFD', text)) > len(text)  # 실제 분해
+    nfc = [(s['label'], s['start_char'], s['end_char'], s['text'])
+           for s in model.predict(unicodedata.normalize('NFC', text))]
+    nfd = [(s['label'], s['start_char'], s['end_char'], s['text'])
+           for s in model.predict(unicodedata.normalize('NFD', text))]
+    assert nfc == nfd                        # 정규화로 두 형태가 일치
+    assert nfc, 'expected at least one entity'
+
+
+# ---------- 동시 추론 (실모델) ----------
+
+_CONCURRENCY_TEXTS = {
+    'ja': '田中さんは東京の株式会社ソニーで働いています。',
+    'vi': 'Nguyen Van A lam viec tai cong ty Samsung o Ha Noi.',
+    'ko': '김철수는 서울에 있는 삼성전자에서 일한다.',
+    'en': 'John Smith works at Microsoft in Seattle.',
+}
+
+
+def _assert_concurrent_matches_sequential(lang, model_dir):
+    """`max_concurrency` 만큼 동시에 predict 해도 예외 0 · 순차 결과와 일치.
+
+    서버가 추론을 `run_in_threadpool` 로 돌리므로 언어당 하나뿐인 토크나이저에
+    여러 스레드가 동시에 들어온다. fast 토크나이저는 그때 `Already borrowed`
+    로 터졌고(실측: 동시 2 요청에 ko·en 의 40~50% 가 500), `LangModel._tokenize`
+    의 잠금이 그걸 막는다. 예외뿐 아니라 span 동일성까지 보는 것은 조용한
+    오염(잘못된 토큰화가 200 으로 나가는 경우)을 배제하기 위해서다.
+
+    `test_tokenizer_lock.py` 가 같은 불변식을 stub 으로 결정적으로 고정한다 —
+    여기는 실제 HF 토크나이저로 그 처방이 듣는지 확인하는 겹이다.
+    """
+    model = LangModel(lang, model_dir, _CONFIG.thresholds_path(lang),
+                      _CONFIG.max_length)
+    text = _CONCURRENCY_TEXTS[lang]
+    expected = model.predict(text)
+
+    n = ServerConfig().max_concurrency
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        futures = [ex.submit(model.predict, text) for _ in range(n)]
+        errors, results = [], []
+        for f in futures:
+            try:
+                results.append(f.result())
+            except Exception as exc:            # noqa: BLE001 — 수집이 목적
+                errors.append(repr(exc))
+
+    assert errors == [], f'{lang}: 동시 추론에서 예외 {len(errors)}건 — {errors[:2]}'
+    assert len(results) == n
+    for got in results:
+        assert got == expected, f'{lang}: 동시 결과가 순차와 다르다'
+
+
+@pytest.mark.skipif(not os.path.isdir(_JA_DIR),
+                    reason=f'ja model dir not present: {_JA_DIR}')
+def test_ja_concurrent_predict_matches_sequential():
+    """ja(slow 토크나이저)도 동시 추론에서 예외 0 · 순차와 일치."""
+    _assert_concurrent_matches_sequential('ja', _JA_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_VI_DIR),
+                    reason=f'vi model dir not present: {_VI_DIR}')
+def test_vi_concurrent_predict_matches_sequential():
+    """vi(PhoBERT)도 동시 추론에서 예외 0 · 순차와 일치."""
+    _assert_concurrent_matches_sequential('vi', _VI_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_KO_DIR),
+                    reason=f'ko model dir not present: {_KO_DIR}')
+def test_ko_concurrent_predict_matches_sequential():
+    """ko(fast) — 잠금 없이는 여기서 `Already borrowed` 가 났다."""
+    _assert_concurrent_matches_sequential('ko', _KO_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_concurrent_predict_matches_sequential():
+    """en(roberta-base fast) — 잠금 없이는 여기서 `Already borrowed` 가 났다."""
+    _assert_concurrent_matches_sequential('en', _EN_DIR)
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_concurrent_predict_many_matches_sequential():
+    """배치 경로(`predict_many`)도 같은 토크나이저를 지나므로 함께 본다.
+
+    `/v1/ner` 은 `text`(단건)와 `texts`(배치)를 한 엔드포인트로 받고, 배치는
+    `predict_many` 로 간다. 단건만 고치고 배치를 두면 절반만 낫는다.
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    texts = [_CONCURRENCY_TEXTS['en'], 'Acme Corp opened an office in Paris.']
+    expected = model.predict_many(texts)
+
+    n = ServerConfig().max_concurrency
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        futures = [ex.submit(model.predict_many, texts) for _ in range(n)]
+        errors, results = [], []
+        for f in futures:
+            try:
+                results.append(f.result())
+            except Exception as exc:            # noqa: BLE001 — 수집이 목적
+                errors.append(repr(exc))
+
+    assert errors == [], f'배치 동시 추론에서 예외 {len(errors)}건 — {errors[:2]}'
+    for got in results:
+        assert got == expected
+
+
+@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
+                    reason=f'en model dir not present: {_EN_DIR}')
+def test_en_whitespace_only_overlong_input_returns_empty():
+    """공백뿐인 장문이 예외 없이 빈 결과를 낸다 — en 전용 경로다.
+
+    en 의 RobertaTokenizer 는 ByteLevel BPE 라 공백 하나가 토큰 하나다(실측:
+    공백 2000 자 = 2000 토큰). 그래서 토큰 예산을 넘고, `split_for_length` 는
+    분할 경로에서 공백뿐인 조각을 전부 버려 **청크를 하나도 안 돌려준다**.
+    나머지 세 언어는 같은 입력을 0 토큰으로 세 예산 안에 들어가 이 경로가
+    없다.
+
+    `LangModel._infer_encoded` 의 빈 `feats` 가드가 여기를 받는다. 가드를
+    지우면 `_forward_feats([])` 가 `IndexError` 로 터져 요청이 500 이 된다 —
+    토크나이저 잠금과는 별개인 두 번째 500 경로이며, `lang='en'` 을 명시하면
+    `max_chars` 안이라 API 로도 닿는다(자동 감지는 라틴 글자가 없어
+    `unsupported` 로 먼저 빠진다).
+    """
+    model = LangModel('en', _EN_DIR, _CONFIG.thresholds_path('en'),
+                      _CONFIG.max_length)
+    for text in (' ' * 2000, '\t' * 2000, '\n' * 2000):
+        assert model.predict(text) == []
+    assert model.predict_many([' ' * 2000, 'John Smith works at Microsoft.']) \
+        == [[], model.predict('John Smith works at Microsoft.')]
