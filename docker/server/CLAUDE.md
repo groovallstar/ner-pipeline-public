@@ -25,7 +25,7 @@ GPU 는 1장만 컨테이너에 노출돼 고정된다(`device_ids`; 기본 0, `
 | 파일 | 역할 |
 |------|------|
 | `Dockerfile` | CUDA 베이스(`pytorch:2.13.0-cuda13.0`) + uv sync(`ner`·`server` 설치). `curl`(healthcheck)·`build-essential`(토크나이저 빌드)·`git` 포함. ENTRYPOINT=`uv run --frozen python -m server` — `--frozen` 이라 런타임에 `uv.lock` 을 재해결하지 않는다(이미지에 굳은 의존성 그대로 기동) |
-| `docker-compose.yml` | `ner-server` 서비스 — `NER_SERVER_*` env, `/data`·HF 캐시 마운트, GPU reservation, 포트 publish, 준비성 healthcheck, restart unless-stopped, `extra_hosts`(`host.docker.internal:host-gateway`). 번역 키에는 기본값을 주지 않는다 — compose 가 값을 채우면 서버가 "안 준 것"과 구별하지 못한다 |
+| `docker-compose.yml` | `ner-server` 서비스 — `NER_SERVER_*` env, `/data` 마운트, GPU reservation, 포트 publish, 준비성 healthcheck, restart unless-stopped, `extra_hosts`(`host.docker.internal:host-gateway`). 번역 키에는 기본값을 주지 않는다 — compose 가 값을 채우면 서버가 "안 준 것"과 구별하지 못한다 |
 | `start.sh` | 빌드 + 기동. 기존 컨테이너 정리 후 올림. `--no-build` 로 기존 이미지 빠른 기동(코드 변경 없을 때 `uv sync` 레이어 재실행 회피) |
 | `stop.sh` | 컨테이너 중지·제거 |
 | `logs.sh` | 컨테이너 로그 tail |
@@ -39,21 +39,18 @@ GPU 는 1장만 컨테이너에 노출돼 고정된다(`device_ids`; 기본 0, `
 
 ### 웹 데모 번역을 켤 때
 
-`NER_SERVER_TRANSLATE_ENABLED=true` 만으로는 뜨지 않는다 — `TRANSLATE_BACKEND`
-(`llm`|`nllb`)를 반드시 고르고, 그 백엔드의 키만 남긴다(반대편 키가 설정돼 있으면
-기동 실패. 이유는 `src/server/CLAUDE.md` §번역 백엔드).
+`NER_SERVER_TRANSLATE_ENABLED=true` 만으로는 뜨지 않는다 — `TRANSLATE_MODEL` 과
+`TRANSLATE_BASE_URL` 을 함께 준다. 둘 다 기본값이 없어 빠지면 기동이 실패한다
+(이유는 `src/server/CLAUDE.md` §번역 설정 표면).
 
-- **`llm`(원격)**: compose 가 `extra_hosts` 로 `host.docker.internal` 을
-  host-gateway 에 붙여 둔다 — 컨테이너 안에서 `localhost` 는 컨테이너 자신이라
-  호스트에 떠 있는 vLLM 에 닿지 못하기 때문이다. `NER_SERVER_TRANSLATE_BASE_URL`
-  을 `http://host.docker.internal:8081/v1` 로 주는 것이 이 설정을 쓰는 경로다.
-- **`nllb`(인프로세스)**: 원격이 필요 없는 대신 기동 때 HF 허브에서 가중치를
-  내려받아(1.3B 기준 수 GB) `HF_HOME`(컨테이너 `/data/ner/_hf_cache`)에 쌓는다.
-  그 경로는 호스트로 마운트돼 있어 컨테이너를 다시 만들어도 재다운로드가 없다
-  (호스트 경로는 `NER_SERVER_HF_CACHE` 로 옮긴다). 첫 기동은 다운로드만큼
-  느려 healthcheck 가 `starting` 에 오래 머문다. 폐쇄망이면 캐시를 미리 채워
-  둔다. 번역이 NER 과 **같은 GPU** 를 쓰므로 VRAM 예산을 함께 본다 —
-  동시 처리량은 `NER_SERVER_TRANSLATE_MAX_CONCURRENCY`(기본 2)로 묶인다.
+`BASE_URL` 은 컨테이너 밖 vLLM 을 가리킨다. compose 가 `extra_hosts` 로
+`host.docker.internal` 을 host-gateway 에 붙여 두는 것이 그 때문이다 —
+컨테이너 안에서 `localhost` 는 컨테이너 자신이라 호스트에 떠 있는 vLLM 에 닿지
+못한다. `http://host.docker.internal:8081/v1` 로 주는 것이 이 설정을 쓰는
+경로이며, compose 네트워크 안의 서비스면 그 서비스 주소를 쓴다.
+
+동시 처리량은 `NER_SERVER_TRANSLATE_MAX_CONCURRENCY`(기본 2)로 묶인다 — NER
+예산과 분리돼 서로를 잠식하지 않는다.
 
 ## 헬스체크 / 준비성
 
