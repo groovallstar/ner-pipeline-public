@@ -1,7 +1,7 @@
 # issue-254: nllb 번역 백엔드 폐기
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/254
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/255
 - 브랜치: `feat/issue-254-drop-inprocess-translate-backend`
 - 승인일: 2026-09-08
 
