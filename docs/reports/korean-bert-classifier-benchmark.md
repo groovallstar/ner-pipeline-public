@@ -5,7 +5,6 @@
 - 데이터: `data/klue/pii_all.jsonl` (25,989 행, canonical 10종 = NER 5 + PII 5)
 - 평가: char-offset span F1 (strict), **단일 split**(test 0.1 / valid 0.1, `seed=42`)
 - 출처: GitHub 이슈 #122
-- 한국어 NER 연대기: `docs/reports/korean-ner-history.md`
 - 일본어·베트남어 동일 셋업: `docs/reports/{japanese,vietnamese}-bert-classifier-benchmark.md`
 
 ## 요약

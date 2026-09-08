@@ -120,7 +120,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/ko/vi/en) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다. 결과가 ko 면 버튼을 **감춘다** — 눌러도 400 이 될 버튼을 회색으로 남기면 "백엔드가 죽었나"로 읽힌다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
 | `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
-| `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`). `--concurrency N` 은 같은 작업량을 N 스레드로 나눠 서버의 실제 경로를 재현한다 — 잠금 경합처럼 동시 실행에서만 드러나는 비용은 N=1 에서 측정되지 않는다 |
+| `scripts/throughput/bench.py` | 처리량·지연 측정 하네스. `--concurrency N` 은 같은 작업량을 N 스레드로 나눠 서버의 실제 경로를 재현한다 — 잠금 경합처럼 동시 실행에서만 드러나는 비용은 N=1 에서 측정되지 않는다. **반복 수를 넉넉히 준다(reps 80)** — 단건 순차는 forward 가 7ms 안팎으로 짧고 간헐적이라 GPU clock 이 idle 에 머물고, 짧게 재면(reps 5~20) 같은 조건에서 ±15% 가 출렁인다. 80 이면 정상상태에 수렴해 ±1% 다 |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
 ## 추론 경로
@@ -132,8 +132,8 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 단건과 동일) 글로벌 offset 으로 병합 — GPU 병렬로 장문/배치에서 가속된다.
 추론은 fp32 전용이라 단건·배치가 같은 커널을 타 배치화가 결과를 바꾸지 않고,
 입력은 NFC 로 정규화한다(NFD span 깨짐 방지).
-추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량·
-정밀도 측정·동결은 `scripts/throughput/`·`docs/reports/server-inference-throughput.md`.
+추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량
+측정은 `scripts/throughput/bench.py`.
 
 ### 토크나이저 접근의 직렬화
 
@@ -280,4 +280,7 @@ sentinel 은 `【PII{nonce}_{i}】` 하나로 고정이다. lenticular bracket �
 
 과거 엔진 비교 하네스(`scripts/translate_bench/`)는 제거됐다 — 번역은 NER 에
 딸린 부가 기능이라 품질이 엔진 선정 기준이 아니고, 상시 돌 하네스를 유지할 값이
-없었다. 측정 경위는 `docs/reports/translate-engine-lightweight-benchmark.md`.
+없었다. 그 벤치 리포트도 함께 폐기했다 — 하네스와 인프로세스 백엔드가 둘 다
+사라져 재현할 코드가 없고, 남은 결론이 지금 고를 것을 바꾸지 않는다. 당시 경위는
+`docs/issues/issue-197-translate-backend-option.md` 와
+`issue-254-drop-inprocess-translate-backend.md` 에 남아 있다.

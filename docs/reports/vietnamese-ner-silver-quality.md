@@ -392,7 +392,7 @@ rm -f kappa_*.json wikidata_anchor_*.json
   - 프롬프트: `src/ner/augmenters/wikiann_vi/prompts.py`
   - anchor: `src/ner/augmenters/wikiann_vi/wikidata_anchor.py`
   - kappa: `src/ner/augmenters/wikiann_vi/kappa.py`
-  - 라벨링 CLI: `src/ner/augmenters/wikiann_vi/__main__.py`, `src/ner/augmenters/wikiann_vi/relabel_8type.py`
+  - 라벨링 CLI: `src/ner/augmenters/wikiann_vi/__main__.py`, `src/ner/augmenters/wikiann_vi/relabel.py`
 - 라벨 정의: `docs/manual/data/canonical-entity-schema.md`
 - 이슈 md: `docs/issues/issue-30-vi-silver-quality-vs-3gold.md`
 - 테스트: `tests/ner/augmenters/wikiann_vi/`, `tests/ner/llm_eval/`

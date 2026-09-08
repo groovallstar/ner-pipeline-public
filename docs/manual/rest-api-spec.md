@@ -447,5 +447,4 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 
 **관련 문서**: 모듈 오리엔테이션 `src/server/CLAUDE.md` · 엔티티 스키마
 `docs/manual/data/canonical-entity-schema.md` · 언어 감지 벤치
-`docs/reports/language-detection-benchmark.md` · 처리량 측정
-`docs/reports/server-inference-throughput.md` · 배포 `docker/server/CLAUDE.md`.
+`docs/reports/language-detection-benchmark.md` · 배포 `docker/server/CLAUDE.md`.
