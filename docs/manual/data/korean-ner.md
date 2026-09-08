@@ -73,9 +73,6 @@ KLUE NER 데이터셋. 두 가지 로딩 경로가 존재한다:
 
 **코드:** `DatasetLoader.load()` (= `HFTokenDatasetLoader` 의 별칭, `src/ner/labelers/dataset_loader.py`)
 
-> BIO 토큰 시퀀스 데이터셋(KLUE·KMOU 등)의 1급 진입점은
-> `src/ner/labelers/bio_dataset.py`(REGISTRY 기반). 라벨러 통합용 레거시 진입점은
-> `dataset_loader.py`다. 자세한 구분은 `bio-dataset-spec-registry.md` 참조.
 
 ### 출력
 

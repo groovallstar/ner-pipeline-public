@@ -13,9 +13,6 @@
 | `__main__.py` | CLI: `python -m ner.llm_eval --lang {ko,ja,vi}` |
 | `benchmark_runner.py` | `BenchmarkRunner` — KO(BIO)·JA·VI(offset-span) 공용 러너, eval_mode 스위치 |
 | `report.py` | `ReportGenerator` — span-match·seqeval 테이블 + per-entity 분석 (KO·JA·VI) |
-| `error_analysis.py` | 문장별 오류 분류 CLI. FN 루프: TYPE_MISMATCH, BOUNDARY_SUBSET, BOUNDARY_SUPERSET, MISS / FP 루프: TYPE_MISMATCH, BOUNDARY_ERROR, HALLUCINATION (FP 쪽 경계 오류는 subset·superset 을 가르지 않고 `BOUNDARY_ERROR` 하나로 낸다) |
-| `span_evaluator.py` | gold 레코드 + 라벨러로 span-match F1 계산 유틸 |
-| `span_evaluator_cli.py` | 예측 JSONL 소비 → char-offset span F1 비교 테이블 CLI |
 | `vi_silver_quality.py` | VI silver vs gold 비교 |
 | `wikiann_vi_gold.py` | WikiANN-vi gold 데이터 로딩 유틸 |
 
@@ -30,7 +27,6 @@
   이 전처리를 건너뛰면 채점 자체가 성립하지 않는다
 - 태그 정규화 맵은 언어별로 갈린다 — `_TAG_NORMALIZE_MAP_{KO,JA,VI}` 를 `_TAG_NORMALIZE_MAPS`
   가 묶고 lang 키로 고른다(미등록 lang 은 KO 맵 폴백). `labelers/tag_aligner.py` 참조
-- `error_analysis.py`는 `llm_eval.__main__`에서 import — 지연 import로 동작
 
 ### Testing Requirements
 - `TagAligner.spans_to_syllable_bio()` — 공백 토큰 포함 KLUE 음절 토큰으로 테스트
@@ -48,7 +44,7 @@
 - `ner.labelers.tag_aligner` (TagAligner, normalize_tags, extract_spans_from_bio)
 - `ner.labelers.span_matcher` (match_spans — JA·VI 예측 텍스트 → 문자 오프셋)
 - `ner.labelers.hf_ner_labeler` (HFNERLabeler — BERT 베이스라인)
-- `ner.labelers.dataset_loader`, `ner.labelers.bio_dataset`, `ner.labelers.ko.*`, `ner.labelers.ja.*`, `ner.labelers.vi.*`
+- `ner.labelers.dataset_loader`, `ner.labelers.ko.*`, `ner.labelers.ja.*`, `ner.labelers.vi.*`
 - `ner.metrics.bio_metrics` (MetricsCalculator — KO 3개 메트릭), `ner.metrics.span_metrics` (JA·VI strict·relaxed offset span F1)
 
 ### External
