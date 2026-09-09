@@ -1,16 +1,8 @@
-"""문서의 출처 선언이 원장에 실제로 있는 경로를 가리키는가.
+"""문서의 결과 출처 선언이 보관된 원본을 가리키는지 독립적으로 검사한다.
 
-커밋 게이트의 인용 대조는 그 커밋의 diff 안에서만 돈다. 그래서 원장
-디렉토리를 지우면서 문서를 하나도 안 건드린 커밋은 게이트가 통째로
-지나가고, 가리킬 것이 없어진 `<!-- certified: ... -->` 선언만 문서에 남는다.
-그 상태는 조용하다 — 그 표에 새 수치를 안 적는 한 아무도 안 밟는다. 여기서
-저장소의 문서를 전수로 훑어 매달린 선언을 붙잡는다.
-
-**선언 문법은 게이트가 정본이라 정규식을 그쪽에서 가져온다.** 여기에 같은
-정규식을 한 벌 더 적으면, 게이트가 문법을 넓혔을 때 이 검사만 옛 문법에
-남아 새 형태의 선언을 못 보게 된다.
+선언 문법은 `certified/README.md`를 따르며 에이전트 훅이나 플러그인을 읽지 않는다.
+이 검사는 경로 존재와 경계만 확인하며 metric 수치나 재현성을 보증하지 않는다.
 """
-import importlib.util
 import re
 from pathlib import Path
 
@@ -19,17 +11,7 @@ DOC_ROOT = REPO_ROOT / 'docs'
 CERT_ROOT = REPO_ROOT / 'certified'
 
 
-def _load_gate_core():
-    """`.claude/hooks/` 는 설치 패키지가 아니라 훅 스크립트 디렉토리라
-    import 경로에 없다 — 파일 경로로 직접 적재한다."""
-    path = REPO_ROOT / '.claude/hooks/gate_core.py'
-    spec = importlib.util.spec_from_file_location('gate_core', path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-CERT_SRC_RE = _load_gate_core().CERT_SRC_RE
+CERT_SRC_RE = re.compile(r'<!--\s*certified:\s*([^\s>]+?)\s*-->')
 
 
 def _declarations():
@@ -62,9 +44,7 @@ def test_the_sweep_actually_reads_documents_and_declarations():
 def test_every_declared_source_exists_in_the_ledger():
     """선언한 경로가 원장에 파일이나 디렉토리로 있어야 한다.
 
-    없으면 그 표는 대조 상대가 사라진 수치를 싣고 있는 것이다. 게이트는
-    그 표에 새 수치가 실릴 때만 이것을 말하므로, 사라진 시점에 여기서
-    말한다.
+    없으면 그 표는 대조 상대가 사라진 수치를 싣고 있는 것이다. 이 검사는 문서의 모든 선언을 읽어 원본이 사라진 시점에 실패한다.
     """
     dangling = [
         f'{doc}:{lineno} -> certified/{src}'
@@ -82,8 +62,7 @@ def test_every_declared_source_exists_in_the_ledger():
 def test_declared_sources_stay_inside_the_ledger():
     """선언이 원장 밖을 가리키지 못한다.
 
-    `../` 나 절대경로를 적으면 게이트의 `_catalog_of` 가 원장 밖 파일을
-    카탈로그로 읽어, 대조가 `certified/` 를 벗어난다.
+    `../` 나 절대경로를 적어 `certified/` 바깥 파일을 출처로 삼지 못한다.
     """
     escaping = []
     for doc, lineno, src in _declarations():

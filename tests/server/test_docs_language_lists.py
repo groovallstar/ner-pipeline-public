@@ -14,7 +14,7 @@
 서술이 여러 자리 있고 그것들은 어떤 유도 집합과도 같아질 일이 없다. 대가는
 비대칭한 실패다 — 언어를 늘리면 3 원소 이상 자리는 시끄럽게 FAIL 하지만
 2 원소 자리는 조용히 낡는다. 그래서 언어를 추가할 때 2 원소 열거 자리를
-손으로 훑는 절차를 `src/server/CLAUDE.md` 에 못 박아 뒀다.
+손으로 훑는 절차를 `docs/manual/server-implementation.md` 에 못 박아 뒀다.
 
 **걸린 자리를 푸는 방법은 셋뿐이다.** ① 열거를 완성한다 ② 2 단 감지 정책은
 신호→언어 화살표 사슬로 다시 쓴다 ③ 지원 집합의 참인 진부분집합은 목록이
@@ -84,7 +84,8 @@ def _scan_files():
     for rel in ('docs/manual/rest-api-spec.md',
                 'docs/manual/rest-api-integration-guide.md',
                 'docs/manual/language-detection.md',
-                'CLAUDE.md', 'README.md', 'docker/CLAUDE.md',
+                'docs/manual/server-implementation.md',
+                'AGENTS.md', 'README.md', 'docker/AGENTS.md',
                 'pyproject.toml'):
         path = _ROOT / rel
         if path.is_file():

@@ -13,8 +13,8 @@ import 하지 않는다.
 ## 기동
 
 ```bash
-python -m server                 # 0.0.0.0:8008, /data/ner 로드
-python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
+uv run python -m server                 # 0.0.0.0:8008, /data/ner 로드
+uv run python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
 
@@ -34,7 +34,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 `TRANSLATE_MAX_CONCURRENCY`(2)다. 왜 기본값을 두지 않는지는 §번역 설정 표면.
 
 컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
-라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
+라이프사이클 + `.env.example`; 상세: `docker/server/AGENTS.md`).
 
 ## API
 
@@ -119,7 +119,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `translate.py` | 마스킹-복원 + `LLMTranslator`(원격 OpenAI 호환) + `build_translator`(설정 검증). 번역 대상 언어 목록 `TRANSLATABLE_LANGS`(=`LANG_NAME` 의 키)도 여기 있다. PII span 을 sentinel `【PII{nonce}_{i}】` 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. `/v1/ner`·`inference.py` 무의존 additive |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/ko/vi/en) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다. 결과가 ko 면 버튼을 **감춘다** — 눌러도 400 이 될 버튼을 회색으로 남기면 "백엔드가 죽었나"로 읽힌다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
-| `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
+| `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`uv run python -m server.scripts.example_client`) |
 | `scripts/throughput/bench.py` | 처리량·지연 측정 하네스. `--concurrency N` 은 같은 작업량을 N 스레드로 나눠 서버의 실제 경로를 재현한다 — 잠금 경합처럼 동시 실행에서만 드러나는 비용은 N=1 에서 측정되지 않는다. **반복 수를 넉넉히 준다(reps 80)** — 단건 순차는 forward 가 7ms 안팎으로 짧고 간헐적이라 GPU clock 이 idle 에 머물고, 짧게 재면(reps 5~20) 같은 조건에서 ±15% 가 출렁인다. 80 이면 정상상태에 수렴해 ±1% 다 |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
@@ -195,34 +195,11 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 
 ## 테스트·검증
 
-- **pytest**: `uv run pytest tests/server/` — 계약·전송은 stub registry 로
-  모델 없이 CI 가능, 모델 통합(`test_inference_integration.py`)은 `/data` 있을
-  때만 (`pytest.skip` 가드). 통합은 **ja·ko·vi·en 을 같은 축으로** 태운다 —
-  offset 정합·thresholds 부재 시 raw 동작·장문 청크 offset 과 후반 recall·
-  청크 배치 parity·gold 엔티티 청크 경계 불가침·`predict_many` 등가·NFD 입력
-  동일, 그리고 네 언어 인터리브 배치가 단건과 1:1. 계약 테스트는 stub 이라
-  모델을 안 부르므로 토크나이저 분기(fast 는 ko 와 en 뿐이고 ja·vi 는 slow)·청킹
-  경로(마침표로 끝나는 산문은 문장이 아니라 단어 경계로 쪼개진다)가 갈리는
-  자리는 여기서만 잡힌다.
-- **토크나이저 잠금**: `test_tokenizer_lock.py` 는 재진입하면 `Already
-  borrowed` 를 내는 stub 으로 직렬화 불변식을 **모델 없이 상시** 고정한다
-  (§토크나이저 접근의 직렬화). 겹침을 확률에 맡기지 않고 첫 진입 스레드가
-  창을 열어 기다리므로, 잠금을 지우면 반드시 터진다 — 실모델 겹은 `/data`
-  없으면 skip 이라 그것만으로는 CI 가 조용하다.
-- **배포 parity**: 서버 predict 로 잰 F1 을 배포 `metrics.json` 과 대조해
-  패키지가 자기가 나온 run 과 어긋나지 않는지 본다. `eval_*` 스크립트를
-  import 하지 않고 기록된 값(데이터)과 맞춘다. ja 는 thresholds 가 있어
-  abstention on/off 둘을, thresholds 없이 출하된 나머지는 raw 하나를
-  본다(`overall_strict`).
-- **번역**: 마스킹-복원 계약·설정 검증·동시성 모두 stub 으로 돈다 — 번역기가
-  원격 호출 하나라 실모델 없이 전 경로가 상시 검사된다.
-- **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
-  --base-url http://localhost:8008` — 내부 소비자가 서버를 호출하는 최소
-  레퍼런스(`NERClient`). 단일·배치·미지원·계약 에러(400·413·429)를 실서버
-  대상으로 호출·검증하고 PASS/FAIL 종료코드를 낸다.
-- **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
-  서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
-  skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
+검사 명령과 자원 조건은 [서버 지침](../../src/server/AGENTS.md#검증)을 따른다.
+모델 없는 API·토크나이저 잠금·번역 배선 검사와 실모델·live 검사를 구분한다.
+모델 통합 검사는 지원 언어의 offset·청킹·단건/배치 parity와 배포 metric을
+검증한다. live 하네스는 현재 설정의 모델 사전 조건·준비성·인증·기동 로그를
+확인하고 테스트가 시작한 프로세스를 회수한다.
 
 ## 번역 대상 언어
 

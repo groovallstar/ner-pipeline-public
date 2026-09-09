@@ -330,7 +330,7 @@ API 층까지 걸친 계약(자동 감지 `unsupported` 는 200, 명시 미지�
 ---
 
 **관련 문서**: API 계약 `docs/manual/rest-api-spec.md` · 모듈 오리엔테이션
-`src/server/CLAUDE.md` · 감지기 후보 비교 측정
+`docs/manual/server-implementation.md` · 감지기 후보 비교 측정
 `docs/reports/language-detection-benchmark.md` · 설계 경위
 `docs/issues/issue-149-supported-lang-detect.md` (양성 감지 도입) ·
 `docs/issues/issue-232-ko-rest-api.md` (한글 신호 추가) ·

@@ -12,8 +12,6 @@
 results
 docs
 tests
-.omc
-.claude
 .github
 node_modules
 docker/vllm

@@ -1,0 +1,33 @@
+# Docker 서비스 지침
+
+## 책임
+
+이 디렉터리는 vLLM 추론 서버와 NER REST API 서버의 배포 자산만 소유한다.
+개발 환경 컨테이너는 만들지 않는다. `vllm/`과 `server/`는 각자의 compose,
+설정, lifecycle 스크립트로 독립적으로 동작한다.
+
+## 입력과 출력
+
+- 입력은 고정 이미지 태그, 모델·캐시 호스트 경로, GPU·포트 환경변수이다.
+- 출력은 내부망에서 사용하는 vLLM OpenAI 호환 API와 NER REST API 서비스이다.
+
+## 계약
+
+- 모든 이미지 태그는 안정 버전으로 고정하고 `latest`를 사용하지 않는다.
+- vLLM HF 캐시는 호스트 `/work/.huggingface`, NER 서버 캐시는
+  `/data/ner/_hf_cache`를 볼륨으로 마운트한다.
+- vLLM은 GPU1과 GPU2, NER 서버는 기본 GPU0 한 장을 사용한다. 실제 점유 상태를
+  확인하지 않은 채 서비스를 올리지 않는다.
+- 시작·중지 스크립트는 자신의 위치에서 compose 파일을 찾을 수 있어야 한다.
+
+## 금지사항
+
+- 모델 가중치를 이미지에 포함하지 않는다.
+- compose 프로젝트 이름과 컨테이너 이름이 같다고 가정하지 않는다.
+- 호스트 `/work`, `/data`, NVIDIA Container Toolkit의 존재를 검증 없이
+  가정하지 않는다.
+
+## 검증
+
+- 셸 변경은 `bash -n docker/server/*.sh docker/vllm/*.sh`로 구문 검사한다.
+- 서비스별 기동과 준비성 검증은 해당 하위 지침을 따른다.

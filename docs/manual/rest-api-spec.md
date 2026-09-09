@@ -80,7 +80,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 
 `NER_SERVER_TRANSLATE_*`(웹 데모 번역)는 이 표에 없다 — 그 엔드포인트가 이
 계약(§3)에 없기 때문이다. 기본 비활성이며 켜도 `/v1/ner` 동작·응답은 바뀌지
-않는다(동시성 예산도 분리 — §8). 설정 표면은 `src/server/CLAUDE.md`, 구현
+않는다(동시성 예산도 분리 — §8). 설정 표면은 `docs/manual/server-implementation.md`, 구현
 레퍼런스(마스킹-복원·설정 검증)는 `docs/manual/web-demo-translation.md`.
 
 ## 3. 엔드포인트 목록
@@ -434,18 +434,27 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 
 ## 13. 검증·테스트
 
-- **계약·전송 pytest**: `uv run pytest tests/server/` — stub registry로 모델
-  없이 CI 가능. 모델 통합(offset 정합·ja·ko·vi·en parity)은 `/data` 있을 때만 실행
-  (`pytest.skip` 가드).
-- **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
-  --base-url http://localhost:8008` — 단일·배치·미지원·계약 에러
-  (400·413·429)를 실서버 대상으로 검증.
-- **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
-  서브프로세스로 띄워 httpx로 검증(`uv run pytest -m live`).
+검사 명령과 자원 조건은 [서버 검증 지침](../../src/server/AGENTS.md#검증)을
+따른다. 모델 없는 기본 검사와 전체 검사를 구분하며, skip과 명시적으로 제외한
+경로는 실모델 검증 성공으로 계산하지 않는다.
+
+- **계약·전송 pytest**: 모델 없는 기본 명령은 live·모델 통합 파일을 제외한다.
+  API와 NER→번역 연결은 모델 대역으로
+  검사하며, 실모델 품질이나 실제 backend 가용성을 증명하지 않는다.
+- **전체 pytest**: `uv run pytest tests/server -q -rs`는 로컬 자원과 설정에 따라
+  실모델을 로드하고 서버를 기동한다. 실행 전에 모델·GPU·번역 설정을 확인한다.
+- **소비자 예제·자기검증**: `uv run python -m server.scripts.example_client
+  --base-url http://localhost:8008`은 단일·배치·미지원·계약 에러를 검사한다.
+  429 검사는 동시 부하를 발생시키고 서버 설정에 의존하므로 공유 서버의 일반
+  준비성 검사로 무조건 실행하지 않는다. 주소는 실제 대상에 맞게 지정한다.
+- **실서버 pytest**: `uv run pytest tests/server/test_live_server.py -q -rs`는
+  현재 설정으로 서버를 기동해 준비성·NER을 확인하고 기동 로그를 보관한다.
+  번역 흐름까지 검사하려면 backend를 준비하고 `NER_SERVER_TEST_LIVE_TRANSLATE=1`을
+  명시한다. 세부 조건과 한계는 [번역 테스트 맵](web-demo-translation.md#7-테스트-맵)을
+  따른다.
 
 ---
 
-**관련 문서**: 모듈 오리엔테이션 `src/server/CLAUDE.md` · 엔티티 스키마
-`docs/manual/data/canonical-entity-schema.md` · 언어 감지 규칙
-`docs/manual/language-detection.md` · 감지기 후보 비교 측정
-`docs/reports/language-detection-benchmark.md` · 배포 `docker/server/CLAUDE.md`.
+**관련 문서**: 모듈 오리엔테이션 `docs/manual/server-implementation.md` · 엔티티 스키마
+`docs/manual/data/canonical-entity-schema.md` · 언어 감지 벤치
+`docs/reports/language-detection-benchmark.md` · 배포 `docker/server/AGENTS.md`.

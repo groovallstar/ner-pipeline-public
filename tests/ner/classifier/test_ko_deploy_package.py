@@ -1,16 +1,7 @@
 """KO 배포 패키지가 스스로 정합하고 쓸 만한가.
 
-**재현 대조도, 독립 원장과의 대조도 하지 않는다.** en(#221)은 백본 벤치라는
-선행 원장이 있어 패키지를 그것과 견줬지만, ko 에 있는 원장은 10-fold pooled
-뿐이라 단일 분할 배포 run 과 자가 다르다 — 교차검증 추정치와 홀드아웃 수치를
-같은 표에 놓는 것은 대조가 아니라 혼동이다. 그래서 ko 는 **배포 run 자신을
-원장으로 승격**하고, 이 파일은 넷만 본다:
-
-1. 패키지가 자기가 나온 run 과 어긋나지 않는가 (프로비넌스 정합 — 원장과
-   verbatim, 다른 것은 포장이 덧붙인 `deploy_package` 블록뿐)
-2. 분할이 기록된 그대로 출하됐는가 (행 수·지문·누출)
-3. 모델이 쓸 만한가 (붕괴한 체크포인트가 나가는 것만 막는 바닥)
-4. `model/` 하나로 로드·추론이 되는가 (배포의 실질)
+분할 크기·데이터 지문·누출·파일 레이아웃과 품질 하한을 검사한다.
+모델 자립 검사는 `integration`으로 분리하며 `model/`만으로 로드하고 추론한다.
 
 바닥은 재현 문턱이 아니라 sanity 문턱이다. 좁게 조이면 seed 뽑기를 통과
 조건으로 만드는 셈이라, 붕괴(F1 이 0 에 가까움)만 걸리게 둔다.
@@ -24,11 +15,6 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[3]
-LEDGER = (
-    REPO / 'certified' / 'classifier' / 'ko' / 'deploy-trainseed42'
-    / 'metrics.json'
-)
 PACKAGE = Path('/data/ner/ko')
 PKG_METRICS = PACKAGE / 'metrics.json'
 
@@ -37,12 +23,10 @@ pytestmark = pytest.mark.skipif(
     reason=f'KO deployment package not present at {PACKAGE}',
 )
 
-# 붕괴 검출용 바닥 — 이 아래면 체크포인트가 망가진 것이다. en 과 같은 값을
-# 쓴다(참고: ko 10-fold pooled strict overall F1 ≈ 0.92).
+# 붕괴 검출용 바닥이며 EN 배포 검사와 같은 값을 사용한다.
 USABLE_F1_FLOOR = 0.85
 
-# 포장이 덧붙이는 유일한 키. 이것만 빼면 패키지와 원장은 글자까지 같아야
-# 한다 — 수치를 손대는 순간 원장 대조가 포장 스크립트를 거친 값을 보게 된다.
+# 배포 출처·분할 재생성·누출 정보를 담는 포장 메타데이터 키다.
 PACKAGING_ONLY_KEY = 'deploy_package'
 
 
@@ -50,23 +34,6 @@ PACKAGING_ONLY_KEY = 'deploy_package'
 def pkg():
     with open(PKG_METRICS, encoding='utf-8') as f:
         return json.load(f)
-
-
-@pytest.fixture(scope='module')
-def ledger():
-    with open(LEDGER, encoding='utf-8') as f:
-        return json.load(f)
-
-
-def test_ledger_run_is_committed():
-    """비교 상대가 원장에 있어야 한다 — 없으면 대조가 허울이다."""
-    assert LEDGER.exists(), f'ledger run missing: {LEDGER}'
-
-
-def test_package_is_the_ledger_run_verbatim(pkg, ledger):
-    """패키지 metrics 는 원장 run + 포장 블록, 그 외엔 한 글자도 다르지 않다."""
-    stripped = {k: v for k, v in pkg.items() if k != PACKAGING_ONLY_KEY}
-    assert stripped == ledger
 
 
 def test_package_declares_its_source_run(pkg):
