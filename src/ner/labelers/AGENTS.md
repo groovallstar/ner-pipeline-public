@@ -23,5 +23,5 @@
 
 ## 검증
 
-- `uv run pytest tests/ner/test_base_labelers.py tests/ner/test_llm_helpers.py tests/ner/test_span_matcher.py tests/ner/test_bio_dataset.py -q`
+- `uv run pytest tests/ner/test_base_labelers.py tests/ner/test_llm_helpers.py tests/ner/test_span_matcher.py -q`
 - 언어별 변경은 해당 하위 지침의 테스트도 실행한다.

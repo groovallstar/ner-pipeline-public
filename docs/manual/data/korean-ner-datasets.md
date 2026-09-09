@@ -2,10 +2,8 @@
 
 > 조사 일자: 2026-04-09
 > 목적: KLUE NER 외 한국어 NER 벤치마크/파인튜닝용 데이터셋의 특성과 현재 파이프라인 호환성 분석
-> 관련 코드: `src/ner/labelers/bio_dataset.py` (REGISTRY 진입점), `src/ner/labelers/dataset_loader.py`, `src/ner/labelers/tag_aligner.py`
-> KLUE·KMOU 등 BIO 토큰 시퀀스 데이터셋의 1급 진입점은 `bio_dataset.py`이며,
-> 스펙 정의·BIO 변종 정규화·span 추출 규칙은 `docs/manual/data/bio-dataset-spec-registry.md` 참조.
-> **갱신(이슈 #109·#111·#115)**: 파이프라인 ko 타깃 스키마가 canonical **10종 평면**으로 완성됨 — NER 5종(PER/LOC/ORG/PROD/EVT)+DAT(KLUE 유래 4종 + KLUE 문장 LLM 재라벨 PROD/EVT 증분, TI/QT 드롭) + PII 4종(EMAIL/PHONE/ID_NUM/CREDIT_CARD, 합성 PII llm 자연삽입 → `data/klue/origin.jsonl`). 아래 데이터셋의 native 스키마 기술은 원본 기준이며, 소비 시 canonical로 재매핑된다. 트랙 히스토리: `docs/reports/korean-ner-history.md`.
+> 관련 코드: `src/ner/labelers/dataset_loader.py`, `src/ner/labelers/tag_aligner.py`
+> **갱신(이슈 #109·#111·#115)**: 파이프라인 ko 타깃 스키마가 canonical **10종 평면**으로 완성됨 — NER 5종(PER/LOC/ORG/PROD/EVT)+DAT(KLUE 유래 4종 + KLUE 문장 LLM 재라벨 PROD/EVT 증분, TI/QT 드롭) + PII 4종(EMAIL/PHONE/ID_NUM/CREDIT_CARD, 합성 PII llm 자연삽입 → `data/klue/origin.jsonl`). 아래 데이터셋의 native 스키마 기술은 원본 기준이며, 소비 시 canonical로 재매핑된다.
 
 ## 목차
 

@@ -1,10 +1,10 @@
-"""번역 서비스 테스트 — 마스킹-복원 PII 보존 + 백엔드 선택 + 엔드포인트 계약.
+"""번역 서비스 테스트 — 마스킹-복원 PII 보존 + 설정 검증 + 엔드포인트 계약.
 
 핵심 불변식: PII 문자열은 (a) 번역기에 노출되지 않고, (b) 출력에서 원문 그대로
 보존되거나(sentinel 생존), (c) 소실 시 훼손 없이 '부재'로 처리된다. 실 LLM 없이
 stub translator 로 검증한다.
 
-백엔드 선택(`build_translator`)은 **설정만 보고 무엇을 부르는지 알 수 있는가**를
+설정 검증(`build_translator`)은 **설정만 보고 무엇을 부르는지 알 수 있는가**를
 본다 — 기본값으로 때우지 않고 기동을 실패시키는지. 동시성은 번역 예산이 NER
 예산과 분리돼 서로를 잠식하지 않는지를 양방향으로 본다.
 """
@@ -19,14 +19,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 import server
-from server import translate_nllb
 from server.app import create_app
 from server.config import SUPPORTED_LANGS, ServerConfig
 from server.translate import (
-    DEFAULT_SENTINEL,
     LANG_NAME,
+    _SENTINEL_TAG,
     TRANSLATABLE_LANGS,
-    SentinelFormat,
     TranslationResult,
     TranslationUnavailable,
     _mask,
@@ -34,6 +32,12 @@ from server.translate import (
     _sentinel,
     build_translator,
 )
+
+# 미지원 언어 픽스처 — 실재하되 지원 계획이 없는 코드. `TRANSLATABLE_LANGS
+# <= set(SUPPORTED_LANGS)` 가 아래에서 단언되므로 이 한 줄이 번역 미지원도
+# 함께 보장한다.
+_UNSUPPORTED_LANG = 'th'
+assert _UNSUPPORTED_LANG not in SUPPORTED_LANGS
 
 
 def _phone_record():
@@ -180,40 +184,10 @@ def test_literal_sentinel_lookalike_in_source_untouched():
     assert (n_ok, n_drop) == (1, 0)
 
 
-def test_alternate_sentinel_format_round_trips():
-    """괄호를 갈아끼워도 마스킹-복원 불변식은 그대로다.
-
-    전용 NMT 처럼 lenticular bracket 이 어휘에 없는 번역기를 위해 표기를
-    엔진 속성으로 뺐다 — 바뀌는 것은 감싸는 괄호뿐이고 nonce·번호는 같다.
-    """
-    ascii_fmt = SentinelFormat(left='[', right=']')
-    text, spans, phone = _phone_record()
-    masked, id2val = _mask(text, spans, ascii_fmt)
-    assert _sentinel(0, ascii_fmt) in masked
-    assert _sentinel(0) not in masked        # 기본 표기는 섞이지 않는다
-    assert phone not in masked               # 번역기에 PII 미노출
-    restored, n_ok, n_drop = _restore(masked, id2val, ascii_fmt)
-    assert phone in restored and (n_ok, n_drop) == (1, 0)
-
-
-def test_alternate_sentinel_leaves_default_format_text_alone():
-    """ASCII 표기로 돌 때 원문의 `【…】` 자연 표기를 건드리지 않는다."""
-    ascii_fmt = SentinelFormat(left='[', right=']')
-    phone = '010-1234-5678'
-    text = f'【重要】連絡先 {phone}'
-    p = text.index(phone)
-    spans = [{'label': 'PHONE', 'start_char': p, 'end_char': p + len(phone),
-              'text': phone}]
-    masked, id2val = _mask(text, spans, ascii_fmt)
-    restored, n_ok, n_drop = _restore(masked, id2val, ascii_fmt)
-    assert '【重要】' in restored
-    assert phone in restored and (n_ok, n_drop) == (1, 0)
-
-
-def test_default_sentinel_unchanged_by_format_parameter():
-    """기본 인자로 부르면 종전과 같은 lenticular 표기를 낸다(동작 불변)."""
+def test_sentinel_uses_lenticular_brackets():
+    """sentinel 표기는 프롬프트가 지시하는 `【…】` 그대로다(동작 불변)."""
     assert _sentinel(0).startswith('【') and _sentinel(0).endswith('】')
-    assert _sentinel(3) == _sentinel(3, DEFAULT_SENTINEL)
+    assert _SENTINEL_TAG in _sentinel(0)     # nonce 가 붙어 충돌하지 않는다
 
 
 # ---------- 엔드포인트 계약 ----------
@@ -278,17 +252,33 @@ def test_translate_echo_preserves_pii_through_endpoint():
 
 
 def test_translate_unsupported_lang_400():
-    """ja/vi 외 lang → 400."""
+    """번역 대상 외 lang → 400."""
     r = _client(translator=_EchoTranslator()).post(
-        '/v1/translate', json={'text': 'hi', 'lang': 'en', 'spans': []})
+        '/v1/translate',
+        json={'text': 'hi', 'lang': _UNSUPPORTED_LANG, 'spans': []})
     assert r.status_code == 400
+
+
+def test_translate_accepts_en():
+    """lang:'en' 이 200 으로 받아들여지고 PII span 이 보존된다."""
+    phone = '010-1234-5678'
+    r = _client(translator=_EchoTranslator()).post('/v1/translate', json={
+        'text': f'Call Alice at {phone} tomorrow.',
+        'lang': 'en',
+        'spans': [{'label': 'PHONE', 'start_char': 14,
+                   'end_char': 14 + len(phone), 'text': phone}],
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body['lang'] == 'en'
+    assert phone in body['translation']
 
 
 def test_translate_rejects_ko_even_though_ner_supports_it():
     """NER 이 받는 ko 를 번역은 400 으로 거절한다.
 
     한국어로 옮기는 기능이라 ko 원문은 옮길 곳이 없다. `SUPPORTED_LANGS`
-    (ja·ko·vi)와 `TRANSLATABLE_LANGS`(ja·vi)가 갈리는 유일한 지점이고,
+    (ja·ko·vi·en)와 `TRANSLATABLE_LANGS`(ja·vi·en)가 갈리는 유일한 지점이고,
     같은 목록을 쓰면 ko 가 조용히 통과해 원문이 그대로 '번역'으로 나온다.
     """
     assert 'ko' in SUPPORTED_LANGS
@@ -319,6 +309,23 @@ def test_web_ui_translatable_list_matches_the_server():
     assert m, 'web UI has no TRANSLATABLE list'
     declared = set(re.findall(r'"([a-z]{2})"', m.group(1)))
     assert declared == set(TRANSLATABLE_LANGS)
+
+
+def test_web_ui_gloss_hint_names_every_translatable_lang():
+    """번역 안내 문구 두 곳이 번역 대상 언어 이름을 전부 담는지.
+
+    문구는 JS 상수와 정적 HTML 두 벌로 있어 한쪽만 고치기 쉽다. 어긋나도
+    에러가 아니라 안내가 거짓이 되므로 조용하다.
+    """
+    ui = (Path(server.__file__).parent / 'static' / 'index.html').read_text(
+        encoding='utf-8')
+    const = re.search(r'const GLOSS_HINT =(.*?);', ui, re.S)
+    assert const, 'index.html has no GLOSS_HINT constant'
+    static = re.search(r'<p[^>]*id="glossStatus"[^>]*>(.*?)</p>', ui, re.S)
+    assert static, 'index.html has no glossStatus paragraph'
+    for blob in (const.group(1), static.group(1)):
+        for name in LANG_NAME.values():
+            assert name in blob, name
 
 
 def test_translate_backend_unavailable_503():
@@ -374,7 +381,7 @@ def test_status_unavailable_when_backend_down():
     assert r.json() == {'enabled': True, 'available': False}
 
 
-# ---------- 백엔드 선택·설정 검증(기동 시점) ----------
+# ---------- 설정 검증(기동 시점) ----------
 
 def _cfg(**kw) -> ServerConfig:
     """번역 활성 config — 나머지 키는 테스트가 채운다."""
@@ -382,84 +389,32 @@ def _cfg(**kw) -> ServerConfig:
 
 
 def test_disabled_builds_nothing():
-    """비활성이면 백엔드를 안 봐도 None(엔드포인트가 503 을 낸다)."""
+    """비활성이면 설정을 안 봐도 None(엔드포인트가 503 을 낸다)."""
     assert build_translator(ServerConfig()) is None
 
 
-def test_backend_is_required_when_enabled():
-    """번역 활성인데 백엔드 미지정이면 기동 실패 — 기본값이 없다."""
-    with pytest.raises(ValueError, match='BACKEND'):
+def test_model_is_required():
+    """MODEL 은 번역 활성 시 필수다."""
+    with pytest.raises(ValueError, match='MODEL'):
+        build_translator(_cfg(translate_base_url='http://x/v1'))
+
+
+def test_base_url_is_required():
+    """BASE_URL 은 기본값이 없어 명시해야 뜬다.
+
+    기본값을 두면 그 포트에 떠 있는 다른 모델을 조용히 번역기로 쓴다. 원격
+    주소 없이 번역만 켜 둔 설정도 여기서 죽는다.
+    """
+    with pytest.raises(ValueError, match='BASE_URL'):
         build_translator(_cfg(translate_model='m'))
 
 
-def test_unknown_backend_rejected():
-    """llm·nllb 외 값은 기동 실패(오타가 조용히 통과하지 않는다)."""
-    with pytest.raises(ValueError, match='unknown translation backend'):
-        build_translator(_cfg(translate_backend='deepl',
-                              translate_model='m'))
-
-
-def test_model_is_required_for_both_backends():
-    """MODEL 은 두 백엔드 공용 필수다."""
-    for backend in ('llm', 'nllb'):
-        with pytest.raises(ValueError, match='MODEL'):
-            build_translator(_cfg(translate_backend=backend))
-
-
-def test_llm_requires_base_url():
-    """BASE_URL 기본값을 없앴으므로 llm 은 명시해야 뜬다."""
-    with pytest.raises(ValueError, match='BASE_URL'):
-        build_translator(_cfg(translate_backend='llm',
-                              translate_model='m'))
-
-
-def test_llm_rejects_nllb_only_keys():
-    """llm 인데 nllb 전용 키가 오면 기동 실패(설정≠동작 방지)."""
-    with pytest.raises(ValueError, match='DEVICE'):
-        build_translator(_cfg(translate_backend='llm', translate_model='m',
-                              translate_base_url='http://x/v1',
-                              translate_device='cuda:0'))
-
-
-def test_nllb_rejects_llm_only_keys():
-    """nllb 인데 원격 호출용 키가 오면 기동 실패."""
-    with pytest.raises(ValueError, match='BASE_URL'):
-        build_translator(_cfg(translate_backend='nllb', translate_model='m',
-                              translate_base_url='http://x/v1'))
-
-
-def test_llm_backend_builds_llm_translator():
-    """유효한 llm 설정은 종전 경로를 그대로 만든다(동작 불변)."""
+def test_valid_config_builds_translator():
+    """필수 둘이 갖춰지면 원격 백엔드를 만든다."""
     translator = build_translator(
-        _cfg(translate_backend='llm', translate_model='m',
+        _cfg(translate_model='m',
              translate_base_url='http://localhost:8081/v1'))
     assert type(translator).__name__ == 'LLMTranslator'
-
-
-class _NLLBSpy:
-    """모델 로드 없이 nllb 경로에 넘어간 인자만 받아 둔다."""
-
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
-
-
-def test_nllb_backend_defaults(monkeypatch):
-    """nllb 기본값 — device cuda:0, 반복 억제는 미지정(=번역기가 정한다)."""
-    monkeypatch.setattr(translate_nllb, 'NLLBTranslator', _NLLBSpy)
-    built = build_translator(
-        _cfg(translate_backend='nllb', translate_model='facebook/nllb'))
-    assert built.kwargs == {'model_id': 'facebook/nllb', 'device': 'cuda:0',
-                            'no_repeat_ngram': None}
-
-
-def test_nllb_explicit_keys_pass_through(monkeypatch):
-    """명시한 값은 그대로 넘어간다(0=끔 포함)."""
-    monkeypatch.setattr(translate_nllb, 'NLLBTranslator', _NLLBSpy)
-    built = build_translator(
-        _cfg(translate_backend='nllb', translate_model='facebook/nllb',
-             translate_no_repeat_ngram=0, translate_device='cpu'))
-    assert built.kwargs['no_repeat_ngram'] == 0
-    assert built.kwargs['device'] == 'cpu'
 
 
 # ---------- 동시성(번역 예산은 NER 과 분리된다) ----------
@@ -596,7 +551,7 @@ def test_ner_spans_feed_translation_without_exposing_phone(lang, text, enabled):
         payload = json.loads(request.content)
         prompt = payload['messages'][0]['content']
         assert phone not in prompt
-        token = DEFAULT_SENTINEL.pattern().search(prompt)
+        token = re.search(r'【PII[0-9a-f]+_\d+】', prompt)
         assert token is not None
         return httpx.Response(200, json={
             'id': 'test-completion', 'object': 'chat.completion', 'created': 0,

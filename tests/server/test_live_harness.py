@@ -16,7 +16,8 @@ def test_missing_models_checks_all_languages_and_environment(tmp_path, monkeypat
     monkeypatch.setenv('NER_SERVER_MODEL_ROOT', str(tmp_path))
     missing = live._missing_models(ServerConfig.from_env())
     assert missing == [str(tmp_path / 'vi' / 'model'),
-                       str(tmp_path / 'ko' / 'model')]
+                       str(tmp_path / 'ko' / 'model'),
+                       str(tmp_path / 'en' / 'model')]
 
 
 def test_startup_exit_reports_code_and_log_path(tmp_path):
@@ -71,7 +72,7 @@ def test_forced_stop_waits_for_process_reaping():
 
 def test_fixture_keeps_startup_log_and_reaps_failed_child(tmp_path, monkeypatch):
     """서버 대신 실패하는 자식 프로세스로 실제 로그 보관·종료를 확인한다."""
-    for lang in ('ja', 'vi', 'ko'):
+    for lang in ('ja', 'vi', 'ko', 'en'):
         (tmp_path / lang / 'model').mkdir(parents=True)
     monkeypatch.setenv('NER_SERVER_MODEL_ROOT', str(tmp_path))
     original_popen = subprocess.Popen

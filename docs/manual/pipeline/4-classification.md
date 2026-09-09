@@ -397,14 +397,14 @@ EN 은 **학습과 포장을 두 단계로 나눈다.** 학습은 CLI 가 그대
 된다.
 
 ```bash
-# 1) 학습 — 백본 벤치마크의 seed42 조건 그대로
+# 1) 학습 — 3-seed baseline 의 seed42 조건 그대로
 python -m ner.classifier --lang en --group-key orig \
     --seed 42 --train-seed 42 --precision bf16 \
-    --output-dir results/classifier/en/deploy-trainseed42
+    --output-dir results/classifier/en/roberta-3seed/roberta_base_seed42
 
 # 2) 포장 — /data/ner/en 으로
 python src/ner/scripts/build_ner_prod.py \
-    --run-dir results/classifier/en/deploy-trainseed42 --lang en
+    --run-dir results/classifier/en/roberta-3seed/roberta_base_seed42 --lang en
 ```
 
 | 아티팩트 | 위치 | 역할 |
@@ -412,8 +412,8 @@ python src/ner/scripts/build_ner_prod.py \
 | 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
 | 배포 추론 | `src/ner/scripts/eval_en_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. 절대경로만. 기본 레이아웃 `/data/ner/en/{model,data/test.jsonl}`. 임계값 파일이 없으면 raw 폴백 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
-| 배포 metric | `/data/ner/en/metrics.json` | 출하한 run의 metric과 포장 정보 |
-| 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 분할 고정값 · 누출·패키지 정합 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
+| 원장 | `certified/classifier/en/deploy-trainseed42/` | 배포된 패키지의 `metrics.json` 사본. 배포본이 나온 run 은 `certified/classifier/en/roberta-3seed/roberta_base_seed42/` 에 있고, 같은 데이터·분할이라 나란히 놓을 수 있다 |
+| 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 프로비넌스 정합 · 원장과 같은 자로 쟀는지 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
 
 **포장 스크립트가 분할을 다시 유도하는 이유** — 학습 CLI 는 분할 JSONL 을
 저장하지 않는다. 같은 인자로 다시 부르면 결정적으로 같은 분할이 나오지만,
@@ -484,6 +484,8 @@ python src/ner/scripts/build_ner_prod.py \
 **서빙까지 한 이슈로 닫은 이유** — EN 은 라틴 스크립트에 고유 코드포인트가 없어
 양성 감지가 불가능했고, 그래서 `SUPPORTED_LANGS`·`detect.py` 를 손대는 일이 별도
 결정으로 미뤄졌다. 한글은 결정적 스크립트 신호라 그 장애물이 없다(`src/server/`).
+그 별도 결정은 이후에 열렸다 — 양성 감지 대신 라틴 폴백(다른 신호가 모두 없고
+라틴 글자가 있으면 EN)을 택해 서빙을 붙였고, 오분류를 대가로 받아들였다.
 
 ---
 

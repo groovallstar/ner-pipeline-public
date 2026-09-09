@@ -1,4 +1,4 @@
-# NER 파이프라인 — 단계별 구현 맵 (일본어·베트남어, 영어는 §영어(EN))
+# NER 파이프라인의 단계별 구현 맵
 
 일본어(JA)·베트남어(VI) NER 파이프라인을 **단계 축**으로 정리한 구현
 맵이다. 파이프라인은 네 단계로 흐른다:
@@ -55,7 +55,7 @@ gold라 재라벨·anchor 검증이 불필요하다. 그래서 단계 문서를 
 
 ## 공통 라벨 스키마
 
-KO·JA·VI 공통으로 **canonical 10종 평면**을 목표 라벨 공간으로 쓴다.
+네 언어 공통으로 **canonical 10종 평면**을 목표 라벨 공간으로 쓴다.
 
 ```
 NER 5종:  PER  LOC  ORG  PROD  EVT
@@ -68,7 +68,7 @@ PII 5종:  DAT  EMAIL  PHONE  ID_NUM  CREDIT_CARD
 
 ---
 
-## 영어(EN) — 단계 하나가 통째로 빠진다
+## 단계 하나가 빠지는 영어 경로
 
 EN 은 위 네 단계를 그대로 타지 않는다. **1 단계(라벨링)가 없다.**
 
@@ -82,14 +82,14 @@ flowchart TD
     RES --> OUT["학습용 데이터 완성<br/>canonical 10 종 평면"]
 ```
 
-### 왜 라벨링이 빠지나
+### 라벨링이 빠지는 이유
 
 JA·VI 가 LLM 라벨러를 거친 이유는 서로 다르다 — JA 는 사람 gold 5 종을
 LLM 과 **비교해 채점**했고, VI 는 silver 3 종을 5 종으로 **재라벨해 만들어냈다**.
 EN 은 둘 다 필요 없다. OntoNotes5 가 `PRODUCT`·`WORK_OF_ART`·`EVENT` 를
 이미 갖고 있어 만들어낼 것이 없기 때문이다.
 
-**세 언어 중 EN 만 원천이 넘친다.** 그래서 이 파이프라인의 위험도 반대편에
+**네 언어 중 EN 만 원천이 넘친다.** 그래서 이 파이프라인의 위험도 반대편에
 있다 — ja·vi 는 "없는 것을 지어내다 틀리는" 위험이었지만 EN 은 "있는 것을
 버리다 잃는" 위험이다. 18 타입 중 9 타입(28,418 span)을 실제로 버린다.
 그 위험을 막는 것이 매핑표 전수성 게이트와 타입별 span 카운트 고정이다
@@ -126,9 +126,9 @@ EN 은 둘 다 필요 없다. OntoNotes5 가 `PRODUCT`·`WORK_OF_ART`·`EVENT` �
 | 분류 | 문서 |
 |---|---|
 | 엔티티 스키마(단일 출처) | `docs/manual/data/canonical-entity-schema.md` |
-| 데이터셋 스펙 | `docs/manual/data/{korean-ner-datasets,bio-dataset-spec-registry,ner-dataset-formats-comparison}.md` |
+| 데이터셋 스펙 | `docs/manual/data/{korean-ner-datasets,ner-dataset-formats-comparison}.md` |
 | KO 트랙 | `docs/manual/data/korean-ner.md`, `docs/manual/bio-tagging-impl.md` |
-| 벤치마크 수치(영구 인용) | `docs/reports/{japanese,vietnamese,korean}-*-benchmark.md`, `*-spec.md` |
+| 벤치마크 수치(영구 인용) | `docs/reports/{japanese,vietnamese,korean,english}-*-benchmark.md`, `*-spec.md` |
 | 모듈 API 상세 | 각 `src/ner/**/AGENTS.md` |
 | 서빙(REST API) | `docs/manual/server-implementation.md` |
 

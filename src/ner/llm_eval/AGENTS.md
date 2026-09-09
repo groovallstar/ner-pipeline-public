@@ -22,6 +22,6 @@ BIO eval mode, JA·VI는 character-offset span eval mode를 사용한다.
 
 ## 검증
 
-- `uv run pytest tests/ner/llm_eval tests/ner/test_span_evaluator.py tests/ner/test_span_f1.py tests/ner/test_span_metrics.py -q`
+- `uv run pytest tests/ner/llm_eval tests/ner/test_span_f1.py tests/ner/test_span_metrics.py -q`
 - CLI 배선은 `uv run python -m ner.llm_eval --help`로 확인한다.
 - 실제 benchmark는 별도로 실행 중인 backend가 있을 때만 검증한다.

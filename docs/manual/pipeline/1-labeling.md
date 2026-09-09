@@ -219,9 +219,9 @@ micro-average + per-entity(타입별 P/R/F1/support) breakdown.
 > **핵심 — 단계 4(분류)와 동일 함수.** `train_eval.py`도 이 함수를 import
 > 한다. LLM 라벨러와 BERT 분류기 결과를 직접 비교할 수 있는 이유다.
 
-**속도·2단계 평가** — 벤치마크는 F1과 함께 `TPS·Sec/Sample·Samples·
-Errors`를 출력한다. 라벨↔평가를 분리하려면 `span_evaluator_cli.py`가 미리
-만든 예측 JSONL(`gold_spans`/`pred_spans`)을 소비해 재평가를 빠르게 한다.
+**속도 지표** — 벤치마크는 F1과 함께 `TPS·Sec/Sample·Samples·Errors`를
+출력한다. 라벨링과 채점은 이 러너 한 벌이 함께 돈다 — 예측 JSONL 을 따로
+떠서 재평가하던 별도 CLI 는 쓰이지 않아 제거됐다.
 
 ---
 

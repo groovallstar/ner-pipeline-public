@@ -1,7 +1,16 @@
 """EN 배포 패키지가 스스로 정합하고 쓸 만한가.
 
-분할 크기·데이터 지문·누출·파일 레이아웃과 품질 하한을 검사한다.
-모델 자립 검사는 `integration`으로 분리하며 `model/`만으로 로드하고 추론한다.
+**재현 대조는 하지 않는다.** 처음에는 "같은 데이터 시드·같은 학습 시드면
+원장의 seed42 run 을 재현한다"를 기준으로 삼았으나, 그 전제가 거짓임이
+드러났다 — best 에포크 선택이 valid `eval_loss` 기준이라 미세한 수치 차이가
+어느 체크포인트를 출하할지를 뒤집고, 예측 span 복원이 라벨 생성과 같은
+offset 배열을 쓰므로 채점 경로도 완전히 결정적이지 않다. 그래서 이 파일은
+재현이 아니라 **세 가지**만 본다:
+
+1. 패키지가 자기가 나온 run 과 어긋나지 않는가 (프로비넌스 정합)
+2. 원장 run 과 **같은 자로** 쟀는가 (데이터·분할·설정 동일 — 수치를 나란히
+   놓을 자격)
+3. 모델이 쓸 만한가 (붕괴한 체크포인트가 출하되는 것만 막는 바닥)
 
 바닥은 재현 문턱이 아니라 sanity 문턱이다. 좁게 조이면 seed 뽑기를 통과
 조건으로 만드는 셈이라, 붕괴(F1 이 0 에 가까움)만 걸리게 둔다.
@@ -15,6 +24,11 @@ from pathlib import Path
 
 import pytest
 
+REPO = Path(__file__).resolve().parents[3]
+LEDGER = (
+    REPO / 'certified' / 'classifier' / 'en' / 'roberta-3seed'
+    / 'roberta_base_seed42' / 'metrics.json'
+)
 PACKAGE = Path('/data/ner/en')
 PKG_METRICS = PACKAGE / 'metrics.json'
 
@@ -26,6 +40,30 @@ pytestmark = pytest.mark.skipif(
 # 붕괴 검출용 바닥 — 이 아래면 체크포인트가 망가진 것이다.
 USABLE_F1_FLOOR = 0.85
 
+# 두 run 이 "같은 자로 잰다"를 이루는 필드. 하나라도 어긋나면 수치를 나란히
+# 놓을 자격이 없다. train_time_sec 처럼 실행 환경에 딸린 값은 뺀다.
+RULER_FIELDS = (
+    'lang',
+    'model_name',
+    'data_path',
+    'data_fingerprint',
+    'n_rows',
+    'n_groups',
+    'group_key',
+    'train_samples',
+    'valid_samples',
+    'test_samples',
+    'valid_ratio',
+    'test_ratio',
+    'seed',
+    'precision',
+    'epochs',
+    'batch_size',
+    'lr',
+    'max_length',
+    'metric_for_best',
+)
+
 
 @pytest.fixture(scope='module')
 def pkg():
@@ -33,12 +71,52 @@ def pkg():
         return json.load(f)
 
 
+@pytest.fixture(scope='module')
+def ledger():
+    with open(LEDGER, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def test_ledger_run_is_committed():
+    """비교 상대가 원장에 있어야 한다 — 없으면 대조가 허울이다."""
+    assert LEDGER.exists(), f'ledger run missing: {LEDGER}'
+
+
+def test_ruler_matches_ledger(pkg, ledger):
+    """데이터·분할·설정이 원장 run 과 같아야 수치를 나란히 놓을 수 있다."""
+    mismatched = {
+        k: (pkg.get(k), ledger.get(k))
+        for k in RULER_FIELDS
+        if pkg.get(k) != ledger.get(k)
+    }
+    assert not mismatched, f'package/ledger ruler mismatch: {mismatched}'
+
+
 def test_split_sizes_are_the_locked_ones(pkg):
-    """분할 크기와 데이터 지문은 그 자체가 고정값이다."""
+    """분할 크기와 데이터 지문은 그 자체가 고정값이다.
+
+    **네 상수의 출처는 코퍼스이지 run 이 아니다.** 배포된 `metrics.json` 에서
+    베껴 오면 이 검사가 검사 대상의 전사가 되어, 잘못된 코퍼스로 학습한
+    패키지도 자기 자신과는 언제나 일치한다.
+
+    - `data_fingerprint`: `dataset_fingerprint(load_jsonl(
+      'data/ontonotes_en/origin.jsonl'))` 를 직접 돌린 값
+    - 분할 셋: 코퍼스 76,378 행을 CLI 가 선언한 비율(valid 0.1 / test 0.1)로
+      나눈 값이다. 10% 두 몫은 내림해 각 7,637 이고 나머지가 train 61,104 다
+
+    어긋나면 상수를 고칠 것이 아니라 조사한다 — 코퍼스가 바뀌었거나, 분할
+    인자가 바뀌었거나, 패키지가 다른 데이터로 학습된 run 에서 나온 것이다.
+    """
     assert pkg['train_samples'] == 61104
     assert pkg['valid_samples'] == 7637
     assert pkg['test_samples'] == 7637
-    assert pkg['data_fingerprint'] == '39cb0f9e9c16f265'
+    assert pkg['data_fingerprint'] == '258166d6972c8144'
+
+
+def test_test_gold_is_the_same_gold(pkg, ledger):
+    """test gold 의 span 수가 같아야 같은 정답을 재고 있는 것이다."""
+    assert (pkg['overall_strict']['support']
+            == ledger['overall_strict']['support'])
 
 
 def test_no_group_leak(pkg):

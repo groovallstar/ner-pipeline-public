@@ -4,22 +4,21 @@
 
 이 디렉터리는 `src/server`를 CUDA 이미지에 설치하고 `uv run --frozen python
 -m server`로 기동한다. 입력은 `NER_SERVER_*` 설정과 호스트
-`/data/ner/{ja,ko,vi}/model`, 출력은 기본 8008 포트의 내부망 REST API이다.
+`/data/ner/{ja,ko,vi,en}/model`, 출력은 기본 8008 포트의 내부망 REST API이다.
 
 ## 계약
 
 - Docker build context는 저장소 루트이며 모델과 HF 캐시는 런타임에 마운트한다.
-- 번역을 켜면 backend를 `llm` 또는 `nllb`로 명시하고 선택한 backend의 키만
-  설정한다. 반대 backend의 키는 남기지 않는다.
-- 원격 번역은 컨테이너에서 `host.docker.internal`을 통해 호스트 서비스를
-  호출한다. 인프로세스 번역은 NER과 GPU 메모리를 공유한다.
+- 번역을 켜면 원격 LLM의 `NER_SERVER_TRANSLATE_MODEL`과
+  `NER_SERVER_TRANSLATE_BASE_URL`을 명시한다.
+- 원격 번역은 컨테이너에서 `host.docker.internal`을 통해 호스트 서비스를 호출한다.
 - `/health`가 `status: "ok"`를 반환해야 준비 완료이다. 포트 바인딩만으로
   모델 준비를 판단하지 않는다.
 
 ## 금지사항
 
 - 인증 없는 서비스를 공개망에 노출하지 않는다.
-- 번역 설정에 암묵적 backend나 base URL 기본값을 추가하지 않는다.
+- 번역 설정에 암묵적 모델이나 base URL 기본값을 추가하지 않는다.
 - 코드 변경 없이 빠르게 재기동하는 경우 외에는 `--no-build`로 새 코드를
   건너뛰지 않는다.
 

@@ -14,9 +14,12 @@ import time
 import httpx
 import pytest
 
-from server.config import ServerConfig
+from server.config import SUPPORTED_LANGS, ServerConfig
 
 pytestmark = pytest.mark.live
+
+_UNSUPPORTED_LANG = 'th'
+assert _UNSUPPORTED_LANG not in SUPPORTED_LANGS
 
 
 def _free_port() -> int:
@@ -122,7 +125,7 @@ def test_ner_single_live(client):
 def test_bad_lang_live(client):
     """실서버 잘못된 lang → 400 + 구조화 에러."""
     r = client.post('/v1/ner',
-                   json={'text': 'x', 'lang': 'en'}, timeout=10)
+                   json={'text': 'x', 'lang': _UNSUPPORTED_LANG}, timeout=10)
     assert r.status_code == 400
     assert 'error' in r.json()
 
@@ -155,3 +158,18 @@ def test_ner_to_translation_live(client, lang, text, phone):
     for span in spans:
         if span['label'] in pii_labels:
             assert span['text'] in body['translation']
+
+
+def test_en_fallback_live(client):
+    """실서버에 영어 문장을 lang 없이 던지면 en 으로 감지되고 결과가 온다.
+
+    모델 사전 조건은 공용 base_url fixture가 현재 설정으로 확인한다.
+    """
+    text = 'Barack Obama was born in Hawaii in 1961.'
+    r = client.post('/v1/ner', json={'text': text}, timeout=30)
+    assert r.status_code == 200
+    body = r.json()
+    assert body['lang'] == 'en'
+    assert body['entities'], 'expected at least one entity'
+    for ent in body['entities']:
+        assert text[ent['start_char']:ent['end_char']] == ent['text']

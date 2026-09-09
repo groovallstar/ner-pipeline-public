@@ -1,19 +1,26 @@
 # 2. 증강 — 합성 PII 주입 + VI 재라벨 silver
 
-> **이 단계가 하는 일**: 학습 코퍼스를 만든다. (a) 모든 언어에서 합성 PII
-> 5종을 자연 주입하고, (b) VI는 그 전에 WikiANN 3종 gold를 canonical 5종
-> silver로 LLM 재라벨한다.
-> **대상 코드**: `src/ner/augmenters/pii`, `src/ner/augmenters/wikiann_vi`
-> **산출**: `data/{stockmark,wikiann_vi}/pii_*.jsonl` (canonical 10종 평면)
+> **이 단계가 하는 일**: 학습 코퍼스를 만든다. (a) 네 언어 모두에 합성 PII를
+> 자연 주입하고, (b) VI는 그 전에 WikiANN 3종 gold를 canonical 5종 silver로
+> LLM 재라벨한다.
+> **대상 코드**: `src/ner/augmenters/pii`, `src/ner/augmenters/wikiann_vi`,
+> `src/ner/augmenters/ontonotes_en`
+> **산출**: `data/{stockmark,wikiann_vi,klue,ontonotes_en}/*.jsonl`
+> (canonical 10종 평면)
 
-두 하위 파이프라인이 언어별로 다르게 연결된다.
+네 레인이 언어별로 다르게 연결된다.
 
 ```mermaid
 flowchart LR
-    JA["JA · Stockmark<br/>gold 5종"] --> JP["PII 주입"] --> J10["10종 평면"]
-    VI["VI · WikiANN<br/>3종"] --> VR["2B 재라벨 silver<br/>5종"] --> VG["gold-fix"] --> VP["PII 주입"] --> V10["10종 평면"]
+    JA["JA · Stockmark<br/>gold 5종"] --> JP["PII 주입<br/>5종"] --> J10["10종 평면"]
+    VI["VI · WikiANN<br/>3종"] --> VR["2B 재라벨 silver<br/>5종"] --> VG["gold-fix"] --> VP["PII 주입<br/>5종"] --> V10["10종 평면"]
     KO["KO · KLUE 유래<br/>gold 5종+DAT"] --> KP["PII 주입<br/>4종 · DAT 제외"] --> K10["10종 평면"]
+    EN["EN · OntoNotes5<br/>18종"] --> EC["형식 변환<br/>5종+DAT"] --> EP["PII 주입<br/>4종 · DAT 제외"] --> E10["10종 평면"]
 ```
+
+**주입할 PII 가 4종인지 5종인지는 원천이 날짜를 갖고 있는지가 정한다.** ko·en 은
+원천 gold 에 날짜가 이미 있어 `DAT` 를 주입하지 않고, ja·vi 는 없어서 `DAT` 까지
+주입한다.
 
 각 레인이 하는 일:
 
@@ -22,6 +29,9 @@ flowchart LR
   PII 주입까지 거치는, 증강이 가장 무거운 레인이다.
 - **KO** — KLUE 유래 gold(`DAT` 이미 보유)에 PII 4종만 주입, 검증 없이
   원본 gold를 보존한다.
+- **EN** — 재라벨이 없다. OntoNotes5 18종을 canonical 6종으로 매핑하고 자연문을
+  복원하는 형식 변환만 거친 뒤 PII 4종을 주입한다. 원본 `FAC` 는 표면별 판정
+  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다.
 
 ## 목차
 

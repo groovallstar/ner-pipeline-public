@@ -1,7 +1,7 @@
-"""CLI 진입점: python -m ner.llm_eval.benchmark
+"""CLI 진입점: python -m ner.llm_eval
 
 사용 예:
-    python -m ner.llm_eval.benchmark \
+    python -m ner.llm_eval \
         --models vllm:Qwen/Qwen3.5-9B hf:model-name \
         --max-samples 100 \
         --output results/benchmark.json
@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 
-from ner.labelers.dataset_loader import DatasetLoader  # direct import avoids bs4 dep in labelers.__init__
+from ner.labelers.dataset_loader import DatasetLoader
 from ner.llm_eval.benchmark_runner import BenchmarkRunner
 from ner.llm_eval.report import ReportGenerator
 
@@ -108,7 +108,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="NER Benchmark: evaluate labeling quality and speed",
-        prog="python -m ner.llm_eval.benchmark",
+        prog="python -m ner.llm_eval",
     )
     parser.add_argument(
         "--models", nargs="+", required=True,
