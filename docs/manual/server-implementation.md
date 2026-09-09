@@ -1,4 +1,4 @@
-# src/server/ — ja·ko·vi NER REST API 서비스
+# NER REST API 서버 구현과 설정
 
 학습된 BERT 분류기(`/data/ner/{ja,ko,vi}/model/`)를 감싸 HTTP 로 NER 추론을
 제공한다. `ner.classifier` 의 data_utils(인코딩·디코드)와
@@ -13,8 +13,8 @@ import 하지 않는다.
 ## 기동
 
 ```bash
-python -m server                 # 0.0.0.0:8008, /data/ner 로드
-python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
+uv run python -m server                 # 0.0.0.0:8008, /data/ner 로드
+uv run python -m server --host 127.0.0.1 --port 9000 --model-root /abs/root
 bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ```
 
@@ -37,7 +37,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 반대편 키가 왜 기동 실패인지는 §번역 백엔드.
 
 컨테이너 배포(내부망 별도 프로세스 소비자용)는 `docker/server/`(compose +
-라이프사이클 + `.env.example`; 상세: `docker/server/CLAUDE.md`).
+라이프사이클 + `.env.example`; 상세: `docker/server/AGENTS.md`).
 
 ## API
 
@@ -117,7 +117,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `translate_nllb.py` | `NLLBTranslator` — 전용 NMT 를 **서버 프로세스 안에서** 돌리는 백엔드(같은 계약: `translate`·`available`). ASCII sentinel·문장 단위 분할·반복 억제가 엔진 속성으로 붙는다(§번역 백엔드). torch·transformers 를 끌어오므로 `build_translator` 가 `nllb` 를 고를 때만 임포트된다 |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/ko/vi) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다. 결과가 ko 면 버튼을 **감춘다** — 눌러도 400 이 될 버튼을 회색으로 남기면 "백엔드가 죽었나"로 읽힌다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
-| `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
+| `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`uv run python -m server.scripts.example_client`) |
 | `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`) |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
@@ -166,30 +166,9 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 
 ## 테스트·검증
 
-- **pytest**: `uv run pytest tests/server/` — 계약·전송은 stub registry 로
-  모델 없이 CI 가능, 모델 통합(`test_inference_integration.py`)은 `/data` 있을
-  때만 (`pytest.skip` 가드). 통합은 **ja·ko·vi 를 같은 축으로** 태운다 —
-  offset 정합·thresholds 부재 시 raw 동작·장문 청크 offset 과 후반 recall·
-  청크 배치 parity·gold 엔티티 청크 경계 불가침·`predict_many` 등가·NFD 입력
-  동일, 그리고 세 언어 인터리브 배치가 단건과 1:1. 계약 테스트는 stub 이라
-  모델을 안 부르므로 토크나이저 분기(ja 만 slow)·청킹 경로(ko 는 문장이
-  아니라 단어 경계로 쪼개진다)가 갈리는 자리는 여기서만 잡힌다.
-- **배포 parity**: 서버 predict 로 잰 F1 을 배포 `metrics.json` 과 대조해
-  패키지가 자기가 나온 run 과 어긋나지 않는지 본다. `eval_*` 스크립트를
-  import 하지 않고 기록된 값(데이터)과 맞춘다. ja 는 thresholds 가 있어
-  abstention on/off 둘을, ko 는 raw 하나를 본다(`overall_strict`).
-- **번역 백엔드**: 계약·설정 검증·동시성은 stub 으로 모델 없이 돈다. `nllb`
-  실모델 경로(ja·vi PII 5종 verbatim 보존)는 가중치가 필요해 env 로 연다 —
-  `NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B uv run pytest
-  tests/server/test_translate_nllb.py`(미지정이면 skip, device 는
-  `NER_SERVER_TEST_NLLB_DEVICE`·기본 `cuda:0`).
-- **소비자 예제·자기검증(python)**: `python -m server.scripts.example_client
-  --base-url http://localhost:8008` — 내부 소비자가 서버를 호출하는 최소
-  레퍼런스(`NERClient`). 단일·배치·미지원·계약 에러(400·413·429)를 실서버
-  대상으로 호출·검증하고 PASS/FAIL 종료코드를 낸다.
-- **실서버 pytest**: `tests/server/test_live_server.py`(`live` 마커) — 서버를
-  서브프로세스로 띄워 httpx 로 검증. 모델 로드에 의존하므로 `/data` 없으면
-  skip. `uv run pytest -m live` 로 따로 돌릴 수 있다.
+모델 없는 기본 검사, 실모델·live 검사 선택과 실패 진단은
+[서버 검증 지침](../../src/server/AGENTS.md#검증)을 따른다.
+구현과 검사 파일의 대응은 [REST API 명세](rest-api-spec.md)를 참고한다.
 
 ## 번역 대상 언어
 
@@ -261,7 +240,7 @@ _configure_logging`). 빈 값이면 stderr 만. 파일 열기 실패는 stderr �
 - 전용 NMT(NLLB) 계열은 SentencePiece 어휘에 그 글자가 없어 **양쪽 괄호가
   `<unk>` 로 죽는다.** sentinel 본체는 멀쩡히 통과하는데 복원이 괄호째
   매칭하니 전량 실패로 집계된다 — 근거는
-  `certified/translate_bench/nllb-1.3b-sentinel-ascii-2080ti/summary.json`
+  [삭제 전 실험 원본](https://github.com/groovallstar/ner-pipeline/blob/b564d5e02402ba09fb8bc3babbecdc0e945326bf/certified/translate_bench/nllb-1.3b-sentinel-ascii-2080ti/summary.json)
   (현행 표기 0/186, ASCII 괄호 186/186). 괄호만 ASCII 로 옮기면 nonce 를
   포함해 복원된다.
 

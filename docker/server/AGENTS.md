@@ -26,5 +26,9 @@
 ## 검증
 
 - `bash -n docker/server/start.sh docker/server/stop.sh docker/server/logs.sh`
-- 기동 시 `curl -fsS localhost:8008/health`와 컨테이너 health 상태를 확인한다.
-- 런타임 계약 변경은 `uv run pytest tests/server -q`로 검증한다.
+- 기동 시 선택한 compose 프로젝트와 컨테이너의 실제 게시 포트를 확인하고,
+  해당 주소의 `/health` 응답과 컨테이너 health 상태를 함께 확인한다. 기본 포트
+  8008이나 현재 셸 변수만으로 `.env`가 반영된 실행 대상을 추정하지 않는다.
+- 런타임 계약 변경은 `uv run pytest tests/server -q -rs`로 검증한다. 모델 없는
+  기본 검사와 전체 검사의 선택·자원 조건은 [서버 검증 지침](../../src/server/AGENTS.md#검증)을
+  따른다. 전체 검사에서 실모델 로드와 서버 기동이 가능함을 고려한다.

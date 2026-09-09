@@ -566,3 +566,64 @@ def test_ner_saturation_does_not_block_translation():
     assert saturated                 # NER 슬롯이 실제로 점유된 상태에서
     assert ner_excess == 429         # NER 은 자기 상한에서 거절되고
     assert translated == 200         # 번역은 영향을 받지 않는다
+
+
+@pytest.mark.parametrize('lang,text', [
+    ('ja', '電話番号は090-1234-5678です。'),
+    ('vi', 'Số điện thoại là 090-1234-5678.'),
+])
+@pytest.mark.parametrize('enabled', [True, False])
+def test_ner_spans_feed_translation_without_exposing_phone(lang, text, enabled):
+    """NER 응답을 번역에 연결하고 외부 호출의 마스킹 및 출력 복원을 검증한다."""
+    import json
+
+    from openai import OpenAI
+
+    from server.translate import LLMTranslator
+
+    phone = '090-1234-5678'
+
+    class PhoneRegistry(_Reg):
+        """가중치 추론만 대체하며 canonical PHONE 응답을 반환한다."""
+
+        def predict(self, text, lang, apply_threshold=True):
+            start = text.index(phone)
+            return [{'label': 'PHONE', 'start_char': start,
+                     'end_char': start + len(phone), 'text': phone, 'score': 1.0}]
+
+    def complete(request):
+        # HTTP 경계까지 실제 번역 구현을 실행하여 원문 PII 유출을 검출한다.
+        payload = json.loads(request.content)
+        prompt = payload['messages'][0]['content']
+        assert phone not in prompt
+        token = DEFAULT_SENTINEL.pattern().search(prompt)
+        assert token is not None
+        return httpx.Response(200, json={
+            'id': 'test-completion', 'object': 'chat.completion', 'created': 0,
+            'model': 'test-model', 'choices': [{'index': 0, 'finish_reason': 'stop',
+                'message': {'role': 'assistant',
+                            'content': '전화번호는 ' + token.group(0) + '입니다.'}}],
+        })
+
+    with httpx.Client(transport=httpx.MockTransport(complete)) as transport:
+        translator = LLMTranslator(base_url='http://test.invalid/v1',
+                                   model='test-model')
+        translator._client.close()
+        translator._client = OpenAI(base_url='http://test.invalid/v1',
+                                    api_key='test', http_client=transport)
+        with TestClient(create_app(PhoneRegistry(), ServerConfig(),
+                                   translator if enabled else None)) as client:
+            ner = client.post('/v1/ner', json={'text': text, 'lang': lang})
+            assert ner.status_code == 200
+            spans = ner.json()['entities']
+            assert len(spans) == 1
+            assert spans[0]['text'] == phone
+            response = client.post('/v1/translate', json={
+                'text': text, 'lang': ner.json()['lang'], 'spans': spans})
+            if not enabled:
+                assert response.status_code == 503
+                return
+            assert response.status_code == 200
+            body = response.json()
+            assert body['translation'] == '전화번호는 090-1234-5678입니다.'
+            assert body['lang'] == lang

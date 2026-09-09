@@ -35,7 +35,29 @@ char offset, text를 보존한다.
 
 ## 검증
 
-- `uv run pytest tests/server -q`
-- 로컬 자원 없는 NLLB·live 테스트의 skip 사유를 확인하고 일반 PASS와 구분한다.
-- 소비자 smoke test는 `uv run python -m server.scripts.example_client --help`,
-  기동 smoke test는 `uv run python -m server --help`로 배선을 확인한다.
+- 모델 없는 기본 검사는 다음 명령으로 실행한다. NLLB 실모델 활성화 변수는
+  이 명령에서만 해제하며, 모델 통합·live 파일은 수집에서 제외한다.
+  ```bash
+  env -u NER_SERVER_TEST_NLLB_MODEL uv run pytest tests/server -q -rs --ignore=tests/server/test_inference_integration.py --ignore=tests/server/test_live_server.py
+  ```
+- 전체 검사는 `uv run pytest tests/server -q -rs`로 실행한다. 로컬 모델이 있으면
+  실모델을 로드하고 live 서버를 기동하므로 실행 전에 모델·GPU와 설정을 확인한다.
+  NLLB 실모델 검사는 `NER_SERVER_TEST_NLLB_MODEL`을 명시할 때만 활성화된다.
+- 로컬 자원 없는 NLLB·live·모델 통합 테스트의 skip 사유와 명시적으로 제외한
+  경로를 일반 PASS와 구분한다. `-m 'not live'`만으로 모델 없는 검사가 되지는 않는다.
+- CLI 배선은 `uv run python -m server.scripts.example_client --help`와
+  `uv run python -m server --help`로 확인한다. 이 검사는 실서버 기동이나
+  NER·번역 사용자 흐름의 성공을 보장하지 않는다.
+
+- live 검사만 실행할 때는 `uv run pytest tests/server/test_live_server.py -q -rs`를
+  사용한다. `NER_SERVER_MODEL_ROOT`의 ja·vi·ko 모델 디렉터리를 먼저 확인하며,
+  누락은 skip, 기동 실패·준비성 타임아웃은 실패다. 실패 메시지의 `startup.log`
+  경로에서 진단한다. 로그는 pytest 임시 디렉터리의 수명 동안만 보관된다.
+- NER→번역 실서버 흐름까지 요구한 작업은 backend와 자원을 준비한 뒤
+  `NER_SERVER_TEST_LIVE_TRANSLATE=1 uv run pytest tests/server/test_live_server.py -q -rs`
+  를 실행한다. 기존 `NER_SERVER_TRANSLATE_*` 설정을 사용하고 ja·vi의 PHONE
+  추출, 한국어 번역과 추출된 PII 원문 보존을 확인한다. 번역 비활성·backend
+  미가용은 실패이며, 모델 부재로 skip되면 전체 흐름은 미검증이다.
+- `test_live_harness.py`는 모델 없이 사전 조건·준비성·로그·프로세스 회수를,
+  `test_translate.py`는 NER→번역 HTTP 배선과 외부 호출 경계의 PII 마스킹을
+  검증한다. 실모델 번역 품질이나 브라우저 UI 동작을 검증하는 것은 아니다.

@@ -14,7 +14,7 @@ flowchart LR
 
 - 엔티티 정의·경계 규칙·canonical 매핑의 **단일 출처**:
   `docs/manual/data/canonical-entity-schema.md`
-- 서빙(REST API)은 본 단계 문서 범위 밖이다 — `src/server/CLAUDE.md` 참조.
+- 서빙(REST API)은 본 단계 문서 범위 밖이다 — `docs/manual/server-implementation.md` 참조.
 
 ---
 
@@ -117,7 +117,7 @@ EN 은 둘 다 필요 없다. OntoNotes5 가 `PRODUCT`·`WORK_OF_ART`·`EVENT` �
 무엇을 어디에 넣었는지 알아 "못 찾았다" 가 곧 "어긋났다" 지만, 원본 gold 는
 그렇지 않다.
 
-상세: `src/ner/augmenters/CLAUDE.md` · `src/ner/labelers/CLAUDE.md`.
+상세: `src/ner/augmenters/AGENTS.md` · `src/ner/labelers/AGENTS.md`.
 
 ---
 
@@ -129,8 +129,8 @@ EN 은 둘 다 필요 없다. OntoNotes5 가 `PRODUCT`·`WORK_OF_ART`·`EVENT` �
 | 데이터셋 스펙 | `docs/manual/data/{korean-ner-datasets,bio-dataset-spec-registry,ner-dataset-formats-comparison}.md` |
 | KO 트랙 | `docs/manual/data/korean-ner.md`, `docs/manual/bio-tagging-impl.md` |
 | 벤치마크 수치(영구 인용) | `docs/reports/{japanese,vietnamese,korean}-*-benchmark.md`, `*-spec.md` |
-| 모듈 API 상세 | 각 `src/ner/**/CLAUDE.md` |
-| 서빙(REST API) | `src/server/CLAUDE.md` |
+| 모듈 API 상세 | 각 `src/ner/**/AGENTS.md` |
+| 서빙(REST API) | `docs/manual/server-implementation.md` |
 
 > 본 단계 문서는 **방법론·구현 맵**이다. 시점별 벤치 수치·모델 선택은
 > 본문에 박지 않고 `docs/reports/`에 위임한다(데이터 재정리로 경로·행 수가

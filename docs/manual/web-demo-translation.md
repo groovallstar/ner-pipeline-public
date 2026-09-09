@@ -9,7 +9,7 @@
 > `tests/server/test_translate_nllb.py`
 
 이 문서가 **안 하는** 일도 적어 둔다. env 설정 표면과 "왜 그렇게 갈랐나"의
-정본은 `src/server/CLAUDE.md` §번역 백엔드이고, 여기서는 목록을 다시 싣지 않고
+정본은 `docs/manual/server-implementation.md` §번역 백엔드이고, 여기서는 목록을 다시 싣지 않고
 가리키기만 한다. `/v1/translate` 는 외부 소비자 계약(`docs/manual/rest-api-
 spec.md`)에 **없다** — 웹 데모 전용이라 OpenAPI 에도 노출하지 않는다. 설계 경위와
 실측 원본은 `docs/issues/issue-189-web-ja-vi-ko-gloss.md`(마스킹-복원 도입) ·
@@ -159,7 +159,7 @@ class TranslationResult:
 
 ### 4.1 설정 표면 — 공용 키와 전용 키
 
-키 목록·기본값의 정본은 `src/server/CLAUDE.md` §기동 이다. 여기서는 **구현이
+키 목록·기본값의 정본은 `docs/manual/server-implementation.md` §기동 이다. 여기서는 **구현이
 의존하는 성질** 하나만 고정한다.
 
 > **핵심 — 백엔드 전용 키는 `config.py` 에서 기본값 없이 `Optional[...] = None`
@@ -276,7 +276,7 @@ def build_translator(config):
 NLLB 의 SentencePiece 어휘에 `【` `】` 이 없어 양쪽 괄호가 `<unk>` 로 죽는다.
 자리표시자 본체는 멀쩡히 통과하는데 복원이 괄호째 매칭하므로 **전량 실패**로
 집계된다 — 현행 표기 0/186, ASCII 괄호 186/186(출처:
-`certified/translate_bench/nllb-1.3b-sentinel-ascii-2080ti/summary.json`).
+[삭제 전 실험 원본](https://github.com/groovallstar/ner-pipeline/blob/b564d5e02402ba09fb8bc3babbecdc0e945326bf/certified/translate_bench/nllb-1.3b-sentinel-ascii-2080ti/summary.json)).
 
 ```python
 ASCII_SENTINEL = SentinelFormat(left='[', right=']')
@@ -444,11 +444,11 @@ flowchart TD
 ## 8. 테스트 맵
 
 ```bash
-uv run pytest tests/server/test_translate.py tests/server/test_translate_nllb.py
+env -u NER_SERVER_TEST_NLLB_MODEL uv run pytest tests/server/test_translate.py tests/server/test_translate_nllb.py -q -rs
 # 실모델 경로까지 켜려면(미지정이면 해당 3건 skip):
 HF_HOME=/data/ner/_hf_cache \
 NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B \
-  uv run pytest tests/server/
+  uv run pytest tests/server/test_translate_nllb.py -q -rs
 ```
 
 | 묶음 | 대표 테스트 | 검증 내용 |
@@ -460,6 +460,8 @@ NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B \
 | 표기 교체 | `test_alternate_sentinel_format_round_trips` · `test_default_sentinel_unchanged_by_format_parameter` | `SentinelFormat` 이 괄호만 바꾼다 |
 | 설정 검증 | `test_backend_is_required_when_enabled` · `test_unknown_backend_rejected` · `test_llm_requires_base_url` · `test_llm_rejects_nllb_only_keys` · `test_nllb_rejects_llm_only_keys` | §4.2 의 네 조건 |
 | 백엔드 배선 | `test_llm_backend_builds_llm_translator` · `test_nllb_backend_defaults` · `test_nllb_explicit_keys_pass_through` | 실효 기본값 주입 · 인자 전달 |
+| NER→번역 연결(대역) | `test_ner_spans_feed_translation_without_exposing_phone` | NER 응답 span 전달 · 원격 HTTP 요청 PII 미노출 · 한국어 출력의 원문 PHONE 복원 · 비활성 503 |
+| 실서버 연결 | `test_ner_to_translation_live` | ja·vi 실모델 NER→번역 · PHONE 추출 · 한국어 출력과 추출된 PII 보존(모델·backend 필요) |
 | 엔드포인트 계약 | `test_translate_disabled_returns_503` · `test_translate_unsupported_lang_400` · `test_translate_backend_unavailable_503` · `test_status_*` | §7 상태코드 · `available` 의미 |
 | 동시성 | `test_translate_concurrency_bounded_and_excess_rejected` · `test_ner_saturation_does_not_block_translation` | 상한 포화 시 429 · 두 guard 의 예산 독립 |
 | 문장 분할 | `test_ja_splits_on_fullwidth_stop` · `test_single_letter_abbreviation_is_not_a_boundary` · `test_decimal_and_year_do_not_split` · `test_sentinel_survives_splitting` | §5.2 경계 규칙 |
@@ -467,6 +469,18 @@ NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B \
 | 잠금 불변식 | `test_encode_holds_source_language_tag_under_concurrency` · `test_tokenizer_access_is_serialized_across_encode_and_decode` | 동시 인코딩 시 언어 태그 불변 · 인코딩↔디코딩 직렬화 |
 | 배치·통합(스텁) | `test_sentence_batches_bound_generate_size` · `test_all_sentences_reach_output` · `test_pii_restored_across_sentences` | 배치 상한 · 뒷문장 유실 없음 |
 | 실모델 | `test_real_model_preserves_pii_verbatim` · `test_real_model_keeps_trailing_sentence` | ja·vi PII 5종 verbatim · 뒷문장 유지(가중치 필요) |
+
+실서버 연결은 ja·vi·ko NER 모델과 선택한 번역 backend의 자원을 확인하고
+`NER_SERVER_TRANSLATE_*` 설정을 준비한 뒤 별도로 실행한다.
+
+```bash
+NER_SERVER_TEST_LIVE_TRANSLATE=1 uv run pytest tests/server/test_live_server.py -q -rs
+```
+
+번역 검사를 켰는데 번역이 비활성이거나 backend가 미가용이면 실패다. 모델
+디렉터리 부재로 skip되면 흐름은 미검증이다. 기동 실패 로그는 pytest 임시
+디렉터리의 `startup.log`에 남고 오류 메시지는 그 경로를 안내한다. 대역 검사는
+실모델 품질을, HTTP 흐름 검사는 브라우저 버튼 동작을 증명하지 않는다.
 
 > **참고 — 잠금 테스트는 뮤테이션으로 확인됐다.** 같은 시나리오를 no-op 잠금으로
 > 돌리면 인코딩 10건 중 5건이 상대 언어 태그로 인코딩되고, `_decode` 의 잠금만
@@ -476,7 +490,7 @@ NER_SERVER_TEST_NLLB_MODEL=facebook/nllb-200-distilled-1.3B \
 
 | 문서 | 무엇을 |
 |---|---|
-| `src/server/CLAUDE.md` | env 설정 표면 · 모듈 오리엔테이션 · 백엔드 결정 근거(정본) |
+| `docs/manual/server-implementation.md` | env 설정 표면 · 모듈 오리엔테이션 · 백엔드 결정 근거(정본) |
 | `docs/manual/rest-api-spec.md` | 외부 소비자 계약 — `/v1/translate` 는 여기 **없다** |
 | `docs/issues/issue-189-web-ja-vi-ko-gloss.md` | 마스킹-복원 도입 · 엔진 선정 벤치 · sentinel 표기 진화 경위 |
 | `docs/issues/issue-197-translate-backend-option.md` | 백엔드 선택 설계 · 억제 강도 sweep · VRAM 실측 |

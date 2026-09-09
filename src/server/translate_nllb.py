@@ -6,9 +6,8 @@
 
 - **sentinel 은 ASCII 괄호다.** NLLB 의 SentencePiece 어휘에 lenticular
   bracket 이 없어 양쪽이 `<unk>` 로 죽는다 — sentinel 본체는 통과하는데 복원이
-  괄호째 매칭하니 전량 실패로 집계된다(근거: `certified/translate_bench/
-  nllb-1.3b-sentinel-ascii-2080ti/summary.json`, 현행 표기 0/186 → ASCII
-  186/186). 마스킹-복원은 소실을 '부재'로 처리해 에러를 내지 않으므로, 표기를
+  괄호째 매칭하니 전량 실패로 집계된다(현행 표기 0/186 → ASCII 186/186).
+  실험 근거는 `docs/manual/web-demo-translation.md`의 ASCII 자리표시자 절에 있다. 마스킹-복원은 소실을 '부재'로 처리해 에러를 내지 않으므로, 표기를
   안 옮기면 화면에서 PII 가 신호 없이 사라진다.
 - **번역 전에 문장으로 쪼갠다.** NLLB 는 문장 단위 모델이라 통짜 입력을 주면
   뒷문장을 통째로 버린다. 경계 규칙은 "마침표류 + 공백"을 기본으로 두고 한 글자

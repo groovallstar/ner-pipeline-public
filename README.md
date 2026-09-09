@@ -45,12 +45,11 @@ src/ner/
 src/server/                # ja·vi NER REST API 서비스 (FastAPI)
 docker/{server,vllm}/      # REST API 배포 + vLLM
 results/                   # 벤치마크 산출물 scratch (gitignore·휘발)
-certified/                 # 커밋된 결과 원장 — 인용 근거 metric JSON (숫자 검사 기준)
-tests/{ner,server,hooks}/  # pytest 테스트 (hooks 는 커밋 게이트 자체의 회귀 안전망)
+tests/{ner,server,migration}/  # 제품 회귀 및 Codex 지침 검사
 docs/                      # manual·reports·issues·wiki·specs
 ```
 
-상세 가이드: [`CLAUDE.md`](CLAUDE.md), 모듈 레퍼런스: [`docs/manual/`](docs/manual/)
+상세 가이드: [`AGENTS.md`](AGENTS.md), 모듈 레퍼런스: [`docs/manual/`](docs/manual/)
 
 ## 설치
 
@@ -80,7 +79,7 @@ python -m server   # uvicorn 기동 (기본 0.0.0.0:8008)
 스키마·상태코드는 [`docs/manual/rest-api-spec.md`](docs/manual/rest-api-spec.md),
 연동 절차는
 [`rest-api-integration-guide.md`](docs/manual/rest-api-integration-guide.md),
-환경변수·모듈 구조는 [`src/server/CLAUDE.md`](src/server/CLAUDE.md), 컨테이너
+환경변수·모듈 구조는 [`docs/manual/server-implementation.md`](docs/manual/server-implementation.md), 컨테이너
 배포는 `docker/server/`.
 
 ## 테스트

@@ -621,45 +621,12 @@ def test_rescore_counts_paired_fold_wins_and_losses():
     assert set(paired["per_fold"]) == {"fold0", "fold1"}
 
 
-def test_certified_noncircular_is_anchored_to_the_preregistered_inputs():
-    """승격된 비순환 표가 사전등록한 자로 쟀나 — 아니면 사전등록이 장식이 된다."""
-    root = pathlib.Path(__file__).resolve().parents[3]
-    base = root / "src/ner/labelers/ko/data"
-    prereg = json.loads((base / "evt_axis1_prereg.json").read_text(encoding="utf-8"))
-    report = json.loads((
-        root / "certified/classifier/ko/issue202-axis1-head/noncircular.json"
-    ).read_text(encoding="utf-8"))
-    assert report["gold_sha256"] == prereg["head_arm"]["gold_sha256"]
-    assert report["sigma_sha256"] == prereg["base_arm"]["fold_sigma_sha256"]
-    recorded = prereg["base_arm"]["pred_spans_sha256"]
-    assert report["pred_sha256"]["base"] == [recorded[f"fold{i}"] for i in range(10)]
-    ledger = [json.loads(line) for line
-              in (base / "evt_axis1_judgements.jsonl").read_text(
-                  encoding="utf-8").splitlines() if line.strip()]
-    assert report["recovered_sites"] == sum(
-        1 for r in ledger if r["verdict"] == "EVT")
-    # 분할이 안 맞아 못 낸 통계는 빠지는 게 아니라 못 낸 이유가 남아야 한다
-    for block in ("full", "recovery_free_subset"):
-        paired = report[block]["paired_evt"]
-        assert paired["available"] or (paired["reason"] and "mean" not in paired)
+def test_prereg_pins_rule_judgements_and_gold_provenance():
+    """사전등록한 규칙·판정 자료와 gold 전후 지문을 대조한다.
 
-
-def test_prereg_pins_the_four_parsed_rule_parameters_and_the_run_inputs():
-    """head 팔 학습 전 상태의 사전등록 — 지문을 다시 계산해 대조한다.
-
-    "커밋 diff 로 본다" 는 집행이 아니다. 실행 순서는 diff 에 남지 않고 `results/`
-    는 휘발이라, 지문을 다시 계산해 대조하는 것만이 순서를 되짚을 수 있다.
-
-    **무엇이 걸리고 무엇이 안 걸리나.** 측정 입력(판정 원장·σ·base 예측)은 파일
-    지문이라 한 바이트만 달라도 걸리고, head 목록은 모듈 상수의 지문이다. canonical 은
-    규칙 **내용** 지문이라 그 넷(head 목록·고유명 타입·가드 임계·사유코드)이 움직일
-    때만 걸린다.
-
-    **§5.3 이 산문으로 정하는 조항을 바꾸는 것은 여기서 안 걸린다** — 인접 조건·head
-    매칭 방식·고유명 판정 근거의 구성(`동행 라벨 ∪ 전역 이력`)·축3 경계 조건절·제외
-    어휘 목록이 그 예이고 **닫힌 목록이 아니다**(산문이라 조항 수가 열려 있다). 파일
-    전체 해시였다면 걸렸겠지만 그것은 실측 주석 한 줄에도 깨져 갱신을 강요했다 — 그
-    교환의 대가가 이 범위 제한이고, 잠글 수단은 따로 만들어야 한다(#206 §후속 작업).
+    canonical은 전체 파일이 아니라 파싱한 head 목록·고유명 타입·가드 임계·
+    사유코드의 내용 지문으로 검사한다. 산문으로 정하는 인접 조건·head 매칭
+    방식·고유명 판정 근거·축3 경계·제외 어휘까지 잠그는 검사는 아니다.
     """
     root = pathlib.Path(__file__).resolve().parents[3]
     base = root / "src/ner/labelers/ko/data"
@@ -676,12 +643,7 @@ def test_prereg_pins_the_four_parsed_rule_parameters_and_the_run_inputs():
     assert prereg["rule"]["heads_sha256"] == heads_sha256(AXIS1_HEADS)
     assert prereg["rule"]["judgements_sha256"] == \
         sha("src/ner/labelers/ko/data/evt_axis1_judgements.jsonl")
-    # σ 는 base 팔에서 뽑아 승격했다 — 그 파일이 바뀌면 노이즈 밴드가 바뀐다
     arm = prereg["base_arm"]
-    assert arm["fold_sigma_sha256"] == \
-        sha("certified/classifier/ko/issue202-axis1-base/fold_sigma.json")
-    assert arm["pooled_metrics_sha256"] == \
-        sha("certified/classifier/ko/issue202-axis1-base/pooled_metrics.json")
     # 두 팔은 서로 다른 gold 를 본다 — 같으면 회수가 반영되지 않았다는 뜻이다
     prov = json.loads((base / "evt_axis1_apply.json").read_text(encoding="utf-8"))
     assert arm["gold_sha256"] == prov["gold_sha256"]["before"]

@@ -247,16 +247,16 @@ STALE_PHRASES: dict[str, tuple[str, ...]] = {
     'docs/manual/data/canonical-entity-schema.md': (
         '`FAC` 를 전량 ORG 로 태운다',
     ),
-    'src/ner/augmenters/CLAUDE.md': (
-        '`FAC`(공항·역·경기장·다리·고속도로)를 `ORG` 로 흡수한다',
-    ),
-    'src/ner/CLAUDE.md': (
-        'JA·VI 관례(`FAC`→`ORG`)를 따르고',
-    ),
     'docs/manual/pipeline/README.md': (
         '`FAC`→`ORG` 경계는 고른 것이라',
     ),
 }
+
+# 삭제된 지침의 문구도 현행 선언에 다시 들어오지 않도록 계속 감시한다.
+RETIRED_SITE_PHRASES = (
+    '`FAC`(공항·역·경기장·다리·고속도로)를 `ORG` 로 흡수한다',
+    'JA·VI 관례(`FAC`→`ORG`)를 따르고',
+)
 
 DECLARATION_SITES = tuple(STALE_PHRASES)
 
@@ -267,7 +267,7 @@ def _normalized(path: str) -> str:
 
 
 def test_every_declaration_site_states_the_split():
-    """다섯 자리가 전부 분할을 같은 문장으로 선언한다."""
+    """현행 구현과 문서가 분할을 같은 문장으로 선언한다."""
     for path in DECLARATION_SITES:
         assert SPLIT_SENTENCE in _normalized(path), (
             f'{path} does not declare the infrastructure split'
@@ -285,7 +285,7 @@ def test_no_declaration_site_keeps_the_pre_split_wording():
     """
     for path in DECLARATION_SITES:
         body = _normalized(path)
-        for phrases in STALE_PHRASES.values():
+        for phrases in (*STALE_PHRASES.values(), RETIRED_SITE_PHRASES):
             for stale in phrases:
                 assert stale not in body, f'{path} still says {stale!r}'
 
@@ -302,7 +302,7 @@ def test_every_site_has_at_least_one_stale_phrase_watching_it():
 
 def test_no_stale_phrase_states_the_split():
     """금지 문구가 새 선언을 담지 않는다 — 담으면 양성 검사와 충돌한다."""
-    for phrases in STALE_PHRASES.values():
+    for phrases in (*STALE_PHRASES.values(), RETIRED_SITE_PHRASES):
         for stale in phrases:
             assert SPLIT_SENTENCE not in stale
 
@@ -318,7 +318,7 @@ def test_every_stale_phrase_really_stood_in_that_file():
     현재 파일 내용으로는 확인할 수 없다 — 금지 문구는 지금 없어야 정상이다.
     확인할 수 있는 곳은 이력뿐이라 `git log -S` 로 그 문구의 등장 횟수를
     바꾼 커밋이 그 파일에 있는지 본다. 이력이 없는 환경(얕은 클론·아카이브)
-    에서는 건너뛴다 — `tests/ner/CLAUDE.md` 의 "로컬 자원 부재 → skip" 관례다.
+    에서는 건너뛴다 — `tests/ner/AGENTS.md` 의 "로컬 자원 부재 → skip" 관례다.
     """
     import subprocess
 

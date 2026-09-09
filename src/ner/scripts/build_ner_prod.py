@@ -2,7 +2,7 @@
 
 **학습은 하지 않는다.** `python -m ner.classifier` 가 낸 run 디렉토리를 읽어
 `/data/ner/{lang}/` 배포 레이아웃으로 옮긴다. 학습 경로를 여기서 복제하면 배포
-체크포인트가 CLI 가 아닌 이 스크립트의 산물이 돼, 원장(certified)에 올라간
+체크포인트가 CLI 가 아닌 이 스크립트의 산물이 돼, 기존 학습 run의
 벤치마크 수치와 맞춰 보는 일이 서로 다른 코드 경로를 비교하는 것이 된다.
 
 **언어는 run 이 정한다.** 언어별 사본을 두지 않는 이유는 분할 재유도·지문
@@ -351,8 +351,7 @@ def main():
     dump_jsonl(valid_rows, os.path.join(data_dir, 'valid.jsonl'))
     dump_jsonl(test_rows, os.path.join(data_dir, 'test.jsonl'))
 
-    # run 의 metrics 를 그대로 싣고 포장 사실만 덧붙인다 — 수치를 손대면
-    # 원장 대조가 이 스크립트를 거친 값을 보게 된다.
+    # run 의 metrics를 그대로 싣고 포장 사실만 덧붙여 학습 결과를 보존한다.
     packaged = dict(m)
     packaged['deploy_package'] = {
         'source_run_dir': args.run_dir,

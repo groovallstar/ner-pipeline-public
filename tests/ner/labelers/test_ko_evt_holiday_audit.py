@@ -783,15 +783,9 @@ def test_the_committed_noregress_matches_a_recomputation():
         - art["r2"]["queue_moved"]["candidates_total"][0])
 
 
-# ── certified 면책 ↔ 이슈 문서 ────────────────────────────────────────
-#
-# 재라벨은 `EVT` 분모를 1,731 → 1,869 로 옮겼다. `certified/classifier/ko/**` 의
-# `EVT`·`DAT` 지표는 전부 그 전 gold 에서 잰 값이라 재라벨 후 모델과 나란히
-# 놓으면 안 되는데, **그 사실은 문서의 산문일 뿐이라 아무도 안 센다.** 아래 셋이
-# 그 산문을 원장·산출물에 묶는다.
+# ── 재라벨 전후 지문·총계와 이슈 문서 대조 ───────────────────────────
 
 _ISSUE_DOC = _REPO / "docs" / "issues" / "issue-222-ko-holiday-evt.md"
-_CERTIFIED_KO = _REPO / "certified" / "classifier" / "ko"
 _DOC_ROW = re.compile(r"^\|(.+)\|\s*$", re.M)
 
 
@@ -812,7 +806,7 @@ def _doc_number(cell):
 
 
 def _doc_before_after():
-    """§certified 면책 의 전후 표 — 지문 접두와 라벨 총계."""
+    """재라벨 전후 표의 지문 접두와 라벨 총계를 읽는다."""
     out = {}
     for cells in _doc_cells():
         head = cells[0].strip()
@@ -823,65 +817,6 @@ def _doc_before_after():
             out[label.group(1)] = tuple(_doc_number(c) for c in cells[1:])
     assert set(out) == {"sha", "DAT", "EVT"}, out
     return out
-
-
-def _doc_certified():
-    """§certified 면책 의 원장 표 — 파일별 (`DAT`, `EVT`) support."""
-    out = {}
-    for cells in _doc_cells():
-        name = cells[0].strip("`")
-        if name.endswith(".json") and len(cells) == 3:
-            out[name] = tuple(_doc_number(c) for c in cells[1:])
-    assert out, "원장 support 표를 못 읽었다 — 파서가 읽을 자리가 사라졌다"
-    return out
-
-
-def _pooled_support():
-    """문서 표가 싣는 자리 — pooled metric 파일의 `strict.per_entity`.
-
-    표에 그 다섯만 적는 것은 그것이 리포트가 인용하는 headline 지표이기
-    때문이다. **원장에는 다른 스키마로 support 를 담는 파일도 있고**(교차·
-    비순환 산출물의 `full`·`recovery_free_subset`), 그쪽까지 표에 옮기면 문서가
-    원장의 사본이 된다. 면책의 실체 — 재라벨 후 분모로 잰 값이 없다 — 는 표가
-    아니라 아래 `_all_support()` 전량 스캔이 본다.
-    """
-    out = {}
-    for path in sorted(_CERTIFIED_KO.rglob("*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        per = data.get("strict", {}).get("per_entity") if isinstance(data, dict) else None
-        if not isinstance(per, dict) or not {"DAT", "EVT"} <= set(per):
-            continue
-        out[str(path.relative_to(_CERTIFIED_KO))] = (
-            per["DAT"]["support"], per["EVT"]["support"])
-    return out
-
-
-def _all_support():
-    """원장 **전량**에서 (`DAT`, `EVT`) support 쌍을 스키마 무관하게 긁는다.
-
-    `strict.per_entity` 만 보면 시야가 좁아 **재라벨 후 gold 로 잰 실험을 다른
-    꼴로 승격하는 경로**가 열린다 — 실제로 비순환 산출물 3 개가 그 밖에서
-    support 를 담고 있고 그중 하나(`9925`/`1714`)는 어느 표에도 없는 값이다.
-    그래서 부재 주장은 파일 스키마를 묻지 않고 트리 전체를 훑어 확인한다.
-    """
-    pairs = {}
-
-    def walk(node, path):
-        if isinstance(node, dict):
-            dat, evt = node.get("DAT"), node.get("EVT")
-            if isinstance(dat, dict) and isinstance(evt, dict) \
-                    and "support" in dat and "support" in evt:
-                pairs[path] = (dat["support"], evt["support"])
-            for key, value in node.items():
-                walk(value, f"{path}.{key}")
-        elif isinstance(node, list):
-            for index, value in enumerate(node):
-                walk(value, f"{path}[{index}]")
-
-    for path in sorted(_CERTIFIED_KO.rglob("*.json")):
-        walk(json.loads(path.read_text(encoding="utf-8")),
-             str(path.relative_to(_CERTIFIED_KO)))
-    return pairs
 
 
 def test_the_issue_doc_matches_the_committed_apply_provenance():
@@ -898,45 +833,3 @@ def test_the_issue_doc_matches_the_committed_apply_provenance():
     assert digests["before"].startswith(doc["sha"][0]), doc["sha"]
     assert digests["after"].startswith(doc["sha"][1]), doc["sha"]
     assert len(doc["sha"][0]) >= 16 and len(doc["sha"][1]) >= 16
-
-
-def test_the_issue_doc_lists_every_pooled_certified_ko_support_and_no_other():
-    """문서 표가 pooled 원장 파일과 **양방향으로** 같다.
-
-    한 방향만 보면 새는 길이 남는다 — pooled 실험을 승격하면서 표에 안 적으면
-    "적힌 것은 전부 옛 gold" 가 여전히 참이라 통과한다.
-
-    **이름이 곧 사정거리다** — 이 검사는 pooled 파일만 보며, 다른 스키마로
-    support 를 담는 원장 파일은 아래 부재 검사가 맡는다.
-    """
-    assert _doc_certified() == _pooled_support()
-
-
-def test_no_certified_ko_run_was_measured_on_the_relabelled_gold():
-    """**면책의 실체** — 재라벨 후 분모로 잰 원장 항목이 하나도 없다.
-
-    없다는 것이 면책의 근거이며, 이 조건이 깨지는 날(재라벨 후 실험 승격)에는
-    문서의 "전부 재라벨 전 gold 에서 잰 값" 이 거짓이 되므로 함께 실패해야 한다.
-    support 쌍으로 보는 것은 gold 지문이 원장 metric 파일에 안 적혀 있어서다 —
-    분모가 그 자리를 대신한다.
-
-    **스캔이 실제로 pooled 밖 파일까지 닿는지 함께 단언한다** — 추출기가 눈이
-    멀면 부재는 공짜로 참이 되고, 그게 이 검사가 막으려는 바로 그 결함이다.
-
-    **넓이는 개수가 아니라 파일로 잰다.** pooled 파일은 저마다 `strict` 와
-    `relaxed` 두 쌍을 내므로 "쌍이 pooled 항목보다 많다" 는 pooled 안쪽만
-    훑어도 성립한다(10 > 5). 그 판으로는 비-pooled 파일을 통째로 안 봐도
-    통과했다 — 넓이를 구속하려면 **pooled 밖 파일에서 나온 쌍이 실재하는지**를
-    물어야 한다.
-    """
-    after = _committed("evt_holiday_apply.json")["label_totals"]["after"]
-    target = (after["DAT"], after["EVT"])
-    everywhere = _all_support()
-    pooled = _pooled_support()
-    outside = {path: pair for path, pair in everywhere.items()
-               if path.split(".json")[0] + ".json" not in pooled}
-    assert outside, everywhere
-    for name, pair in pooled.items():
-        assert everywhere.get(f"{name}.strict.per_entity") == pair, name
-    clashes = {k: v for k, v in everywhere.items() if v == target}
-    assert not clashes, clashes
