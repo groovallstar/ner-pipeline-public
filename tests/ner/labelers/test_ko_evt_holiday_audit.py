@@ -16,6 +16,7 @@ import warnings
 
 import pytest
 
+from ner.labelers.ko import ko_dat_audit
 from ner.labelers.ko.ko_evt_holiday_audit import (
     CATEGORY_HEADS,
     DAY_HEADS,
@@ -518,9 +519,23 @@ def _committed(name):
     return json.loads((_DATA / name).read_text(encoding="utf-8"))
 
 
+def _previous_generation_gold():
+    """이 원장이 기술하는 세대의 gold 를 역적용으로 되살린다.
+
+    뒤 세대가 `DAT` 경계를 고치고 무라벨 자리를 회수하면서 이 원장이 기술하던
+    gold 는 더는 디스크에 없다. **그렇다고 이 검사들을 지우거나 새 원장으로
+    갈아끼우면 안 된다** — 그러면 이 세대가 무엇을 초록으로 만들었는지 확인하는
+    기계가 하나도 안 남는다. 대신 커밋된 편집 매니페스트로 한 세대를 되감아
+    같은 단언을 그대로 돌린다. 되감기가 틀리면 지문 검사가 먼저 운다.
+    """
+    rows = _live_gold()
+    manifest = _committed("dat_edit_manifest.json")
+    return ko_dat_audit.revert_apply(rows, manifest)
+
+
 def test_the_committed_ledger_still_describes_the_live_gold():
     """원장의 1,372 자리가 지금 gold 에 그대로 있고 판정이 라벨과 맞는지."""
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     ledger = load_ledger(str(_DATA / "evt_holiday_prereg.json"))
     report = check_gate(rows, ledger)
     assert gate_failures(report) == []
@@ -537,7 +552,7 @@ def test_reversing_the_ledger_reproduces_the_pre_relabel_gold():
     그 sha 가 산출물의 `before` 와 다르면 지금 gold 가 원장이 말하는 그 gold 가
     아니거나 산출물이 틀린 것이고, 둘 다 알아야 할 일이다.
     """
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     ledger = load_ledger(str(_DATA / "evt_holiday_prereg.json"))
     planned = planned_moves(ledger["judgements"])
     reverted = 0
@@ -560,7 +575,7 @@ def test_reversing_the_ledger_reproduces_the_pre_relabel_gold():
 
 def test_the_committed_provenance_matches_the_live_gold():
     """provenance 의 수를 gold 에서 다시 세어 대조한다 — 적힌 값을 안 믿는다."""
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     provenance = _committed("evt_holiday_apply.json")
     counts = collections.Counter(e["label"] for r in rows for e in r["entities"])
     assert counts["DAT"] == provenance["label_totals"]["after"]["DAT"]
@@ -570,13 +585,18 @@ def test_the_committed_provenance_matches_the_live_gold():
     assert (provenance["label_totals"]["after"]["EVT"]
             - provenance["label_totals"]["before"]["EVT"]) == provenance["moved"]
     assert sum(provenance["by_reason"].values()) == provenance["moved"]
-    assert (hashlib.sha256(_GOLD.read_bytes()).hexdigest()
-            == provenance["gold_sha256"]["after"])
+    # 되감은 gold 를 실제로 직렬화해 지문을 낸다 — 디스크의 현 파일은 뒤 세대라
+    # 여기서 읽으면 이 세대의 provenance 와 어긋난다.
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "reverted.jsonl"
+        ko_dat_audit.write_gold(rows, str(path))
+        assert (hashlib.sha256(path.read_bytes()).hexdigest()
+                == provenance["gold_sha256"]["after"])
 
 
 def test_the_committed_ledger_sweep_anchor_still_holds():
     """앵커가 지금 gold 와 어긋나면 표면형이 움직인 것이다 — 새 이름일 수 있다."""
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     ledger = load_ledger(str(_DATA / "evt_holiday_prereg.json"))
     assert ledger["sweep"]["inventory_sha256"] == inventory_sha256(rows)
 
@@ -783,9 +803,15 @@ def test_the_committed_noregress_matches_a_recomputation():
         - art["r2"]["queue_moved"]["candidates_total"][0])
 
 
-# ── 재라벨 전후 지문·총계와 이슈 문서 대조 ───────────────────────────
+# ── certified 면책 ↔ 이슈 문서 ────────────────────────────────────────
+#
+# 재라벨은 `EVT` 분모를 1,731 → 1,869 로 옮겼다. `certified/classifier/ko/**` 의
+# `EVT`·`DAT` 지표는 전부 그 전 gold 에서 잰 값이라 재라벨 후 모델과 나란히
+# 놓으면 안 되는데, **그 사실은 문서의 산문일 뿐이라 아무도 안 센다.** 아래 셋이
+# 그 산문을 원장·산출물에 묶는다.
 
 _ISSUE_DOC = _REPO / "docs" / "issues" / "issue-222-ko-holiday-evt.md"
+_CERTIFIED_KO = _REPO / "certified" / "classifier" / "ko"
 _DOC_ROW = re.compile(r"^\|(.+)\|\s*$", re.M)
 
 
@@ -806,7 +832,7 @@ def _doc_number(cell):
 
 
 def _doc_before_after():
-    """재라벨 전후 표의 지문 접두와 라벨 총계를 읽는다."""
+    """§certified 면책 의 전후 표 — 지문 접두와 라벨 총계."""
     out = {}
     for cells in _doc_cells():
         head = cells[0].strip()
@@ -817,6 +843,65 @@ def _doc_before_after():
             out[label.group(1)] = tuple(_doc_number(c) for c in cells[1:])
     assert set(out) == {"sha", "DAT", "EVT"}, out
     return out
+
+
+def _doc_certified():
+    """§certified 면책 의 원장 표 — 파일별 (`DAT`, `EVT`) support."""
+    out = {}
+    for cells in _doc_cells():
+        name = cells[0].strip("`")
+        if name.endswith(".json") and len(cells) == 3:
+            out[name] = tuple(_doc_number(c) for c in cells[1:])
+    assert out, "원장 support 표를 못 읽었다 — 파서가 읽을 자리가 사라졌다"
+    return out
+
+
+def _pooled_support():
+    """문서 표가 싣는 자리 — pooled metric 파일의 `strict.per_entity`.
+
+    표에 그 다섯만 적는 것은 그것이 리포트가 인용하는 headline 지표이기
+    때문이다. **원장에는 다른 스키마로 support 를 담는 파일도 있고**(교차·
+    비순환 산출물의 `full`·`recovery_free_subset`), 그쪽까지 표에 옮기면 문서가
+    원장의 사본이 된다. 면책의 실체 — 재라벨 후 분모로 잰 값이 없다 — 는 표가
+    아니라 아래 `_all_support()` 전량 스캔이 본다.
+    """
+    out = {}
+    for path in sorted(_CERTIFIED_KO.rglob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        per = data.get("strict", {}).get("per_entity") if isinstance(data, dict) else None
+        if not isinstance(per, dict) or not {"DAT", "EVT"} <= set(per):
+            continue
+        out[str(path.relative_to(_CERTIFIED_KO))] = (
+            per["DAT"]["support"], per["EVT"]["support"])
+    return out
+
+
+def _all_support():
+    """원장 **전량**에서 (`DAT`, `EVT`) support 쌍을 스키마 무관하게 긁는다.
+
+    `strict.per_entity` 만 보면 시야가 좁아 **재라벨 후 gold 로 잰 실험을 다른
+    꼴로 승격하는 경로**가 열린다 — 실제로 비순환 산출물 3 개가 그 밖에서
+    support 를 담고 있고 그중 하나(`9925`/`1714`)는 어느 표에도 없는 값이다.
+    그래서 부재 주장은 파일 스키마를 묻지 않고 트리 전체를 훑어 확인한다.
+    """
+    pairs = {}
+
+    def walk(node, path):
+        if isinstance(node, dict):
+            dat, evt = node.get("DAT"), node.get("EVT")
+            if isinstance(dat, dict) and isinstance(evt, dict) \
+                    and "support" in dat and "support" in evt:
+                pairs[path] = (dat["support"], evt["support"])
+            for key, value in node.items():
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}[{index}]")
+
+    for path in sorted(_CERTIFIED_KO.rglob("*.json")):
+        walk(json.loads(path.read_text(encoding="utf-8")),
+             str(path.relative_to(_CERTIFIED_KO)))
+    return pairs
 
 
 def test_the_issue_doc_matches_the_committed_apply_provenance():
@@ -833,3 +918,52 @@ def test_the_issue_doc_matches_the_committed_apply_provenance():
     assert digests["before"].startswith(doc["sha"][0]), doc["sha"]
     assert digests["after"].startswith(doc["sha"][1]), doc["sha"]
     assert len(doc["sha"][0]) >= 16 and len(doc["sha"][1]) >= 16
+
+
+def test_the_issue_doc_lists_every_pooled_certified_ko_support_and_no_other():
+    """문서 표가 pooled 원장 파일과 **양방향으로** 같다.
+
+    한 방향만 보면 새는 길이 남는다 — pooled 실험을 승격하면서 표에 안 적으면
+    "적힌 것은 전부 옛 gold" 가 여전히 참이라 통과한다.
+
+    **이름이 곧 사정거리다** — 이 검사는 pooled 파일만 보며, 다른 스키마로
+    support 를 담는 원장 파일은 아래 부재 검사가 맡는다.
+    """
+    assert _doc_certified() == _pooled_support()
+
+
+def test_no_certified_ko_run_was_measured_on_the_relabelled_gold():
+    """**면책의 실체** — 재라벨 후 분모로 잰 원장 항목이 하나도 없다.
+
+    없다는 것이 면책의 근거이며, 이 조건이 깨지는 날(재라벨 후 실험 승격)에는
+    문서의 "전부 재라벨 전 gold 에서 잰 값" 이 거짓이 되므로 함께 실패해야 한다.
+    support 쌍으로 보는 것은 gold 지문이 원장 metric 파일에 안 적혀 있어서다 —
+    분모가 그 자리를 대신한다.
+
+    **스캔이 실제로 pooled 밖 파일까지 닿는지 함께 단언한다** — 추출기가 눈이
+    멀면 부재는 공짜로 참이 되고, 그게 이 검사가 막으려는 바로 그 결함이다.
+
+    **넓이는 개수가 아니라 파일로 잰다.** pooled 파일은 저마다 `strict` 와
+    `relaxed` 두 쌍을 내므로 "쌍이 pooled 항목보다 많다" 는 pooled 안쪽만
+    훑어도 성립한다(10 > 5). 그 판으로는 비-pooled 파일을 통째로 안 봐도
+    통과했다 — 넓이를 구속하려면 **pooled 밖 파일에서 나온 쌍이 실재하는지**를
+    물어야 한다.
+    """
+    # **두 세대를 다 본다.** 뒤 세대가 분모를 또 옮겼으므로 앞 세대 쌍만 막으면
+    # 새 gold 로 잰 실험을 승격해도 이 검사가 침묵한다 — 그 침묵이 "전부 재라벨 전
+    # gold 에서 잰 값" 을 조용히 거짓으로 만든다.
+    generations = [
+        _committed("evt_holiday_apply.json")["label_totals"]["after"],
+        _committed("dat_edit_apply.json")["label_totals"]["after"],
+    ]
+    targets = {(gen["DAT"], gen["EVT"]) for gen in generations}
+    assert len(targets) == len(generations), "세대끼리 분모가 같으면 구별이 안 된다"
+    everywhere = _all_support()
+    pooled = _pooled_support()
+    outside = {path: pair for path, pair in everywhere.items()
+               if path.split(".json")[0] + ".json" not in pooled}
+    assert outside, everywhere
+    for name, pair in pooled.items():
+        assert everywhere.get(f"{name}.strict.per_entity") == pair, name
+    clashes = {k: v for k, v in everywhere.items() if v in targets}
+    assert not clashes, clashes
