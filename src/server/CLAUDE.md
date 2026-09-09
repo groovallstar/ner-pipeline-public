@@ -49,7 +49,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 응답 span 은 canonical `{label, start_char, end_char, text}`
 (`.jsonl` 데이터 관례와 일치). 단일 → `{lang, entities}`, 배치 →
 `{results:[{lang, entities}, ...]}`(입력 순서 1:1). `lang` 생략 시 자동감지가
-배타적 스크립트 신호도 라틴 글자도 못 찾으면 **`200 + {lang:"unsupported",
+언어 고유 신호도 라틴 글자도 못 찾으면 **`200 + {lang:"unsupported",
 entities:[]}`**(에러 아님, 모델 미호출) — 배치는 항목별 부분성공. 명시 `lang` 이 미지원이면 400
 (클라이언트 계약). 에러는 구조화 `{error: {status, message}}` — 잘못된 요청
 (lang·text/texts 택일)→400, 크기 한도(max_chars·max_batch·max_total_chars)
@@ -109,7 +109,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | 파일 | 역할 |
 |------|------|
 | `config.py` | `ServerConfig` — env 설정·언어별 경로(`model_dir`/`thresholds_path`) |
-| `detect.py` | `detect_lang` — **두 단**이다. ① 배타적 스크립트 양성 감지: 가나→ja, 한글(음절·자모)→ko, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi. ② 셋이 모두 실패하면 라틴 글자가 있는지 보고 → en, 라틴도 없으면 → `unsupported`. 둘째 단은 감지가 아니라 폴백이라 대가를 진다 — 인도네시아어·로마자 일본어·무부호 베트남어가 en 으로 간다. 한자만 있는 텍스트는 라틴 글자도 없어 `unsupported` — ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않으므로 *배타적* 스크립트만 신호로 쓴다. `DETECTORS` (신호,언어) 레지스트리로 확장 — 스크립트 언어 추가는 여전히 한 줄이다(폴백이 리스트 밖 루프 뒤에 있어 새 감지기가 언제나 앞에서 돈다). **언어를 추가할 때는 2 원소 열거 자리를 손으로 훑는다** — 열거 정합 검사의 하한이 3 원소라 그 자리들은 조용히 낡는다(`tests/server/test_docs_language_lists.py`). 언어별 신호·코드포인트 구간·수용된 한계의 정본은 `docs/manual/language-detection.md`, 감지기 후보 비교 측정은 `docs/reports/language-detection-benchmark.md` |
+| `detect.py` | `detect_lang` — **두 단**이다. ① 언어 고유 신호 양성 감지: 가나→ja, 한글(음절·자모)→ko, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi. ② 셋이 모두 실패하면 라틴 글자가 있는지 보고 → en, 라틴도 없으면 → `unsupported`. 둘째 단은 감지가 아니라 폴백이라 대가를 진다 — 인도네시아어·로마자 일본어·무부호 베트남어가 en 으로 간다. 한자만 있는 텍스트는 라틴 글자도 없어 `unsupported` — ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않으므로 가나·한글처럼 그 언어에만 나오는 글자만 신호로 쓴다. `DETECTORS` (신호,언어) 레지스트리로 확장 — 새 언어 추가는 여전히 한 줄이다(폴백이 리스트 밖 루프 뒤에 있어 새 감지기가 언제나 앞에서 돈다). **언어를 추가할 때는 2 원소 열거 자리를 손으로 훑는다** — 열거 정합 검사의 하한이 3 원소라 그 자리들은 조용히 낡는다(`tests/server/test_docs_language_lists.py`). 언어별 신호·코드포인트 구간·수용된 한계의 정본은 `docs/manual/language-detection.md`, 감지기 후보 비교 측정은 `docs/reports/language-detection-benchmark.md` |
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
 | `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). 추론은 fp32 전용(단건·배치 결정적), 입력은 NFC 정규화. 토크나이저 접근(`_tokenize`)은 잠금으로 직렬화 — 공유 인스턴스라 동시 요청이 `Already borrowed` 로 터진다(§토크나이저 접근의 직렬화). 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429. `app.py` 가 **둘을 만든다** — NER 용과 번역 전용(`TRANSLATE_MAX_CONCURRENCY`, 큐 없음) |

@@ -1,4 +1,4 @@
-"""언어 자동 감지 단위 테스트 — 배타적 스크립트 양성 감지 + 라틴 폴백.
+"""언어 자동 감지 단위 테스트 — 언어 고유 신호 양성 감지 + 라틴 폴백.
 
 가나→ja, 한글→ko, vi-변별 코드포인트(horn·hook·dot·đ)→vi, 셋이 모두
 실패하고 라틴 글자가 있으면 en, 라틴도 없으면 unsupported. 범-라틴 부호
@@ -85,7 +85,7 @@ def test_vi_decomposed_nfd_input_detected_as_vi():
     'Watashi wa gakusei desu',   # romaji-ja
 ])
 def test_latin_text_falls_back_to_en(text):
-    """배타적 스크립트 신호가 없고 라틴 글자가 있으면 en 폴백.
+    """언어 고유 신호가 없고 라틴 글자가 있으면 en 폴백.
 
     여덟 중 실제 영어는 하나뿐이다 — fr·de·pt·es·tr 는 다른 언어이고
     뒤 둘은 베트남어·일본어다. 그래도 en 으로 보내는 것이 폴백이 받은
@@ -171,7 +171,7 @@ def test_registry_detector_wins_over_latin_fallback(monkeypatch):
 
 
 def test_detectors_hold_only_exclusive_script_signals():
-    """레지스트리는 배타적 스크립트의 양성 신호만 담는다.
+    """레지스트리는 언어 고유의 양성 신호만 담는다.
 
     누가 `(_has_latin_ish, 'id')` 같은 폴백성 술어를 append 하면 배선
     판별자는 키릴을 쓰므로 여전히 통과하지만 이 단언이 실패한다. 선택지 B
