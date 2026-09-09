@@ -16,6 +16,7 @@ import warnings
 
 import pytest
 
+from ner.labelers.ko import ko_dat_audit
 from ner.labelers.ko.ko_evt_holiday_audit import (
     CATEGORY_HEADS,
     DAY_HEADS,
@@ -518,9 +519,23 @@ def _committed(name):
     return json.loads((_DATA / name).read_text(encoding="utf-8"))
 
 
+def _previous_generation_gold():
+    """이 원장이 기술하는 세대의 gold 를 역적용으로 되살린다.
+
+    뒤 세대가 `DAT` 경계를 고치고 무라벨 자리를 회수하면서 이 원장이 기술하던
+    gold 는 더는 디스크에 없다. **그렇다고 이 검사들을 지우거나 새 원장으로
+    갈아끼우면 안 된다** — 그러면 이 세대가 무엇을 초록으로 만들었는지 확인하는
+    기계가 하나도 안 남는다. 대신 커밋된 편집 매니페스트로 한 세대를 되감아
+    같은 단언을 그대로 돌린다. 되감기가 틀리면 지문 검사가 먼저 운다.
+    """
+    rows = _live_gold()
+    manifest = _committed("dat_edit_manifest.json")
+    return ko_dat_audit.revert_apply(rows, manifest)
+
+
 def test_the_committed_ledger_still_describes_the_live_gold():
     """원장의 1,372 자리가 지금 gold 에 그대로 있고 판정이 라벨과 맞는지."""
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     ledger = load_ledger(str(_DATA / "evt_holiday_prereg.json"))
     report = check_gate(rows, ledger)
     assert gate_failures(report) == []
@@ -537,7 +552,7 @@ def test_reversing_the_ledger_reproduces_the_pre_relabel_gold():
     그 sha 가 산출물의 `before` 와 다르면 지금 gold 가 원장이 말하는 그 gold 가
     아니거나 산출물이 틀린 것이고, 둘 다 알아야 할 일이다.
     """
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     ledger = load_ledger(str(_DATA / "evt_holiday_prereg.json"))
     planned = planned_moves(ledger["judgements"])
     reverted = 0
@@ -560,7 +575,7 @@ def test_reversing_the_ledger_reproduces_the_pre_relabel_gold():
 
 def test_the_committed_provenance_matches_the_live_gold():
     """provenance 의 수를 gold 에서 다시 세어 대조한다 — 적힌 값을 안 믿는다."""
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     provenance = _committed("evt_holiday_apply.json")
     counts = collections.Counter(e["label"] for r in rows for e in r["entities"])
     assert counts["DAT"] == provenance["label_totals"]["after"]["DAT"]
@@ -570,13 +585,18 @@ def test_the_committed_provenance_matches_the_live_gold():
     assert (provenance["label_totals"]["after"]["EVT"]
             - provenance["label_totals"]["before"]["EVT"]) == provenance["moved"]
     assert sum(provenance["by_reason"].values()) == provenance["moved"]
-    assert (hashlib.sha256(_GOLD.read_bytes()).hexdigest()
-            == provenance["gold_sha256"]["after"])
+    # 되감은 gold 를 실제로 직렬화해 지문을 낸다 — 디스크의 현 파일은 뒤 세대라
+    # 여기서 읽으면 이 세대의 provenance 와 어긋난다.
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "reverted.jsonl"
+        ko_dat_audit.write_gold(rows, str(path))
+        assert (hashlib.sha256(path.read_bytes()).hexdigest()
+                == provenance["gold_sha256"]["after"])
 
 
 def test_the_committed_ledger_sweep_anchor_still_holds():
     """앵커가 지금 gold 와 어긋나면 표면형이 움직인 것이다 — 새 이름일 수 있다."""
-    rows = _live_gold()
+    rows = _previous_generation_gold()
     ledger = load_ledger(str(_DATA / "evt_holiday_prereg.json"))
     assert ledger["sweep"]["inventory_sha256"] == inventory_sha256(rows)
 
@@ -929,8 +949,15 @@ def test_no_certified_ko_run_was_measured_on_the_relabelled_gold():
     통과했다 — 넓이를 구속하려면 **pooled 밖 파일에서 나온 쌍이 실재하는지**를
     물어야 한다.
     """
-    after = _committed("evt_holiday_apply.json")["label_totals"]["after"]
-    target = (after["DAT"], after["EVT"])
+    # **두 세대를 다 본다.** 뒤 세대가 분모를 또 옮겼으므로 앞 세대 쌍만 막으면
+    # 새 gold 로 잰 실험을 승격해도 이 검사가 침묵한다 — 그 침묵이 "전부 재라벨 전
+    # gold 에서 잰 값" 을 조용히 거짓으로 만든다.
+    generations = [
+        _committed("evt_holiday_apply.json")["label_totals"]["after"],
+        _committed("dat_edit_apply.json")["label_totals"]["after"],
+    ]
+    targets = {(gen["DAT"], gen["EVT"]) for gen in generations}
+    assert len(targets) == len(generations), "세대끼리 분모가 같으면 구별이 안 된다"
     everywhere = _all_support()
     pooled = _pooled_support()
     outside = {path: pair for path, pair in everywhere.items()
@@ -938,5 +965,5 @@ def test_no_certified_ko_run_was_measured_on_the_relabelled_gold():
     assert outside, everywhere
     for name, pair in pooled.items():
         assert everywhere.get(f"{name}.strict.per_entity") == pair, name
-    clashes = {k: v for k, v in everywhere.items() if v == target}
+    clashes = {k: v for k, v in everywhere.items() if v in targets}
     assert not clashes, clashes
