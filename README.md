@@ -50,7 +50,7 @@ src/ner/
 src/server/                # ja·ko·vi·en NER REST API 서비스 (FastAPI)
 docker/{server,vllm}/      # REST API 배포 + vLLM
 results/                   # 벤치마크 산출물 scratch (gitignore·휘발)
-tests/{ner,server,migration}/  # 제품 회귀 및 Codex 지침 검사
+tests/{ner,server}/            # 제품 회귀 검사
 docs/                      # manual·reports·issues·wiki·specs
 ```
 
