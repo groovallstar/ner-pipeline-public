@@ -16,22 +16,24 @@ ruff check              # 린트
 tests/ner/
 ├── CLAUDE.md
 ├── test_base_labelers.py
-├── test_bio_dataset.py
 ├── test_llm_helpers.py
-├── test_span_evaluator.py
 ├── test_span_f1.py
 ├── test_span_matcher.py
 ├── test_span_metrics.py
 ├── test_validity.py   # ner.validity — σ_fold·σ_repro, comparability,
 │                      # 누출 근거, compare verdict 우선순위
 ├── augmenters/
+│   ├── ontonotes_en/  # OntoNotes5 → canonical 변환·매핑 전수성, 자연문 복원,
+│   │                  # split 병합·group 복원, FAC 판정 표와 디스크 이관 원장
 │   ├── pii/           # suffix·llm injector, label merger, loader, verifier,
-│   │                  # ko·vi 생성기·주입, __main__ verify 라벨러 lang 분기
+│   │                  # ko·vi·en 생성기·주입, __main__ verify 라벨러 lang 분기
 │   └── wikiann_vi/    # 재라벨 파서·kappa·Wikidata anchor·confidence 병합,
 │                      # silver-갭 additive 삽입
 ├── classifier/        # confidence_threshold, boundary weights, data_utils,
-│   │                  # encode, error_analysis, kfold_pool
+│   │                  # encode, error_analysis, kfold_pool,
+│   │                  # ko·en 배포 패키지, lang 배선
 ├── golden/
+│   ├── ontonotes_en/  # EN 변환 산출물의 byte-고정 스냅샷
 │   └── validity/      # verdict 별 byte-고정 스냅샷 11종 (pass·fail·invalid·
 │                      # inconclusive) — compare() 출력 전체를 대조
 ├── labelers/
@@ -97,15 +99,18 @@ tests/ner/
 │   │                  # 안인지 — 프롬프트 + 출력 예약이 max-model-len 을 넘으면
 │   │                  # vLLM 이 전건 400 으로 거절하고 리포트는 정상 생성돼
 │   │                  # 모델 성능 저하로 읽힌다. 토크나이저는 로컬 HF 캐시
+│   ├── test_en_labeler.py  # EN 라벨러 — PII 주입 교차 검증 전용 경로
+│   ├── test_canonical_scope_markers.py  # canonical 절의 적용 언어 마커
+│   ├── test_canonical_section_refs.py   # canonical 절 참조의 실재
 │   ├── ja/            # test_ja_dataset_loader (canonical JSONL 로딩)
 │   └── vi/            # test_dataset_loader (VI canonical JSONL 로딩)
-└── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,
-                       # wikiann_vi_gold 테스트
+├── llm_eval/          # eval_mode CLI dispatch, vi_silver_quality,
+│                      # wikiann_vi_gold 테스트
+└── scripts/           # 배포 패키지 포장(build_ner_prod), EN 배포 추론
 ```
 
 `labelers/` 에 `ko/` 디렉토리는 없다 — 한국어 라벨러 테스트는 최상위
-`test_base_labelers.py`·`test_bio_dataset.py` 와 `labelers/test_ko_*.py` 에
-흩어져 있다. `test_ko_ner_prompts.py` 는 축1 head 동기에 더해 canonical §2.5 ↔
+`test_base_labelers.py` 와 `labelers/test_ko_*.py` 에 흩어져 있다. `test_ko_ner_prompts.py` 는 축1 head 동기에 더해 canonical §2.5 ↔
 프롬프트 LOC/ORG 동기, canonical §3.3·§5.3 ↔ 프롬프트 명절 판정 동기를
 양방향으로 대조한다. 명절 쪽이 묶는 것은 **네 목록**(하루·기간·범주 머리와
 구간 이름)과 **예시**다 — gold 는 명절 이름 138 자리를 `EVT` 로 옮겼는데
@@ -129,8 +134,8 @@ tests/ner/
 
 - LLM 백엔드(vLLM) 연동 테스트는 서버가 실행 중이어야 함
 - 조건부 skip 은 GPU 유무가 아니라 **로컬 자원 부재**로 걸린다 — HF 캐시가 없으면
-  `pytest.skip`(`test_bio_dataset.py`)·`skipif`(`labelers/test_prompt_token_budget.py`
-  — 토크나이저 캐시), 선택적 패키지(`pyvi`·`fugashi` 등)가 없으면
+  `skipif`(`labelers/test_prompt_token_budget.py` — 토크나이저 캐시),
+  선택적 패키지(`pyvi`·`fugashi` 등)가 없으면
   `importorskip`(`classifier/test_encode.py`). CI 설정은 리포에 없어(호스트 실행 전제)
   "CI 에서 스킵" 이라는 경로 자체가 없다
 - 테스트는 `PYTHONPATH` 설정 없이 동작 (uv editable install 기준)

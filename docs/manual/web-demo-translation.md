@@ -291,4 +291,3 @@ uv run pytest tests/server/test_translate.py
 | `docs/manual/rest-api-spec.md` | 외부 소비자 계약 — `/v1/translate` 는 여기 **없다** |
 | `docs/issues/issue-189-web-ja-vi-ko-gloss.md` | 마스킹-복원 도입 · 엔진 선정 벤치 · sentinel 표기 진화 경위 |
 | `docs/issues/issue-254-drop-inprocess-translate-backend.md` | 인프로세스 백엔드 폐기 경위(설정 표면이 단일 경로로 줄어든 이유) |
-| `docs/reports/translate-engine-lightweight-benchmark.md` | 경량 번역 엔진 측정 경위(하네스는 제거됨) |

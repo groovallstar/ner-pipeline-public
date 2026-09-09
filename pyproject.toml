@@ -1,53 +1,33 @@
 [project]
 name = "ner-pipeline"
 version = "0.1.0"
-description = "Named Entity Recognition pipeline built on LangChain with multi-backend LLM support"
+description = "Multilingual NER pipeline (ja/ko/vi/en): vLLM labeling, BERT token classification, synthetic PII augmentation, FastAPI serving"
 requires-python = ">=3.13"
 dependencies = [
     # PyTorch (CUDA 13.0)
     "torch",
     # Data / ML
-    "scikit-learn",
     "numpy",
-    "pandas",
-    "seaborn",
-    "matplotlib",
-    "emoji",
-    "tiktoken",
     # NLP / HuggingFace
     "transformers",
     "datasets",
+    # transformers 의 Trainer 가 요구한다 — import 문에는 안 보인다
     "accelerate",
-    "evaluate",
-    "sentence-transformers",
+    # BIO 레벨 메트릭(`ner.metrics.bio_metrics`)
     "seqeval",
+    # sentencepiece 토크나이저(xlm-roberta·deberta-v3)를 다루는 데 둘 다 필요하다.
+    # protobuf 는 spm 모델을 fast 토크나이저로 변환할 때 transformers 가 찾는다 —
+    # 없으면 변환이 tiktoken 폴백까지 내려갔다가 ImportError 로 끝난다.
     "sentencepiece",
+    "protobuf",
     # OpenAI SDK (vLLM/OpenAI 호환 클라이언트 — labelers·server 직접 사용)
     "openai",
-    # LangChain ecosystem
-    "langchain",
-    "langgraph",
-    "langchain-openai",
-    "langchain-huggingface",
-    "langchain-community",
-    "langchain-milvus",
-    # Vector store
-    "pymilvus",
-    # Web crawling
-    "beautifulsoup4>=4.12,<5",
     "requests",
-    "lxml>=5.2,<6",
-    "feedparser>=6.0,<7",
+    "tqdm",
     # Web API server (ja/ko/vi/en NER REST API)
     "fastapi",
     "uvicorn",
-    # Korean sentence splitter
-    "kiwipiepy>=0.18,<1",
-    # Utilities
-    "langdetect",
-    "tavily-python",
-    # NLP tokenization
-    "spacy",
+    # 언어별 토크나이저 백엔드 — ja 는 BertJapaneseTokenizer, vi 는 PhoBERT
     "fugashi>=1.5.2",
     "unidic-lite>=1.0.8",
     "pyvi>=0.1.1",
@@ -104,4 +84,6 @@ build-backend = "hatchling.build"
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.10",
+    # tests/server 가 직접 import 한다(TestClient 경유가 아닌 실 HTTP 호출)
+    "httpx",
 ]

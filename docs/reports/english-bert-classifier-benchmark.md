@@ -300,7 +300,9 @@ PII 를 선정 기준에서 빼는 판단 자체는 유지한다 — 한 seed �
 `xlmr_base_seed44` 중복 이력). 두 건은 폐기하고 다시 돌린 값이 위 표에 실려
 있다.
 
-구현: `ner.classifier.backbone_summary --check`.
+구현은 `ner.classifier.backbone_summary --check` 였다. **이 도구는 이후
+제거됐다** — 백본 비교가 `roberta-base` 채택으로 끝나 상시 유지할 값이
+없었다. 아래 재현 절차의 집계 단계도 그래서 지금은 돌지 않는다.
 
 ## 학습시간 — 1 epoch GPU 독점 재측
 
@@ -411,7 +413,7 @@ CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
     --batch-size 16 --seed 42 \
     --output-dir results/classifier/en_bench/roberta_base_seed42
 
-# 3) 무결성 검사 + median 집계
+# 3) 무결성 검사 + median 집계 (당시 실행 경위 — 도구는 제거돼 지금은 돌지 않는다)
 python -m ner.classifier.backbone_summary \
     --runs-dir results/classifier/en_bench --pattern '*_seed4*' --check \
     --output results/classifier/en_bench/median_summary.json
@@ -438,5 +440,5 @@ CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
 | scratch | `results/classifier/en_bench/` (gitignore·휘발) |
 | 학습시간 재측 | `results/classifier/en_bench/time_1ep/` (gitignore·휘발) |
 | 병합 도구 | `src/ner/augmenters/ontonotes_en/merge_splits.py` |
-| 집계·검사 도구 | `src/ner/classifier/backbone_summary.py` |
+| 집계·검사 도구 | **없다** — `src/ner/classifier/backbone_summary.py` 는 백본 비교 종결 후 제거됐다 |
 | 이슈 문서 | `docs/issues/issue-215-en-backbone-benchmark.md` |

@@ -15,7 +15,7 @@
 |---|---|---|---|
 | 3A silver 품질 | 재라벨 silver | VI | kappa·anchor agreement·gold span F1 |
 | 3B 측정 무결성 | 분류 K-fold 평가 | VI(JA 적용 가능) | cross-fold 누출 0 보장 |
-| 3C PII 주입 | 주입 span | JA·VI | confirmed/missed/conflict |
+| 3C PII 주입 | 주입 span | JA·VI·EN | confirmed/missed/conflict |
 
 ## 목차
 

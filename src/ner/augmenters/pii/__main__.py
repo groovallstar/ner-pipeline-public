@@ -125,8 +125,9 @@ def _build_verify_labeler(
 ):
     """언어별 vLLM NER 라벨러를 생성한다.
 
-    verifier 자체는 lang-agnostic 이지만 호출 측에서 ja/vi 라벨러를
-    선택해 주입해야 한다. 미지원 lang 은 `ValueError`.
+    verifier 자체는 lang-agnostic 이지만 호출 측에서 언어별 라벨러를
+    선택해 주입해야 한다. ko 는 교차 검증용 라벨러를 두지 않아 미지원이며,
+    미지원 lang 은 `ValueError`.
     """
     if lang == 'ja':
         from ner.labelers.ja.vllm_ner_labeler import VllmNERLabeler

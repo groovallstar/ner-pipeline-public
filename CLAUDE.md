@@ -4,10 +4,13 @@
 
 ## 프로젝트 개요
 
-**다국어 NER(Named Entity Recognition) 파이프라인** — 멀티 백엔드 LLM 지원(OpenAI 호환 API) + BERT 토큰 분류 파인튜닝 + PII 증강 + 크롤링 기반 학습 데이터 생성.
+**다국어 NER(Named Entity Recognition) 파이프라인** — vLLM LLM 라벨링(OpenAI 호환 API) + BERT 토큰 분류 파인튜닝 + PII 증강 + REST API 서빙.
 
-- 한국어: canonical 10종 평면 완성 — NER 5종(PER/LOC/ORG/PROD/EVT) + DAT 은 KLUE 유래(PROD/EVT LLM 재라벨 증분, TI/QT 드롭), PII 4종(EMAIL/PHONE/ID_NUM/CREDIT_CARD)은 합성 주입
-- 일본어·베트남어: canonical 10종 평면 = NER 5종(PER/LOC/ORG/PROD/EVT) + PII 5종(DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD)
+네 언어 모두 canonical 10종 평면 = NER 5종(PER/LOC/ORG/PROD/EVT) + DAT + PII 4종(EMAIL/PHONE/ID_NUM/CREDIT_CARD). 갈리는 것은 DAT 의 출처다.
+
+- 한국어: DAT 은 KLUE 유래(PROD/EVT 는 LLM 재라벨 증분, TI/QT 드롭), PII 4종은 합성 주입
+- 영어: DAT 은 OntoNotes5 유래(재라벨 없음 — 원천이 PRODUCT·WORK_OF_ART·EVENT 를 이미 갖고 있다), PII 4종은 합성 주입
+- 일본어·베트남어: 원천에 날짜가 없어 DAT 까지 PII 5종을 합성 주입
 - 단일 출처: `docs/manual/data/canonical-entity-schema.md`
 
 ## 개발 환경

@@ -109,7 +109,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | 파일 | 역할 |
 |------|------|
 | `config.py` | `ServerConfig` — env 설정·언어별 경로(`model_dir`/`thresholds_path`) |
-| `detect.py` | `detect_lang` — **두 단**이다. ① 배타적 스크립트 양성 감지: 가나→ja, 한글(음절·자모)→ko, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi. ② 셋이 모두 실패하면 라틴 글자가 있는지 보고 → en, 라틴도 없으면 → `unsupported`. 둘째 단은 감지가 아니라 폴백이라 대가를 진다 — 인도네시아어·로마자 일본어·무부호 베트남어가 en 으로 간다. 한자만 있는 텍스트는 라틴 글자도 없어 `unsupported` — ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않으므로 *배타적* 스크립트만 신호로 쓴다. `DETECTORS` (신호,언어) 레지스트리로 확장 — 스크립트 언어 추가는 여전히 한 줄이다(폴백이 리스트 밖 루프 뒤에 있어 새 감지기가 언제나 앞에서 돈다). **언어를 추가할 때는 2 원소 열거 자리를 손으로 훑는다** — 열거 정합 검사의 하한이 3 원소라 그 자리들은 조용히 낡는다(`tests/server/test_docs_language_lists.py`). 근거: `docs/reports/language-detection-benchmark.md` |
+| `detect.py` | `detect_lang` — **두 단**이다. ① 배타적 스크립트 양성 감지: 가나→ja, 한글(음절·자모)→ko, vi-변별 코드포인트(horn·hook·dot 결합부호+đ)→vi. ② 셋이 모두 실패하면 라틴 글자가 있는지 보고 → en, 라틴도 없으면 → `unsupported`. 둘째 단은 감지가 아니라 폴백이라 대가를 진다 — 인도네시아어·로마자 일본어·무부호 베트남어가 en 으로 간다. 한자만 있는 텍스트는 라틴 글자도 없어 `unsupported` — ja·ko 가 한자를 공유해 어느 쪽도 가리키지 않으므로 *배타적* 스크립트만 신호로 쓴다. `DETECTORS` (신호,언어) 레지스트리로 확장 — 스크립트 언어 추가는 여전히 한 줄이다(폴백이 리스트 밖 루프 뒤에 있어 새 감지기가 언제나 앞에서 돈다). **언어를 추가할 때는 2 원소 열거 자리를 손으로 훑는다** — 열거 정합 검사의 하한이 3 원소라 그 자리들은 조용히 낡는다(`tests/server/test_docs_language_lists.py`). 언어별 신호·코드포인트 구간·수용된 한계의 정본은 `docs/manual/language-detection.md`, 감지기 후보 비교 측정은 `docs/reports/language-detection-benchmark.md` |
 | `chunking.py` | `split_for_length` — max_length 초과 입력을 문장 단위로 쪼개 `(substring, base_offset)` 반환(원문 char offset 보존) |
 | `inference.py` | `LangModel`(모델·토크나이저·임계값 1회 로드·재사용; 단건 `predict`·cross-text 배치 `predict_many`)·`ModelRegistry`(언어별 보관·`predict_batch` 언어별 묶음, 미로드→`ModelUnavailable`→503). 추론은 fp32 전용(단건·배치 결정적), 입력은 NFC 정규화. 토크나이저 접근(`_tokenize`)은 잠금으로 직렬화 — 공유 인스턴스라 동시 요청이 `Already borrowed` 로 터진다(§토크나이저 접근의 직렬화). 임계값은 `confidence_threshold` — graceful(파일 없으면 raw), canonical 변환 전 내부 span 에 적용 |
 | `concurrency.py` | `ConcurrencyGuard`(async) — 세마포어로 동시 in-flight ≤ `MAX_CONCURRENCY`, 대기 큐 `MAX_QUEUE`·타임아웃 `ACQUIRE_TIMEOUT_S` 로 bound, 초과 시 `Overloaded`→429. `app.py` 가 **둘을 만든다** — NER 용과 번역 전용(`TRANSLATE_MAX_CONCURRENCY`, 큐 없음) |
@@ -120,7 +120,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/ko/vi/en) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다. 결과가 ko 면 버튼을 **감춘다** — 눌러도 400 이 될 버튼을 회색으로 남기면 "백엔드가 죽었나"로 읽힌다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
 | `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`python -m server.scripts.example_client`) |
-| `scripts/throughput/bench.py` | 처리량·지연 측정 하네스 (근거: `docs/reports/server-inference-throughput.md`). `--concurrency N` 은 같은 작업량을 N 스레드로 나눠 서버의 실제 경로를 재현한다 — 잠금 경합처럼 동시 실행에서만 드러나는 비용은 N=1 에서 측정되지 않는다 |
+| `scripts/throughput/bench.py` | 처리량·지연 측정 하네스. `--concurrency N` 은 같은 작업량을 N 스레드로 나눠 서버의 실제 경로를 재현한다 — 잠금 경합처럼 동시 실행에서만 드러나는 비용은 N=1 에서 측정되지 않는다. **반복 수를 넉넉히 준다(reps 80)** — 단건 순차는 forward 가 7ms 안팎으로 짧고 간헐적이라 GPU clock 이 idle 에 머물고, 짧게 재면(reps 5~20) 같은 조건에서 ±15% 가 출렁인다. 80 이면 정상상태에 수렴해 ±1% 다 |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
 ## 추론 경로
@@ -132,8 +132,8 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 단건과 동일) 글로벌 offset 으로 병합 — GPU 병렬로 장문/배치에서 가속된다.
 추론은 fp32 전용이라 단건·배치가 같은 커널을 타 배치화가 결과를 바꾸지 않고,
 입력은 NFC 로 정규화한다(NFD span 깨짐 방지).
-추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량·
-정밀도 측정·동결은 `scripts/throughput/`·`docs/reports/server-inference-throughput.md`.
+추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량
+측정은 `scripts/throughput/bench.py`.
 
 ### 토크나이저 접근의 직렬화
 
@@ -280,4 +280,7 @@ sentinel 은 `【PII{nonce}_{i}】` 하나로 고정이다. lenticular bracket �
 
 과거 엔진 비교 하네스(`scripts/translate_bench/`)는 제거됐다 — 번역은 NER 에
 딸린 부가 기능이라 품질이 엔진 선정 기준이 아니고, 상시 돌 하네스를 유지할 값이
-없었다. 측정 경위는 `docs/reports/translate-engine-lightweight-benchmark.md`.
+없었다. 그 벤치 리포트도 함께 폐기했다 — 하네스와 인프로세스 백엔드가 둘 다
+사라져 재현할 코드가 없고, 남은 결론이 지금 고를 것을 바꾸지 않는다. 당시 경위는
+`docs/issues/issue-197-translate-backend-option.md` 와
+`issue-254-drop-inprocess-translate-backend.md` 에 남아 있다.

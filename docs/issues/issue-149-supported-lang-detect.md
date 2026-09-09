@@ -71,6 +71,8 @@ REST API 입력은 어떤 언어든 올 수 있으나 지원은 ja·vi 뿐이다
   배치 per-item 부분성공·확장성(한글 detector 한 줄 등록). ruff green.
 - 메트릭(요약): 손규칙 ja-kana 100% / vi-부호 100% / pan-Latin vi
   false-accept 0 / ko·en·zh·romaji·không-dấu → unsupported 100% /
-  kanji-only-ja 0%(보고 전용 한계). 상세 혼동행렬·gold 설계·한계 3종:
+  kanji-only-ja 0%(보고 전용 한계). 상세 혼동행렬·gold 설계:
   `docs/reports/language-detection-benchmark.md`, 원시
-  `results/lang_detect_bench.json`.
+  `results/lang_detect_bench.json`. 그 뒤 한글 신호와 라틴 폴백이 들어와
+  위 미지원 항목이 지금은 다르게 나온다 — 현행 규칙의 정본은
+  `docs/manual/language-detection.md`.

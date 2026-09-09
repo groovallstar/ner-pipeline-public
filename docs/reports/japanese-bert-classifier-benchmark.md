@@ -18,7 +18,7 @@ Phase 0~8 각 단계의 가설·시도·결과 상세 (실측 수치 표 포함)
 - 평가: char-offset span F1. (시작, 끝, 종류)가 셋 다 정확히 일치해야만
   정답. + 보조 SemEval'13 Partial F1 (경계가 살짝 어긋난 건 부분 점수)
 - 원시 수치 출처: `japanese-bert-classifier-history.md` +
-  `docs/issues/issue-{40,45,48,51,56,58,61,64,66}-*.md`
+  `docs/issues/issue-{40,45,51,56,58,61}-*.md`
 - 베트남어 동일 평가 셋업의 분류기 결과는
   `docs/reports/vietnamese-bert-classifier-benchmark.md` 참조
 

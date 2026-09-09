@@ -24,7 +24,8 @@
 공유하므로 한자의 존재는 어느 쪽도 가리키지 않는다. 가나·한글이라는
 *배타적* 스크립트만 신호로 쓰는 이유가 이것이다.
 
-방법론·혼동행렬 근거: docs/reports/language-detection-benchmark.md.
+언어별 규칙·수용된 한계·채택 근거: docs/manual/language-detection.md.
+후보 비교 측정: docs/reports/language-detection-benchmark.md.
 """
 
 import unicodedata

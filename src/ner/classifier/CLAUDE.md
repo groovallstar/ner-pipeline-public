@@ -1,6 +1,6 @@
 # src/ner/classifier/ — BERT 토큰 분류 파인튜닝
 
-JA·VI·KO canonical 10종 평면 (NER 5 + PII 5) 학습용 BERT NER 분류기. augmenters 가
+ja·vi·ko·en canonical 10종 평면 (NER 5 + PII 5) 학습용 BERT NER 분류기. augmenters 가
 produce 한 PII 주입 JSONL 을 입력으로 받아 BIO 21-class 모델을 학습하고 char-offset
 span F1 을 측정한다.
 
@@ -252,27 +252,35 @@ docs/reports/korean-bert-classifier-per-entity-diagnosis.md  # KO 엔티티별 �
 docs/issues/issue-146-electra-fold-collapse.md           # KO fold 붕괴 조사 (재현성·안정성)
 ```
 
-## 출하·배포 (JA·VI deploy)
+## 출하·배포
 
 출하 아티팩트·배포 추론은 본 패키지 밖(`scripts/`·`data/`·`docs/`)에
 둔다 — 학습은 CLI(`python -m ner.classifier`, `--fit-threshold` 포함)에
-흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음). **JA·VI 두 언어가
-같은 골격으로 출하돼 있다** — 아래 세 아티팩트가 언어별로 한 벌씩 있다.
+흡수하고 배포 추론만 분리했다 (별도 `train_*` 스크립트 없음). **네 언어가 같은
+골격으로 출하돼 있다.**
 
-| 아티팩트 | JA | VI |
-|---|---|---|
-| 배포 추론 (`.sh` = uv 래퍼) | `src/ner/scripts/eval_ja_ner_test.py` | `src/ner/scripts/eval_vi_ner_test.py` |
-| 출하 모델 번들 | `data/stockmark/ja_ner_prod_seed1/` | `data/wikiann_vi/vi_ner_prod_seed1/` |
-| 최종 출하 스펙 | `docs/reports/japanese-bert-classifier-spec.md` | `docs/reports/vietnamese-bert-classifier-spec.md` |
+| 아티팩트 | JA | VI | KO | EN |
+|---|---|---|---|---|
+| 배포 추론 (`.sh` = uv 래퍼) | `eval_ja_ner_test.py` | `eval_vi_ner_test.py` | `eval_ko_ner_test.py` | `eval_en_ner_test.py` |
+| 출하 번들 | `data/stockmark/ja_ner_prod_seed1/` | `data/wikiann_vi/vi_ner_prod_seed1/` | `/data/ner/ko/` | `/data/ner/en/` |
+| 최종 출하 스펙 | `docs/reports/japanese-bert-classifier-spec.md` | `docs/reports/vietnamese-bert-classifier-spec.md` | 없음 | 없음 |
 
-배포 추론 스크립트는 학습 없이 고정 test + 저장된 `thresholds.json` 으로
-추론·태깅·P/R/F1·단계별 타이밍을 낸다(절대경로만 허용). 기본 배포 레이아웃은
-`/data/ner/{ja,vi}/{model,data/test.jsonl,thresholds.json}` 이고, 번들은
-`model/` + `data/{train,valid,test}.jsonl` + `metrics.json` +
-`thresholds.json` + `MODEL_CARD.md` 를 담아 배포 시 그 경로로 복사한다.
-차이는 둘뿐이다 — VI 는 `thresholds.json` 이 없으면 raw 로 폴백하고, 배포
-test 가 orig 그룹 단위 홀드아웃이라 개수가 딱 맞지 않아 앞 100문장으로 잘라
-평가한다(`N_TEST=100`). JA 출하 수치는 위 JA 스펙 문서가 단일 출처다.
+배포 추론 스크립트는 모두 `src/ner/scripts/` 에 있다. 학습 없이 고정 test 와
+저장된 `thresholds.json` 으로 추론·태깅·P/R/F1·단계별 타이밍을 낸다(절대경로만
+허용). 기본 배포 레이아웃은 `/data/ner/{lang}/{model,data/test.jsonl,
+thresholds.json}` 이고, 번들은 `model/` + `data/{train,valid,test}.jsonl` +
+`metrics.json` + `MODEL_CARD.md` 를 담는다. 포장은 `build_ner_prod.py` 한 벌이
+네 언어를 모두 처리한다.
+
+언어별로 갈리는 것은 셋이다. **임계값이 실제로 붙는 것은 JA 뿐이다** — 네
+스크립트 모두 `--thresholds` 를 받지만 vi·ko·en 번들에는 그 파일이 없어
+raw 로 폴백한다. **VI 는 앞 100문장만 평가한다** —
+배포 test 가 orig 그룹 단위 홀드아웃이라 개수가 딱 안 맞아 오버슈트분을
+자른다(`N_TEST=100`). **KO·EN 은 평가 대상과 화면 표시를 따로 받는다**
+(`--limit`·`--show`) — 배포 test 가 각각 2,598행·7,637행이라 하나로 묶으면
+지표를 전수로 재는 일과 태깅을 눈으로 보는 일이 서로를 막는다. JA·VI 출하
+수치는 위 스펙 문서가 단일 출처이고, KO·EN 은 스펙 문서 없이 벤치마크 리포트가
+그 자리를 대신한다.
 
 > 배포 추론은 위 "책임 경계 제외(추론 서빙)" 와 직교 — `scripts/` 의 독립
 > 도구이며 classifier 패키지를 import 만 한다 (패키지에 서빙 코드 없음).
