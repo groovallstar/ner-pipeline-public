@@ -7,7 +7,7 @@
 > **테스트**: `tests/server/test_translate.py`
 
 이 문서가 **안 하는** 일도 적어 둔다. env 설정 표면과 "왜 그렇게 갈랐나"의
-정본은 `src/server/CLAUDE.md` §번역 설정 표면이고, 여기서는 목록을 다시 싣지 않고
+정본은 `docs/manual/server-implementation.md` §번역 설정 표면이고, 여기서는 목록을 다시 싣지 않고
 가리키기만 한다. `/v1/translate` 는 외부 소비자 계약(`docs/manual/rest-api-
 spec.md`)에 **없다** — 웹 데모 전용이라 OpenAPI 에도 노출하지 않는다. 설계 경위와
 실측 원본은 `docs/issues/issue-189-web-ja-vi-ko-gloss.md` 에 있다.
@@ -160,7 +160,7 @@ class TranslationResult:
 
 ### 4.1 미설정과 설정의 구별
 
-키 목록·기본값의 정본은 `src/server/CLAUDE.md` §번역 설정 표면이다. 여기서는
+키 목록·기본값의 정본은 `docs/manual/server-implementation.md` §번역 설정 표면이다. 여기서는
 **구현이 의존하는 성질** 하나만 고정한다.
 
 > **핵심 — 선택 키는 `config.py` 에서 기본값 없이 `Optional[...] = None` 이다.**
@@ -283,11 +283,17 @@ uv run pytest tests/server/test_translate.py
 | 번역 대상 언어 | `test_translate_rejects_ko_even_though_ner_supports_it` · `test_web_ui_translatable_list_matches_the_server` | ko 는 400 · UI 목록과 서버 목록의 일치 |
 | 동시성 | `test_translate_concurrency_bounded_and_excess_rejected` · `test_ner_saturation_does_not_block_translation` | 상한 포화 시 429 · 두 guard 의 예산 독립 |
 
+`test_ner_spans_feed_translation_without_exposing_phone`은 NER 응답을 번역 요청에
+연결하고 외부 호출의 PII 마스킹과 원문 복원을 검증한다. 실모델 NER→번역 흐름은
+`NER_SERVER_TEST_LIVE_TRANSLATE=1 uv run pytest tests/server/test_live_server.py -q -rs`
+로 별도 실행한다. 모델·원격 번역 설정과 자원이 필요하며 미실행·skip은 성공이 아니다.
+실행 조건은 [서버 지침](../../src/server/AGENTS.md#검증)을 따른다.
+
 ## 8. 관련 문서
 
 | 문서 | 무엇을 |
 |---|---|
-| `src/server/CLAUDE.md` | env 설정 표면 · 모듈 오리엔테이션 · 설계 근거(정본) |
+| `docs/manual/server-implementation.md` | env 설정 표면 · 모듈 오리엔테이션 · 설계 근거(정본) |
 | `docs/manual/rest-api-spec.md` | 외부 소비자 계약 — `/v1/translate` 는 여기 **없다** |
 | `docs/issues/issue-189-web-ja-vi-ko-gloss.md` | 마스킹-복원 도입 · 엔진 선정 벤치 · sentinel 표기 진화 경위 |
 | `docs/issues/issue-254-drop-inprocess-translate-backend.md` | 인프로세스 백엔드 폐기 경위(설정 표면이 단일 경로로 줄어든 이유) |

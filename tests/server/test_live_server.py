@@ -1,7 +1,7 @@
 """실서버(네트워크) 스모크 — uvicorn 서브프로세스 기동 후 HTTP 검증.
 
 in-process TestClient 와 달리 실제 포트 바인딩·네트워크 경로를 확인한다.
-서버 기동이 모델 로드에 의존하므로 `/data` 모델이 없으면 모듈 전체 skip.
+설정한 모델 루트에 지원 언어 모델 디렉터리가 없으면 해당 fixture를 skip.
 `live` 마커가 붙어 `uv run pytest -m live` 로 따로 돌릴 수도 있다.
 """
 
@@ -16,18 +16,10 @@ import pytest
 
 from server.config import SUPPORTED_LANGS, ServerConfig
 
-_JA_DIR = ServerConfig().model_dir('ja')
-_EN_DIR = ServerConfig().model_dir('en')
+pytestmark = pytest.mark.live
 
-# 미지원 언어 픽스처 — 이 파일이 자기 전제를 스스로 단언한다.
 _UNSUPPORTED_LANG = 'th'
 assert _UNSUPPORTED_LANG not in SUPPORTED_LANGS
-
-pytestmark = [
-    pytest.mark.live,
-    pytest.mark.skipif(not os.path.isdir(_JA_DIR),
-                       reason=f'ja model dir not present: {_JA_DIR}'),
-]
 
 
 def _free_port() -> int:
@@ -39,48 +31,87 @@ def _free_port() -> int:
     return port
 
 
-@pytest.fixture(scope='module')
-def base_url():
-    """uvicorn 서버를 서브프로세스로 띄우고 준비될 때까지 대기 후 종료."""
-    port = _free_port()
-    proc = subprocess.Popen(
-        [sys.executable, '-m', 'server',
-         '--host', '127.0.0.1', '--port', str(port)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    url = f'http://127.0.0.1:{port}'
-    try:
-        deadline = time.monotonic() + 120
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                raise RuntimeError(
-                    f'server exited early (code {proc.returncode})')
-            try:
-                if httpx.get(f'{url}/health', timeout=2).status_code == 200:
-                    break
-            except httpx.HTTPError:
-                time.sleep(1)
-        else:
-            raise RuntimeError('server did not become ready in time')
-        yield url
-    finally:
-        proc.terminate()
+def _missing_models(config):
+    """모델 사전 조건을 확인한다."""
+    return [config.model_dir(lang) for lang in config.langs
+            if not os.path.isdir(config.model_dir(lang))]
+
+
+def _wait_until_ready(proc, url, log_path, timeout=120):
+    """실서버 준비를 기다린다."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(
+                f'server exited early (code {proc.returncode}); log: {log_path}')
         try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            response = httpx.get(f'{url}/health', timeout=2, trust_env=False)
+            if (response.status_code == 200
+                    and response.json().get('status') == 'ok'):
+                return
+        except (httpx.HTTPError, ValueError):
+            pass
+        time.sleep(1)
+    raise RuntimeError(f'server did not become ready in time; log: {log_path}')
 
 
-def test_health_live(base_url):
+def _stop_server(proc):
+    """테스트가 시작한 서버를 종료한다."""
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+@pytest.fixture(scope='module')
+def base_url(tmp_path_factory):
+    """현재 설정으로 기동하고 로그를 보관하며 테스트 소유 프로세스만 종료한다."""
+    config = ServerConfig.from_env()
+    missing = _missing_models(config)
+    if missing:
+        pytest.skip('model directories not present: ' + ', '.join(missing))
+    port = _free_port()
+    log_path = tmp_path_factory.mktemp('live-server') / 'startup.log'
+    env = os.environ.copy()
+    # 공유 기본 로그 파일을 사용하지 않고 stdout/stderr를 한 파일로 보관한다.
+    env['NER_SERVER_LOG_FILE'] = ''
+    url = f'http://127.0.0.1:{port}'
+    with log_path.open('wb') as log:
+        log_path.chmod(0o600)
+        proc = subprocess.Popen(
+            [sys.executable, '-m', 'server', '--host', '127.0.0.1',
+             '--port', str(port), '--model-root', config.model_root],
+            env=env, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            _wait_until_ready(proc, url, log_path)
+            yield url
+        finally:
+            _stop_server(proc)
+
+
+@pytest.fixture(scope='module')
+def client(base_url):
+    """기동에 사용한 인증 설정으로 로컬 서버를 호출한다."""
+    key = ServerConfig.from_env().api_key
+    headers = {'x-api-key': key} if key else {}
+    with httpx.Client(base_url=base_url, headers=headers,
+                      timeout=30, trust_env=False) as value:
+        yield value
+
+
+def test_health_live(client):
     """실서버 /health 가 200·status ok."""
-    r = httpx.get(f'{base_url}/health', timeout=5)
+    r = client.get('/health', timeout=5)
     assert r.status_code == 200
     assert r.json()['status'] == 'ok'
 
 
-def test_ner_single_live(base_url):
+def test_ner_single_live(client):
     """실서버 단일 추론 — 자동감지 ja + offset 정합성."""
     text = '織田信長は東京都千代田区に住んでいた。'
-    r = httpx.post(f'{base_url}/v1/ner', json={'text': text}, timeout=30)
+    r = client.post('/v1/ner', json={'text': text}, timeout=30)
     assert r.status_code == 200
     body = r.json()
     assert body['lang'] == 'ja'
@@ -91,25 +122,51 @@ def test_ner_single_live(base_url):
         assert text[ent['start_char']:ent['end_char']] == ent['text']
 
 
-def test_bad_lang_live(base_url):
+def test_bad_lang_live(client):
     """실서버 잘못된 lang → 400 + 구조화 에러."""
-    r = httpx.post(f'{base_url}/v1/ner',
+    r = client.post('/v1/ner',
                    json={'text': 'x', 'lang': _UNSUPPORTED_LANG}, timeout=10)
     assert r.status_code == 400
     assert 'error' in r.json()
 
 
-@pytest.mark.skipif(not os.path.isdir(_EN_DIR),
-                    reason=f'en model dir not present: {_EN_DIR}')
-def test_en_fallback_live(base_url):
+@pytest.mark.skipif(os.environ.get('NER_SERVER_TEST_LIVE_TRANSLATE') != '1',
+                    reason='set NER_SERVER_TEST_LIVE_TRANSLATE=1 for translation')
+@pytest.mark.parametrize('lang,text,phone', [
+    ('ja', '電話番号は090-1234-5678です。', '090-1234-5678'),
+    ('vi', 'Số điện thoại là 0904-123-456.', '0904-123-456'),
+])
+def test_ner_to_translation_live(client, lang, text, phone):
+    """실모델 NER span을 번역에 연결해 한국어 출력과 PII 보존을 확인한다."""
+    assert ServerConfig.from_env().translate_enabled, 'translation must be enabled'
+    status = client.get('/v1/translate/status')
+    assert status.status_code == 200
+    assert status.json()['enabled'] is True
+    assert status.json()['available'] is True
+    ner = client.post('/v1/ner', json={'text': text, 'lang': lang})
+    assert ner.status_code == 200
+    spans = ner.json()['entities']
+    assert any(s['label'] == 'PHONE' and s['text'] == phone for s in spans)
+    response = client.post('/v1/translate', json={
+        'text': text, 'lang': ner.json()['lang'], 'spans': spans})
+    assert response.status_code == 200
+    body = response.json()
+    assert body['lang'] == lang
+    assert phone in body['translation']
+    assert any('가' <= char <= '힣' for char in body['translation'])
+    pii_labels = {'DAT', 'EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD'}
+    for span in spans:
+        if span['label'] in pii_labels:
+            assert span['text'] in body['translation']
+
+
+def test_en_fallback_live(client):
     """실서버에 영어 문장을 lang 없이 던지면 en 으로 감지되고 결과가 온다.
 
-    모듈 가드는 ja 만 보므로 여기 따로 skipif 를 건다 — `ModelRegistry.load`
-    가 로드 실패를 삼키고 서버를 띄우기 때문에, en 모델이 없는 환경에서는
-    skip 이 아니라 503 FAIL 이 된다.
+    모델 사전 조건은 공용 base_url fixture가 현재 설정으로 확인한다.
     """
     text = 'Barack Obama was born in Hawaii in 1961.'
-    r = httpx.post(f'{base_url}/v1/ner', json={'text': text}, timeout=30)
+    r = client.post('/v1/ner', json={'text': text}, timeout=30)
     assert r.status_code == 200
     body = r.json()
     assert body['lang'] == 'en'

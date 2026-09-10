@@ -431,8 +431,9 @@ EN 은 76,378행이라 벤치마크와 같은 `test_ratio=0.1`(7,637행)을 그�
 재현할 것으로 보고 수치 일치를 검사에 넣었으나, 그 전제가 거짓이다. best 에포크
 선택이 valid `eval_loss` 기준이라 미세한 수치 차이가 어느 체크포인트를 출하할지를
 뒤집고, 예측 span 복원이 라벨 생성과 같은 offset 배열을 쓰므로 채점 경로도 완전히
-결정적이지 않다. 그래서 검사는 재현이 아니라 **프로비넌스 정합 · 같은 자 · 붕괴
-검출 바닥** 셋을 본다. 바닥을 좁게 조이면 seed 뽑기를 통과 조건으로 만드는 셈이다.
+결정적이지 않다. 현재 검사는 패키지 자체의 분할·누출·품질·자립 조건을 본다.
+과거 원장과의 대조는 원장 폐기와 함께 제거했다. 바닥을 좁게 조이면 seed 뽑기를
+통과 조건으로 만드는 셈이다.
 
 **포장 스크립트는 언어별 사본을 두지 않는다** — 분할 재유도·지문 대조·누출
 가드는 언어와 무관한 안전장치라, 언어마다 복사해 두면 그 장치가 여러 벌이 되고
@@ -470,16 +471,15 @@ python src/ner/scripts/build_ner_prod.py \
 |---|---|---|
 | 배포 추론 | `src/ner/scripts/eval_ko_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. EN 판과 같이 평가 대상(`--limit`)과 화면 표시(`--show`)를 따로 받는다 |
 | 출하 번들 | `/data/ner/ko/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI·EN 과 같이 임계값 미적용) |
-| 원장 | `certified/classifier/ko/deploy-trainseed42/` | 배포런의 metric |
-| 검사 | `tests/ner/classifier/test_ko_deploy_package.py` | 프로비넌스 정합 · 분할 고정값 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
+| 배포 metric | `/data/ner/ko/metrics.json` | 출하한 run의 metric과 포장 정보 |
+| 검사 | `tests/ner/classifier/test_ko_deploy_package.py` | 출처 선언 · 분할 고정값 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
 
-**원장이 배포 run 자신인 이유** — EN 은 3-seed baseline(`roberta-3seed/`)이라는
-선행 원장이 있어 패키지를 그것과 견줬다. KO 에 있는 원장은 10-fold pooled 뿐이라
-자가 다르다: 교차검증 추정치와 단일 홀드아웃 수치를 같은 표에 놓는 것은 대조가
-아니라 혼동이다. 그래서 배포 run 의 `metrics.json` 자체를 원장으로 승격하고,
-검사는 *재현*이 아니라 *프로비넌스 정합*(패키지가 자기가 나온 run 과 어긋나지
-않는가)을 본다. 참고로 두 수치는 가까운 자리에 있다 — 배포 run strict overall
-F1 0.9153, 10-fold pooled 0.9203.
+**배포 metric과 비교 범위** — 패키지의 `metrics.json`은 기존 run의 metric에
+`deploy_package` 포장 정보를 덧붙인다. 현재 검사는 출처 선언과 분할·누출·품질·
+자립 조건을 확인한다. 원장 사본과의 verbatim 대조는 원장 폐기와 함께 제거했다.
+교차검증 추정치와 단일 홀드아웃 수치는 평가 기준이 다르므로 직접 비교하지 않는다.
+과거 원장 근거는 [삭제 전 Git 기록](https://github.com/groovallstar/ner-pipeline/tree/b564d5e02402ba09fb8bc3babbecdc0e945326bf/certified/classifier)으로 보존된다.
+
 
 **서빙까지 한 이슈로 닫은 이유** — EN 은 라틴 스크립트에 고유 코드포인트가 없어
 양성 감지가 불가능했고, 그래서 `SUPPORTED_LANGS`·`detect.py` 를 손대는 일이 별도

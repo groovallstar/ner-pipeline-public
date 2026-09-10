@@ -2,12 +2,9 @@
 
 핵심은 **판정을 못 하는 상황에서 판정을 만들지 않는 것**이다. 이 감사는 겹침이
 낮게 나오는 쪽이 가설이 예상한 답이라, 도구가 고장 나면 그 고장이 곧 "예상대로"
-로 읽힌다. 그래서 여기 테스트는 두 가지를 고정한다 — 재생성 파이프라인이 보존된
-실행을 되살리는지(양성 대조), 그리고 근거 없는 추측이 판정으로 굳지 않는지.
+로 읽힌다. 회수 역적용·fold 겹침·판정 조건과 보고서의 지문·양성 대조 검증을
+검사하며, 근거 없는 추측이 판정으로 굳지 않도록 한다.
 """
-
-import json
-import pathlib
 
 import pytest
 
@@ -23,9 +20,6 @@ from ner.labelers.ko.ko_split_audit import (
     fold_overlap,
     strip_recovered,
 )
-
-AUDIT_JSON = pathlib.Path(
-    "certified/classifier/ko/issue201-r2-principle/split_audit.json")
 
 
 def _row(row_id, ents):
@@ -173,31 +167,6 @@ def test_check_report_catches_a_failed_positive_control():
     """양성 대조가 깨지면 낮은 겹침은 고장과 구별되지 않는다."""
     problems = check_report(_report(control_exact=3))
     assert any("positive control failed" in p for p in problems)
-
-
-# --- 커밋된 산출물 ----------------------------------------------------------
-
-@pytest.mark.skipif(not AUDIT_JSON.exists(),
-                    reason="audit artifact not promoted yet")
-def test_committed_audit_artifact_is_self_consistent():
-    report = json.loads(AUDIT_JSON.read_text(encoding="utf-8"))
-    assert check_report(report) == []
-    assert report["gold_reconstruction"]["match"] is True
-    for slug, ctrl in report["positive_control"].items():
-        assert ctrl["exact_folds"] == ctrl["n_folds"], slug
-    assert report["params"]["overlap_metric"] == "intersection / |base fold|"
-
-
-@pytest.mark.skipif(not AUDIT_JSON.exists(),
-                    reason="audit artifact not promoted yet")
-def test_committed_artifact_records_both_scenarios_and_no_verdict():
-    """#201 head 팔 설정이 기록되지 않았다는 사실 자체가 결론이다."""
-    report = json.loads(AUDIT_JSON.read_text(encoding="utf-8"))
-    assert report["arms"]["head"]["basis"] is None
-    assert report["verdict"] == VERDICT_UNDECIDABLE
-    assert set(report["scenarios"]) == {"head_no_stratify", "head_stratify"}
-    assert (report["scenarios"]["head_no_stratify"]["verdict"]
-            != report["scenarios"]["head_stratify"]["verdict"])
 
 
 def test_check_report_refuses_a_report_that_skipped_the_fingerprint_check():
