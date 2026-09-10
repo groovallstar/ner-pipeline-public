@@ -142,6 +142,11 @@ head 로 gold 를 전수 스캔해 만들었고 모델 예측은 입력이 아�
     EVT 인데 gold 는 다른 타입인 정면 충돌이 섞여 있었다. 라벨러 프롬프트가 그 head 를
     EVT 로 가르치므로 체계적 오류로 되돌아온다. 축3 최대-span 안(canonical 이 명시)과
     타입 충돌을 분리하고 후자는 판정 대상으로 승격했다.
+- 2026-09-10: KO gold 감사 장치를 폐기했다. `src/ner/labelers/ko/data/` 의 원장·
+  사전등록 JSON 21 개와 `ko_dat_audit.py`·`ko_evt_axis1_audit.py`·
+  `ko_evt_holiday_audit.py`, 그리고 그것들을 gold 에 대조하던 테스트가 함께
+  없어졌다. 이 문서가 그 경로를 인용한 자리는 그때의 기록이며 지금은 파일이 없다.
+  수치와 판정 결과는 손대지 않았다
 ## 구현
 
 1. **canonical §5.3 재작성** — R2a·R2b 2 행을 원칙 1 행 + R2 단독 1 행 + 제외 5 행

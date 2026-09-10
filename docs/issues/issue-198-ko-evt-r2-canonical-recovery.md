@@ -106,6 +106,11 @@ gold `data/klue/pii_all.jsonl` 25,989 행 (gitignore·로컬).
 - **2026-07-30: 판정 rubric 을 상수에서 생성.** 손으로 나열한 R2 목록이
   canonical 표보다 6 종 적었다. 상수 파생으로 바꾸고 회귀 테스트로 고정한 뒤
   재판정했다(결과 동일 — 빠졌던 6 종이 판정을 바꾸지 않았다).
+- 2026-09-10: KO gold 감사 장치를 폐기했다. `src/ner/labelers/ko/data/` 의 원장·
+  사전등록 JSON 21 개와 `ko_dat_audit.py`·`ko_evt_axis1_audit.py`·
+  `ko_evt_holiday_audit.py`, 그리고 그것들을 gold 에 대조하던 테스트가 함께
+  없어졌다. 이 문서가 그 경로를 인용한 자리는 그때의 기록이며 지금은 파일이 없다.
+  수치와 판정 결과는 손대지 않았다
 
 ## 구현
 
