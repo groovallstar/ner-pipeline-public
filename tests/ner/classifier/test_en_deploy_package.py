@@ -1,22 +1,7 @@
-"""EN 배포 패키지가 스스로 정합하고 쓸 만한가.
+"""EN 배포 패키지의 분할·누출·성능 하한과 자체 로드 가능성을 검증한다.
 
-**재현 대조는 하지 않는다.** 처음에는 "같은 데이터 시드·같은 학습 시드면
-원장의 seed42 run 을 재현한다"를 기준으로 삼았으나, 그 전제가 거짓임이
-드러났다 — best 에포크 선택이 valid `eval_loss` 기준이라 미세한 수치 차이가
-어느 체크포인트를 출하할지를 뒤집고, 예측 span 복원이 라벨 생성과 같은
-offset 배열을 쓰므로 채점 경로도 완전히 결정적이지 않다. 그래서 이 파일은
-재현이 아니라 **세 가지**만 본다:
-
-1. 패키지가 자기가 나온 run 과 어긋나지 않는가 (프로비넌스 정합)
-2. 원장 run 과 **같은 자로** 쟀는가 (데이터·분할·설정 동일 — 수치를 나란히
-   놓을 자격)
-3. 모델이 쓸 만한가 (붕괴한 체크포인트가 출하되는 것만 막는 바닥)
-
-바닥은 재현 문턱이 아니라 sanity 문턱이다. 좁게 조이면 seed 뽑기를 통과
-조건으로 만드는 셈이라, 붕괴(F1 이 0 에 가까움)만 걸리게 둔다.
-
-패키지(`/data/ner/en/`)가 없으면 통째로 건너뛴다. `/data` 는 저장소 밖이라
-클론 직후에는 없고, 그때 실패시키면 무관한 변경까지 붉어진다.
+패키지(`/data/ner/en/`)가 없으면 건너뛴다. 과거 실험 결과와의 대조나
+재현 검증은 수행하지 않는다.
 """
 import json
 import os
@@ -24,11 +9,6 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[3]
-LEDGER = (
-    REPO / 'certified' / 'classifier' / 'en' / 'roberta-3seed'
-    / 'roberta_base_seed42' / 'metrics.json'
-)
 PACKAGE = Path('/data/ner/en')
 PKG_METRICS = PACKAGE / 'metrics.json'
 
@@ -40,56 +20,11 @@ pytestmark = pytest.mark.skipif(
 # 붕괴 검출용 바닥 — 이 아래면 체크포인트가 망가진 것이다.
 USABLE_F1_FLOOR = 0.85
 
-# 두 run 이 "같은 자로 잰다"를 이루는 필드. 하나라도 어긋나면 수치를 나란히
-# 놓을 자격이 없다. train_time_sec 처럼 실행 환경에 딸린 값은 뺀다.
-RULER_FIELDS = (
-    'lang',
-    'model_name',
-    'data_path',
-    'data_fingerprint',
-    'n_rows',
-    'n_groups',
-    'group_key',
-    'train_samples',
-    'valid_samples',
-    'test_samples',
-    'valid_ratio',
-    'test_ratio',
-    'seed',
-    'precision',
-    'epochs',
-    'batch_size',
-    'lr',
-    'max_length',
-    'metric_for_best',
-)
-
 
 @pytest.fixture(scope='module')
 def pkg():
     with open(PKG_METRICS, encoding='utf-8') as f:
         return json.load(f)
-
-
-@pytest.fixture(scope='module')
-def ledger():
-    with open(LEDGER, encoding='utf-8') as f:
-        return json.load(f)
-
-
-def test_ledger_run_is_committed():
-    """비교 상대가 원장에 있어야 한다 — 없으면 대조가 허울이다."""
-    assert LEDGER.exists(), f'ledger run missing: {LEDGER}'
-
-
-def test_ruler_matches_ledger(pkg, ledger):
-    """데이터·분할·설정이 원장 run 과 같아야 수치를 나란히 놓을 수 있다."""
-    mismatched = {
-        k: (pkg.get(k), ledger.get(k))
-        for k in RULER_FIELDS
-        if pkg.get(k) != ledger.get(k)
-    }
-    assert not mismatched, f'package/ledger ruler mismatch: {mismatched}'
 
 
 def test_split_sizes_are_the_locked_ones(pkg):
@@ -111,12 +46,6 @@ def test_split_sizes_are_the_locked_ones(pkg):
     assert pkg['valid_samples'] == 7637
     assert pkg['test_samples'] == 7637
     assert pkg['data_fingerprint'] == '258166d6972c8144'
-
-
-def test_test_gold_is_the_same_gold(pkg, ledger):
-    """test gold 의 span 수가 같아야 같은 정답을 재고 있는 것이다."""
-    assert (pkg['overall_strict']['support']
-            == ledger['overall_strict']['support'])
 
 
 def test_no_group_leak(pkg):

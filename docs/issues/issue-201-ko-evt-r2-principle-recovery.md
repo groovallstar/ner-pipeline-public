@@ -188,7 +188,6 @@ head 로 gold 를 전수 스캔해 만들었고 모델 예측은 입력이 아�
 
 ### 신 gold 10-fold pooled (strict)
 
-<!-- certified: classifier/ko/issue201-r2-principle/pooled_metrics.json -->
 
 | 타입 | P | R | F1 | support |
 |---|---:|---:|---:|---:|
@@ -211,7 +210,6 @@ base 팔(#198 r2)의 fold 별 예측을 신 gold 라벨로 재채점해 같은 �
 σ 는 `certified/classifier/ko/issue198-evt-r2/fold_sigma.json` 의 base 팔 값을
 **사전 등록**해 쓴다 — 판정 대상 실행에서 뽑으면 변동이 큰 쪽이 자동 통과한다.
 
-<!-- certified: classifier/ko/issue201-r2-principle/noncircular.json -->
 
 | 타입 | base@신gold | head@신gold | σ 사전등록 |
 |---|---:|---:|---:|
@@ -245,7 +243,6 @@ base 팔은 `--no-stratify` 로 확정된다 — #198 이 그 설정을 적었�
 산출물 어디에도 없다. 그 run 의 `fold*/metrics.json` 이 `results/` 휘발로 사라졌기
 때문이다(#202 가 base 를 재학습해야 했던 것과 같은 사건).
 
-<!-- certified: classifier/ko/issue201-r2-principle/split_audit.json -->
 
 | head 팔 설정 | 두 팔 fold 겹침 | 같은 fold | 그러면 paired 는 |
 |---|---:|---:|---|

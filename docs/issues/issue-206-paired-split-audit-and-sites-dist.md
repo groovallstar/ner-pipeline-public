@@ -41,7 +41,6 @@ fold 대응과 무관하므로 P/R/F1 은 이 이슈로 바뀌지 않는다.
 | #201 fold 예측은 **이미 소실** | `results/` 휘발 — #202 가 base 를 재학습해야 했던 그 사건 |
 | #202 두 팔은 층화 | 그때 커밋돼 있던 예측 덤프로 fold 재현 10/10 + `metrics.json` 의 `stratify` |
 
-<!-- certified: classifier/ko/issue201-r2-principle/split_audit.json -->
 
 | head 팔 설정 | 두 팔 fold 겹침 | 같은 fold | paired 는 |
 |---|---:|---:|---|

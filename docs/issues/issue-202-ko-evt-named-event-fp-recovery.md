@@ -257,7 +257,6 @@ base 팔은 회수 전 gold 로, head 팔은 회수 후 gold 로 학습했다. �
 나란히 놓으면 자가 둘이라 비교가 성립하지 않는다 — 회수가 EVT 분모를 1,717 → 1,731 로
 바꿨기 때문이다. 그래서 **base 예측을 회수 후 gold 로 다시 채점해** 같은 자로 맞춘다.
 
-<!-- certified: classifier/ko/issue202-axis1-head/noncircular.json -->
 
 | 타입 | base (재채점) | head | Δ | \|Δ\|/σ_pre | support |
 |---|---:|---:|---:|---:|---:|

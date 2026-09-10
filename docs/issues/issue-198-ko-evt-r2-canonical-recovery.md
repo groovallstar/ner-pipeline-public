@@ -5,7 +5,6 @@
 - 브랜치: `feat/issue-198-ko-evt-r2-canonical-recovery`
 - 승인일: 2026-07-30
 
-<!-- certified: classifier/ko/issue198-evt-r2 -->
 
 ## 배경 (왜)
 
@@ -149,7 +148,6 @@ gold `data/klue/pii_all.jsonl` 25,989 행 (gitignore·로컬).
 
 ### 신 gold 10-fold pooled (strict)
 
-<!-- certified: classifier/ko/issue198-evt-r2/pooled_r2.json -->
 
 | 타입 | P | R | F1 | support |
 |---|---:|---:|---:|---:|
@@ -172,7 +170,6 @@ gold `data/klue/pii_all.jsonl` 25,989 행 (gitignore·로컬).
 그대로는 못 잰다는 판정이고, 그래서 base 팔의 fold 별 예측을 신 gold 라벨로
 재채점했다(#153 ORG 방식).
 
-<!-- certified: classifier/ko/issue198-evt-r2 -->
 
 | 타입 | base@신 gold | r2@신 gold | Δ | σ_fold |
 |---|---:|---:|---:|---:|

@@ -91,7 +91,6 @@ KO 의 명절·기념일·절기 이름을 `EVT` 로 정하고 canonical·gold·
 
 ## certified 면책
 
-<!-- certified: classifier/ko -->
 
 `certified/classifier/ko/**` 의 `EVT`·`DAT` 지표는 **전부 재라벨 전 gold 에서 잰
 값이다.** 재라벨이 분모를 옮겼으므로 재라벨 후 모델을 그 수와 나란히 놓으면 안 된다 —

@@ -79,7 +79,6 @@ Qwen3.6 은 한 달 뒤 2026-07-31 `34c40fb`(4459)에서 넘는다. 어느 커�
 
 ## ablation — 중복 지시문 제거
 
-<!-- certified: llm_labeler/ko/issue210-prompt-dedup -->
 
 | | |
 |---|---|
@@ -156,7 +155,6 @@ flowchart TD
 
 ### 결과 — 두 덩어리 모두 노이즈 안
 
-<!-- certified: llm_labeler/ko/issue210-prompt-dedup/summary.json -->
 
 | 뺀 덩어리 | 뺀 토큰 | Δ평균 | σ | 2σ | 판정 |
 |---|---|---|---|---|---|
