@@ -62,8 +62,7 @@ REST API(`src/server/`)의 긴 입력·배치 요청 처리를 견고화한다. 
   정확, score 1e-5) — `test_{ja,vi}_batched_chunks_match_per_chunk`.
 - latency(GPU, illustrative): multi-chunk ~1.6–2.0x, 단일 문장 불변.
 - 결과-시점 refuter(격리 Opus): R1 `350c89accae8`·R2 `490f3f737e97`·R3
-  `fa96496d8727` 모두 **PASS**(`.omc/state/refuter/`). mutation 으로 가드
-  식별력 확인.
+  `fa96496d8727` 모두 **PASS**. mutation 으로 가드 식별력 확인.
 
 ## 관련 커밋
 

@@ -175,7 +175,7 @@ JA: none=거부 | id=통과
 - **정의 시점**: `REVISE`. 고유 키가 거짓 초록을 내는 경로(위 문제 2), 기준
   3↔6 충돌(text fallback 제거가 기존 테스트를 깬다), 인센티브 역전(위 문제 3)을
   구현 전에 찾았다. 기준을 6개로 다시 짜고 진행했다.
-- **결과 시점**: `PASS`(`.omc/state/refuter/ab6dd02bee463003.json`). MINOR
+- **결과 시점**: `PASS`(diff_hash `ab6dd02bee463003`). MINOR
   findings 4건 중 3건을 반영했다 — 관측된 누출을 `FAIL` 로, 근거 없는 옛
   산출물을 `unknown`(불신)으로, `error_analysis` 에 검증 추가. 네 번째(범주 필드
   오탐)는 `_coarsens` 로 닫았다.

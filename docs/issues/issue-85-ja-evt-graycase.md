@@ -75,7 +75,7 @@ support 동시 변동(987→992·5310→5303·943→942)으로 ΔEVT 단독 격�
 ## 6. 검증 (refuter)
 
 격리 컨텍스트 Sonnet 반박자(code-reviewer) 판정 **PASS**
-(diff_hash `850351437220`, `.omc/state/refuter/850351437220.json`). 3축:
+(diff_hash `850351437220`). 3축:
 
 - **코드**: `ner_prompts.py` EVT 3 템플릿 + `チャンピオンズリーグ` 예시
   ORG→EVT, import·ruff 통과.

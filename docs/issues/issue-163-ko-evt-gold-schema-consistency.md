@@ -177,7 +177,7 @@ KO EVT 는 **커밋된 canonical §3·§3.3 그대로**이며 JA·VI 와 동일�
   0.851)는 #153 narrow-ORG 최종(koelectra·sup 2,797)의 0.849 와 정합해 #163 표의
   낮은 ORG(0.833)가 백본 차이임을 확인해준다. PROD 는 kf-deberta 가 우위, overall
   은 동률(±fold noise) — koelectra 는 recall 형·kf-deberta 는 precision 형.
-- 결과-시점 refuter: **PASS** (`.omc/state/refuter/082736db0e14.json`, round 2).
+- 결과-시점 refuter: **PASS** (diff_hash `082736db0e14`, round 2).
 
 ## 관련 커밋
 

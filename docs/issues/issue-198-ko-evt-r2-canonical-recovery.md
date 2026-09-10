@@ -144,7 +144,7 @@ gold `data/klue/pii_all.jsonl` 25,989 행 (gitignore·로컬).
 - 적용 무결성 — 불변 타입 9 종 byte-identical, span↔원문 불일치 0, 겹침 0.
 - 누출 — `leak_check_basis: group`, `cross_fold_group_dups: 0` (양 팔).
 - 격리 반박자(opus) **5 라운드**: FAIL×4 → **PASS**
-  (`.omc/state/refuter/b9246a019ffd.json`). 잡아낸 결함은 위 결정 로그 참조.
+  (diff_hash `b9246a019ffd`). 잡아낸 결함은 위 결정 로그 참조.
 
 ### 신 gold 10-fold pooled (strict)
 

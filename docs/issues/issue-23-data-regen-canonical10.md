@@ -107,12 +107,12 @@ data/pii/
    유지되는지 확인 (#16 7건 중 5종 매핑 후 분별 가능한 1건)
 4. **PII 할루시네이션 카운트**: VI PII 주입본에서 false positive 점검
    (위키 개요문에서 숫자 패턴을 `ID_NUM`/`PHONE`으로 오탐 등)
-5. **PII prefix-동반률 측정** (신규, `.omc/handoff-2026-04-17.md` §7
+5. **PII prefix-동반률 측정** (신규, 2026-04-17 핸드오프 §7
    흡수): Stockmark 측정에서 일본어 단서어(`担当者`/`連絡先`/`ID番号`
    등) PII 값 직전 동반 비율 **27.5%** + `ID_NUMBER` 영문 라벨 그대로
    leakage **170건** 확인됨. VI 등가 패턴(`liên hệ`, `số điện thoại`,
    `email`, `số CMND` 등) 매칭률 + 영문 라벨 leakage 카운트 측정.
-6. **PII 밀도 분포 점검** (신규, `.omc/specs/handoff-ja-pii-augmenter.md`
+6. **PII 밀도 분포 점검** (신규, ja PII augmenter 핸드오프
    §3 흡수): 일본어 주입에서 `P(0)=0.2` 기대 대비 실제
    `samples_no_pii_ratio = 1.8%` 괴리 발견. VI 주입본의 N=0 비율이
    `density[0]`과 일치하는지 점검. 불일치 시 `PIIInjector._sample_n()`
@@ -165,9 +165,9 @@ data/pii/
       メアリー病院` = `LOC` 확인 (#16 1건 spot-check)
 - [ ] 검증: PII 할루시네이션 카운트 리포트 (VI PII 주입본)
 - [ ] 검증: VI PII 주입본 prefix-동반률 + 영문 라벨 leakage 카운트
-      (`.omc/handoff-2026-04-17.md` §7 흡수)
+      (2026-04-17 핸드오프 §7 흡수)
 - [ ] 검증: VI PII 주입본 밀도 분포 (`samples_no_pii_ratio` vs
-      `density[0]`, `.omc/specs/handoff-ja-pii-augmenter.md` §3 흡수)
+      `density[0]`, ja PII augmenter 핸드오프 §3 흡수)
 - [ ] 정리: 구 `*_8type_*.jsonl` 데이터 파일 삭제, 데이터 경로 참조
       코드·테스트 fixture 신규 경로로 정정 (필드명·모듈명은 그대로)
 - [ ] 문서: 리포트 생성 + 본 이슈 md 최초 커밋
@@ -197,12 +197,12 @@ data/pii/
 - **PII 할루시네이션** (高): VI PII 주입본 검증 단계에서 위키 개요문
   숫자 패턴을 `ID_NUM`/`PHONE`으로 오탐 가능. 4단계 스모크에서 카운트
   점검 후 본 배치 진입.
-- **PII prefix leakage 재현** (中, `.omc/handoff-2026-04-17.md` §7
+- **PII prefix leakage 재현** (中, 2026-04-17 핸드오프 §7
   흡수): Stockmark 측정에서 단서어(`担当者`/`連絡先`/`ID番号`) PII 값
   직전 동반 27.5% + `ID_NUMBER` 영문 라벨 leakage 170건 발견. VI 주입에
   서 동일 shortcut 학습 위험. 6단계에서 `_INJECTION_PROMPT`에 단서어
   직전 부착 금지·라벨 영문명 출력 금지 부정 예시를 선행 추가.
-- **PII 밀도 분포 미반영** (中, `.omc/specs/handoff-ja-pii-augmenter.md`
+- **PII 밀도 분포 미반영** (中, ja PII augmenter 핸드오프
   §3 흡수): 일본어 주입에서 `P(0)=0.2` 기대 대비 실제
   `samples_no_pii_ratio = 1.8%` 괴리. `PIIInjector._sample_n()` 또는
   0건일 때 접미사 삽입 경로 의심. VI 주입 직전
@@ -224,11 +224,11 @@ data/pii/
 - 라벨러 리팩터: 커밋 1a39401
 - 이전 재라벨 트랙: #10 (closed, 8종 기준 — 본 이슈가 5종 silver로 갱신)
 - 병렬 트랙: #8 (PII 벤치 — 데이터 확정 후 소비 측)
-- 흡수된 핸드오프:
-  - `.omc/handoff-2026-04-17.md` §7 — 일본어 PII prefix leakage 27.5%
+- 흡수된 핸드오프 (원본은 2026-09-10 폐기, 내용은 아래에 남는다):
+  - 2026-04-17 핸드오프 §7 — 일본어 PII prefix leakage 27.5%
     + `ID_NUMBER` 영문 라벨 leakage 170건 (검증 5번·위험·6단계 프롬프트
     보강에 흡수)
-  - `.omc/specs/handoff-ja-pii-augmenter.md` §3 — 일본어 주입 밀도 분포
+  - ja PII augmenter 핸드오프 §3 — 일본어 주입 밀도 분포
     `P(0)` 미반영 (검증 6번·위험에 흡수)
 
 ---
