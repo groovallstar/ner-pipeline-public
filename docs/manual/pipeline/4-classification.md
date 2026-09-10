@@ -412,8 +412,8 @@ python src/ner/scripts/build_ner_prod.py \
 | 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
 | 배포 추론 | `src/ner/scripts/eval_en_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. 절대경로만. 기본 레이아웃 `/data/ner/en/{model,data/test.jsonl}`. 임계값 파일이 없으면 raw 폴백 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
-| 원장 | `certified/classifier/en/deploy-trainseed42/` | 배포된 패키지의 `metrics.json` 사본. 배포본이 나온 run 은 `certified/classifier/en/roberta-3seed/roberta_base_seed42/` 에 있고, 같은 데이터·분할이라 나란히 놓을 수 있다 |
-| 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 프로비넌스 정합 · 원장과 같은 자로 쟀는지 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
+| 배포 metric | `/data/ner/en/metrics.json` | 출하한 run 의 metric 과 포장 정보 |
+| 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 분할 고정값·데이터 지문 · test 그룹 누출 0 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
 
 **포장 스크립트가 분할을 다시 유도하는 이유** — 학습 CLI 는 분할 JSONL 을
 저장하지 않는다. 같은 인자로 다시 부르면 결정적으로 같은 분할이 나오지만,
@@ -478,7 +478,7 @@ python src/ner/scripts/build_ner_prod.py \
 `deploy_package` 포장 정보를 덧붙인다. 현재 검사는 출처 선언과 분할·누출·품질·
 자립 조건을 확인한다. 원장 사본과의 verbatim 대조는 원장 폐기와 함께 제거했다.
 교차검증 추정치와 단일 홀드아웃 수치는 평가 기준이 다르므로 직접 비교하지 않는다.
-과거 원장 근거는 [삭제 전 Git 기록](https://github.com/groovallstar/ner-pipeline/tree/b564d5e02402ba09fb8bc3babbecdc0e945326bf/certified/classifier)으로 보존된다.
+과거 원장 근거는 [삭제 전 Git 기록](https://github.com/groovallstar/ner-pipeline/tree/a60cb813d0be19a1ccb414c660c83c6407bb50a5/certified/classifier)으로 보존된다.
 
 
 **서빙까지 한 이슈로 닫은 이유** — EN 은 라틴 스크립트에 고유 코드포인트가 없어
