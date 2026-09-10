@@ -63,8 +63,7 @@ GitHub Issue에 매이지 않는 단발성 측정·비교 실험 결과를 **시
 - 리포트가 **인용하는 수치**에는 원본 metric JSON의 경로 또는 커밋과 실행 조건을 명시한다. 원본을 보관하지 못하면 그 한계를 밝힌다. 수치를 손으로 만들거나 과거 증거를 덮어쓰지 않는다. 별도 원장 승격이나 옛 훅의 자동 대조는 사용하지 않는다.
 - 합성/주입 데이터셋은 `data/`(gitignore 대상)에 로컬 보관. 생성 커맨드를 리포트 상단에 명시한다.
 
-과거 리포트의 `certified/` 경로와 수치는 당시 실험의 기록이다. 현재 남은
-JSON은 보관 자료이며 테스트·하네스의 검증 기준으로 사용하지 않는다.
-삭제된 과거 원본은
-[Git 기록](https://github.com/groovallstar/ner-pipeline/tree/b564d5e02402ba09fb8bc3babbecdc0e945326bf/certified)에서
-확인할 수 있다. 새 결과를 이 디렉터리로 승격하거나 자동 출처 선언을 추가하지 않는다.
+과거 리포트의 `certified/` 경로와 수치는 당시 실험의 기록이다. 그 디렉터리는
+저장소에서 삭제했으므로 지금 체크아웃에는 없고, 원본 JSON 은
+[삭제 전 Git 기록](https://github.com/groovallstar/ner-pipeline/tree/a60cb813d0be19a1ccb414c660c83c6407bb50a5/certified)에서 확인할 수 있다. 새 결과를 원장으로
+승격하거나 자동 출처 선언을 추가하지 않는다.

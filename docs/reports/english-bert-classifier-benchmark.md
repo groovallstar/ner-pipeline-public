@@ -433,8 +433,8 @@ CUDA_VISIBLE_DEVICES=0 python -m ner.classifier \
 
 | 무엇 | 경로 |
 |---|---|
-| 원장(인용 근거) | **없다** — 세대 1 원장 `certified/classifier/en/backbone-bench/` 는 #244 가 지웠다. 아래 백본 비교표는 대조 상대가 없는 기록이다 |
-| 현행 baseline 원장 | `certified/classifier/en/roberta-3seed/` — §현행 gold 의 `roberta-base` baseline 이 인용하는 곳 |
+| 원장(인용 근거) | **없다** — 세대 1 원장 `certified/classifier/en/backbone-bench/` 는 #244 가 지웠고, 남아 있던 `certified/` 도 이후 통째로 폐기했다. 아래 백본 비교표는 대조 상대가 없는 기록이다 |
+| 현행 baseline 수치의 출처 | §현행 gold 의 `roberta-base` baseline. 그 원본 JSON 은 [삭제 전 Git 기록](https://github.com/groovallstar/ner-pipeline/tree/a60cb813d0be19a1ccb414c660c83c6407bb50a5/certified/classifier/en/roberta-3seed)에 있다 |
 | scratch | `results/classifier/en_bench/` (gitignore·휘발) |
 | 학습시간 재측 | `results/classifier/en_bench/time_1ep/` (gitignore·휘발) |
 | 병합 도구 | `src/ner/augmenters/ontonotes_en/merge_splits.py` |
