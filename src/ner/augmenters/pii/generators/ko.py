@@ -24,6 +24,26 @@ KOREAN_GIVEN_NAMES = [
     '수빈', '지원', '예린', '시은', '유진', '채은', '가은', '소율',
 ]
 
+# 이메일 로컬파트에 쓰는 로마자 이름. 로컬파트에는 ASCII 만 들어가므로 한글
+# 이름을 그대로 넣으면 전량 탈락해 무작위 글자만 남는다. 표기 이름 목록과
+# 같은 순서의 국어의 로마자 표기다.
+EMAIL_FAMILY_NAMES = [
+    'kim', 'lee', 'park', 'choi', 'jung', 'kang', 'cho', 'yoon',
+    'jang', 'lim', 'han', 'oh', 'seo', 'shin', 'kwon', 'hwang',
+    'ahn', 'song', 'ryu', 'jeon', 'hong', 'ko', 'moon', 'yang',
+    'son', 'bae', 'baek', 'heo', 'yoo', 'nam', 'sim', 'noh',
+    'ha', 'kwak', 'sung', 'cha', 'joo', 'woo', 'koo', 'min',
+]
+
+EMAIL_GIVEN_NAMES = [
+    'minjun', 'seojun', 'doyun', 'yejun', 'siwoo', 'juwon', 'hajun',
+    'jiho', 'junseo', 'hyunwoo', 'dohyun', 'gunwoo', 'woojin', 'sunwoo',
+    'seojin', 'yeonwoo', 'seoyeon', 'seoyun', 'jiwoo', 'seohyun',
+    'minseo', 'haeun', 'hayun', 'yunseo', 'jiyu', 'jimin', 'chaewon',
+    'sua', 'jia', 'daeun', 'eunseo', 'yeeun', 'subin', 'jiwon',
+    'yerin', 'sieun', 'yujin', 'chaeeun', 'gaeun', 'soyul',
+]
+
 KOREAN_PROVINCES = [
     '서울특별시', '부산광역시', '대구광역시', '인천광역시',
     '광주광역시', '대전광역시', '울산광역시', '세종특별자치시',
