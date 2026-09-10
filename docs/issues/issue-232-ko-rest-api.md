@@ -142,7 +142,6 @@ pooled 뿐이고 자가 다르다. 그래서 **배포 run 의 `metrics.json` 자
 
 ### 배포 체크포인트 성능
 
-<!-- certified: classifier/ko/deploy-trainseed42/metrics.json -->
 
 test 2,598문장 · strict span · 임계값 미적용(raw).
 

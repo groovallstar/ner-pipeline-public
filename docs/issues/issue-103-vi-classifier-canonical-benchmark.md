@@ -37,7 +37,7 @@ VI BERT classifier 전 모델을 **단일 split·기본 설정**으로 재학습
   > cafebert(0.9367) > xlm-r-large(0.8364†, fold0 붕괴 포함). 상세는 리포트.
 - DeBERTa-V3(mdeberta·videberta) 제외: 발산(warmup/LR로 해소 가능) + 비학습
   (all-O, warmup·LR 무관, bf16 정밀도 미분리) 두 문제.
-- 인터뷰 스펙: `.omc/specs/deep-interview-vi-classifier-canonical-benchmark.md`.
+- 인터뷰 스펙 원본은 2026-09-10 폐기됐고, 요지는 위 항목이 전부다.
 
 ## 결정 로그 (append-only)
 

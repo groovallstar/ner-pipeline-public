@@ -12,8 +12,7 @@
 엔드포인트로 char-offset 엔티티 span 을 반환하며, abstention 임계값은
 graceful 로딩(파일 있으면 적용·없으면 raw). LLM 라벨러 경로 미사용.
 
-설계 근거: `.omc/specs/deep-interview-ja-vi-ner-rest-api.md` (deep-interview,
-ambiguity 12%).
+설계 근거: deep-interview(ambiguity 12%). 스펙 원본은 2026-09-10 폐기됐다.
 
 ## 범위
 
@@ -89,7 +88,7 @@ ModelRegistry, 추론 루프 직접 구현, 임계값은 classifier.confidence_t
   - [x] **ja parity**: operating F1 0.9493 / baseline 0.9369 가
     `/data/ner/ja/metrics.json` 과 1e-6 일치(리팩터 스크립트 비의존,
     기록 데이터 대조) — `test_ja_parity_*`
-- 결과시점 refuter: PASS (`.omc/state/refuter/48829907e8d1.json`). parity
+- 결과시점 refuter: PASS (diff_hash `48829907e8d1`). parity
   비-tautology 확인. 후속 cleanup 반영(response_model 배선, 임계값/dedup
   순서 주석).
 - chunk recall (후속 검증·종결): 실 ja·vi test gold 엔티티 전수가 청크

@@ -41,13 +41,11 @@ lr 5e-5 · max_length 256 · bf16 · batch 16 · `--group-key orig` · 분할 se
 로 다시 3-seed 돌려 현행 baseline 을 세웠다. 세 run 모두
 `data_fingerprint = 258166d6972c8144` 다.
 
-<!-- certified: classifier/en/roberta-3seed -->
 
 | 백본 | seed | **NER-5 median** | std | min | max | macro | (참고)PII5 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `roberta-base` | 42·43·44 | **0.8956** | 0.0077 | 0.8884 | 0.9039 | 0.8089 | 0.9476 |
 
-<!-- certified: classifier/en/roberta-3seed -->
 
 | 타입 | PER | LOC | ORG | PROD | EVT |
 |---|---:|---:|---:|---:|---:|

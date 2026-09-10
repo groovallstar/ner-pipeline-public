@@ -2,7 +2,7 @@
 
 > GitHub: https://github.com/groovallstar/ner_pipeline/issues/189
 > 브랜치: `feat/issue-189-web-ja-vi-ko-gloss` (origin/develop 베이스)
-> 딥인터뷰 스펙 원본: `.omc/specs/deep-interview-web-ja-vi-korean-gloss.md`
+> 딥인터뷰 스펙 원본: 2026-09-10 폐기
 
 ## 목적 (Goal)
 

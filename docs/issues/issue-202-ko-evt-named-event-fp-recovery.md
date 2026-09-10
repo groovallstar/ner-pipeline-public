@@ -257,7 +257,6 @@ base 팔은 회수 전 gold 로, head 팔은 회수 후 gold 로 학습했다. �
 나란히 놓으면 자가 둘이라 비교가 성립하지 않는다 — 회수가 EVT 분모를 1,717 → 1,731 로
 바꿨기 때문이다. 그래서 **base 예측을 회수 후 gold 로 다시 채점해** 같은 자로 맞춘다.
 
-<!-- certified: classifier/ko/issue202-axis1-head/noncircular.json -->
 
 | 타입 | base (재채점) | head | Δ | \|Δ\|/σ_pre | support |
 |---|---:|---:|---:|---:|---:|
@@ -410,7 +409,7 @@ paired 통계를 내지 않고 못 낸 이유와 실측 겹침을 대신 남긴�
 - 결과-시점 반박자(critic/opus) — round 1 **FAIL 2**(이 문서의 산문 수치 오기, §결정 로그
   ⑦) → round 2 **FAIL 1**(프롬프트 few-shot 자기모순, ⑧) → round 3 **FAIL 1**(그 수정으로
   만든 검사의 검출력 부족, ⑨) → round 4 **FAIL 2**(이 §검증 줄 자체 — 받지 않은 판정을
-  적었고 테스트 수가 낡았다, ⑩) → round 5 **PASS**(`.omc/state/refuter/0c484a9cbd00.json`).
+  적었고 테스트 수가 낡았다, ⑩) → round 5 **PASS**(diff_hash `0c484a9cbd00`).
   그 해시는 **판정 시점의 diff** 를 가리키고 이 줄을 더한 편집은 그 뒤라, 적힌 해시가
   자기 자신을 덮지는 않는다(구조상 불가피하다). canonical 커밋의 판정은 별개 사슬이고
   위 §canonical 에 있다. 반박자가 독립 확인한 것 중 값이 컸던 것: 원장의
