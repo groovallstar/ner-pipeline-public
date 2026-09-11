@@ -303,10 +303,15 @@ flowchart TD
 
 ### decode_bio_to_spans
 
-BIO id 시퀀스 + char offsets → `{type,start,end}` span. 동일 char span 반복은
-`max(end)`로 병합. `B-` 누락된 `I-`는 새 span 시작으로 관용 처리. `confs`를
+BIO id 시퀀스 + char offsets → `{type,start,end}` span. 연속한 동일 offset은
+첫 서브워드 라벨을 따른다. 같은 라벨의 후속 B/I는 이어 붙이고 충돌 라벨은
+무시한다. `B-` 누락된 `I-`는 새 span 시작으로 관용 처리하며 직전 span도
+보존한다. `confs`를
 주면 각 span에 `score`(구성 토큰 신뢰도 평균 conf_mean)를 부착(임계값 fit/apply용,
 미입력 시 score 키 없음 → BC).
+
+충돌하여 제외한 서브워드의 점수는 평균에 포함하지 않는다. 디코딩 규칙이 다른
+과거 점수와 직접 비교하지 않으며, 비교할 때는 같은 디코더로 다시 평가한다.
 
 ---
 

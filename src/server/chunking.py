@@ -11,6 +11,8 @@ start/end 에 base_offset 을 더하면 원문 char offset 으로 정확히 복�
 import re
 from typing import List, Tuple
 
+from ner.classifier.data_utils import _is_phobert, _word_spans_vi
+
 # 문장 경계: 마침표류·물음표·느낌표(전각 포함)와 개행. 경계 문자를 문장
 # 끝에 포함해 연속(tile)되게 매칭한다 → 청크 결합 시 원문 슬라이스 보존.
 _SENT_RE = re.compile(r'[^。．！？!?\n]*(?:[。．！？!?\n]+|$)')
@@ -22,6 +24,9 @@ def _token_count(text: str, tokenizer) -> int:
     if getattr(tokenizer, 'is_fast', False):
         enc = tokenizer(text, add_special_tokens=False)
         return len(enc['input_ids'])
+    if _is_phobert(tokenizer):
+        return sum(len(tokenizer.tokenize(surface))
+                   for surface, _, _ in _word_spans_vi(text))
     return len(tokenizer.tokenize(text))
 
 
@@ -36,6 +41,18 @@ def _sentences(text: str) -> List[Tuple[str, int]]:
     return out
 
 
+def _split_word(text: str, base: int, tokenizer,
+                budget: int) -> List[Tuple[str, int]]:
+    """단어 자체가 한도를 넘으면 문자 중간에서 나누고 양쪽 길이를 재검사한다."""
+    if _token_count(text, tokenizer) <= budget:
+        return [(text, base)]
+    if len(text) <= 1:
+        raise ValueError('token budget is too small to encode one character')
+    mid = len(text) // 2
+    return (_split_word(text[:mid], base, tokenizer, budget)
+            + _split_word(text[mid:], base + mid, tokenizer, budget))
+
+
 def _char_windows(sent: str, base: int, tokenizer,
                   budget: int) -> List[Tuple[str, int]]:
     """단일 문장이 budget 초과 시 단어 경계로 강제 분할(offset 보존)."""
@@ -45,6 +62,12 @@ def _char_windows(sent: str, base: int, tokenizer,
     for m in _WORD_RE.finditer(sent):
         word = m.group()
         word_start = base + m.start()
+        if _token_count(word, tokenizer) > budget:
+            if cur:
+                out.append((cur, cur_start))
+                cur = ''
+            out.extend(_split_word(word, word_start, tokenizer, budget))
+            continue
         cand = cur + word if cur else word
         if cur and _token_count(cand, tokenizer) > budget:
             out.append((cur, cur_start))
@@ -63,7 +86,7 @@ def split_for_length(text: str, tokenizer,
     """텍스트를 토큰 한도에 맞는 `(substring, base_offset)` 청크로 분할.
 
     한도 안이면 `[(text, 0)]`. 초과하면 문장 단위로 묶되, 한 문장이 단독으로
-    한도를 넘으면 단어 경계로 더 쪼갠다.
+    한도를 넘으면 단어 경계로 더 쪼개고, 단어도 넘으면 문자 단위로 나눈다.
     """
     budget = max(1, max_length - 2)  # CLS/SEP 여유
     if _token_count(text, tokenizer) <= budget:

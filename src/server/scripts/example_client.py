@@ -13,6 +13,7 @@
 
 import argparse
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
@@ -24,13 +25,18 @@ class NERClient:
 
     `ner_single`/`ner_batch` 는 `requests.Response` 를 그대로 돌려준다 —
     호출자가 `status_code` 와 `json()` 으로 정상/에러 계약을 직접 판단하게
-    해, 413·429 같은 계약 에러를 삼키지 않는다.
+    해, 413·429 같은 계약 에러를 삼키지 않는다. `max_retries`를 지정하면
+    429에 한해서 추가 시도하며, 상한에 도달하면 마지막 응답을 반환한다.
     """
 
     def __init__(self, base_url: str = 'http://localhost:8008',
-                 api_key: Optional[str] = None, timeout: float = 30.0):
+                 api_key: Optional[str] = None, timeout: float = 30.0,
+                 max_retries: int = 0):
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError('max_retries must be a non-negative integer')
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
+        self.max_retries = max_retries
         self._headers = {'Content-Type': 'application/json'}
         if api_key:
             self._headers['x-api-key'] = api_key
@@ -58,9 +64,22 @@ class NERClient:
         return self._post(body)
 
     def _post(self, body: dict) -> requests.Response:
-        """`/v1/ner` POST. 신뢰도 임계값은 서버가 자동 적용(요청 옵션 없음)."""
-        return requests.post(f'{self.base_url}/v1/ner', json=body,
-                             headers=self._headers, timeout=self.timeout)
+        """429만 선택적으로 재시도한다. 현재 서버의 Retry-After는 초 단위다."""
+        remaining = self.max_retries
+        while True:
+            response = requests.post(f'{self.base_url}/v1/ner', json=body,
+                                     headers=self._headers, timeout=self.timeout)
+            if response.status_code != 429 or remaining == 0:
+                return response
+            try:
+                delay = int(response.headers.get('Retry-After', '1'))
+            except ValueError:
+                delay = 1
+            if delay < 0:
+                delay = 1
+            response.close()
+            time.sleep(delay)
+            remaining -= 1
 
 
 def _check(desc: str, ok: bool, detail: str = '') -> bool:
@@ -111,9 +130,8 @@ def run_demo(client: NERClient, max_chars: int = 20000) -> int:
                  str(r.status_code))
 
     # 에러 429: 동시 과부하. 짧은 텍스트를 동시 대량 발사해 in-flight+큐
-    # 초과를 유발한다. 기본 설정(max_concurrency 8 + max_queue 32 = 40 슬롯)
-    # 기준 64 workers×200req 는 결정적으로 429 를 낸다 — concurrency 를 크게
-    # 올린 서버에선 이 단언이 약해질 수 있다(예제는 기본 설정 대상).
+    # 초과를 유발한다. 기본 설정은 추론 8건 + 대기 32건이다. 서버 설정과
+    # 부하 상황에 따라 429가 없을 수 있으므로 실서버 검증 결과를 확인한다.
     def _hit(_: int) -> int:
         try:
             return client.ner_single('東京', lang='ja').status_code

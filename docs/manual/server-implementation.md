@@ -119,7 +119,7 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 | `translate.py` | 마스킹-복원 + `LLMTranslator`(원격 OpenAI 호환) + `build_translator`(설정 검증). 번역 대상 언어 목록 `TRANSLATABLE_LANGS`(=`LANG_NAME` 의 키)도 여기 있다. PII span 을 sentinel `【PII{nonce}_{i}】` 로 가려 번역기에 미노출·복원 시 원문 그대로 보존(소실 시 부재, 훼손 없음), 고유명사 음차. `/v1/ner`·`inference.py` 무의존 additive |
 | `static/index.html` | 내부 개발·데모용 웹 UI(자족적 HTML+vanilla JS, 빌드·신규 의존성 없음). 텍스트 입력 + 언어 셀렉터(auto/ja/ko/vi/en) → 동일 출처 `/v1/ner` 호출 → 개체를 원문 위 라벨별 색상 하이라이트. 입력을 NFC 정규화해 offset 정합, code-point 슬라이스로 astral 문자 대응. **한국어 번역 보기**(온디맨드 버튼)도 여기 있다 — 페이지 로드 시 `/v1/translate/status` 를 1회 조회해 버튼을 켜거나 끄고(폴링 없음), 누르면 `/v1/translate` 를 호출한다. 결과가 ko 면 버튼을 **감춘다** — 눌러도 400 이 될 버튼을 회색으로 남기면 "백엔드가 죽었나"로 읽힌다 |
 | `scripts/run_local.sh` | 호스트 로컬 기동 래퍼(GPU 0 고정, `--port` 전달) |
-| `scripts/example_client.py` | 내부 소비자용 최소 레퍼런스 `NERClient` + 자기검증 (`uv run python -m server.scripts.example_client`) |
+| `scripts/example_client.py` | 내부 소비자용 `NERClient` + 자기검증 (`uv run python -m server.scripts.example_client`). `max_retries`(기본 0)를 지정하면 429만 Retry-After의 초만큼 대기 후 재시도하고 최종 응답을 반환한다. 단건·배치에 공통 적용하며 자기검증은 기본 0회를 사용한다. |
 | `scripts/throughput/bench.py` | 처리량·지연 측정 하네스. `--concurrency N` 은 같은 작업량을 N 스레드로 나눠 서버의 실제 경로를 재현한다 — 잠금 경합처럼 동시 실행에서만 드러나는 비용은 N=1 에서 측정되지 않는다. **반복 수를 넉넉히 준다(reps 80)** — 단건 순차는 forward 가 7ms 안팎으로 짧고 간헐적이라 GPU clock 이 idle 에 머물고, 짧게 재면(reps 5~20) 같은 조건에서 ±15% 가 출렁인다. 80 이면 정상상태에 수렴해 ±1% 다 |
 | `__main__.py` | uvicorn 기동 진입점 + 로깅 구성(`_configure_logging` — stderr + 주간 회전 파일) |
 
@@ -134,6 +134,21 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
 입력은 NFC 로 정규화한다(NFD span 깨짐 방지).
 추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량
 측정은 `scripts/throughput/bench.py`.
+
+청크는 기존 문장·공백 경계로 나누며 단어 하나도 한도를 넘으면 문자 중간에서
+추가 분할하고 양쪽 길이를 다시 확인한다. PhoBERT는 실제 인코딩과 같은 pyvi
+분절 표면의 BPE 수를 센다. 한도 이내 입력은 그대로 유지한다. 공백뿐인 장문의
+청크 생략은 기존 동작을 유지하며, 강제 분할 경계의 엔티티 보존은 보장하지 않는다.
+ASCII 마침표 경계 확장이나 겹치는 청크·재병합은 사용하지 않는다.
+
+반복 offset의 BIO 라벨은 첫 서브워드가 결정한다. 같은 라벨의 후속 서브워드는
+기존 span과 신뢰도 평균에 포함하고 충돌 라벨은 제외한다. 이 규칙은 공용
+디코더에서 적용되므로 평가에도 동일하게 적용된다. 과거 디코더의 점수와 직접
+비교하지 않고 같은 디코더로 재평가해야 한다.
+
+NER 슬롯 획득 직후 연결 종료를 확인하여 이미 끊긴 요청의 추론을 생략한다.
+이 경우 499로 기록하고 슬롯을 반환한다. 실행 중인 추론을 중단하지 않는다.
+NER·번역의 429는 기존 오류 본문에 `Retry-After: 1`을 함께 반환한다.
 
 ### 토크나이저 접근의 직렬화
 
