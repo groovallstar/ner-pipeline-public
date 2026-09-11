@@ -64,7 +64,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 환경변수 | 기본값 | 의미 |
 |---|---|---|
 | `NER_SERVER_MODEL_ROOT` | `/data/ner` | 모델 루트. `{root}/{lang}/model`·`{root}/{lang}/thresholds.json` 레이아웃 |
-| `NER_SERVER_MAX_LENGTH` | `256` | 모델 토큰 한도. 초과 입력은 문장 단위로 분할(offset 보존) |
+| `NER_SERVER_MAX_LENGTH` | `256` | 모델 토큰 한도. 초과 입력은 문장·공백 경계로 나누며 필요하면 문자 중간에서 추가 분할(§11) |
 | `NER_SERVER_MAX_CHARS` | `20000` | 텍스트 1건 char 상한(초과 → 413) |
 | `NER_SERVER_MAX_BATCH` | `64` | 배치 텍스트 개수 상한(초과 → 413) |
 | `NER_SERVER_MAX_TOTAL_CHARS` | `100000` | 배치 전체 char 합산 상한 — 요청당 작업량 가드(초과 → 413) |
@@ -274,6 +274,42 @@ RFC 7231이 요구하는 프로토콜 헤더라 봉투로 감싸면서도 보존
 > 잡히지만, 라우터가 부모 클래스를 직접 던지는 `404`·`405`는 매칭되지 않고
 > FastAPI 기본 핸들러로 새어 `{"detail": ...}`가 된다.
 
+### 429 과부하 응답과 재시도
+
+`POST /v1/ner`는 다음 두 경우에 429를 반환한다. 아래 숫자는 기본 설정이며
+배포 설정에 따라 달라질 수 있다.
+
+| 발생 조건 | 기본 설정 | `error.message` 예시 |
+|---|---|---|
+| 추론 슬롯이 모두 사용 중이고 대기 큐도 가득 찬 상태에서 추가 요청이 도착한다. | 동시 추론 8건, 대기 32건 | `queue full (>= 32 waiting)` |
+| 대기 큐에 들어간 요청이 제한 시간 안에 추론 슬롯을 얻지 못한다. | 대기 시간 10초 | `acquire timed out (10.0s)` |
+
+단건과 배치는 모두 HTTP 요청 하나당 추론 슬롯 하나를 사용한다. 초당 요청
+횟수 제한이 아니라 현재 추론·대기 상태에 따른 거절이다. 자동 감지 결과가
+모두 `unsupported`인 요청은 추론 슬롯을 사용하지 않는다.
+
+두 경우 모두 HTTP 429와 `error.status`·`error.message`를 담은 JSON 본문을
+반환한다. 응답에는 `Retry-After: 1` 헤더가 포함된다.
+
+OpenAPI·Swagger에도 429의 `ErrorResponse` 스키마와 `Retry-After` 헤더를
+선언한다. 예제 `NERClient`는 기본적으로 재시도하지 않으며, `max_retries`를
+지정하면 429에 한해 지정한 횟수만큼 추가 요청한다. 상한에 도달하면 마지막
+429 응답을 그대로 반환한다.
+
+```http
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 1
+
+{"error":{"status":429,"message":"queue full (>= 32 waiting)"}}
+```
+
+재시도하는 클라이언트는 `Retry-After` 헤더에 지정된 초만큼 대기한 뒤 동일
+요청을 다시 보낸다. 현재 서버는 1초를 안내하며, 1초 뒤의 성공을 보장하는
+것은 아니다. 재시도 여부는 HTTP 상태 코드로 판단하고 `message` 문구를
+분기 조건으로 사용하지 않는다. 즉시 반복 재시도는 피하고, 재시도 횟수나
+전체 대기 시간은 호출자의 정책에 따라 제한한다.
+
 ## 7. 인증
 
 `NER_SERVER_API_KEY`가 설정된 경우에만 `POST /v1/ner`가 `X-API-Key` 헤더를
@@ -282,7 +318,8 @@ RFC 7231이 요구하는 프로토콜 헤더라 봉투로 감싸면서도 보존
 없이 접근 가능하다.
 
 ```bash
-curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
+curl -H 'X-API-Key: <secret>' -H 'Content-Type: application/json' \
+  -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 ```
 
 ## 8. 동시성·크기 한도
@@ -297,6 +334,11 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
   `max_queue=0`은 "대기 불허"이지 "처리 불허"가 아니다.)
 - **대기 타임아웃 `acquire_timeout_s`**. 시간 내 슬롯을 못 얻으면 **429**
   `acquire timed out`.
+- **429 재시도 안내**. `Retry-After: 1`을 반환한다. 클라이언트 처리 방법은
+  §6의 429 과부하 응답과 재시도 절을 따른다.
+- **대기 중 연결 종료**. 슬롯 획득 직후 연결 종료가 확인되면 추론하지 않고
+  슬롯을 반환한다. 해당 요청은 로그에 499로 남는다. 실행 중 추론을 취소하거나
+  대기 큐에서 즉시 제거하는 것은 아니다.
 
 검증·언어 감지는 guard 밖에서 빠르게 처리하고, 무거운 추론만 guard 안
 `run_in_threadpool`로 실행한다. 크기 한도(`max_chars`·`max_batch`·
@@ -329,10 +371,13 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ### 응답 헤더 `X-Request-ID`
 
-모든 응답에 실린다. 요청에 `X-Request-ID`를 실어 보내면 서버가 그 값을 그대로
-에코하므로 호출자 쪽 추적 ID와 서버 로그를 이어 붙일 수 있고, 안 보내면
-서버가 8-hex 값을 생성한다. 장애를 신고할 때 이 값을 함께 전달하면 해당
-요청의 로그 라인을 바로 특정할 수 있다.
+정상 응답과 처리된 에러 응답(전송 계층의 413 포함)에 실린다. 미처리 예외의
+500 응답에는 현재 이 헤더가 없으며, 요청 ID는 서버의 예외 로그에만 남는다.
+요청에 비어 있지 않은 `X-Request-ID`를 보내면 서버가 앞 64자까지 에코하므로
+호출자 쪽 추적 ID와 서버 로그를 이어 붙일 수 있다. 헤더가 없거나 값이 비어
+있으면 서버가 8자리 16진수 값을 생성한다. 응답에 요청 ID 헤더가 있으면 장애
+신고 시 그 값을 함께 전달한다. 미처리 500 응답에는 이 헤더가 없으므로,
+호출자가 요청에 ID를 지정했다면 그 값의 앞 64자를 전달해 서버 로그와 대조한다.
 
 ### 출력·보관
 
@@ -365,7 +410,7 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ```mermaid
 flowchart TD
-    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> RID["최외곽 로깅 계층<br/>request-id 부여·응답 헤더 에코<br/>최종 상태·지연 기록"]
+    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> RID["요청 로깅 계층<br/>request-id 부여<br/>처리된 응답에 헤더 에코·상태/지연 기록<br/>미처리 500은 예외 로그에만 ID 기록"]
     RID --> BODY{"바디 크기<br/>≤ max_body_bytes?"}
     BODY -->|초과| E413B["413 · 파싱 전"]
     BODY -->|통과| AUTH{"API-key<br/>검증"}
@@ -380,13 +425,22 @@ flowchart TD
     CANON --> OK["200 · entities/results"]
 ```
 
-**추론 내부**(`inference.py`): 입력을 토큰 한도에 맞게 문장 단위로 분할하고,
+**추론 내부**(`inference.py`): 입력을 토큰 한도에 맞게 문장·공백 경계로 분할한다.
+단어 자체도 한도를 넘으면 문자 중간에서 추가 분할하며 각 조각의 길이를 다시
+확인한다. PhoBERT 길이 계산은 실제 인코딩과 같은 pyvi 분절을 사용한다.
+강제 분할 경계의 엔티티 보존은 보장하지 않는다.
+
 전 chunk를 `[N, max_length]` 한 배치로 묶어 1 forward → softmax·argmax로
 토큰별 예측·confidence → BIO 디코드로 span 추출 → chunk base offset을 더해
-원문 글로벌 offset 복원 → 임계값 로드 시 자동 적용 → canonical
-변환. 배치 요청은 같은 언어끼리 묶어 한 forward로 추론한다(chunk 1개면
-단건과 결과 동일 — behavior-invariant). 서빙은 fp32라 단건·배치가 같은
-커널을 타 배치화가 결과를 바꾸지 않는다(결정적). 입력은 NFC로 정규화한다.
+NFC 정규화한 입력 전체의 offset 복원 → 임계값 로드 시 자동 적용 → canonical
+변환. 배치 요청은 같은 언어끼리 묶어 한 forward로 추론하며 입력 순서를
+보존한다. 서빙은 fp32를 사용하고 단건·배치 결과의 일치 여부는 테스트로
+검증한다. 입력은 NFC로 정규화한다.
+
+BIO 디코더는 연속한 동일 offset의 첫 서브워드 라벨을 따른다. 뒤따르는
+동일 타입의 B/I는 이어 붙이고 충돌하는 라벨은 무시한다. 다른 타입의 I로
+전환되면 직전 span을 보존한 뒤 새 span을 시작한다. 이 규칙은 추론과
+평가에서 공용으로 사용한다.
 
 ## 12. 사용 예시
 

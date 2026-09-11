@@ -230,8 +230,8 @@ class LangModel:
         spans = self._infer_encoded(*self._tokenize(text))
         # 임계값은 canonical 변환 전 내부 span({type,...})에 적용한다 —
         # confidence_threshold.apply_thresholds 가 type 필드로 필터하며,
-        # 이는 학습-시점 eval 경로와 동일하다(parity 보장). decode 가 동일
-        # (type,start,end)를 이미 병합해 중복이 없다.
+        # 이는 학습-시점 eval 경로와 동일하다(parity 보장). 반복 offset의
+        # 라벨 충돌은 공용 디코더에서 처리한다.
         if apply_threshold and self.thresholds:
             spans = apply_thresholds([spans], self.thresholds)[0]
         return [_to_canonical(s, text) for s in spans]
