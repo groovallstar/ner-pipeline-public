@@ -64,7 +64,7 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 | 환경변수 | 기본값 | 의미 |
 |---|---|---|
 | `NER_SERVER_MODEL_ROOT` | `/data/ner` | 모델 루트. `{root}/{lang}/model`·`{root}/{lang}/thresholds.json` 레이아웃 |
-| `NER_SERVER_MAX_LENGTH` | `256` | 모델 토큰 한도. 초과 입력은 문장 단위로 분할(offset 보존) |
+| `NER_SERVER_MAX_LENGTH` | `256` | 모델 토큰 한도. 초과 입력은 문장·공백 경계로 나누며 필요하면 문자 중간에서 추가 분할(§11) |
 | `NER_SERVER_MAX_CHARS` | `20000` | 텍스트 1건 char 상한(초과 → 413) |
 | `NER_SERVER_MAX_BATCH` | `64` | 배치 텍스트 개수 상한(초과 → 413) |
 | `NER_SERVER_MAX_TOTAL_CHARS` | `100000` | 배치 전체 char 합산 상한 — 요청당 작업량 가드(초과 → 413) |
@@ -318,7 +318,8 @@ Retry-After: 1
 없이 접근 가능하다.
 
 ```bash
-curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
+curl -H 'X-API-Key: <secret>' -H 'Content-Type: application/json' \
+  -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 ```
 
 ## 8. 동시성·크기 한도
@@ -370,10 +371,13 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ### 응답 헤더 `X-Request-ID`
 
-모든 응답에 실린다. 요청에 `X-Request-ID`를 실어 보내면 서버가 그 값을 그대로
-에코하므로 호출자 쪽 추적 ID와 서버 로그를 이어 붙일 수 있고, 안 보내면
-서버가 8-hex 값을 생성한다. 장애를 신고할 때 이 값을 함께 전달하면 해당
-요청의 로그 라인을 바로 특정할 수 있다.
+정상 응답과 처리된 에러 응답(전송 계층의 413 포함)에 실린다. 미처리 예외의
+500 응답에는 현재 이 헤더가 없으며, 요청 ID는 서버의 예외 로그에만 남는다.
+요청에 비어 있지 않은 `X-Request-ID`를 보내면 서버가 앞 64자까지 에코하므로
+호출자 쪽 추적 ID와 서버 로그를 이어 붙일 수 있다. 헤더가 없거나 값이 비어
+있으면 서버가 8자리 16진수 값을 생성한다. 응답에 요청 ID 헤더가 있으면 장애
+신고 시 그 값을 함께 전달한다. 미처리 500 응답에는 이 헤더가 없으므로,
+호출자가 요청에 ID를 지정했다면 그 값의 앞 64자를 전달해 서버 로그와 대조한다.
 
 ### 출력·보관
 
@@ -406,7 +410,7 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
 
 ```mermaid
 flowchart TD
-    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> RID["최외곽 로깅 계층<br/>request-id 부여·응답 헤더 에코<br/>최종 상태·지연 기록"]
+    REQ["요청 도착<br/>text 또는 texts (+lang?)"] --> RID["요청 로깅 계층<br/>request-id 부여<br/>처리된 응답에 헤더 에코·상태/지연 기록<br/>미처리 500은 예외 로그에만 ID 기록"]
     RID --> BODY{"바디 크기<br/>≤ max_body_bytes?"}
     BODY -->|초과| E413B["413 · 파싱 전"]
     BODY -->|통과| AUTH{"API-key<br/>검증"}
@@ -428,10 +432,15 @@ flowchart TD
 
 전 chunk를 `[N, max_length]` 한 배치로 묶어 1 forward → softmax·argmax로
 토큰별 예측·confidence → BIO 디코드로 span 추출 → chunk base offset을 더해
-원문 글로벌 offset 복원 → 임계값 로드 시 자동 적용 → canonical
-변환. 배치 요청은 같은 언어끼리 묶어 한 forward로 추론한다(chunk 1개면
-단건과 결과 동일 — behavior-invariant). 서빙은 fp32라 단건·배치가 같은
-커널을 타 배치화가 결과를 바꾸지 않는다(결정적). 입력은 NFC로 정규화한다.
+NFC 정규화한 입력 전체의 offset 복원 → 임계값 로드 시 자동 적용 → canonical
+변환. 배치 요청은 같은 언어끼리 묶어 한 forward로 추론하며 입력 순서를
+보존한다. 서빙은 fp32를 사용하고 단건·배치 결과의 일치 여부는 테스트로
+검증한다. 입력은 NFC로 정규화한다.
+
+BIO 디코더는 연속한 동일 offset의 첫 서브워드 라벨을 따른다. 뒤따르는
+동일 타입의 B/I는 이어 붙이고 충돌하는 라벨은 무시한다. 다른 타입의 I로
+전환되면 직전 span을 보존한 뒤 새 span을 시작한다. 이 규칙은 추론과
+평가에서 공용으로 사용한다.
 
 ## 12. 사용 예시
 
