@@ -4,7 +4,10 @@
 이게 보장돼야 청크 내 span offset 에 base 를 더해 원문 offset 으로 복원된다.
 """
 
-from server.chunking import split_for_length
+import pytest
+
+from ner.classifier.data_utils import build_label_maps, encode_row
+from server.chunking import _token_count, split_for_length
 
 
 class FakeTok:
@@ -120,3 +123,50 @@ def test_whitespace_only_short_text_still_yields_one_chunk():
     """같은 공백 입력도 예산 안이면 통째로 한 청크다(위 경로와의 경계)."""
     tok = ByteLevelTok()
     assert split_for_length('   ', tok, max_length=256) == [('   ', 0)]
+
+
+@pytest.mark.parametrize('text', ['가' * 1000, 'あ' * 1000,
+                                 'aa ' + '나' * 1000 + ' tail'],
+                         ids=['ko', 'ja', 'surrounded'])
+def test_overlong_word_is_split_without_losing_content(text):
+    """공백 없는 한도 초과 단어도 전부 검사하고 원문 offset을 보존한다."""
+    chunks = split_for_length(text, ByteLevelTok(), max_length=256)
+    assert ''.join(sub for sub, _ in chunks) == text
+    _assert_contiguous(text, chunks)
+    assert all(0 < len(sub) <= 254 for sub, _ in chunks)
+
+
+class FakePhobertTokenizer:
+    """분절 표면의 BPE 수가 원문보다 큰 PhoBERT를 모사한다."""
+
+    is_fast = False
+    cls_token_id = 0
+    sep_token_id = 1
+    pad_token_id = 2
+
+    def tokenize(self, text):
+        return list(text) if '_' in text else text.split()
+
+    def convert_tokens_to_ids(self, token):
+        return 3
+
+
+def test_phobert_chunks_fit_actual_encoding(monkeypatch):
+    """분절 전 길이가 작아도 실제 BPE 한도로 청크를 나눈다."""
+    from pyvi import ViTokenizer
+
+    monkeypatch.setattr(ViTokenizer, 'tokenize', lambda text: text.replace(' ', '_'))
+    tok = FakePhobertTokenizer()
+    text = 'aa bb cc dd'
+    label2id, _ = build_label_maps()
+    assert _token_count(text, tok) == 11
+    chunks = split_for_length(text, tok, max_length=8)
+    assert len(chunks) > 1
+    assert ''.join(sub for sub, _ in chunks) == text
+    _assert_contiguous(text, chunks)
+    for sub, _ in chunks:
+        full, _ = encode_row({'text': sub, 'entities': []}, tok, label2id, 'vi', 128)
+        bounded, _ = encode_row({'text': sub, 'entities': []}, tok, label2id, 'vi', 8)
+        assert sum(full['attention_mask']) <= 8
+        n = sum(full['attention_mask'])
+        assert bounded['input_ids'][:n] == full['input_ids'][:n]

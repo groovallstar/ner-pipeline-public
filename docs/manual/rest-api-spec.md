@@ -274,6 +274,42 @@ RFC 7231이 요구하는 프로토콜 헤더라 봉투로 감싸면서도 보존
 > 잡히지만, 라우터가 부모 클래스를 직접 던지는 `404`·`405`는 매칭되지 않고
 > FastAPI 기본 핸들러로 새어 `{"detail": ...}`가 된다.
 
+### 429 과부하 응답과 재시도
+
+`POST /v1/ner`는 다음 두 경우에 429를 반환한다. 아래 숫자는 기본 설정이며
+배포 설정에 따라 달라질 수 있다.
+
+| 발생 조건 | 기본 설정 | `error.message` 예시 |
+|---|---|---|
+| 추론 슬롯이 모두 사용 중이고 대기 큐도 가득 찬 상태에서 추가 요청이 도착한다. | 동시 추론 8건, 대기 32건 | `queue full (>= 32 waiting)` |
+| 대기 큐에 들어간 요청이 제한 시간 안에 추론 슬롯을 얻지 못한다. | 대기 시간 10초 | `acquire timed out (10.0s)` |
+
+단건과 배치는 모두 HTTP 요청 하나당 추론 슬롯 하나를 사용한다. 초당 요청
+횟수 제한이 아니라 현재 추론·대기 상태에 따른 거절이다. 자동 감지 결과가
+모두 `unsupported`인 요청은 추론 슬롯을 사용하지 않는다.
+
+두 경우 모두 HTTP 429와 `error.status`·`error.message`를 담은 JSON 본문을
+반환한다. 응답에는 `Retry-After: 1` 헤더가 포함된다.
+
+OpenAPI·Swagger에도 429의 `ErrorResponse` 스키마와 `Retry-After` 헤더를
+선언한다. 예제 `NERClient`는 기본적으로 재시도하지 않으며, `max_retries`를
+지정하면 429에 한해 지정한 횟수만큼 추가 요청한다. 상한에 도달하면 마지막
+429 응답을 그대로 반환한다.
+
+```http
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 1
+
+{"error":{"status":429,"message":"queue full (>= 32 waiting)"}}
+```
+
+재시도하는 클라이언트는 `Retry-After` 헤더에 지정된 초만큼 대기한 뒤 동일
+요청을 다시 보낸다. 현재 서버는 1초를 안내하며, 1초 뒤의 성공을 보장하는
+것은 아니다. 재시도 여부는 HTTP 상태 코드로 판단하고 `message` 문구를
+분기 조건으로 사용하지 않는다. 즉시 반복 재시도는 피하고, 재시도 횟수나
+전체 대기 시간은 호출자의 정책에 따라 제한한다.
+
 ## 7. 인증
 
 `NER_SERVER_API_KEY`가 설정된 경우에만 `POST /v1/ner`가 `X-API-Key` 헤더를
@@ -297,6 +333,11 @@ curl -H 'X-API-Key: <secret>' -X POST localhost:8008/v1/ner -d '{"text":"..."}'
   `max_queue=0`은 "대기 불허"이지 "처리 불허"가 아니다.)
 - **대기 타임아웃 `acquire_timeout_s`**. 시간 내 슬롯을 못 얻으면 **429**
   `acquire timed out`.
+- **429 재시도 안내**. `Retry-After: 1`을 반환한다. 클라이언트 처리 방법은
+  §6의 429 과부하 응답과 재시도 절을 따른다.
+- **대기 중 연결 종료**. 슬롯 획득 직후 연결 종료가 확인되면 추론하지 않고
+  슬롯을 반환한다. 해당 요청은 로그에 499로 남는다. 실행 중 추론을 취소하거나
+  대기 큐에서 즉시 제거하는 것은 아니다.
 
 검증·언어 감지는 guard 밖에서 빠르게 처리하고, 무거운 추론만 guard 안
 `run_in_threadpool`로 실행한다. 크기 한도(`max_chars`·`max_batch`·
@@ -380,7 +421,11 @@ flowchart TD
     CANON --> OK["200 · entities/results"]
 ```
 
-**추론 내부**(`inference.py`): 입력을 토큰 한도에 맞게 문장 단위로 분할하고,
+**추론 내부**(`inference.py`): 입력을 토큰 한도에 맞게 문장·공백 경계로 분할한다.
+단어 자체도 한도를 넘으면 문자 중간에서 추가 분할하며 각 조각의 길이를 다시
+확인한다. PhoBERT 길이 계산은 실제 인코딩과 같은 pyvi 분절을 사용한다.
+강제 분할 경계의 엔티티 보존은 보장하지 않는다.
+
 전 chunk를 `[N, max_length]` 한 배치로 묶어 1 forward → softmax·argmax로
 토큰별 예측·confidence → BIO 디코드로 span 추출 → chunk base offset을 더해
 원문 글로벌 offset 복원 → 임계값 로드 시 자동 적용 → canonical

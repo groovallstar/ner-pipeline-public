@@ -265,7 +265,7 @@ def create_app(registry, config: Optional[ServerConfig] = None,
 
     @app.exception_handler(Overloaded)
     async def _overloaded(request: Request, exc: Overloaded):
-        return _error(429, str(exc))
+        return _error(429, str(exc), headers={'Retry-After': '1'})
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):
@@ -294,9 +294,21 @@ def create_app(registry, config: Optional[ServerConfig] = None,
               summary=_NER_SUMMARY,
               description=_NER_DESCRIPTION,
               response_model=Union[SingleResponse, BatchResponse],
-              responses={422: {
-                  'model': ErrorResponse,
-                  'description': 'JSON 스키마 검증 실패'}},
+              responses={
+                  422: {'model': ErrorResponse,
+                        'description': 'JSON 스키마 검증 실패'},
+                  429: {
+                      'model': ErrorResponse,
+                      'description': '대기 큐가 가득 차거나 추론 슬롯 대기 시간이 초과됨',
+                      'headers': {
+                          'Retry-After': {
+                              'description': '재시도 전에 대기할 시간(초)',
+                              'schema': {'type': 'integer', 'minimum': 0},
+                              'example': 1,
+                          },
+                      },
+                  },
+              },
               dependencies=[Depends(require_key)])
     async def ner(request: Request,
                   req: NERRequest = Body(openapi_examples=_NER_BODY_EXAMPLES)):
@@ -328,6 +340,8 @@ def create_app(registry, config: Optional[ServerConfig] = None,
                     'lang': lang, 'batch': 1, 'entities': 0}
                 return {'lang': lang, 'entities': []}
             async with guard:
+                if await request.is_disconnected():
+                    return _error(499, 'client disconnected')
                 entities = await run_in_threadpool(
                     registry.predict, req.text, lang)
             request.state.ner_meta = {
@@ -354,6 +368,8 @@ def create_app(registry, config: Optional[ServerConfig] = None,
             sup_texts = [t for _, t, _ in sup]
             sup_langs = [lang for _, _, lang in sup]
             async with guard:
+                if await request.is_disconnected():
+                    return _error(499, 'client disconnected')
                 ents = await run_in_threadpool(
                     registry.predict_batch, sup_texts, sup_langs)
             for (i, _, lang), e in zip(sup, ents):

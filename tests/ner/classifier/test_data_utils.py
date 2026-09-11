@@ -112,6 +112,52 @@ def test_decode_special_tokens_skipped():
     ]
 
 
+def test_decode_repeated_offset_b_merges_with_existing_span():
+    """단어 중간 B가 겹치는 span을 만들지 않고 같은 라벨의 점수를 보존한다."""
+    label2id, id2label = build_label_maps()
+    labels = ['B-PROD', 'I-PROD', 'B-PROD', 'I-PROD']
+    spans = decode_bio_to_spans(
+        [label2id[label] for label in labels],
+        [(3, 30), (30, 40), (30, 40), (30, 40)], id2label,
+        confs=[0.9, 0.8, 0.7, 0.6])
+    assert spans == [{'type': 'PROD', 'start': 3, 'end': 40,
+                      'score': pytest.approx(0.75)}]
+
+
+@pytest.mark.parametrize('conflict', ['O', 'B-PHONE', 'I-PHONE'])
+def test_decode_repeated_offset_conflict_keeps_first_label(conflict):
+    """반복 offset의 충돌 라벨은 기존 문자 구간의 라벨과 점수를 바꾸지 않는다."""
+    label2id, id2label = build_label_maps()
+    labels = ['B-EMAIL', conflict, 'B-EMAIL', 'B-PHONE']
+    spans = decode_bio_to_spans(
+        [label2id[label] for label in labels],
+        [(0, 5), (0, 5), (0, 5), (6, 10)], id2label,
+        confs=[0.6, 0.99, 0.8, 0.9])
+    assert spans == [
+        {'type': 'EMAIL', 'start': 0, 'end': 5, 'score': pytest.approx(0.7)},
+        {'type': 'PHONE', 'start': 6, 'end': 10, 'score': 0.9},
+    ]
+
+
+def test_decode_repeated_offset_first_o_does_not_start_entity():
+    """첫 서브워드가 O이면 같은 구간의 후속 B로 엔티티를 만들지 않는다."""
+    label2id, id2label = build_label_maps()
+    spans = decode_bio_to_spans(
+        [label2id['O'], label2id['B-PER'], label2id['B-PER']],
+        [(0, 3), (0, 3), (4, 7)], id2label)
+    assert spans == [{'type': 'PER', 'start': 4, 'end': 7}]
+
+
+def test_decode_mismatched_i_preserves_previous_entity():
+    """다른 offset의 라벨이 바뀐 I도 직전 엔티티를 유실하지 않는다."""
+    label2id, id2label = build_label_maps()
+    spans = decode_bio_to_spans(
+        [label2id['B-PER'], label2id['I-PHONE']],
+        [(0, 3), (4, 7)], id2label)
+    assert spans == [{'type': 'PER', 'start': 0, 'end': 3},
+                     {'type': 'PHONE', 'start': 4, 'end': 7}]
+
+
 def test_split_train_valid_test_partition():
     """3-way 분할: train/valid/test 가 disjoint 하고 union 이 전체."""
     rows = [{'text': '', 'entities': [], 'id': str(i)} for i in range(100)]

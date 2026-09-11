@@ -770,7 +770,8 @@ def decode_bio_to_spans(label_ids: List[int],
                         confs: Optional[List[float]] = None) -> List[dict]:
     """BIO label id 시퀀스 + char offsets → list of {type, start, end} spans.
 
-    동일 단어에 같은 char span 이 반복되어도 max(end) 로 병합되어 단일 span 으로 수렴.
+    연속한 동일 offset은 첫 서브워드 라벨을 따른다. 같은 라벨의 후속 B/I는
+    이어 붙이고, 충돌하는 라벨은 무시하여 같은 문자 구간을 중복 출력하지 않는다.
 
     confs 가 주어지면(토큰별 신뢰도, label_ids 와 동일 길이) 각 span 에
     `score` = span 구성 토큰 신뢰도의 평균(conf_mean)을 부착한다. confs 미입력
@@ -779,6 +780,8 @@ def decode_bio_to_spans(label_ids: List[int],
     spans: List[dict] = []
     current = None
     cur_confs: Optional[List[float]] = None
+    previous_offset = None
+    first_label = 'O'
 
     def _push() -> None:
         # confs 입력 시에만 score 부착 — 그 외엔 기존 출력과 동일
@@ -789,12 +792,20 @@ def decode_bio_to_spans(label_ids: List[int],
     for idx, (lid, (start, end)) in enumerate(zip(label_ids, char_offsets)):
         cf = confs[idx] if confs is not None else None
         if start == 0 and end == 0:
+            previous_offset = None
             if current:
                 _push()
                 current = None
                 cur_confs = None
             continue
         label = id2label.get(int(lid), 'O')
+        if (start, end) == previous_offset:
+            if first_label == 'O' or label[2:] != first_label[2:]:
+                continue
+            label = 'I-' + first_label[2:]
+        else:
+            previous_offset = (start, end)
+            first_label = label
         if label == 'O':
             if current:
                 _push()
@@ -813,6 +824,8 @@ def decode_bio_to_spans(label_ids: List[int],
                     cur_confs.append(cf)
             else:
                 # B- 누락된 I- 는 새 span 시작으로 관용 처리
+                if current:
+                    _push()
                 current = {'type': etype, 'start': start, 'end': end}
                 cur_confs = [cf] if cf is not None else None
     if current:
