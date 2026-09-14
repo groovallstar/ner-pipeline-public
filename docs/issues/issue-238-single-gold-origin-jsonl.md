@@ -125,6 +125,11 @@ uv run pytest tests/   # 1107 passed, 3 skipped (78s)
   나쁘다. 다섯을 확인하고 복원했다.
   **원장을 줄일 때는 문서 참조뿐 아니라 `tests/` 참조를 먼저 봐야 하고, 실패만
   세면 조용히 빠지는 검사를 놓친다.**
+- 2026-09-10: KO gold 감사 장치를 폐기했다. `src/ner/labelers/ko/data/` 의 원장·
+  사전등록 JSON 21 개와 `ko_dat_audit.py`·`ko_evt_axis1_audit.py`·
+  `ko_evt_holiday_audit.py`, 그리고 그것들을 gold 에 대조하던 테스트가 함께
+  없어졌다. 이 문서가 그 경로를 인용한 자리는 그때의 기록이며 지금은 파일이 없다.
+  수치와 판정 결과는 손대지 않았다
 
 ## 후속 작업
 

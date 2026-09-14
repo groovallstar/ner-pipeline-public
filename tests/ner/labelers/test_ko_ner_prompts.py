@@ -12,8 +12,8 @@ import pathlib
 import re
 import tempfile
 
-from ner.labelers.ko.ko_evt_axis1_audit import AXIS1_HEADS
-from ner.labelers.ko.ko_evt_holiday_audit import (
+from ner.labelers.ko.canonical_rules import (
+    canonical_axis1_heads,
     following_span_head,
     parse_canonical_holiday,
 )
@@ -102,13 +102,14 @@ def _taught_heads(template: str) -> set:
 
 
 def test_the_template_teaches_exactly_the_axis1_head_list():
-    """프롬프트가 가르치는 head 집합과 모듈 상수가 어긋나면 감사와 라벨러가 갈린다.
+    """프롬프트가 가르치는 head 집합과 canonical §5.3 이 어긋나면 라벨러가 옛 기준으로
+    답한다.
 
     존재 검사(`"사건 head" in template`)로는 부족하다 — 그 문자열은 PROD 절에도 있어서
-    **축1 절을 통째로 지워도 통과한다.** 템플릿에서 head 집합을 실제로 뽑아 모듈
-    상수와 대조해야 좁힘·넓힘이 둘 다 걸린다.
+    **축1 절을 통째로 지워도 통과한다.** 템플릿에서 head 집합을 실제로 뽑아 표와
+    대조해야 좁힘·넓힘이 둘 다 걸린다.
     """
-    assert _taught_heads(SINGLE_PROMPT_TEMPLATE) == set(AXIS1_HEADS)
+    assert _taught_heads(SINGLE_PROMPT_TEMPLATE) == set(canonical_axis1_heads())
 
 
 def test_head_extraction_ignores_examples_and_other_rules():
@@ -526,9 +527,8 @@ def test_a_discriminating_few_shot_survives():
 # 밖이다.** 둘이 갈리면 라벨러가 옛 기준으로 답하고 그 하락이 재라벨 탓인지
 # 모델 탓인지 구별되지 않는다 — 어떤 기계 검사도 안 잡는 자리라 여기서 묶는다.
 #
-# 대조 상대는 모듈 상수가 아니라 **canonical 표**다. 상수 ↔ canonical 은
-# `test_ko_evt_holiday_audit.py` 가 이미 양방향으로 대조하므로, 여기서 상수를
-# 보면 두 사본이 나란히 틀려도 통과하는 고리가 생긴다.
+# 대조 상대는 **canonical 표**다. 사본을 두고 그것과 맞추면 두 사본이 나란히
+# 틀려도 통과하는 고리가 생기므로, `canonical_rules` 는 사본 없이 표를 읽는다.
 
 _HOLIDAY_LIST = {
     "day_heads": re.compile(r"하루 머리\(([^)]*)\)"),
@@ -609,7 +609,7 @@ def test_holiday_sync_breaks_in_both_directions():
 def test_every_holiday_example_the_prompt_teaches_has_a_canonical_root():
     """프롬프트가 §5.3 이 모르는 이름을 EVT 로 가르치지 않는다.
 
-    어근 목록은 감사 모듈의 **후보 그물**이라, 목록 밖 이름은 gold 에서
+    어근 목록은 gold 를 만들 때 쓴 **후보 그물**이라, 목록 밖 이름은 gold 에서
     `DAT` 로 남아 있다. 프롬프트만 `추분`·`백중` 을 EVT 로 가르치면 그
     예측은 전부 FP 가 되고, 어긋남을 볼 것이 없다.
 
@@ -658,9 +658,8 @@ def test_a_few_shot_teaches_the_period_head_shared_across_a_coordination():
     """`설과 추석 연휴` — 등위로 기간 머리를 나눠 갖는 자리.
 
     바로 뒤만 보면 `추석 연휴` 만 `DAT` 로 걸러지고 `설` 은 `EVT` 로 남아
-    **한 명사구 안에서 타입이 갈린다.** gold 는 그 4 자리를 `DAT` 로 묶어 뒀고
-    (`evt_holiday_prereg.json` 의 `site_exceptions`), 프롬프트가 반대를
-    가르치면 그 자리마다 라벨러와 gold 가 어긋난다.
+    **한 명사구 안에서 타입이 갈린다.** gold 는 그 4 자리를 `DAT` 로 묶어 뒀으므로,
+    프롬프트가 반대를 가르치면 그 자리마다 라벨러와 gold 가 어긋난다.
     """
     hit = [(t, s) for t, s in _few_shots() if "설과 추석 연휴" in t]
     assert hit, "등위 예시가 없다"
@@ -676,7 +675,7 @@ def test_few_shot_holiday_spans_obey_the_head_rule():
     위 두 검사는 지목한 예시만 본다 — **새 예시가 `추석`=DAT 를 가르쳐도
     지나간다.** 여기서는 명절 어근을 담은 모든 예시 span 을 판정 함수에
     태워, 자리마다 머리가 무엇을 부르는지로 기대 타입을 계산해 대조한다.
-    머리를 보는 것은 감사 모듈의 `following_span_head()` — gold 를 그렇게
+    머리를 보는 것은 `canonical_rules.following_span_head()` — gold 를 그렇게
     갈랐으므로 예시도 같은 자로 재야 한다.
 
     **span 을 붙여서 내는 예시는 건너뛴다**(`서울 삼성동`→`서울삼성동`) —

@@ -14,21 +14,17 @@ LOC/ORG는 narrow-ORG 규칙을 사용한다. 정부·행정·공공·정치 기
   동기 테스트를 유지한다.
 - `spans_to_bio()`의 exact 후 substring 2-pass 정렬과 공용 sentence splitter를
   재사용한다.
-- gold audit는 모델 예측으로 candidate 모집단을 정의하지 않는다. ledger,
-  gold hash, set equality, 다른 entity type 보존 검사를 유지한다.
-- `data/*.json`과 `*.jsonl`은 감사 provenance이다. 수치만 맞추려고 재생성하거나
-  판정을 자동 선택하지 않는다.
+- `canonical_rules`는 canonical 표를 그때그때 읽는다. 목록을 상수로 복사해 두면
+  기준 파일과 갈려도 볼 것이 없다.
 
 ## 금지사항
 
 - canonical 문서와 prompt에 서로 다른 LOC/ORG 또는 EVT 규칙을 두지 않는다.
-- count equality만으로 relabel 안전성을 증명하지 않는다.
-- recovery가 이미 성공할 model false positive만 골라 gold에 넣지 않는다.
 - flat BIO에서 겹치는 entity를 만들지 않는다.
 
 ## 검증
 
 - `uv run pytest tests/ner/labelers/test_ko_ner_prompts.py tests/ner/labelers/test_prompt_token_budget.py -q`
-- audit 변경은 대응하는 `tests/ner/labelers/test_ko_*audit.py`와
-  `tests/ner/labelers/test_ko_locorg_ledger.py`를 실행한다.
+- canonical 파서 변경은 `tests/ner/labelers/test_ko_evt_r2_audit.py`와
+  `tests/ner/labelers/test_canonical_section_refs.py`를 실행한다.
 - 공용 정렬 변경은 `uv run pytest tests/ner/test_base_labelers.py tests/ner/test_llm_helpers.py -q`
