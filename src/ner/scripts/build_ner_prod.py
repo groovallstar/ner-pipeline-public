@@ -230,6 +230,10 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes,
         if not os.path.exists(os.path.join(out_dir, 'thresholds.json'))
         else '신뢰도 임계값(`thresholds.json`) 적용 — 운영점 그대로 낸다.')
 
+    inference_example = (
+        f' `src/ner/scripts/eval_{lang}_ner_test.py`가 그 사용 예다.'
+        if lang in ('ja', 'vi') else '')
+
     card = f"""# {lang.upper()} NER production 모델
 
 {label} canonical 10종 평면 NER BERT 분류기. 실제 추론 배포용.
@@ -291,7 +295,7 @@ def write_model_card(path, *, m, leak, out_dir, run_dir, notes,
 1. `model/` 을 `AutoTokenizer` · `AutoModelForTokenClassification` 로 로드
    (별도 tokenizer 다운로드 불필요).
 2. char offset 디코드는 `ner.classifier.data_utils` 의 인코딩 경로와 짝을
-   이룬다 — `src/ner/scripts/eval_{lang}_ner_test.py` 가 그 사용 예다.
+   이룬다.{inference_example}
 
 ## 프로비넌스
 

@@ -415,7 +415,6 @@ python src/ner/scripts/build_ner_prod.py \
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
 | 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
-| 배포 추론 | `src/ner/scripts/eval_en_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. 절대경로만. 기본 레이아웃 `/data/ner/en/{model,data/test.jsonl}`. 임계값 파일이 없으면 raw 폴백 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
 | 배포 metric | `/data/ner/en/metrics.json` | 출하한 run 의 metric 과 포장 정보 |
 | 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 분할 고정값·데이터 지문 · test 그룹 누출 0 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
@@ -474,7 +473,6 @@ python src/ner/scripts/build_ner_prod.py \
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
-| 배포 추론 | `src/ner/scripts/eval_ko_ner_test.py`(`.sh`=uv 래퍼) | 학습 없이 고정 test 추론·태깅·P/R/F1. EN 판과 같이 평가 대상(`--limit`)과 화면 표시(`--show`)를 따로 받는다 |
 | 출하 번들 | `/data/ner/ko/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI·EN 과 같이 임계값 미적용) |
 | 배포 metric | `/data/ner/ko/metrics.json` | 출하한 run의 metric과 포장 정보 |
 | 검사 | `tests/ner/classifier/test_ko_deploy_package.py` | 출처 선언 · 분할 고정값 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
@@ -507,12 +505,12 @@ python src/ner/scripts/build_ner_prod.py \
 
 KO는 `monologg/koelectra-base-v3-discriminator`(ELECTRA 계열, `--precision fp16`
 기본), `data/klue/origin.jsonl`. 행마다 고유한 `id` 를 group-key 로 쓴다. 출하는
-`/data/ner/ko/` + `eval_ko_ner_test`(§8)이고 REST 서버가 이 경로를 로드한다.
+`/data/ner/ko/`(§8)이고 REST 서버가 이 경로를 로드한다.
 
 EN은 `roberta-base`(백본 벤치마크로 확정), `data/ontonotes_en/origin.jsonl`,
 fast(RoBERTa BPE) 토크나이저라 별도 런타임 의존이 없다. 원문 파생 행이 있어
 `--group-key orig` 가 필수이고, DeBERTa-v3 발산 전례 때문에 `--precision bf16`
-을 쓴다. 출하는 `/data/ner/en/` + `eval_en_ner_test`(§8).
+을 쓴다. 출하 경로는 `/data/ner/en/`(§8)이다.
 
 ---
 

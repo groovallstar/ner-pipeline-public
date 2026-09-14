@@ -145,7 +145,10 @@ def test_package_layout_is_language_independent(
         assert got == metrics[f'{name}_samples']
 
 
-@pytest.mark.parametrize('lang,model_name,label', LANGS)
+@pytest.mark.parametrize('lang,model_name,label', LANGS + [
+    ('ja', 'tohoku-nlp/bert-base-japanese-v3', '일본어'),
+    ('vi', 'xlm-roberta-base', '베트남어'),
+])
 def test_model_card_speaks_the_run_language(
         tmp_path, monkeypatch, stub_tokenizer, lang, model_name, label):
     """카드 문구가 run 의 언어를 따라간다 — 제목·평가 스크립트·재현 명령."""
@@ -154,7 +157,10 @@ def test_model_card_speaks_the_run_language(
 
     assert card.startswith(f'# {lang.upper()} NER production 모델')
     assert f'{label} canonical 10종' in card
-    assert f'eval_{lang}_ner_test.py' in card
+    if lang in ('ja', 'vi'):
+        assert f'eval_{lang}_ner_test.py' in card
+    else:
+        assert f'eval_{lang}_ner_test.py' not in card
     assert f'--lang {lang}' in card
     assert 'build_ner_prod.py' in card
 
