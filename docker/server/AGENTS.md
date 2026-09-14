@@ -15,6 +15,9 @@
 - `/health`가 `status: "ok"`를 반환해야 준비 완료이다. 포트 바인딩만으로
   모델 준비를 판단하지 않는다.
 
+- `stop.sh`는 down의 stderr와 실패 코드를 보존한다. `start.sh`는 사전 down이
+  실패하면 그 코드를 반환하고 up을 실행하지 않는다.
+
 ## 금지사항
 
 - 인증 없는 서비스를 공개망에 노출하지 않는다.
@@ -24,7 +27,9 @@
 
 ## 검증
 
-- `bash -n docker/server/start.sh docker/server/stop.sh docker/server/logs.sh`
+- 각 셸 파일에 `bash -n`을 개별 실행한다.
+- `uv run pytest tests/docker/test_lifecycle_failures.py -q`로 실패 전파를 검증한다.
+  Docker CLI 대역을 사용하므로 실제 서비스의 기동·종료 검사와 구분한다.
 - 기동 시 선택한 compose 프로젝트와 컨테이너의 실제 게시 포트를 확인하고,
   해당 주소의 `/health` 응답과 컨테이너 health 상태를 함께 확인한다. 기본 포트
   8008이나 현재 셸 변수만으로 `.env`가 반영된 실행 대상을 추정하지 않는다.

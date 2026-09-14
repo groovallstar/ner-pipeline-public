@@ -15,10 +15,16 @@ esac
 
 PROJECT="${NER_SERVER_PROJECT:-ner-server}"
 
-echo "기존 컨테이너 정리..."
-docker compose -p "$PROJECT" -f docker-compose.yml down 2>/dev/null || true
+echo "Removing existing containers..."
+if docker compose -p "$PROJECT" -f docker-compose.yml down; then
+  :
+else
+  status=$?
+  echo "Cleanup failed; startup aborted (exit $status)." >&2
+  exit "$status"
+fi
 
-echo "기동 (project=$PROJECT${BUILD:+, build})..."
+echo "Starting (project=$PROJECT${BUILD:+, build})..."
 docker compose -p "$PROJECT" -f docker-compose.yml up -d $BUILD
 
-echo "로그: bash logs.sh   |   헬스: curl -s localhost:${NER_SERVER_PORT:-8008}/health"
+echo "Logs: bash logs.sh   |   Health: curl -s localhost:${NER_SERVER_PORT:-8008}/health"
