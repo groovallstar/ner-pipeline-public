@@ -20,6 +20,8 @@ Gemma 4는 GPU1/8081, Qwen3.8은 GPU2/8082를 사용하며 compose 기본 포트
 - 준비 완료는 `/models` 응답에 기대한 모델 이름이 나타나는지로 확인한다.
 - JSON 값을 갖는 복잡한 vLLM 플래그는 compose 치환 과정에서 따옴표가 깨질 수
   있으므로 동작을 실제로 검증한다.
+- `stop.sh`는 모든 지정 프로젝트의 종료를 시도하며 down의 stderr를 보존한다.
+  하나라도 실패하면 첫 실패 코드를 반환하고 전체 성공 메시지를 출력하지 않는다.
 
 ## 금지사항
 
@@ -30,5 +32,8 @@ Gemma 4는 GPU1/8081, Qwen3.8은 GPU2/8082를 사용하며 compose 기본 포트
 ## 검증
 
 - `bash -n docker/vllm/*.sh`
+- 종료 스크립트의 정상·일부 실패·전체 실패 경로는
+  `uv run pytest tests/docker/test_lifecycle_failures.py -q`로 검증한다.
+  Docker CLI 대역을 사용하므로 실제 서비스의 종료 검증과 구분한다.
 - 기동 후 `/models`와 로그를 확인하고, benchmark는
   `uv run python -m ner.llm_eval ...`로 실행한다.

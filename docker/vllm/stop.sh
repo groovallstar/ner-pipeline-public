@@ -8,8 +8,21 @@ set -e
 cd "$(dirname "$0")"
 
 PROJECTS="${*:-vllm-gemma4-31b-awq-8bit vllm-qwen38-27b-w4a16-awq}"
+status=0
 for p in $PROJECTS; do
-  docker compose -p "$p" -f docker-compose.yml down 2>/dev/null \
-    && echo "중지: $p" || true
+  if docker compose -p "$p" -f docker-compose.yml down; then
+    echo "Stopped: $p"
+  else
+    project_status=$?
+    echo "Failed to stop: $p (exit $project_status)" >&2
+    # 나머지 프로젝트도 종료하되 첫 실패 코드는 보존한다.
+    if [ "$status" -eq 0 ]; then
+      status=$project_status
+    fi
+  fi
 done
-echo "vLLM 컨테이너 중지 완료"
+if [ "$status" -ne 0 ]; then
+  echo "Some vLLM projects could not be stopped." >&2
+  exit "$status"
+fi
+echo "All vLLM projects stopped."

@@ -16,7 +16,13 @@ esac
 PROJECT="${NER_SERVER_PROJECT:-ner-server}"
 
 echo "기존 컨테이너 정리..."
-docker compose -p "$PROJECT" -f docker-compose.yml down 2>/dev/null || true
+if docker compose -p "$PROJECT" -f docker-compose.yml down; then
+  :
+else
+  status=$?
+  echo "Cleanup failed; startup aborted (exit $status)." >&2
+  exit "$status"
+fi
 
 echo "기동 (project=$PROJECT${BUILD:+, build})..."
 docker compose -p "$PROJECT" -f docker-compose.yml up -d $BUILD
