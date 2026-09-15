@@ -14,7 +14,7 @@ GitHub Issue에 매이지 않는 단발성 측정·비교 실험 결과를 **시
 | BERT 분류기 (동결 히스토리) | `japanese-bert-classifier-history.md` · `vietnamese-bert-classifier-history.md` |
 | BERT 분류기 (출하 스펙) | `japanese-bert-classifier-spec.md` · `vietnamese-bert-classifier-spec.md` |
 | 데이터 품질 | `vietnamese-ner-silver-quality.md` · `data-regen-canonical10-2026-04.md` |
-| 서버 | `language-detection-benchmark.md` |
+| 서버 | `language-detection-benchmark.md` · [NER API 기능·부하 테스트](ner-api-functional-load-test.md) |
 
 **언어마다 벌 수가 다르다.** JA 는 넷(요약·히스토리·진단·스펙), VI 는 셋(스펙
 없는 진단 대신 silver 품질), KO 는 둘, EN 은 하나다. 나뉜 이유는 측정을 몇 번
