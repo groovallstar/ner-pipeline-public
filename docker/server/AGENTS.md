@@ -14,7 +14,13 @@
 - 원격 번역은 컨테이너에서 `host.docker.internal`을 통해 호스트 서비스를 호출한다.
 - `/health`가 `status: "ok"`를 반환해야 준비 완료이다. 포트 바인딩만으로
   모델 준비를 판단하지 않는다.
-
+- 프로젝트·컨테이너·게시 포트는 compose가 해석한 값만 쓴다. 스크립트는 `.env`를
+  따로 읽지 않고 `-p`도 만들어 넘기지 않으며, 필요한 값은 `resolve.sh`를 통해
+  compose에 묻는다. 푸는 곳이 둘이면 안내한 주소와 실제 대상이 갈린다.
+- 프로젝트 이름은 `COMPOSE_PROJECT_NAME`이고 기본값은 `docker-compose.yml`의
+  `name:`이다. 셸이 `.env`를 이기며, `stop.sh`에 인자를 주면 그 프로젝트가 이긴다.
+- `logs.sh`는 인자가 없으면 컨테이너 이름이 아니라 compose 서비스 이름으로 붙는다.
+  컨테이너 이름을 바꿔도 대상이 어긋나지 않는다.
 - `stop.sh`는 down의 stderr와 실패 코드를 보존한다. `start.sh`는 사전 down이
   실패하면 그 코드를 반환하고 up을 실행하지 않는다.
 
@@ -27,10 +33,12 @@
 
 ## 검증
 
+- 각 셸 파일에 `bash -n`을 개별 실행한다.
 - 실패 전파는 `uv run pytest tests/docker/test_lifecycle_failures.py -q`로
   검증한다. Docker CLI 대역을 사용하므로 실제 서비스를 중지하거나 기동하지 않는다.
-
-- `bash -n docker/server/start.sh docker/server/stop.sh docker/server/logs.sh`
+- 스크립트 계약 변경은 `uv run pytest tests/server/test_lifecycle_scripts.py -q`로
+  검증한다. Docker 데몬 없이 돌고, docker CLI가 있으면 실제 compose 파일의 해석
+  우선순위까지 함께 본다.
 - 기동 시 선택한 compose 프로젝트와 컨테이너의 실제 게시 포트를 확인하고,
   해당 주소의 `/health` 응답과 컨테이너 health 상태를 함께 확인한다. 기본 포트
   8008이나 현재 셸 변수만으로 `.env`가 반영된 실행 대상을 추정하지 않는다.

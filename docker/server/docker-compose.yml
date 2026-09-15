@@ -1,6 +1,11 @@
 # ja·ko·vi·en NER REST API 추론 서버 — 단일 GPU, 호스트 /data 모델 마운트.
 # 라이프사이클은 start.sh/stop.sh/logs.sh, 설정 표면은 .env.example 참조.
 # compose 는 같은 디렉토리의 .env 를 자동 로드한다.
+#
+# 프로젝트 이름의 기본값은 아래 name: 이다. .env 나 셸의 COMPOSE_PROJECT_NAME
+# 이 있으면 그쪽이 이긴다 — compose 가 직접 아는 키라 스크립트가 -p 로 날라줄
+# 필요가 없고, 그래서 스크립트와 compose 가 다른 프로젝트를 고를 수 없다.
+name: ner-server
 services:
   ner-server:
     image: ${NER_SERVER_IMAGE:-ner-server:0.1.0}

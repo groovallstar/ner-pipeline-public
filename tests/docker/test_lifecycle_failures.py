@@ -94,9 +94,15 @@ def test_server_stop_reports_success(run_script, args, project):
     proc, calls = run_script('server/stop.sh', *args)
     assert proc.returncode == 0, proc.stderr
     assert f'Stopped: {project}' in proc.stdout
-    assert calls == [
-        ['compose', '-p', project, '-f', 'docker-compose.yml', 'down'],
-    ]
+    if args:
+        assert calls == [
+            ['compose', '-p', project, '-f', 'docker-compose.yml', 'down'],
+        ]
+    else:
+        assert calls == [
+            ['compose', '-f', 'docker-compose.yml', 'config', '--format', 'json'],
+            ['compose', '-f', 'docker-compose.yml', 'down'],
+        ]
 
 
 @pytest.mark.parametrize('args,build', [((), True), (('--no-build',), False)])
