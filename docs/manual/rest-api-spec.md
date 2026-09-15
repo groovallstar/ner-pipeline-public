@@ -3,7 +3,8 @@
 > **이 문서가 하는 일**: `src/server/`가 제공하는 ja·ko·vi·en NER 추론 REST API의
 > 계약(엔드포인트·요청/응답 스키마·상태 코드·에러·설정)을 한 곳에 고정한다.
 > **대상 코드**: `src/server/` (`app.py`·`config.py`·`inference.py`·
-> `detect.py`·`concurrency.py`·`chunking.py`)
+> `detect.py`·`concurrency.py`·`chunking.py`·`limits.py`·`request_log.py`·
+> `__main__.py`). `translate.py`는 별도 웹 데모 번역 기능을 담당한다.
 > **소비자**: 내부망 별도 프로세스 클라이언트(레퍼런스: `server.scripts.
 > example_client`). 배포는 `docker/server/`.
 
@@ -98,13 +99,24 @@ bash src/server/scripts/run_local.sh --port 9000   # 로컬 GPU 0 고정 기동
 ### 요청
 
 `Content-Type: application/json`. 본문은 단일과 배치를 겸한다 — `text`와
-`texts` 중 **정확히 하나**를 넣는다(둘 다 또는 둘 다 아님 → 400).
+`texts` 중 **`null`이 아닌 값을 정확히 하나** 넣는다. 생략과 `null`은
+값이 없는 것으로 취급한다. 둘 다 값이 없거나 둘 다 `null`이 아니면 400이다.
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `text` | string | 택일 | 단일 텍스트. `texts`와 상호배타 |
 | `texts` | string[] | 택일 | 배치 텍스트. `text`와 상호배타 |
 | `lang` | string | 선택 | `ja`\|`ko`\|`vi`\|`en`. 생략 시 텍스트별 자동 감지. 지원 외 값 → 400 |
+
+- `{"text":""}`는 유효하며, 언어 자동 감지 시
+  `{"lang":"unsupported","entities":[]}`를 200으로 반환한다.
+- `{"texts":[]}`는 `{"results":[]}`를 200으로 반환한다.
+- `{"text":"","texts":null}`은 유효하지만 `{"text":"","texts":[]}`는
+  택일 위반으로 400이다.
+- `lang: null`은 생략과 같이 자동 감지한다. 언어 코드는 대소문자를 구분하며,
+  `lang: "JA"`와 `lang: ""`는 400이다.
+- 알 수 없는 필드는 무시한다. 필수 택일 조건과 알려진 필드 검증은 유지된다.
+- 깨진 JSON과 `Content-Type: text/plain`으로 보낸 본문은 422이다.
 
 신뢰도 임계값은 모델이 임계값 파일을 로드한 경우 **자동 적용**된다(요청
 파라미터 없음). 임계값 파일이 없는 배포·언어는 raw span을 그대로 반환한다.
@@ -258,6 +270,10 @@ vi-변별 결합부호(horn·hook-above·dot-below) 또는 `đ` → `vi`. 셋의
 | **429** | 대기 큐 초과 또는 세마포어 타임아웃 | `queue full (>= 32 waiting)` / `acquire timed out (10.0s)` |
 | **500** | 미처리 서버 오류(추론 예외 등) | `internal server error` |
 | **503** | 요청 언어 모델이 미로드 | `model for lang 'vi' is not loaded` |
+
+OpenAPI의 `POST /v1/ner`에는 400·401·413·422·429·500·503을
+`ErrorResponse`로 선언한다. 404·405는 경로·메서드 불일치로 발생하는 공통
+라우팅 오류이며, OpenAPI의 API 설명과 위 표에서 설명한다.
 
 `unsupported` 입력(자동 감지)은 에러가 아니라 **200 + 빈 결과**임에 유의
 (위 §4). 모든 에러는 위 봉투 형식으로 통일된다 — Pydantic 스키마 위반(`422`)·
@@ -503,13 +519,65 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
   실모델을 로드하고 서버를 기동한다. 실행 전에 모델·GPU·번역 설정을 확인한다.
 - **소비자 예제·자기검증**: `uv run python -m server.scripts.example_client
   --base-url http://localhost:8008`은 단일·배치·미지원·계약 에러를 검사한다.
-  429 검사는 동시 부하를 발생시키고 서버 설정에 의존하므로 공유 서버의 일반
-  준비성 검사로 무조건 실행하지 않는다. 주소는 실제 대상에 맞게 지정한다.
+  기본 실행에는 429 부하 검사가 없다. `--overload`를 추가할 때만 최대 64개
+  작업 스레드로 총 200건을 보내며, 429가 한 번도 없으면 검사 실패로 종료한다.
+  이 검사는 서버 설정과 부하에 의존하므로 공유 서버의 일반 준비성 검사에서는
+  옵션을 지정하지 않는다. 주소는 실제 대상에 맞게 지정한다.
 - **실서버 pytest**: `uv run pytest tests/server/test_live_server.py -q -rs`는
   현재 설정으로 서버를 기동해 준비성·NER을 확인하고 기동 로그를 보관한다.
   번역 흐름까지 검사하려면 backend를 준비하고 `NER_SERVER_TEST_LIVE_TRANSLATE=1`을
   명시한다. 세부 조건과 한계는 [번역 테스트 맵](web-demo-translation.md#7-테스트-맵)을
   따른다.
+
+### API 계약 정합성 보완 작업 기록
+
+- 문제: 예제의 기본 실행이 부하 검사를 포함하고, OpenAPI 오류 선언과
+  빈 값 처리 설명이 실제 동작을 충분히 표현하지 못한다.
+- 목표·성공 기준: 기본 데모는 부하 요청을 보내지 않으며 `--overload`로만
+  부하 검사를 실행한다. OpenAPI에 400·401·413·500·503의 공통 오류 스키마를
+  추가하고 404·405는 공통 라우팅 오류로 설명한다. 빈 값·null·추가 필드·본문
+  검증 계약과 대상 코드 목록을 명세·가이드·OpenAPI 설명에 일치시킨다.
+- 승인·결정: 대화에서 제시한 수정안에 대한 작업 진행 승인을 기준으로 한다.
+  기존 기본 부하 검사를 선택 실행으로 바꾸는 이유는 공유 서버의 일반 검사에서
+  의도하지 않은 부하를 방지하기 위해서다. 요청 처리와 canonical 스키마는
+  유지하며, 라이브러리 경고 억제는 재현 후 별도 검토로 미룬다.
+- 브랜치: `feat/rest-api-contract-alignment`, 분기 기준과 PR 대상은
+  `develop`이다. 생성 직전 작업 공간은 깨끗하고 `git fetch origin develop`
+  후 로컬·원격 develop의 차이는 0/0이다. 갱신된 `origin/develop`에서
+  분기하며 별도 worktree와 브랜치 예외는 없다.
+- 구현 순서: 예제 기본·옵션 실행 및 OpenAPI 선언의 실패 테스트를 확인한 뒤
+  최소 구현을 적용한다. 빈 값 처리 회귀 테스트와 명세·연동 가이드·서버 구현
+  맵을 갱신하고 모델 없는 서버 검사, Ruff, CLI help, diff 검사와 리뷰를 한다.
+- 검증 결과:
+  - 변경 전 `uv run pytest tests/server/test_example_client.py
+    tests/server/test_api.py -q`에서 기본 부하 실행·옵션 부재·오류 선언 누락에
+    해당하는 8건이 실패했다. 구현 후 같은 명령은 69건이 통과했다.
+  - `uv run pytest tests/server -q -rs
+    --ignore=tests/server/test_inference_integration.py
+    --ignore=tests/server/test_live_server.py`에서 225건이 통과했다.
+    Starlette TestClient의 httpx 사용 중단 예정 경고가 1건 발생했다.
+  - `uv run ruff check src/server tests/server`,
+    `uv run python -m server.scripts.example_client --help`,
+    `uv run python -m server --help`, `git diff --check`가 통과했다.
+  - canonical 스키마 갱신은 필요하지 않으며 서버 구현 맵을 갱신했다.
+  - 공유 서버 부하 검사와 실모델·live 검사는 실행하지 않았다. 옵션 실행은
+    HTTP 전송 대역으로 검증했으며 실제 배포의 429 발생을 보장하지 않는다.
+- 리뷰: Superpowers `requesting-code-review` 절차의 리뷰 서브에이전트가
+  최종 7개 파일 변경을 읽기 전용으로 검토했다. Critical·Important·Minor
+  지적이 없으며 병합 가능으로 평가했다. 테스트와 실서버 검증을 대신하지 않는다.
+- 기록 범위: 원격 이슈에는 기록하지 않고 이 명세에서 관리한다.
+- PR 준비 결정: 작업 중 기존 브랜치에 별도 위키 커밋 `36ec31f`가 추가되어,
+  이를 보존한 채 API 변경만 `feat/rest-api-contract-alignment-pr`로 옮긴다.
+  새 브랜치는 fetch한 `origin/develop`에서 분기하고 PR 대상도 `develop`이다.
+  생성 직전 현재 브랜치는 `feat/rest-api-contract-alignment`이며 미커밋 변경은
+  이 작업의 7개 파일뿐이다. 위키 커밋은 이번 PR 범위에서 제외한다.
+  PR 생성 전에는 대상 브랜치를 다시 fetch하고 포함 커밋과 diff 범위를 확인한다.
+  서버 테스트 225건·Ruff·diff 검사는 커밋 직전에 다시 통과했다.
+- PR 직전 검사 결과: `git fetch origin develop` 후 포함 커밋은 이 작업의
+  `fix: API 계약 문서와 예제 부하 검사를 정합화한다` 1개이며,
+  `git diff --stat origin/develop...HEAD`의 범위는 코드·테스트·문서 7개 파일이다.
+  `docs/wiki`의 커밋 차이는 없다. head는 `feat/rest-api-contract-alignment-pr`,
+  base는 `develop`으로 명시한다. 브랜치 접두사·분기 기준·PR 대상의 예외는 없다.
 
 ---
 

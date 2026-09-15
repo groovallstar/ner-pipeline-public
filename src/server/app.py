@@ -110,7 +110,7 @@ class ErrorBody(BaseModel):
 class ErrorResponse(BaseModel):
     """서버가 판정하는 모든 에러의 공통 봉투(`_error` 가 내는 형태).
 
-    OpenAPI 의 422 선언을 이 모델로 덮기 위해 존재한다 — 선언을 안 덮으면
+    OpenAPI 오류 응답을 이 모델로 선언한다. 422 선언을 안 덮으면
     FastAPI 기본 `HTTPValidationError`(`{"detail": [...]}`)가 남아, 봉투로
     통일된 실제 응답과 기계 계약이 어긋난다.
     """
@@ -148,8 +148,13 @@ _NER_DESCRIPTION = (
     '일본어(`ja`)·한국어(`ko`)·베트남어(`vi`)·영어(`en`) 텍스트에서 '
     '개체명(인물·장소·조직 등)과 그 위치를 추출합니다.\n\n'
     '**요청** — `text`(단일 문장) 또는 `texts`(여러 문장 배치) 중 하나를 '
-    '보냅니다. 둘 다 넣거나 둘 다 비우면 400 입니다. `lang` 은 선택이며, '
-    '생략하면 자동 감지합니다(`ja`·`ko`·`vi`·`en` 외 값은 400).\n\n'
+    '보냅니다. `null`이 아닌 값이 정확히 하나 있어야 하며, 둘 다 생략하거나 '
+    '`null`이면 400입니다. 둘 다 `null`이 아닌 경우도 400입니다. '
+    '`text: ""`는 허용되며 자동 감지 시 `unsupported`와 빈 개체 목록을, '
+    '`texts: []`는 빈 `results`를 반환합니다. 알 수 없는 필드는 무시합니다. '
+    '`lang`은 생략하거나 `null`이면 자동 감지합니다. 대소문자를 구분하며 '
+    '`ja`·`ko`·`vi`·`en` 외 값(`JA`나 빈 문자열 포함)은 400입니다. '
+    '깨진 JSON이나 `Content-Type: text/plain` 본문은 422입니다.\n\n'
     '**응답** — 개체마다 `label`(종류), `start_char`·`end_char`(원문 글자 '
     '위치, 시작 포함·끝 제외), `text`(해당 글자)를 돌려줍니다. 배치 응답 '
     '`results` 는 입력 순서와 1:1 입니다.\n\n'
@@ -211,6 +216,9 @@ def create_app(registry, config: Optional[ServerConfig] = None,
     # 숨긴다(연동 노이즈 제거). 스키마는 openapi.json·엔드포인트엔 그대로 남는다.
     app = FastAPI(
         title='NER API', version='1',
+        description=('공통 라우팅 오류도 `{error: {status, message}}` 형식입니다. '
+                     '존재하지 않는 경로는 404, 지원하지 않는 메서드는 405이며 '
+                     '405의 `Allow` 헤더로 허용 메서드를 안내합니다.'),
         swagger_ui_parameters={'defaultModelsExpandDepth': -1})
     # 라우팅·인증보다 앞서 바디 바이트를 bound — 전송 계층 메모리 고갈 가드.
     app.add_middleware(BodySizeLimitMiddleware,
@@ -295,6 +303,16 @@ def create_app(registry, config: Optional[ServerConfig] = None,
               description=_NER_DESCRIPTION,
               response_model=Union[SingleResponse, BatchResponse],
               responses={
+                  400: {'model': ErrorResponse,
+                        'description': 'text/texts 택일 위반 또는 지원 외 lang'},
+                  401: {'model': ErrorResponse,
+                        'description': 'API 키 설정 시 키 누락 또는 불일치'},
+                  413: {'model': ErrorResponse,
+                        'description': '요청 바디·텍스트·배치 크기 한도 초과'},
+                  500: {'model': ErrorResponse,
+                        'description': '미처리 서버 내부 오류'},
+                  503: {'model': ErrorResponse,
+                        'description': '요청 언어 모델 미준비'},
                   422: {'model': ErrorResponse,
                         'description': 'JSON 스키마 검증 실패'},
                   429: {

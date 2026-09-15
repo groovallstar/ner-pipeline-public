@@ -6,6 +6,7 @@ lang 에코·감지·에러·인증·헬스)만 검증한다.
 
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
 from server.app import create_app
@@ -240,6 +241,54 @@ def test_openapi_422_declares_error_envelope():
     actual = client.post('/v1/ner', json={'texts': 5})
     assert actual.status_code == 422
     assert set(actual.json()['error']) == declared
+
+
+@pytest.mark.parametrize('status', [400, 401, 413, 422, 429, 500, 503])
+def test_openapi_declares_ner_error_responses(status):
+    """NER에서 반환하는 오류는 공통 오류 봉투로 선언한다."""
+    spec = _client().get('/openapi.json').json()
+    response = spec['paths']['/v1/ner']['post']['responses'][str(status)]
+    assert response['content']['application/json']['schema'] == {
+        '$ref': '#/components/schemas/ErrorResponse'}
+
+
+@pytest.mark.parametrize(('body', 'status', 'expected'), [
+    ({'text': ''}, 200, {'lang': 'unsupported', 'entities': []}),
+    ({'texts': []}, 200, {'results': []}),
+    ({'text': '', 'texts': None}, 200,
+     {'lang': 'unsupported', 'entities': []}),
+    ({'text': None, 'texts': []}, 200, {'results': []}),
+    ({'text': '', 'lang': None}, 200,
+     {'lang': 'unsupported', 'entities': []}),
+    ({'text': '', 'extra': True}, 200,
+     {'lang': 'unsupported', 'entities': []}),
+    ({'text': None, 'texts': None}, 400, None),
+    ({'text': None}, 400, None),
+    ({'text': '', 'texts': []}, 400, None),
+    ({'text': '', 'lang': 'JA'}, 400, None),
+    ({'text': '', 'lang': ''}, 400, None),
+])
+def test_request_empty_null_and_extra_fields(body, status, expected):
+    """빈 값·null·추가 필드의 기존 요청 계약을 보존한다."""
+    response = _client().post('/v1/ner', json=body)
+    assert response.status_code == status
+    if expected is not None:
+        assert response.json() == expected
+    else:
+        assert response.json()['error']['status'] == status
+
+
+@pytest.mark.parametrize(('content', 'content_type'), [
+    ('{', 'application/json'),
+    ('{"text":""}', 'text/plain'),
+])
+def test_invalid_body_returns_validation_envelope(content, content_type):
+    """깨진 JSON과 text/plain 본문은 422 오류 봉투를 반환한다."""
+    response = _client().post('/v1/ner', content=content,
+                              headers={'Content-Type': content_type})
+    assert response.status_code == 422
+    assert response.json() == {'error': {
+        'status': 422, 'message': 'request validation failed (1 error(s))'}}
 
 
 def test_max_batch_413():
