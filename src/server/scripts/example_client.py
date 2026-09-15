@@ -2,13 +2,14 @@
 
 내부망 별도 프로세스가 서버를 어떻게 호출하는지 보여주는 최소 레퍼런스다.
 `NERClient` 로 단일·배치·자동감지를 호출하고, 데모는 정상 경로와 계약 에러
-(400 택일 위반·413 크기 초과·429 과부하)·미지원(unsupported)을 한 번씩 호출해
+(400 택일 위반·413 크기 초과)·미지원(unsupported)을 한 번씩 호출해
 응답을 출력하고 기대 결과를 검증한다 — 통과 시 0, 하나라도 어긋나면 1 로
 종료한다(실서버 대상 스모크 겸 소비자 레퍼런스).
+429 부하 검사는 `--overload`를 지정했을 때만 실행한다.
 
 사용:
-    python -m server.scripts.example_client \\
-        --base-url http://localhost:8008 [--api-key KEY]
+    uv run python -m server.scripts.example_client \\
+        --base-url http://localhost:8008 [--api-key KEY] [--overload]
 """
 
 import argparse
@@ -89,8 +90,9 @@ def _check(desc: str, ok: bool, detail: str = '') -> bool:
     return ok
 
 
-def run_demo(client: NERClient, max_chars: int = 20000) -> int:
-    """정상·미지원·계약 에러 경로를 한 번씩 호출·검증(0=PASS, 1=FAIL)."""
+def run_demo(client: NERClient, max_chars: int = 20000,
+             *, overload: bool = False) -> int:
+    """일반 계약을 검사하고 overload 지정 시 부하도 검사한다(0=PASS)."""
     ok = True
 
     # 정상: 단일 ja 자동감지 → PER/LOC
@@ -129,20 +131,21 @@ def run_demo(client: NERClient, max_chars: int = 20000) -> int:
     ok &= _check('text exceeds max_chars -> 413', r.status_code == 413,
                  str(r.status_code))
 
-    # 에러 429: 동시 과부하. 짧은 텍스트를 동시 대량 발사해 in-flight+큐
-    # 초과를 유발한다. 기본 설정은 추론 8건 + 대기 32건이다. 서버 설정과
-    # 부하 상황에 따라 429가 없을 수 있으므로 실서버 검증 결과를 확인한다.
-    def _hit(_: int) -> int:
-        try:
-            return client.ner_single('東京', lang='ja').status_code
-        except requests.RequestException:
-            return -1
+    if overload:
+        # 에러 429: 동시 과부하. 짧은 텍스트를 동시 대량 발사해 in-flight+큐
+        # 초과를 유발한다. 기본 설정은 추론 8건 + 대기 32건이다. 서버 설정과
+        # 부하 상황에 따라 429가 없을 수 있으므로 실서버 검증 결과를 확인한다.
+        def _hit(_: int) -> int:
+            try:
+                return client.ner_single('東京', lang='ja').status_code
+            except requests.RequestException:
+                return -1
 
-    with ThreadPoolExecutor(max_workers=64) as ex:
-        codes = list(ex.map(_hit, range(200)))
-    ok &= _check('concurrent overload -> 429',
-                 429 in codes,
-                 f'200:{codes.count(200)} 429:{codes.count(429)}')
+        with ThreadPoolExecutor(max_workers=64) as ex:
+            codes = list(ex.map(_hit, range(200)))
+        ok &= _check('concurrent overload -> 429',
+                     429 in codes,
+                     f'200:{codes.count(200)} 429:{codes.count(429)}')
 
     return 0 if ok else 1
 
@@ -156,11 +159,14 @@ def main() -> None:
                    help='x-api-key header (if server auth is enabled)')
     p.add_argument('--max-chars', type=int, default=20000,
                    help='Server max_chars (for the 413 check)')
+    p.add_argument('--overload', action='store_true',
+                   help='Run the overload check: 200 requests with up to '
+                        '64 workers; adds load and requires a 429 response')
     args = p.parse_args()
 
     client = NERClient(args.base_url, api_key=args.api_key)
     print('health:', client.health())
-    code = run_demo(client, max_chars=args.max_chars)
+    code = run_demo(client, max_chars=args.max_chars, overload=args.overload)
     print('DEMO PASS' if code == 0 else 'DEMO FAIL')
     sys.exit(code)
 

@@ -5,7 +5,7 @@ import json
 import pytest
 import requests
 
-from server.scripts.example_client import NERClient
+from server.scripts.example_client import NERClient, main
 
 
 def _response(status, retry_after=None):
@@ -101,3 +101,44 @@ def test_negative_retry_limit_is_rejected():
     """음수 상한 때문에 요청 없이 종료되는 설정을 거절한다."""
     with pytest.raises(ValueError, match='max_retries'):
         NERClient(max_retries=-1)
+
+
+@pytest.mark.parametrize('overload_status', [None, 429, 200])
+def test_demo_overload_requires_cli_opt_in(monkeypatch, overload_status):
+    """기본 CLI는 일반 검사만 하고 옵션 실행만 부하 응답을 판정한다."""
+    bodies = []
+
+    def post(url, **kwargs):
+        body = kwargs['json']
+        bodies.append(body)
+        status = 200
+        if body == {'text': '東京', 'lang': 'ja'}:
+            status = overload_status or 200
+            result = {}
+        elif 'texts' in body:
+            result = {'results': [{'lang': lang}
+                                  for lang in ('ja', 'ko', 'vi', 'en')]}
+        elif not body:
+            status, result = 400, {}
+        elif len(body['text']) > 20000:
+            status, result = 413, {}
+        elif body['text'] == '東京都千代田区':
+            result = {'lang': 'unsupported', 'entities': []}
+        else:
+            result = {'lang': 'ja', 'entities': [{'label': 'PER'}]}
+        response = _response(status)
+        response._content = json.dumps(result).encode()
+        return response
+
+    monkeypatch.setattr('server.scripts.example_client.requests.post', post)
+    monkeypatch.setattr(NERClient, 'health', lambda self: {'status': 'ok'})
+    argv = ['example_client']
+    if overload_status is not None:
+        argv.append('--overload')
+    monkeypatch.setattr('sys.argv', argv)
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == (1 if overload_status == 200 else 0)
+    overload = [b for b in bodies if b == {'text': '東京', 'lang': 'ja'}]
+    assert len(overload) == (0 if overload_status is None else 200)
+    assert len(bodies) - len(overload) == 5
