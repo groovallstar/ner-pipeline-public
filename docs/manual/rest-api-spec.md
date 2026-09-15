@@ -393,7 +393,8 @@ curl -H 'X-API-Key: <secret>' -H 'Content-Type: application/json' \
 
 컨테이너의 `/tmp`는 컨테이너-로컬이라 재시작하면 사라진다. 호스트에 보존하려면
 볼륨 마운트 경로로 `NER_SERVER_LOG_FILE`을 바꾼다(스트리밍 로그 자체는
-`docker/server/logs.sh` = `docker logs`로도 본다).
+`docker/server/logs.sh`로도 본다. 인자가 없으면 Compose 서비스 로그를,
+컨테이너 이름을 인자로 주면 해당 컨테이너의 로그를 조회한다).
 
 ## 10. 엔티티 라벨 셋
 
