@@ -1,7 +1,7 @@
 # issue-262: EMAIL 주입 로컬파트 표면형 분포
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/262
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/286
 - 브랜치: `feat/issue-262-email-localpart-surface-distribution`
 - 승인일: 2026-09-10
 
