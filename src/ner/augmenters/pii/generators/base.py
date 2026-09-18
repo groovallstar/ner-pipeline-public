@@ -15,8 +15,6 @@ EMAIL_DOMAINS: list[str] = [
     'naver.com', 'daum.net', 'hanmail.net', 'kakao.com', 'nate.com',
 ]
 
-ALLOWED_EMAIL_SPECIALS = '.-_'
-
 # 로컬파트 형태별 목표 비율. 실제 이메일이 이름 두 토큰을 어떤 구분자로
 # 잇는지의 분포를 따른다. 근거와 축 설계는
 # `docs/manual/pipeline/2-augmentation.md` 의 EMAIL 로컬파트 절에 있다.

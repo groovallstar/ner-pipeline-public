@@ -26,7 +26,8 @@ KOREAN_GIVEN_NAMES = [
 
 # 이메일 로컬파트에 쓰는 로마자 이름. 로컬파트에는 ASCII 만 들어가므로 한글
 # 이름을 그대로 넣으면 전량 탈락해 무작위 글자만 남는다. 표기 이름 목록과
-# 같은 순서의 국어의 로마자 표기다.
+# 같은 순서의 관용 표기다(`lee`·`park`) — 로마자 표기법(`i`·`bak`)이 아니라
+# 실제 이메일·여권에 흔히 쓰는 철자를 따른다.
 EMAIL_FAMILY_NAMES = [
     'kim', 'lee', 'park', 'choi', 'jung', 'kang', 'cho', 'yoon',
     'jang', 'lim', 'han', 'oh', 'seo', 'shin', 'kwon', 'hwang',
