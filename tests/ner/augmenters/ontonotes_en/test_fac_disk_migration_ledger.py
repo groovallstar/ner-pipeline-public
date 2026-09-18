@@ -14,8 +14,9 @@
 남은 것은 둘이다. 원장 자체의 형태·개수 등식은 데이터 없이 돌고, 병합 산출물
 (`origin.jsonl`)의 후 지문은 gitignore 된 코퍼스를 나중에 조용히 편집하는 것을
 막는다 — 원장은 그대로인데 실물만 달라지면 그 어긋남이 여기서 붉어진다.
-마이그레이션 뒤 EMAIL 로컬파트 재작성이 병합본을 한 번 더 고쳤으므로, 실물은
-그 원장의 출력 지문과 대 보고 두 원장이 서로 이어지는지를 따로 본다.
+마이그레이션 뒤 EMAIL 로컬파트 재작성과 EMAIL 붙은 문맥 치환이 병합본을
+차례로 고쳤으므로, 실물은 마지막 원장의 출력 지문과 대 보고 원장끼리 서로
+이어지는지를 따로 본다.
 """
 import ast
 import hashlib
@@ -41,6 +42,13 @@ EMAIL_REWRITE_LEDGER_PATH = (
     / 'data' / 'email_localpart_rewrite_ledger.json'
 )
 EMAIL_REWRITE_RUN = 'ontonotes_en'
+
+# 그다음 단계. EMAIL 일부를 괄호·따옴표·`mailto:`·콜론 뒤로 붙였다. 디스크
+# 판본은 이 원장의 출력 지문과 맞는다.
+EMAIL_CONTEXT_LEDGER_PATH = (
+    _ROOT / 'src' / 'ner' / 'augmenters' / 'pii'
+    / 'data' / 'email_context_rewrite_ledger.json'
+)
 
 # 손댄 자리의 수 — 원장을 고치는 사람이 이 숫자도 손으로 고쳐야 한다.
 GOLDEN_MOVED = 274
@@ -68,6 +76,11 @@ def _ledger():
 
 def _email_rewrite_run():
     ledger = json.loads(EMAIL_REWRITE_LEDGER_PATH.read_text(encoding='utf-8'))
+    return ledger['runs'][EMAIL_REWRITE_RUN]
+
+
+def _email_context_run():
+    ledger = json.loads(EMAIL_CONTEXT_LEDGER_PATH.read_text(encoding='utf-8'))
     return ledger['runs'][EMAIL_REWRITE_RUN]
 
 
@@ -168,6 +181,13 @@ def test_the_email_rewrite_starts_from_the_after_fingerprint():
     assert run['input_sha256'] == _ledger()['after_sha256'][name]
 
 
+def test_the_email_context_rewrite_starts_from_the_local_part_rewrite():
+    """붙은 문맥 치환이 로컬파트 재작성 결과에서 출발한다 — 사슬의 다음 고리."""
+    run = _email_context_run()
+    assert run['corpus'] == _email_rewrite_run()['corpus']
+    assert run['input_sha256'] == _email_rewrite_run()['output_sha256']
+
+
 # ── 병합 산출물이 있어야 도는 검사 ──────────────────────────────────────
 
 @pytest.mark.skipif(
@@ -179,11 +199,11 @@ def test_the_merged_corpus_matches_the_last_recorded_fingerprint():
 
     학습이 읽는 파일이 이것 하나라(`classifier` 의 `--data`) 여기만 봉인해도
     gold 가 바뀌면 붉어진다. 주입 split 의 지문은 그 파일들이 디스크에서
-    내려가 대조할 상대가 없어졌다. 마지막 단계는 EMAIL 로컬파트 재작성이고,
-    그 입력이 FAC 후 지문이라는 것은 위 사슬 검사가 본다.
+    내려가 대조할 상대가 없어졌다. 마지막 단계는 EMAIL 붙은 문맥 치환이고,
+    그 앞 고리들이 이어진다는 것은 위 사슬 검사가 본다.
     """
     name = _ledger()['merged_name']
-    expected = _email_rewrite_run()['output_sha256']
+    expected = _email_context_run()['output_sha256']
     digest = hashlib.sha256((DATA_DIR / name).read_bytes()).hexdigest()
     assert digest == expected, (
         f'{name} 가 원장이 기록한 판본과 다르다. 코퍼스를 바꿨다면 원장을'
