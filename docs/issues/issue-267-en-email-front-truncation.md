@@ -1,7 +1,7 @@
 # issue-267: EN 문두 이메일 경계 잘림
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/267
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/288 (`develop` 대상. PR 전 검사: develop 은 분기 시점 f67c9e5 그대로, 포함 커밋 7개 모두 이 이슈 것, 예외 없음)
 - 브랜치: `feat/issue-267-en-email-front-truncation` (`origin/develop` f67c9e5 에서 분기, 예외 없음)
 - 승인일: 2026-09-18
 
