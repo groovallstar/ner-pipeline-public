@@ -35,11 +35,10 @@ import logging
 import os
 import shutil
 
-from transformers import AutoTokenizer
-
 from ner.classifier.data_utils import (
     dataset_fingerprint,
     load_jsonl,
+    load_tokenizer,
     split_train_valid_test,
 )
 
@@ -170,10 +169,9 @@ def build_model_dir(run_dir, out_dir, model_name, force):
         shutil.rmtree(model_dir)
     shutil.copytree(best_dir, model_dir)
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    except (TypeError, ValueError, OSError):
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    # 학습과 같은 로더로 연다. 바이트 BPE 의 앞 공백 설정이 여기서 저장돼
+    # 서버가 학습 때와 같은 토큰을 받는다.
+    tokenizer = load_tokenizer(model_name)
     tokenizer.save_pretrained(model_dir)
     # 토크나이저를 돌려주는 것은 카드가 *실제로 동봉된 것*을 적게 하려는
     # 것이다. 언어별 표를 따로 두면 백본을 바꿨을 때 카드만 옛말이 된다.

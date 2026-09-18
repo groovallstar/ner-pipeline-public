@@ -518,12 +518,13 @@ def run_inference(
         gold/pred span dict 형식: {'type', 'start', 'end', 'text'}
     """
     import torch
-    from transformers import AutoModelForTokenClassification, AutoTokenizer
+    from transformers import AutoModelForTokenClassification
 
     from ner.classifier.data_utils import (
         build_label_maps,
         encode_dataset,
         load_jsonl,
+        load_tokenizer,
         split_train_valid_test,
         validate_group_key,
     )
@@ -554,10 +555,7 @@ def run_inference(
             'not tokenizer). pass --tokenizer-name or the original HF '
             'model id (e.g., tohoku-nlp/bert-base-japanese-v3).'
         )
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
-    except (TypeError, ValueError, OSError):
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
+    tokenizer = load_tokenizer(tokenizer_name)
 
     target_features, target_offsets = encode_dataset(
         target_rows, tokenizer, label2id, lang, max_length

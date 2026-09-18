@@ -38,6 +38,7 @@ from ner.classifier.data_utils import (
     decode_bio_to_spans,
     encode_row,
     load_jsonl,
+    load_tokenizer,
 )
 from ner.metrics.span_metrics import compute_offset_span_f1
 
@@ -234,7 +235,11 @@ def main():
         raise SystemExit('Error: give --model-name or --model-dir')
 
     label2id, id2label = build_label_maps()
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_src, use_fast=True)
+    # 기반 모델 이름은 학습과 같은 로더로, 배포 패키지 디렉토리는 거기 저장된
+    # 설정 그대로 연다 — 옛 패키지를 새 설정으로 재면 학습 때와 다른 토큰이 된다.
+    tokenizer = (load_tokenizer(args.model_name) if args.model_name
+                 else AutoTokenizer.from_pretrained(args.model_dir,
+                                                    use_fast=True))
     rows = load_jsonl(args.data)
     if args.limit > 0:
         rows = rows[:args.limit]

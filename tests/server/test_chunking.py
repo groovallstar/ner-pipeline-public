@@ -6,7 +6,7 @@
 
 import pytest
 
-from ner.classifier.data_utils import build_label_maps, encode_row
+from ner.classifier.data_utils import build_label_maps, encode_row, load_tokenizer
 from server.chunking import _token_count, split_for_length
 
 
@@ -202,3 +202,11 @@ def test_phobert_chunks_fit_actual_encoding(monkeypatch):
         assert sum(full['attention_mask']) <= 8
         n = sum(full['attention_mask'])
         assert bounded['input_ids'][:n] == full['input_ids'][:n]
+
+
+def test_byte_level_count_matches_the_normalized_encoding():
+    """바이트 BPE 는 공백류를 접은 입력을 인코딩하므로 셈도 그 입력으로 한다."""
+    pytest.importorskip('transformers')
+    tok = load_tokenizer('roberta-base')
+    assert (_token_count('Contact:\r\n\talice@example.com', tok)
+            == _token_count('Contact: alice@example.com', tok))

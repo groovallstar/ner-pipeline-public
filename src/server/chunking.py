@@ -15,7 +15,12 @@ start/end 에 base_offset 을 더하면 원문 char offset 으로 정확히 복�
 import re
 from typing import List, Tuple
 
-from ner.classifier.data_utils import _is_phobert, _word_spans_vi
+from ner.classifier.data_utils import (
+    _is_phobert,
+    _word_spans_vi,
+    canonical_whitespace,
+    is_byte_level,
+)
 
 # 문장 경계: 마침표류·물음표·느낌표(전각 포함)와 개행. 경계 문자를 문장
 # 끝에 포함해 연속(tile)되게 매칭한다 → 청크 결합 시 원문 슬라이스 보존.
@@ -29,8 +34,13 @@ _NOT_SENTENCE_END_NEXT = '([{（［｛'
 
 
 def _token_count(text: str, tokenizer) -> int:
-    """tokenizer 로 special token 제외 토큰 수를 센다."""
+    """tokenizer 로 special token 제외 토큰 수를 센다.
+
+    바이트 BPE 는 인코딩이 공백류를 접은 텍스트를 넣으므로 셈도 그 텍스트로 한다.
+    """
     if getattr(tokenizer, 'is_fast', False):
+        if is_byte_level(tokenizer):
+            text = canonical_whitespace(text)[0]
         enc = tokenizer(text, add_special_tokens=False)
         return len(enc['input_ids'])
     if _is_phobert(tokenizer):
