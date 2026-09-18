@@ -152,7 +152,10 @@ ko·ja 목록은 표기 이름 목록과 같은 순서의 로마자 표기다.
 
 이미 만들어져 있는 코퍼스는 `ner.scripts.rewrite_email_localpart` 로 EMAIL
 span 의 로컬파트만 이 분포로 다시 만든다. 도메인·문맥·다른 라벨은 건드리지
-않고 길이 차이만큼 뒤따르는 엔티티 오프셋을 민다.
+않고 길이 차이만큼 뒤따르는 엔티티 오프셋을 민다. `data/` 는 gitignore 라, 네
+코퍼스를 치환한 입력·출력 지문과 seed 는
+`augmenters/pii/data/email_localpart_rewrite_ledger.json` 에 커밋해 둔다. EN 병합본
+지문 검사는 이 원장의 출력 지문과 디스크 판본을 대조한다.
 
 ### CLI
 
