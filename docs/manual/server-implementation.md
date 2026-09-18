@@ -126,8 +126,8 @@ curl -s localhost:8008/health   # {"status":"ok","langs":{...}}
 ## 추론 경로
 
 `encode_row`(data_utils, 토크나이저 capability 분기) → model logits →
-softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → canonical
-변환 → 임계값 로드 시 자동 적용(graceful — 파일 없으면 raw). 긴 입력은 chunk 분할, 배치 요청(`texts`)은
+softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → EMAIL 조각
+병합(`merge_email_fragments`) → canonical 변환 → 임계값 로드 시 자동 적용(graceful — 파일 없으면 raw). 긴 입력은 chunk 분할, 배치 요청(`texts`)은
 언어별로 묶어 전 chunk 를 `[N, max_length]` 한 forward 로 추론하고(B=1 이면
 단건과 동일) 글로벌 offset 으로 병합 — GPU 병렬로 장문/배치에서 가속된다.
 추론은 fp32 전용이라 단건·배치가 같은 커널을 타 배치화가 결과를 바꾸지 않고,
@@ -145,6 +145,12 @@ ASCII 마침표 경계 확장이나 겹치는 청크·재병합은 사용하지 
 기존 span과 신뢰도 평균에 포함하고 충돌 라벨은 제외한다. 이 규칙은 공용
 디코더에서 적용되므로 평가에도 동일하게 적용된다. 과거 디코더의 점수와 직접
 비교하지 않고 같은 디코더로 재평가해야 한다.
+
+디코드 뒤에는 공백 없이 이어진 EMAIL 조각을 한 span 으로 합친다. 서브워드 단위로
+라벨을 내는 모델은 주소 중간 서브워드 하나만 놓쳐도 주소를 조각으로 내고, 마스킹
+에서는 조각 사이 글자가 그대로 샌다. 사이에 공백이 있거나 합친 결과에 `@` 가 둘
+이상이면 합치지 않는다. 병합은 임계값보다 먼저 하며, 학습 평가도 같은 함수를 같은
+자리에서 부른다.
 
 NER 슬롯 획득 직후 연결 종료를 확인하여 이미 끊긴 요청의 추론을 생략한다.
 이 경우 499로 기록하고 슬롯을 반환한다. 실행 중인 추론을 중단하지 않는다.

@@ -15,6 +15,7 @@ from ner.classifier.data_utils import (
     decode_bio_to_spans,
     group_stats,
     mask_pii_in_features,
+    merge_email_fragments,
     split_holdout_deploy,
     split_kfold_stratified,
     split_train_valid_test,
@@ -156,6 +157,88 @@ def test_decode_mismatched_i_preserves_previous_entity():
         [(0, 3), (4, 7)], id2label)
     assert spans == [{'type': 'PER', 'start': 0, 'end': 3},
                      {'type': 'PHONE', 'start': 4, 'end': 7}]
+
+
+# ── EMAIL 조각 병합 ─────────────────────────────────────────────────────
+# 오프셋은 손으로 센다 — 구현이 쓰는 index 계산을 테스트가 되풀이하면
+# 같은 실수가 양쪽에 들어가 통과해 버린다.
+
+def test_merge_email_joins_fragments_split_by_an_o_subword():
+    """공백 없이 이어진 두 EMAIL 조각은 사이의 O 서브워드까지 한 주소다.
+
+    `al`·`ice`·`42@example.com` 에서 `ice` 만 O 로 떨어지면 디코더는 두
+    span 을 낸다. 이메일에는 공백이 없으므로 둘은 같은 주소의 조각이다.
+    """
+    text = 'to alice42@example.com.'
+    spans = [{'type': 'EMAIL', 'start': 3, 'end': 5},
+             {'type': 'EMAIL', 'start': 8, 'end': 22}]
+    assert merge_email_fragments(spans, text) == [
+        {'type': 'EMAIL', 'start': 3, 'end': 22}]
+
+
+def test_merge_email_joins_back_to_back_b_tags():
+    """같은 주소 안에서 B-EMAIL 이 두 번 나와 맞붙은 두 span 도 합친다."""
+    text = '(jdoe1987@gmail.com)'
+    spans = [{'type': 'EMAIL', 'start': 1, 'end': 2},
+             {'type': 'EMAIL', 'start': 2, 'end': 19}]
+    assert merge_email_fragments(spans, text) == [
+        {'type': 'EMAIL', 'start': 1, 'end': 19}]
+
+
+def test_merge_email_chains_more_than_two_fragments():
+    text = 'at emily.t88@yahoo.com today'
+    spans = [{'type': 'EMAIL', 'start': 3, 'end': 9},
+             {'type': 'EMAIL', 'start': 9, 'end': 10},
+             {'type': 'EMAIL', 'start': 12, 'end': 22}]
+    assert merge_email_fragments(spans, text) == [
+        {'type': 'EMAIL', 'start': 3, 'end': 22}]
+
+
+def test_merge_email_keeps_fragments_across_whitespace():
+    """사이에 공백이 있으면 다른 주소일 수 있어 합치지 않는다."""
+    text = 'mail bob @example.com'
+    spans = [{'type': 'EMAIL', 'start': 5, 'end': 8},
+             {'type': 'EMAIL', 'start': 9, 'end': 21}]
+    assert merge_email_fragments(spans, text) == spans
+
+
+def test_merge_email_keeps_a_packed_address_list_apart():
+    """쉼표로 붙여 쓴 주소 목록은 공백이 없어도 두 주소다 — `@` 가 둘이면 안 합친다."""
+    text = 'a@x.com,b@y.com'
+    spans = [{'type': 'EMAIL', 'start': 0, 'end': 7},
+             {'type': 'EMAIL', 'start': 8, 'end': 15}]
+    assert merge_email_fragments(spans, text) == spans
+
+
+def test_merge_email_leaves_other_types_alone():
+    """병합은 EMAIL 에만 건다. 붙어 있는 다른 타입 조각은 그대로다."""
+    text = 'SeoulTower'
+    spans = [{'type': 'LOC', 'start': 0, 'end': 5},
+             {'type': 'LOC', 'start': 5, 'end': 10}]
+    assert merge_email_fragments(spans, text) == spans
+
+
+def test_merge_email_does_not_swallow_an_entity_in_between():
+    """두 EMAIL 조각 사이에 다른 엔티티가 있으면 합치지 않는다."""
+    text = 'alice42@example.com'
+    spans = [{'type': 'EMAIL', 'start': 0, 'end': 2},
+             {'type': 'PER', 'start': 2, 'end': 5},
+             {'type': 'EMAIL', 'start': 5, 'end': 19}]
+    assert merge_email_fragments(spans, text) == spans
+
+
+def test_merge_email_scores_as_the_weakest_fragment():
+    """합친 span 의 score 는 조각 중 가장 낮은 값이다.
+
+    임계값은 span score 로 거른다. 평균을 내면 확신 없는 조각이 확신 있는
+    조각에 묻혀 임계값을 통과한다.
+    """
+    text = 'jdoe@gmail.com'
+    spans = [{'type': 'EMAIL', 'start': 0, 'end': 1, 'score': 0.6},
+             {'type': 'EMAIL', 'start': 1, 'end': 14, 'score': 0.9}]
+    assert merge_email_fragments(spans, text) == [
+        {'type': 'EMAIL', 'start': 0, 'end': 14, 'score': 0.6}]
+
 
 
 def test_split_train_valid_test_partition():
