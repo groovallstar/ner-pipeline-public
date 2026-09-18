@@ -24,6 +24,10 @@ VIETNAMESE_GIVEN_NAMES = [
     'Phuc', 'Kiet', 'Nhan', 'Trinh', 'My', 'Thuy', 'Tung', 'Giang',
 ]
 
+# 이메일 로컬파트에 쓰는 이름. 성조 부호 없는 목록이라 그대로 쓴다.
+EMAIL_GIVEN_NAMES = VIETNAMESE_GIVEN_NAMES
+EMAIL_FAMILY_NAMES = VIETNAMESE_FAMILY_NAMES
+
 VIETNAMESE_FAMILY_NAMES_DIA = [
     'Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Phan', 'Vũ', 'Võ',
     'Đặng', 'Bùi', 'Đỗ', 'Hồ', 'Ngô', 'Dương', 'Đinh', 'Lý', 'Trương',

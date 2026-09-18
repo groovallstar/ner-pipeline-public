@@ -6,6 +6,10 @@ start/end 에 base_offset 을 더하면 원문 char offset 으로 정확히 복�
 
 토큰 한도 안에 드는 텍스트는 통째로 한 청크 `(text, 0)` 로 둬, 정상 입력의
 추론 동작이 분할 없이 그대로 유지되도록 한다.
+
+**엔티티가 경계를 가로지르지 않는 것은 문장 단위로 자를 때만 보장된다.**
+한 문장이 혼자 한도를 넘으면 단어 경계로 강제 분할하므로 그 안의 엔티티는
+잘릴 수 있다. 한도보다 긴 문장을 모델에 넣을 방법이 없어 남는 한계다.
 """
 
 import re
@@ -17,6 +21,11 @@ from ner.classifier.data_utils import _is_phobert, _word_spans_vi
 # 끝에 포함해 연속(tile)되게 매칭한다 → 청크 결합 시 원문 슬라이스 보존.
 _SENT_RE = re.compile(r'[^。．！？!?\n]*(?:[。．！？!?\n]+|$)')
 _WORD_RE = re.compile(r'\S+\s*')
+
+# 경계 문자 뒤에 이것이 오면 문장이 안 끝난 것으로 본다. 작품 제목 같은
+# 표면이 `Do You Know ? ( The Ping Pong Song )` 처럼 물음표를 품는데, 그
+# 자리를 문장 끝으로 보면 엔티티 한가운데에 청크 경계가 생겨 회수에 실패한다.
+_NOT_SENTENCE_END_NEXT = '([{（［｛'
 
 
 def _token_count(text: str, tokenizer) -> int:
@@ -30,14 +39,38 @@ def _token_count(text: str, tokenizer) -> int:
     return len(tokenizer.tokenize(text))
 
 
+def _ends_sentence(text: str, end: int) -> bool:
+    """`end` 위치의 경계가 실제 문장 끝인지 — 뒤따르는 글자로 판단한다."""
+    nxt = text[end:].lstrip()[:1]
+    if not nxt:
+        return True
+    return not (nxt in _NOT_SENTENCE_END_NEXT or nxt.islower())
+
+
 def _sentences(text: str) -> List[Tuple[str, int]]:
-    """(문장, 원문 시작 offset) 리스트 — 공백뿐인 조각은 제외."""
+    """(문장, 원문 시작 offset) 리스트 — 공백뿐인 조각은 제외.
+
+    경계 문자가 나와도 뒤따르는 글자가 문장 시작으로 안 보이면 다음 조각과
+    이어 붙인다. 이어 붙인 조각도 원문의 연속 슬라이스라 offset 은 그대로다.
+    """
     out: List[Tuple[str, int]] = []
+    pending = ''
+    pending_start = 0
     for m in _SENT_RE.finditer(text):
         seg = m.group()
         if not seg or not seg.strip():
             continue
-        out.append((seg, m.start()))
+        start = m.start()
+        if pending:
+            seg = text[pending_start:m.end()]
+            start = pending_start
+            pending = ''
+        if not _ends_sentence(text, m.end()):
+            pending, pending_start = seg, start
+            continue
+        out.append((seg, start))
+    if pending:
+        out.append((pending, pending_start))
     return out
 
 

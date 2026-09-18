@@ -381,7 +381,32 @@ results/classifier/{ja,vi,ko,en}/
 ### JA 출하 (deploy)
 
 학습은 CLI(`python -m ner.classifier`)에 흡수하고 배포 추론만 분리한다
-(별도 `train_*` 스크립트 없음).
+(별도 `train_*` 스크립트 없음). issue-262 재출하에 쓴 조건은 다음과 같다 —
+`--group-key id` 는 그 뒤 들어온 누출 가드가 행 단위 분할을 거부하기 때문이고,
+임계값은 모델 종속이라 같은 run 에서 다시 fit 한다.
+
+```bash
+python -m ner.classifier --lang ja --group-key id --seed 1 --train-seed 1 \
+    --valid-ratio 0.1 --test-ratio 0.019 \
+    --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
+    --fit-threshold --threshold-target 0.93 \
+    --output-dir results/classifier/ja/<run>
+python src/ner/scripts/build_ner_prod.py --run-dir results/classifier/ja/<run> --lang ja
+cp results/classifier/ja/<run>/thresholds.json /data/ner/ja/thresholds.json
+```
+
+포장 스크립트는 `thresholds.json` 을 옮기지 않는다. 옮기지 않으면 옛 임계값이
+번들에 남아 새 모델에 걸리므로 위처럼 손으로 덮어쓴다.
+
+VI 는 백본이 CLI 기본값과 다르다. `--model-name` 을 빠뜨리면 `xlm-roberta-base` 로
+학습돼 배포 백본과 어긋난다.
+
+```bash
+python -m ner.classifier --lang vi --model-name vinai/phobert-base-v2 \
+    --group-key orig --seed 42 --train-seed 42 --precision fp16 \
+    --output-dir results/classifier/vi/<run>
+python src/ner/scripts/build_ner_prod.py --run-dir results/classifier/vi/<run> --lang vi
+```
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
@@ -425,11 +450,13 @@ python src/ner/scripts/build_ner_prod.py \
 대조해 어긋나면 중단한다. 실제로 학습에 쓰이지 않은 분할을 배포 데이터로
 적어 두는 것이 여기서 가능한 가장 조용한 실패이기 때문이다.
 
-**test 홀드아웃이 JA·VI 의 100문장이 아닌 이유** — EN gold 는 EVT 보유 행이
+**test 홀드아웃이 JA 의 100문장이 아닌 이유** — EN gold 는 EVT 보유 행이
 856(1.1%)·PROD 가 1,754(2.3%)라, 100문장을 떼면 두 타입이 각각 한두 행만
-들어와 측정이 성립하지 않는다. JA·VI 는 원본이 작아 그 크기가 불가피했지만
+들어와 측정이 성립하지 않는다. JA 는 원본이 5,270행이라 그 크기가 불가피하지만
 EN 은 76,378행이라 벤치마크와 같은 `test_ratio=0.1`(7,637행)을 그대로 쓴다.
-폴더 구조만 동형이고 홀드아웃 크기는 다르다.
+폴더 구조만 동형이고 홀드아웃 크기는 다르다. VI 도 issue-262 재출하에서
+`test_ratio=0.1`(3,774행)로 옮겼다 — 옛 101행 홀드아웃은 엔티티 보유·문맥어
+3개 이상으로 고른 것인데 그 선별 인자가 지금 CLI 에 없어 재현되지 않는다.
 
 **재현 대조를 하지 않는 이유** — 처음에는 배포런이 같은 시드의 벤치마크 run 을
 재현할 것으로 보고 수치 일치를 검사에 넣었으나, 그 전제가 거짓이다. best 에포크
@@ -463,13 +490,18 @@ KO 도 EN 과 같은 두 단계다 — 학습은 CLI, 포장은 그 산출물을
 ```bash
 # 1) 학습 — 원장 k-fold 와 같은 group-key
 python -m ner.classifier --lang ko --group-key id \
-    --seed 42 --train-seed 42 \
-    --output-dir results/classifier/ko/deploy-trainseed42
+    --seed 42 --train-seed 44 \
+    --output-dir results/classifier/ko/issue262-email-localpart-trainseed44
 
 # 2) 포장 — /data/ner/ko 로
 python src/ner/scripts/build_ner_prod.py \
-    --run-dir results/classifier/ko/deploy-trainseed42 --lang ko
+    --run-dir results/classifier/ko/issue262-email-localpart-trainseed44 --lang ko
 ```
+
+**`--train-seed` 를 valid 로 고르는 이유** — 같은 데이터·같은 데이터 시드에서도
+head 초기화 시드에 따라 EMAIL 이 흔들린다. issue-262 재출하 때 42·43·44 중 42 만
+valid EMAIL F1 이 0.9566 으로 떨어져 44 를 출하했다. test 로 고르면 그 test 로 내는
+판정이 자기 참조가 되므로 기준은 valid 다.
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|

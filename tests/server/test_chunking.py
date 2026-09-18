@@ -90,6 +90,38 @@ def test_sentence_entities_stay_within_chunks():
             f'entity {surface!r} straddles a chunk boundary'
 
 
+def test_title_punctuation_does_not_end_a_sentence():
+    """제목 안의 `?` 뒤에 여는 괄호가 오면 그 자리에서 청크가 갈리지 않는다.
+
+    `Do You Know ? ( The Ping Pong Song )` 같은 표면이 실제 gold 에 있다.
+    `?` 를 문장 끝으로 보면 엔티티 한가운데에 청크 경계가 생겨 그 엔티티가
+    회수되지 않는다. 여는 괄호나 소문자가 뒤따르는 경계는 문장 끝이 아니다.
+    """
+    tok = FakeTok()
+    text = 'Q1 q2 q3 q4 ! Aa bb ? ( cc dd ) Ee.'
+    chunks = split_for_length(text, tok, max_length=10)  # budget 8 tokens
+    assert len(chunks) > 1  # 강제 분할 확인 — 테스트가 공허하지 않음
+    _assert_contiguous(text, chunks)
+    spans = [(base, base + len(sub)) for sub, base in chunks]
+    surface = 'bb ? ( cc'
+    s = text.index(surface)
+    e = s + len(surface)
+    assert any(cs <= s and e <= ce for cs, ce in spans), \
+        f'entity {surface!r} straddles a chunk boundary'
+
+
+def test_lowercase_after_a_boundary_does_not_end_a_sentence():
+    """경계 문자 뒤 첫 글자가 소문자면 문장 끝이 아니다 (약어·제목 표기)."""
+    tok = FakeTok()
+    text = 'Q1 q2 q3 q4 ! Aa bb ! cc dd ee ff.'
+    chunks = split_for_length(text, tok, max_length=10)  # budget 8 tokens
+    _assert_contiguous(text, chunks)
+    spans = [(base, base + len(sub)) for sub, base in chunks]
+    s = text.index('bb ! cc')
+    e = s + len('bb ! cc')
+    assert any(cs <= s and e <= ce for cs, ce in spans)
+
+
 class ByteLevelTok:
     """공백도 토큰으로 세는 가짜 fast 토크나이저 — ByteLevel BPE 를 모사.
 
