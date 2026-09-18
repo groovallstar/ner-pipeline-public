@@ -170,16 +170,18 @@ vi 만 배포 분할을 그대로 재현하지 못한다. 배포 vi test 는 엔
 스크립트로 test 전수를 쟀다. 배포 eval 스크립트를 안 쓴 것은 ja·vi 판이 앞 100문장만
 재고 타입별 표를 안 내기 때문이다. 임계값은 양쪽 모두 미적용(raw)이다.
 
-### 기준 1 — 생성기·코퍼스 분포
+### 기준 1. 생성기·코퍼스 분포
 
 `uv run pytest tests/ner -q` 886 passed. 배포 분할의 EMAIL 로컬파트 숫자 접두는
 train·valid·test 열두 조각 전부 ≤ 2.9% 다(en train 2.09% · ko train 2.03% ·
 ja train 1.93% · vi train 2.08%, 최댓값 ja valid 2.86%).
 
-### 기준 2 — 옛 모델과 새 모델을 같은 새 test 로
+### 기준 2. 같은 새 test 위의 옛 모델·새 모델
 
 같은 test·같은 평가 코드로 두 모델을 잰 값이다. 옛 모델은
-`/data/ner/_pre-issue-262/{lang}/model` 로 보존했다.
+`/data/ner/_pre-issue-262/{lang}/model` 로 보존했다. 2026-09-18 에는 그 경로가 없고,
+en·ko 옛 번들만 `/data/ner/{en,ko}.tar.gz` 로 남아 있다(`metrics.json` 의 데이터 지문이
+치환 전 값 `258166d6972c8144`·`a6aaa31ba099c9fd` 다). ja·vi 는 이 표를 다시 잴 수 없다.
 
 | 언어 | test 행 | EMAIL span | EMAIL 옛 → 새 | overall 옛 → 새 |
 |---|---:|---:|---|---|
@@ -192,7 +194,7 @@ ja train 1.93% · vi train 2.08%, 최댓값 ja valid 2.86%).
 100행 중 95행이 옛 모델의 train·valid 에 있었다. 편향이 옛 모델 쪽이므로 EMAIL 이
 양쪽 1.0 인 것은 유효하지만, overall 하락분은 노출 차이지 회귀가 아니다.
 
-### 기준 3 — en 이 무엇을 얻고 무엇을 잃었나
+### 기준 3. en 표면형별 득실
 
 en test 2,385 EMAIL span 을 로컬파트 표면형으로 묶은 strict recall 이다.
 
@@ -211,7 +213,7 @@ en test 2,385 EMAIL span 을 로컬파트 표면형으로 묶은 strict recall �
 내려간 표면형이 완벽을 유지하지 못하는 것은 예상된 대가이며, 분포 안에 남겨 둔 이유는
 §목표 분포에 적었다.
 
-### 기준 4 — #263 probe
+### 기준 4. #263 probe
 
 #263 재현 문장 + 표면형 축 13건을 서버 추론 경로(`LangModel.predict`, raw)로 물렸다.
 strict 일치 기준 옛 모델 8/13, 새 모델 11/13. 옛 모델이 놓치던 `alice@example.com`·
@@ -223,13 +225,13 @@ Friday.` 는 탐지가 아니라 경계 문제로 `@example.` 까지만 잡고, 
 gmail.com` 은 숫자 접두 + 점 + 대문자가 겹친 형태다. 둘 다 #263 에서 probe set 을
 테스트로 고정할 때 다룬다.
 
-### 기준 5 — 출하 번들
+### 기준 5. 출하 번들
 
 네 언어 모두 `build_ner_prod.py` 로 다시 포장하고 서버 로드 경로로 확인했다. en·ko·vi
 는 raw, ja 는 새 run 에서 다시 fit 한 `thresholds.json` 을 싣는다. vi 는 배포와 같은
 PhoBERT slow 토크나이저로 열리고, 네 언어 모두 EMAIL 을 정상 탐지한다.
 
-### 부수 발견 — 청크 경계가 엔티티를 가르던 자리
+### 청크 경계가 엔티티를 가르던 부수 발견
 
 vi 번들의 test 가 101행에서 3,774행이 되고 EMAIL 문자열 길이가 바뀌면서 장문 청킹의
 경계 위치가 밀렸고, `Do You Know ? ( The Ping Pong Song )` 이라는 PROD 엔티티가 경계에
@@ -250,10 +252,33 @@ vi 452 → 460 이다.
 - 첫 vi run 은 `--model-name` 을 빠뜨려 CLI 기본값 `xlm-roberta-base` 로 돌았다. 배포
   백본이 `vinai/phobert-base-v2` 라 코퍼스 외에 백본까지 바뀌어 폐기하고 다시 돌렸다.
   위 표의 vi 수치는 PhoBERT run 이다.
-- 치환 원장(`origin.jsonl.email-rewrite.json`)과 치환 전 코퍼스는 `data/` 아래에만 있고
-  저장소에 안 들어간다. 재현은 `origin.jsonl.pre-issue-262` + `--seed 42` 로 한다.
+- 치환 전 코퍼스(`origin.jsonl.pre-issue-262`)는 `data/` 아래에만 있고 저장소에 안
+  들어간다. 재현은 그 파일에 `--seed 42` 로 한다. 치환 원장은 네 언어분을 모아
+  `src/ner/augmenters/pii/data/email_localpart_rewrite_ledger.json` 에 커밋했다.
 - 청크 경계 보장은 문장 단위로 자를 때만 성립한다. 한 문장이 혼자 모델 한도를 넘으면
   단어 경계로 강제 분할하므로 그 안의 엔티티는 여전히 잘릴 수 있다.
+
+### develop 위 재검증 (2026-09-18)
+
+커밋들을 develop `48bf2e9` 위에 다시 올린 뒤(§결정 로그 2026-09-18) 같은 판단이 지금
+코드에서도 서는지 다시 쟀다. 실모델 검사는 GPU 2 에서 돌렸다.
+
+| 항목 | 결과 |
+|---|---|
+| 치환 재현 | 지금 코드로 네 `origin.jsonl.pre-issue-262` 에 `--seed 42` 를 다시 돌리면 출력 지문이 원장·디스크 판본과 네 언어 모두 같다 |
+| 배포 분할 분포 | 열두 조각의 숫자 접두 최댓값 ja valid 2.86%, 점 없는 소문자 60.2~73.1% |
+| `tests/ner` | `data/` 를 연결해 783 passed, skip 0 |
+| `tests/server` 모델 없는 검사 | 227 passed |
+| `test_live_server.py` | 4 passed, 2 skipped(번역 backend 미설정) |
+| `test_inference_integration.py` | 36 passed, 2 failed(ko·en parity) |
+
+**ko·en parity 실패는 이 이슈의 변경 때문이 아니다.** 이 검사는 서버 추론의 F1 이 배포
+`metrics.json` 과 소수 여섯째 자리까지 같은지 본다. 옛 브랜치 끝(`97ffa1a`)에서는 네
+언어 모두 통과했고, develop `48bf2e9` 그대로 돌려도 ko 0.92681 · en 0.92780(배포 값
+0.92746 · 0.92883)으로 이 브랜치와 같은 값에서 실패한다. 그 사이 #271 이 학습 평가와 서버가 함께 쓰는 BIO 디코더를
+바꿨다. 배포 `metrics.json` 은 옛 디코더로 잰 값이라 둘이 갈린다. ja 는 develop 에서
+`KeyError: 'abstention'` 으로 실패하는데, 새 ja 번들의 키 이름(`confidence_threshold`)에
+맞춘 이 브랜치의 검사 수정으로 통과한다.
 
 ## 결정 로그 (append-only)
 
@@ -279,6 +304,20 @@ vi 452 → 460 이다.
   CLI 에 없어 재현이 불가능하다. 그 결과 배포 vi 번들의 test 가 101건에서 3,774건으로
   커진다. ja 는 기록된 인자(`seed 1`, test 0.019)가 배포 분할을 그대로 재현해 배포
   계약을 유지한다.
+- 2026-09-18: 브랜치를 복구해 develop 위에 다시 올린다. 원래 브랜치는 PR 없이 지워져
+  커밋이 어느 참조에도 안 걸린 상태였고, 배포 번들만 새 모델로 바뀌어 있었다. 이 이슈의
+  커밋 여섯 개를 develop `48bf2e9` 위에 cherry-pick 했다. 옛 브랜치의 develop 병합
+  커밋은 가져오지 않았다. 새 기준 위에서 다시 올리므로 그 병합이 할 일이 없다.
+- 2026-09-18: EN 병합본 지문 검사를 재작성 원장까지 잇는다. FAC 이관 원장이
+  `data/ontonotes_en/origin.jsonl` 을 FAC 후 지문으로 봉인하고 있어, 치환 뒤 판본에서
+  그 검사가 실패했다. `data/` 가 없는 작업 트리에서는 이 검사가 skip 되므로 옛 검증에서
+  드러나지 않은 것으로 보인다.
+  FAC 원장의 후 지문을 새 값으로 덮지 않는다. 덮으면 FAC 이관이 만들지 않은 판본을 그
+  결과로 적게 된다. 대신 치환 원장을 저장소에 커밋하고, 검사가 "FAC 후 지문 = 치환 입력
+  지문"과 "디스크 판본 = 치환 출력 지문" 두 고리를 따로 보게 했다.
+- 2026-09-18: ko·en parity 실패는 이 이슈에서 고치지 않는다. 원인이 #271 의 디코더
+  변경이라 EMAIL 표면형과 무관하다. 배포 `metrics.json` 을 새 디코더로 다시 쓰는 일은
+  배포 기록을 바꾸는 결정이라 별도로 다룬다.
 
 ## 후속 작업
 
