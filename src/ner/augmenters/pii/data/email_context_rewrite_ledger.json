@@ -1,5 +1,5 @@
 {
-  "why": "EN 디스크 코퍼스의 EMAIL 일부를 괄호·따옴표·mailto:·콜론 뒤로 붙인 기록. 바이트 BPE 모델이 공백 아닌 글자 뒤 주소의 앞쪽을 놓치는 결함(#267)을 학습 분포에서 메운다. data/ 는 gitignore 라 치환 전후 판본의 지문이 저장소에 남는 자리는 이 원장뿐이다. 재현은 치환 전 판본(input_sha256)에 같은 seed 로 generated_by 를 다시 돌린다.",
+  "why": "EN 디스크 코퍼스의 EMAIL 일부를 괄호·따옴표·mailto:·콜론 뒤로 붙인 기록. 바이트 BPE 모델이 공백 아닌 글자 뒤 주소의 앞쪽을 놓치는 결함을 학습 분포에서 메운다. data/ 는 gitignore 라 치환 전후 판본의 지문이 저장소에 남는 자리는 이 원장뿐이다. 재현은 치환 전 판본(input_sha256)에 같은 seed 로 generated_by 를 다시 돌린다.",
   "generated_by": "python -m ner.scripts.rewrite_email_context",
   "target": {
     "wrap_weights": {
