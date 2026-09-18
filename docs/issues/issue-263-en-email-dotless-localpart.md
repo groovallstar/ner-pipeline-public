@@ -1,7 +1,7 @@
 # issue-263: EN EMAIL 점 없는 로컬파트 미탐지
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/263
-- PR: <!-- 머지 직전 채움 -->
+- PR: https://github.com/groovallstar/ner-pipeline/pull/287
 - 브랜치: `feat/issue-263-en-email-dotless-localpart`
 - 승인일: 2026-09-18
 
