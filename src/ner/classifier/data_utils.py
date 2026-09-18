@@ -831,3 +831,39 @@ def decode_bio_to_spans(label_ids: List[int],
     if current:
         _push()
     return spans
+
+
+EMAIL_TYPE = 'EMAIL'
+
+
+def merge_email_fragments(spans: List[dict], text: str) -> List[dict]:
+    """공백 없이 이어진 EMAIL 조각을 한 span 으로 합친다.
+
+    서브워드마다 따로 라벨을 내는 토크나이저에서는 주소의 한 조각만 O 로
+    떨어져도, 혹은 같은 주소 안에서 B 가 다시 나와도 디코더가 주소를 여러
+    span 으로 낸다. 이메일에는 공백이 없으므로 사이에 공백이 없는 두 EMAIL
+    조각은 같은 주소다. 사이의 O 글자까지 덮어 한 span 으로 만든다.
+
+    합치지 않는 경우가 셋이다. 사이에 공백이 있으면 다른 주소일 수 있고,
+    합친 결과에 `@` 가 둘 이상이면 쉼표로 붙여 쓴 주소 목록이며, 두 조각
+    사이에 다른 엔티티가 있으면 그것을 삼키게 된다. score 가 있으면 조각 중
+    가장 낮은 값을 준다 — 평균을 내면 확신 없는 조각이 임계값을 통과한다.
+    """
+    out: List[dict] = []
+    for span in sorted(spans, key=lambda s: (s['start'], s['end'])):
+        prev = out[-1] if out else None
+        if (prev is not None
+                and prev['type'] == EMAIL_TYPE
+                and span['type'] == EMAIL_TYPE
+                and not any(c.isspace()
+                            for c in text[prev['end']:span['start']])
+                and text[prev['start']:max(prev['end'], span['end'])]
+                .count('@') <= 1):
+            merged = dict(prev)
+            merged['end'] = max(prev['end'], span['end'])
+            if 'score' in prev and 'score' in span:
+                merged['score'] = min(prev['score'], span['score'])
+            out[-1] = merged
+            continue
+        out.append(dict(span))
+    return out

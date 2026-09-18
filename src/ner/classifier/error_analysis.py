@@ -527,7 +527,10 @@ def run_inference(
         split_train_valid_test,
         validate_group_key,
     )
-    from ner.classifier.data_utils import decode_bio_to_spans
+    from ner.classifier.data_utils import (
+        decode_bio_to_spans,
+        merge_email_fragments,
+    )
 
     label2id, id2label = build_label_maps()
 
@@ -585,11 +588,12 @@ def run_inference(
                 idx = i + j
                 offs = target_offsets[idx]
                 pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
-                pred_spans_raw = decode_bio_to_spans(
-                    pred_ids_list, offs, id2label,
-                )
                 row = target_rows[idx]
                 text = row['text']
+                pred_spans_raw = merge_email_fragments(
+                    decode_bio_to_spans(pred_ids_list, offs, id2label),
+                    text,
+                )
                 gold_spans = [
                     {'type': e['label'],
                      'start': e['start_char'],

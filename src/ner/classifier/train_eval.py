@@ -16,7 +16,10 @@ from transformers import (
     set_seed,
 )
 
-from ner.classifier.data_utils import decode_bio_to_spans
+from ner.classifier.data_utils import (
+    decode_bio_to_spans,
+    merge_email_fragments,
+)
 from ner.metrics.span_metrics import (
     compute_offset_span_f1,
     compute_offset_span_f1_relaxed,
@@ -212,8 +215,10 @@ def evaluate_model(*, model_path: str,
                 pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
                 cf = ([float(x) for x in confs_np[j][:len(offs)]]
                       if confs_np is not None else None)
-                spans = decode_bio_to_spans(
-                    pred_ids_list, offs, id2label, confs=cf)
+                spans = merge_email_fragments(
+                    decode_bio_to_spans(
+                        pred_ids_list, offs, id2label, confs=cf),
+                    eval_rows[i + j]['text'])
                 pred_spans_list.append(spans)
                 gold = [
                     {'type': e['label'],
