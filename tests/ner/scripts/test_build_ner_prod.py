@@ -106,12 +106,8 @@ def _make_run(tmp_path, lang, model_name, **overrides):
 @pytest.fixture
 def stub_tokenizer(monkeypatch):
     """HF 허브를 타지 않도록 토크나이저 로드를 stub 으로 바꾼다."""
-    class _Auto:
-        @staticmethod
-        def from_pretrained(name, use_fast=True):
-            return _StubTokenizer()
-
-    monkeypatch.setattr(bnp, 'AutoTokenizer', _Auto)
+    monkeypatch.setattr(bnp, 'load_tokenizer',
+                        lambda name: _StubTokenizer())
 
 
 LANGS = [('ko', 'monologg/koelectra-base-v3-discriminator', '한국어'),

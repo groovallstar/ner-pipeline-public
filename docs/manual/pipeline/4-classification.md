@@ -92,7 +92,7 @@ else:
 
 | 분기 | 조건 | 모델 예 | 정렬 방식 | 의존성 |
 |---|---|---|---|---|
-| **fast** | `tokenizer.is_fast` | XLM-R, mmBERT, DeBERTa-V3 | `return_offsets_mapping=True` + `_trim_offset` | — |
+| **fast** | `tokenizer.is_fast` | XLM-R, mmBERT, DeBERTa-V3, RoBERTa | `return_offsets_mapping=True` + `_trim_offset`. 바이트 BPE 는 앞 공백·공백류 정규화 | — |
 | **PhoBERT** | `_is_phobert` | vinai/phobert | pyvi 단어분절 → 단어별 BPE, 단어 char-span | `pyvi` |
 | **JA slow** | 그 외 slow | tohoku-nlp/bert-base-japanese-v3 | `tokenize()` → `text.find()` greedy, `##` strip | `fugashi`+`unidic-lite` |
 
@@ -118,6 +118,36 @@ entity 밖 char를 들고 있어 검사에서 떨어지고, entity가 문장부�
 경우(`Inc.`)에도 마지막 char가 살아 있어 gold 라벨을 디코드했을 때 원래
 span이 복원된다. 애초에 길이 0인 offset(토크나이저가 연속 공백 자리에 주는
 것)과 `(0,0)` 특수토큰은 그대로 둔다.
+
+### 바이트 BPE 의 앞 공백과 공백류 정규화
+
+en 의 RoBERTa 는 바이트 BPE 다. 이 방식은 공백 뒤 단어에 `Ġ` 표지를 붙여, 같은
+단어라도 앞에 공백이 있는지에 따라 다른 토큰으로 쓴다. 개행·탭은 `Ċ`·`ĉ`, 연속
+공백의 여분은 단독 `Ġ` 로 따로 된 토큰이 된다. 학습 문장은 단어 사이가 공백 한
+칸이라 이 모양들을 거의 보지 못한다. 그래서 그 자리의 주소가 앞쪽을 잃은 채
+잡혔다. `r.patel@bluepine.io` 하나만 넣으면 `patel@bluepine.io` 가 나왔다.
+
+두 장치로 첫 단어와 공백류 뒤 단어를 문중과 같은 토큰으로 맞춘다.
+
+- **앞 공백** — 학습·포장·분석이 `load_tokenizer` 로 토크나이저를 열고, 바이트
+  BPE 는 `add_prefix_space=True` 로 연다. 포장이 이 설정을 `model/` 에 저장하므로
+  서버는 코드 변경 없이 같은 토큰을 받고, 옛 패키지는 옛 설정대로 돈다. 바이트
+  BPE 인지는 pre-tokenizer 가 `ByteLevel` 인지로 가린다. `add_prefix_space` 속성은
+  SentencePiece 계열에도 있어 판별에 쓰지 않는다.
+- **공백류 정규화** — 인코딩 직전에 앞뒤 공백을 떼고 공백류 연속을 공백 한 칸으로
+  접은 텍스트를 넣은 뒤 offset 을 원문 위치로 되돌린다(`canonical_whitespace`).
+  en 코퍼스에는 개행·탭이 없고 연속 공백은 카드번호 표기(`5291  8884 …`) 안에만
+  있어, 접어도 학습 분포 밖으로 나가는 입력이 없다. 이 정규화를 토크나이저 파일이
+  아니라 코드에 두는 것은 transformers v5 가 파일의 커스텀 normalizer 를 다시 로드할
+  때 버리기 때문이다. 서버의 청크 분할은 원문으로 토큰을 센다. 접으면 토큰이 줄기만
+  하므로 원문 셈이 한도를 넉넉하게 지킨다.
+
+두 장치 모두 바이트 BPE 에만 걸린다. ko 의 WordPiece 는 공백 모양을 토큰에 새기지
+않고, SentencePiece 계열의 입력은 그대로다.
+
+문장부호 바로 뒤(`<alice@…`, `mailto:alice@…`)는 토크나이저로 풀지 않는다. 그 앞에
+공백을 끼우면 뒤따르는 모든 단어(`(Seoul)`, `"The`)의 토큰이 함께 바뀐다. 이 자리는
+학습 코퍼스가 맡는다([2. 증강](2-augmentation.md) §EMAIL 붙은 문맥).
 
 ### BIO 라벨 부여 (`_bio_labels_from_offsets`)
 
@@ -454,7 +484,7 @@ python src/ner/scripts/build_ner_prod.py \
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
-| 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
+| 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer(학습과 같은 `load_tokenizer`) → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
 | 배포 metric | `/data/ner/en/metrics.json` | 출하한 run 의 metric 과 포장 정보 |
 | 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 분할 고정값·데이터 지문 · test 그룹 누출 0 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |

@@ -31,7 +31,8 @@ flowchart LR
   원본 gold를 보존한다.
 - **EN** — 재라벨이 없다. OntoNotes5 18종을 canonical 6종으로 매핑하고 자연문을
   복원하는 형식 변환만 거친 뒤 PII 4종을 주입한다. 원본 `FAC` 는 표면별 판정
-  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다.
+  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다. 주입 뒤 EMAIL 일부를
+  괄호·따옴표 등에 붙인다(§EMAIL 붙은 문맥).
 
 ## 목차
 
@@ -154,8 +155,46 @@ ko·ja 목록은 표기 이름 목록과 같은 순서의 로마자 표기다.
 span 의 로컬파트만 이 분포로 다시 만든다. 도메인·문맥·다른 라벨은 건드리지
 않고 길이 차이만큼 뒤따르는 엔티티 오프셋을 민다. `data/` 는 gitignore 라, 네
 코퍼스를 치환한 입력·출력 지문과 seed 는
-`augmenters/pii/data/email_localpart_rewrite_ledger.json` 에 커밋해 둔다. EN 병합본
-지문 검사는 이 원장의 출력 지문과 디스크 판본을 대조한다.
+`augmenters/pii/data/email_localpart_rewrite_ledger.json` 에 커밋해 둔다. EN 은 이
+출력 위에 아래 붙은 문맥 치환을 한 번 더 했다.
+
+### EMAIL 붙은 문맥 (EN)
+
+EN 은 주입한 EMAIL 가운데 일부를 공백이 아닌 글자 뒤에 둔다. en 모델의 토크나이저
+(RoBERTa 바이트 BPE)는 공백 뒤 단어에 `Ġ` 표지를 붙여 다른 토큰으로 쓴다. 그래서
+`at alice@x.com` 의 로컬파트는 `Ġalice` 한 토큰이지만 `<alice@x.com>` 의 로컬파트는
+`al` + `ice` 다. LLM 자연 주입은 주소를 거의 언제나 공백 뒤에 둔다(치환 전
+24,105건 중 3건만 예외). 그래서 모델이 뒤쪽 모양을 보지 못했고, 괄호·`mailto:` 뒤
+주소의 앞쪽을 놓쳤다.
+
+| 종류 | 바꾼 모양 | 비율 |
+|---|---|---|
+| 꺾쇠 | `at <alice@x.com> today` | 5% |
+| 괄호 | `at (alice@x.com) today` | 3% |
+| 큰따옴표 | `at "alice@x.com" today` | 3% |
+| `mailto:` | `at mailto:alice@x.com today` | 2% |
+| 단서어 콜론 | `email alice@x.com` → `email:alice@x.com` | 단서어 뒤 주소의 30% |
+
+비율의 단일 출처는 `augmenters/pii/email_context.py` 의 `EMAIL_WRAP_WEIGHTS`·
+`EMAIL_CUE_COLON_RATE` 이고 위 표는 그 사본이다. 적용 뒤 EN gold 에서 공백 아닌
+글자 뒤의 주소가 14.3% 가 됐다. 콜론을 단서어 뒤에만 넣는 것은 단서어 없이 넣으면
+`at:alice@x.com` 같은 없는 표기가 되기 때문이다.
+
+**위 §주입 방식이 경계하는 규칙 삽입과는 다르다.** 그 경계는 PII 를 문두·문말로
+옮겨 단서어 없이 끼우는 방식을 향한다. 이 치환은 LLM 이 둔 자리와 앞의 단서어
+(`at`·`email`)를 그대로 두고 주소 둘레에 글자만 더하므로 위치 분포가 바뀌지 않는다.
+남는 위험은 "괄호 안 = EMAIL" 같은 지름길이다. 이메일이 아닌 내용을 같은 자리에 넣은
+음성 probe(`tests/server/test_en_email_probe.py`)가 그것을 잰다.
+
+문자열 첫 자리와 개행·탭 뒤는 코퍼스로 다루지 않는다. 그 자리는 토크나이저 쪽의
+앞 공백과 공백류 정규화가 맡는다([4. 분류](4-classification.md) §2). 코퍼스에
+문두 주소를 넣으면 이 문서가 경계하는 위치 지름길이 된다.
+
+적용은 `ner.scripts.rewrite_email_context` 로 하고, 입력·출력 지문과 seed 는
+`augmenters/pii/data/email_context_rewrite_ledger.json` 에 커밋한다. 이 원장은
+로컬파트 치환 원장의 출력 지문에서 출발하고, EN 병합본 지문 검사는 디스크 판본을
+이 원장의 출력 지문과 대조한다. EN 을 다시 주입하면 로컬파트 분포는 생성기가
+맞추지만 이 치환은 다시 돌려야 한다.
 
 ### CLI
 

@@ -135,6 +135,11 @@ softmax → argmax+conf → `decode_bio_to_spans`(score=conf_mean) → EMAIL 조
 추론은 전역 `ConcurrencyGuard` 안에서 실행돼 동시 부하를 bound 한다. 처리량
 측정은 `scripts/throughput/bench.py`.
 
+en(바이트 BPE)은 인코딩 직전에 앞뒤 공백을 떼고 개행·탭·연속 공백을 공백 한
+칸으로 접은 뒤 offset 을 원문 위치로 되돌린다. 문자열 첫 단어의 앞 공백은 패키지
+`model/` 에 저장된 토크나이저 설정(`add_prefix_space`)을 따르므로 서버 코드에 언어
+분기가 없다. 둘의 이유는 [4. 분류](pipeline/4-classification.md) §2 에 있다.
+
 청크는 기존 문장·공백 경계로 나누며 단어 하나도 한도를 넘으면 문자 중간에서
 추가 분할하고 양쪽 길이를 다시 확인한다. PhoBERT는 실제 인코딩과 같은 pyvi
 분절 표면의 BPE 수를 센다. 한도 이내 입력은 그대로 유지한다. 공백뿐인 장문의

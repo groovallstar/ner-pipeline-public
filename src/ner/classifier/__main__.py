@@ -14,8 +14,6 @@ import json
 import logging
 import os
 
-from transformers import AutoTokenizer
-
 from ner.classifier.data_utils import (
     build_label_maps,
     boundary_weights_tensor,
@@ -23,6 +21,7 @@ from ner.classifier.data_utils import (
     encode_dataset,
     group_stats,
     load_jsonl,
+    load_tokenizer,
     mask_pii_in_features,
     split_kfold_stratified,
     split_train_valid_test,
@@ -246,11 +245,8 @@ def main():
     )
 
     logger.info('Loading tokenizer: %s', model_name)
-    # 우선 fast tokenizer 시도 → 실패 시 slow fallback (BertJapaneseTokenizer 등 MeCab 기반)
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    except (TypeError, ValueError, OSError):
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    # fast 우선·slow fallback, 바이트 BPE 는 앞 공백 — 포장과 같은 로더라야 한다
+    tokenizer = load_tokenizer(model_name)
     logger.info('Tokenizer fast=%s', tokenizer.is_fast)
 
     trim_offsets = not args.legacy_no_offset_trim
