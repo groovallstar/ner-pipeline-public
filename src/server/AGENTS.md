@@ -35,6 +35,12 @@ char offset, text를 보존한다.
 
 ## 검증
 
+- 배포 패키지를 교체하면 그 언어의 parity 검사가 통과하는지 본다.
+  `tests/server/test_inference_integration.py`의 `test_<lang>_parity_baseline_raw`가
+  서버 predict 경로의 strict F1을 그 패키지의 `metrics.json`과 대조한다. 재현을
+  보는 것이 아니라 `model/`·토크나이저·디코드 경로가 그 `metrics.json`을 만든 run과
+  같은 물건인지를 본다. 허용 오차 `_PARITY_ABS`는 정밀도가 아니라 span 몇 개까지
+  달라도 되는지의 값이며, 실패를 통과시키려고 넓히지 않는다.
 - 모델 없는 기본 검사는 다음 명령으로 실행한다. 모델 통합·live 파일은
   수집에서 제외한다.
   ```bash
