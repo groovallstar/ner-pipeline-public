@@ -68,20 +68,55 @@ def test_vi_phone_digits_only_after_strip():
         assert stripped.isdigit(), phone
 
 
+_VI_DAT_NUMERIC = (
+    re.compile(r'^\d{2}/\d{2}/\d{4}$'),
+    re.compile(r'^\d{4}-\d{2}-\d{2}$'),
+    re.compile(r'^\d{2}-\d{2}-\d{4}$'),
+)
+_VI_DAT_DESCRIPTIVE = re.compile(r'^\d{1,2} tháng \d{1,2} năm \d{4}$')
+
+
 def test_vi_dat_known_formats():
-    """generate_dat 출력은 dd/mm/yyyy·yyyy-mm-dd·dd-mm-yyyy 형식 중 하나다."""
+    """generate_dat 출력은 숫자 3종 또는 `D tháng M năm Y` 중 하나다."""
     r = random.Random(5)
-    pat_dmy_slash = re.compile(r'^\d{2}/\d{2}/\d{4}$')
-    pat_ymd_dash = re.compile(r'^\d{4}-\d{2}-\d{2}$')
-    pat_dmy_dash = re.compile(r'^\d{2}-\d{2}-\d{4}$')
-    for _ in range(100):
+    for _ in range(200):
         dat = vi.generate_dat(r)
         matched = (
-            pat_dmy_slash.match(dat)
-            or pat_ymd_dash.match(dat)
-            or pat_dmy_dash.match(dat)
+            any(p.match(dat) for p in _VI_DAT_NUMERIC)
+            or _VI_DAT_DESCRIPTIVE.match(dat)
         )
         assert matched, dat
+
+
+def test_vi_dat_descriptive_share():
+    """서술형 `D tháng M năm Y` 가 전체의 약 40%다.
+
+    숫자 표기를 과반으로 남기는 것은 그것이 서식·증서에 실제로 쓰이는 표기이고,
+    현 DAT metric 이 그 표기 위에서 나온 값이라 너무 깎으면 무회귀 기준이
+    흔들리기 때문이다.
+    """
+    r = random.Random(1234)
+    n = 20000
+    descriptive = sum(
+        bool(_VI_DAT_DESCRIPTIVE.match(vi.generate_dat(r))) for _ in range(n)
+    )
+    share = descriptive / n
+    assert 0.38 <= share <= 0.42, share
+
+
+def test_vi_dat_descriptive_has_no_leading_ngay():
+    """서술형 값이 `ngày` 로 시작하지 않는다.
+
+    값 앞에 `ngày` 를 붙이는 것은 LLM 주입기이고 생성기는 그것을 통제하지 못한다.
+    생성기가 `ngày` 를 달고 나가면 `ngày ngày 15 tháng 3 năm 2024` 가 된다.
+    코퍼스 관례도 `ngày` 를 span 밖에 둔다.
+    """
+    r = random.Random(77)
+    for _ in range(500):
+        dat = vi.generate_dat(r)
+        assert not dat.lower().startswith('ngày'), dat
+        assert not dat.lower().startswith('tháng'), dat
+        assert not dat.lower().startswith('năm'), dat
 
 
 def test_vi_id_number_12_digits():
