@@ -15,6 +15,7 @@ JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
 
 토크나이저 분기:
 - fast (XLM-R·DeBERTa-V3 등): return_offsets_mapping=True + 공백·후행부호 trim
+  - 그중 바이트 BPE(RoBERTa): 앞 공백(`load_tokenizer`) + 공백류 한 칸 정규화
 - PhoBERT (slow, 단어분절 전제): pyvi 분절 후 단어별 BPE, 단어 char span 부여
 - JA (BertJapaneseTokenizer, slow): tokenize() 후 text.find() 로 subword char span 추적
 """
@@ -544,20 +545,106 @@ def _trim_offset(text: str, start: int, end: int) -> Tuple[int, int]:
     return (start, end)
 
 
+def is_byte_level(tokenizer) -> bool:
+    """바이트 BPE(GPT-2·RoBERTa 계열) fast 토크나이저인지 판별한다.
+
+    이 계열만 공백의 유무·종류·개수를 토큰 모양(`Ġ`·`Ċ`·`ĉ`)에 새긴다.
+    `add_prefix_space` 속성은 SentencePiece 계열에도 있어 판별에 쓰지 않는다.
+    """
+    backend = getattr(tokenizer, 'backend_tokenizer', None)
+    if backend is None:
+        return False
+    from tokenizers import pre_tokenizers
+    return isinstance(backend.pre_tokenizer, pre_tokenizers.ByteLevel)
+
+
+def load_tokenizer(name_or_path: str):
+    """학습·포장·분석이 함께 쓰는 토크나이저 로더.
+
+    fast 를 먼저 열고, 없으면(BertJapaneseTokenizer 같은 MeCab 기반) slow 로
+    내려간다. 바이트 BPE 는 `add_prefix_space=True` 로 다시 연다. 그러지 않으면
+    문자열 첫 단어만 `Ġ` 없는 토큰이 되어, 학습에서 공백 뒤 모양으로만 본 단어가
+    첫 자리에서는 낯선 조각으로 쪼개진다(주소 `alice@…` 의 `al`+`ice`).
+
+    포장이 이 로더로 연 토크나이저를 `model/` 에 저장하므로 설정이 모델과 함께
+    배포되고, 서버는 저장된 파일을 그대로 연다. 학습과 포장이 다른 로더를 쓰면
+    배포 모델이 학습 때와 다른 토큰을 받는다.
+    """
+    from transformers import AutoTokenizer
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(name_or_path, use_fast=True)
+    except (TypeError, ValueError, OSError):
+        return AutoTokenizer.from_pretrained(name_or_path, use_fast=False)
+    if is_byte_level(tokenizer) and not tokenizer.add_prefix_space:
+        tokenizer = AutoTokenizer.from_pretrained(
+            name_or_path, use_fast=True, add_prefix_space=True)
+    return tokenizer
+
+
+def canonical_whitespace(text: str) -> Tuple[str, List[int]]:
+    """앞뒤 공백을 떼고 공백류의 연속을 공백 한 칸으로 접는다.
+
+    돌려주는 목록은 접힌 텍스트의 각 글자가 원문 몇 번째 글자였는지다.
+    바이트 BPE 는 개행·탭(`Ċ`·`ĉ`)과 연속 공백의 여분(단독 `Ġ`)을 따로 된
+    토큰으로 쓰는데, en 코퍼스에는 개행·탭이 없고 연속 공백은 카드번호 표기
+    안에만 있다. 그런 토큰이 주소 앞에 오면 모델이 주소를 깨뜨리므로, 모델이
+    학습에서 본 공백 한 칸 모양으로 맞춘다.
+    """
+    chars: List[str] = []
+    index: List[int] = []
+    pending = False
+    for i, ch in enumerate(text):
+        if ch.isspace():
+            pending = bool(chars)
+            continue
+        if pending:
+            chars.append(' ')
+            index.append(i - 1)
+            pending = False
+        chars.append(ch)
+        index.append(i)
+    return ''.join(chars), index
+
+
+def _unfold_offset(index: List[int], start: int, end: int,
+                   n_chars: int) -> Tuple[int, int]:
+    """접힌 텍스트의 offset 을 원문 위치로 되돌린다.
+
+    (0,0) 은 특수 토큰 표지라 그대로 둔다. 실제 토큰은 첫 글자와 마지막 글자를
+    옮긴다 — 접힌 공백은 토큰 가운데에만 올 수 있으므로 양끝 위치면 충분하다.
+    """
+    if start == end == 0:
+        return (0, 0)
+    if end > start:
+        return (index[start], index[end - 1] + 1)
+    pos = index[start] if start < len(index) else n_chars
+    return (pos, pos)
+
+
 def _encode_vi(text: str, tokenizer, max_length: int, trim: bool = True):
     """VI: fast tokenizer 의 offset_mapping 을 (기본) 공백·후행부호 trim 후 사용.
 
     trim=False 는 정렬 수정 이전 동작을 재현하는 진단용 — SentencePiece 계열의
     offset 어긋남으로 라벨이 붕괴(F1 ≈ 0)하는 as-is 벤치마크 재현에만 쓴다.
+
+    바이트 BPE 는 `canonical_whitespace` 로 접은 텍스트를 인코딩하고 offset 을
+    원문 위치로 되돌린다. 다른 fast 토크나이저는 원문을 그대로 넣는다.
     """
+    text_for_tok, index = text, None
+    if is_byte_level(tokenizer):
+        folded, fold_index = canonical_whitespace(text)
+        if folded != text:
+            text_for_tok, index = folded, fold_index
     enc = tokenizer(
-        text,
+        text_for_tok,
         max_length=max_length,
         truncation=True,
         padding='max_length',
         return_offsets_mapping=True,
     )
     raw = enc['offset_mapping']
+    if index is not None:
+        raw = [_unfold_offset(index, s, e, len(text)) for s, e in raw]
     offsets = [_trim_offset(text, s, e) for s, e in raw] if trim else list(raw)
     return (
         {'input_ids': enc['input_ids'], 'attention_mask': enc['attention_mask']},
@@ -831,3 +918,39 @@ def decode_bio_to_spans(label_ids: List[int],
     if current:
         _push()
     return spans
+
+
+EMAIL_TYPE = 'EMAIL'
+
+
+def merge_email_fragments(spans: List[dict], text: str) -> List[dict]:
+    """공백 없이 이어진 EMAIL 조각을 한 span 으로 합친다.
+
+    서브워드마다 따로 라벨을 내는 토크나이저에서는 주소의 한 조각만 O 로
+    떨어져도, 혹은 같은 주소 안에서 B 가 다시 나와도 디코더가 주소를 여러
+    span 으로 낸다. 이메일에는 공백이 없으므로 사이에 공백이 없는 두 EMAIL
+    조각은 같은 주소다. 사이의 O 글자까지 덮어 한 span 으로 만든다.
+
+    합치지 않는 경우가 셋이다. 사이에 공백이 있으면 다른 주소일 수 있고,
+    합친 결과에 `@` 가 둘 이상이면 쉼표로 붙여 쓴 주소 목록이며, 두 조각
+    사이에 다른 엔티티가 있으면 그것을 삼키게 된다. score 가 있으면 조각 중
+    가장 낮은 값을 준다 — 평균을 내면 확신 없는 조각이 임계값을 통과한다.
+    """
+    out: List[dict] = []
+    for span in sorted(spans, key=lambda s: (s['start'], s['end'])):
+        prev = out[-1] if out else None
+        if (prev is not None
+                and prev['type'] == EMAIL_TYPE
+                and span['type'] == EMAIL_TYPE
+                and not any(c.isspace()
+                            for c in text[prev['end']:span['start']])
+                and text[prev['start']:max(prev['end'], span['end'])]
+                .count('@') <= 1):
+            merged = dict(prev)
+            merged['end'] = max(prev['end'], span['end'])
+            if 'score' in prev and 'score' in span:
+                merged['score'] = min(prev['score'], span['score'])
+            out[-1] = merged
+            continue
+        out.append(dict(span))
+    return out

@@ -50,7 +50,8 @@ def test_split_sizes_are_the_locked_ones(pkg):
     assert pkg['train_samples'] == 20793
     assert pkg['valid_samples'] == 2598
     assert pkg['test_samples'] == 2598
-    assert pkg['data_fingerprint'] == 'a6aaa31ba099c9fd'
+    # 지문은 EMAIL 로컬파트 표면형 재생성(issue-262) 이후 값이다.
+    assert pkg['data_fingerprint'] == '8216558baefea35b'
     assert pkg['group_key'] == 'id'
 
 

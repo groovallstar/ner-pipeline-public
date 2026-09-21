@@ -518,16 +518,20 @@ def run_inference(
         gold/pred span dict 형식: {'type', 'start', 'end', 'text'}
     """
     import torch
-    from transformers import AutoModelForTokenClassification, AutoTokenizer
+    from transformers import AutoModelForTokenClassification
 
     from ner.classifier.data_utils import (
         build_label_maps,
         encode_dataset,
         load_jsonl,
+        load_tokenizer,
         split_train_valid_test,
         validate_group_key,
     )
-    from ner.classifier.data_utils import decode_bio_to_spans
+    from ner.classifier.data_utils import (
+        decode_bio_to_spans,
+        merge_email_fragments,
+    )
 
     label2id, id2label = build_label_maps()
 
@@ -551,10 +555,7 @@ def run_inference(
             'not tokenizer). pass --tokenizer-name or the original HF '
             'model id (e.g., tohoku-nlp/bert-base-japanese-v3).'
         )
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
-    except (TypeError, ValueError, OSError):
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
+    tokenizer = load_tokenizer(tokenizer_name)
 
     target_features, target_offsets = encode_dataset(
         target_rows, tokenizer, label2id, lang, max_length
@@ -585,11 +586,12 @@ def run_inference(
                 idx = i + j
                 offs = target_offsets[idx]
                 pred_ids_list = [int(x) for x in pred_ids[:len(offs)]]
-                pred_spans_raw = decode_bio_to_spans(
-                    pred_ids_list, offs, id2label,
-                )
                 row = target_rows[idx]
                 text = row['text']
+                pred_spans_raw = merge_email_fragments(
+                    decode_bio_to_spans(pred_ids_list, offs, id2label),
+                    text,
+                )
                 gold_spans = [
                     {'type': e['label'],
                      'start': e['start_char'],

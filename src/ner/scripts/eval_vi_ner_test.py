@@ -8,9 +8,9 @@ span) 를 출력한다. 임계값 파일이 없으면 신뢰도 임계 미적용
 출력 그대로 평가한다. 모델·test·임계값 경로는 전체(절대) 경로만 받는다
 (상대 경로 거부).
 
-test 앞 100문장만 평가한다. 배포 test 는 orig 그룹 단위 홀드아웃이라 최소
-100을 그룹 통째로 채우다 ≥100(현재 101)이 되므로, 오버슈트분을 앞에서부터
-잘라 100에 맞춘다.
+기본은 test 전수 평가다. 앞 N 문장만 재고 싶으면 `--limit N` 을 준다. 예전에는
+100행이 상수로 박혀 있었는데, 번들의 test 가 커지면 그 상수가 대부분을 조용히
+버리고도 같은 모양의 수치 표를 내므로 인자로 옮겼다.
 
 사용:
     python src/ner/scripts/eval_vi_ner_test.py
@@ -39,8 +39,8 @@ from ner.metrics.span_metrics import compute_offset_span_f1
 DEFAULT_MODEL_DIR = '/data/ner/vi/model'
 DEFAULT_TEST = '/data/ner/vi/data/test.jsonl'
 DEFAULT_THRESHOLDS = '/data/ner/vi/thresholds.json'
-# 배포 test 는 orig 그룹 단위 홀드아웃이라 ≥100(현재 101) — 앞 N문장만 평가.
-N_TEST = 100
+# 화면에 찍을 문장 수 기본값 — 지표는 전수로 재고 표시만 자른다.
+DEFAULT_SHOW = 100
 
 
 def require_abs(path, label):
@@ -50,10 +50,21 @@ def require_abs(path, label):
             f'Error: {label} must be an absolute path (got: {path})')
 
 
-def show_tagging(rows, pred_spans_list):
+def select_rows(rows, limit):
+    """평가할 행을 고른다 — `limit` 0 이면 전수, 아니면 앞에서 자른다."""
+    if limit and len(rows) > limit:
+        print(f'Evaluating the first {limit} of {len(rows)} sentences.')
+        return rows[:limit]
+    return rows
+
+
+def show_tagging(rows, pred_spans_list, limit=0):
     """문장별 예측 태깅(엔티티 type:표면형) 표시. surface 는 char offset 추출."""
-    print(f'=== 태깅 결과 (테스트 {len(rows)}문장) ===')
-    for i, (row, spans) in enumerate(zip(rows, pred_spans_list), 1):
+    shown = rows if not limit else rows[:limit]
+    head = f'=== 태깅 결과 (테스트 {len(shown)}문장'
+    head += ')' if len(shown) == len(rows) else f' / 전체 {len(rows)})'
+    print(head)
+    for i, (row, spans) in enumerate(zip(shown, pred_spans_list), 1):
         text = row['text']
         if spans:
             ents = '  '.join(
@@ -79,6 +90,11 @@ def main():
     p.add_argument('--thresholds', default=DEFAULT_THRESHOLDS,
                    help='Absolute thresholds.json path (raw output if '
                         'missing)')
+    p.add_argument('--limit', type=int, default=0,
+                   help='Evaluate only the first N sentences (0 = all)')
+    p.add_argument('--show', type=int, default=DEFAULT_SHOW,
+                   help=f'Print tagging for the first N sentences '
+                        f'(default {DEFAULT_SHOW}, 0 = all)')
     args = p.parse_args()
 
     require_abs(args.model_dir, 'model dir')
@@ -94,11 +110,7 @@ def main():
         tok = AutoTokenizer.from_pretrained(args.model_dir, use_fast=False)
     tok_load_sec = time.perf_counter() - t0
 
-    rows = load_jsonl(args.test)
-    # 앞 N_TEST 문장만 평가(오버슈트분 절단). 파일이 N_TEST 이하면 그대로.
-    if len(rows) > N_TEST:
-        print(f'Evaluating the first {N_TEST} of {len(rows)} sentences.')
-    rows = rows[:N_TEST]
+    rows = select_rows(load_jsonl(args.test), args.limit)
     feats, offs = encode_dataset(rows, tok, label2id, 'vi', 256)
     res = evaluate_model(
         model_path=args.model_dir, eval_features=feats, eval_offsets=offs,
@@ -115,7 +127,7 @@ def main():
         pred = res['pred_spans_list']
 
     # 1) 샘플 추론 내용
-    show_tagging(rows, pred)
+    show_tagging(rows, pred, args.show)
 
     # 2) 추론 시간 — 모델·토크나이저 로드 / 추론 전체 / 1문장당 추론
     load_sec = tok_load_sec + res['load_seconds']

@@ -420,7 +420,7 @@ def test_ja_parity_operating_point():
                       _CONFIG.max_length)
     rows = load_jsonl(_JA_TEST)
     expected = json.load(open(_JA_METRICS, encoding='utf-8'))[
-        'abstention']['overall_operating']
+        'confidence_threshold']['overall_operating']
     got = _overall_f1(model, rows, apply_threshold=True)
     assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
     assert got['precision'] == pytest.approx(expected['precision'], abs=1e-6)
@@ -435,7 +435,7 @@ def test_ja_parity_baseline_raw():
                       _CONFIG.max_length)
     rows = load_jsonl(_JA_TEST)
     expected = json.load(open(_JA_METRICS, encoding='utf-8'))[
-        'abstention']['overall_baseline']
+        'confidence_threshold']['overall_baseline']
     got = _overall_f1(model, rows, apply_threshold=False)
     assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
 

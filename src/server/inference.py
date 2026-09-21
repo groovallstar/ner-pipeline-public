@@ -30,6 +30,7 @@ from ner.classifier.data_utils import (
     build_label_maps,
     decode_bio_to_spans,
     encode_row,
+    merge_email_fragments,
 )
 from server.chunking import split_for_length
 from server.config import ServerConfig
@@ -211,7 +212,7 @@ class LangModel:
                     self._decode_chunk(pred_np[i], conf_np[i], offs, base))
         out: List[List[dict]] = []
         for ti, text in enumerate(texts):
-            spans = per_text[ti]
+            spans = merge_email_fragments(per_text[ti], text)
             if apply_threshold and self.thresholds:
                 spans = apply_thresholds([spans], self.thresholds)[0]
             out.append([_to_canonical(s, text) for s in spans])
@@ -231,7 +232,9 @@ class LangModel:
         # 임계값은 canonical 변환 전 내부 span({type,...})에 적용한다 —
         # confidence_threshold.apply_thresholds 가 type 필드로 필터하며,
         # 이는 학습-시점 eval 경로와 동일하다(parity 보장). 반복 offset의
-        # 라벨 충돌은 공용 디코더에서 처리한다.
+        # 라벨 충돌은 공용 디코더에서 처리한다. EMAIL 조각 병합도 학습-시점
+        # eval 과 같이 임계값보다 먼저 한다 — 임계값이 그 단위로 fit 됐다.
+        spans = merge_email_fragments(spans, text)
         if apply_threshold and self.thresholds:
             spans = apply_thresholds([spans], self.thresholds)[0]
         return [_to_canonical(s, text) for s in spans]

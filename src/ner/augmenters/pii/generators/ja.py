@@ -23,6 +23,29 @@ JAPANESE_GIVEN_NAMES = [
     '美月', '一輝', '美羽', '沙織', '杏奈', '玲奈', '梨花', '彩',
 ]
 
+# 이메일 로컬파트에 쓰는 로마자 이름. 로컬파트에는 ASCII 만 들어가므로 한자
+# 이름을 그대로 넣으면 전량 탈락해 무작위 글자만 남는다. 표기 이름 목록과
+# 같은 순서의 헵번식 표기다.
+EMAIL_FAMILY_NAMES = [
+    'yamada', 'sato', 'suzuki', 'tanaka', 'takahashi', 'ito',
+    'watanabe', 'nakamura', 'kobayashi', 'kato', 'yoshida', 'yamamoto',
+    'inoue', 'kimura', 'hayashi', 'saito', 'shimizu', 'yamazaki',
+    'mori', 'abe', 'ikeda', 'hashimoto', 'yamashita', 'ishii',
+    'maeda', 'fujita', 'goto', 'okada', 'hasegawa', 'ishikawa',
+    'murakami', 'kondo', 'sakamoto', 'endo', 'aoki', 'fujii',
+    'nishimura', 'fukuda', 'ota', 'miura', 'fujiwara', 'okamoto',
+    'matsumoto', 'nakajima',
+]
+
+EMAIL_GIVEN_NAMES = [
+    'taro', 'hanako', 'kenichi', 'misaki', 'shota', 'yuko', 'daisuke',
+    'ayaka', 'naoki', 'mai', 'yuto', 'miho', 'takuya', 'yui',
+    'yosuke', 'ai', 'takashi', 'mayu', 'tomoya', 'nanako', 'yuna',
+    'hiroto', 'yuina', 'ren', 'hina', 'sota', 'miyu', 'kokoa',
+    'aoi', 'yuma', 'rin', 'ao', 'sakura', 'riku', 'akari', 'hayate',
+    'mitsuki', 'kazuki', 'miu', 'saori', 'anna', 'rena', 'rika', 'aya',
+]
+
 JAPANESE_PREFECTURES = [
     '東京都', '大阪府', '神奈川県', '愛知県', '北海道',
     '千葉県', '埼玉県', '福岡県', '兵庫県', '京都府',

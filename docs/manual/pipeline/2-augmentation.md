@@ -31,7 +31,8 @@ flowchart LR
   원본 gold를 보존한다.
 - **EN** — 재라벨이 없다. OntoNotes5 18종을 canonical 6종으로 매핑하고 자연문을
   복원하는 형식 변환만 거친 뒤 PII 4종을 주입한다. 원본 `FAC` 는 표면별 판정
-  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다.
+  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다. 주입 뒤 EMAIL 일부를
+  괄호·따옴표 등에 붙인다(§EMAIL 붙은 문맥).
 
 ## 목차
 
@@ -112,6 +113,88 @@ LLM 주입 출력을 그대로 학습에 쓰지 않고 **독립한 두 번째 LL
 - KO 주민등록번호는 **체크섬 무효**로 생성(실유효 번호 비생성)
 - 주입 밀도 기본 분포 `P(0)=0.2, P(1)=0.4, P(2)=0.3, P(3)=0.1`(문장당
   PII 수), `--pii-max`로 상한 조정, `--seed`로 결정론성
+
+### EMAIL 로컬파트 표면형
+
+`local@domain` 의 `@` 앞부분을 **형태·대소문자·숫자** 세 축으로 나눠 각각
+독립 추첨한다. 축이 독립이라 형태마다 대소문자 표를 다시 만들 필요가 없고,
+한 축의 비율을 조정해도 나머지 두 축이 흔들리지 않는다. 목표값은
+`generators/base.py` 의 `LOCAL_PART_FORM_WEIGHTS`·`LOCAL_PART_*_RATE` 가
+단일 출처이며 아래 표는 그 사본이다.
+
+형태 축은 이름 두 토큰을 무엇으로 잇는지가 정한다.
+
+| 형태 | 비율 | 예 |
+|---|---|---|
+| 점 연결 | 30% | `emily.thompson` |
+| 붙여쓰기 | 22% | `emilythompson` |
+| 단일 토큰 | 20% | `emily` |
+| 이니셜 + 성 | 15% | `ethompson` |
+| 밑줄 연결 | 8% | `emily_thompson` |
+| 하이픈 연결 | 5% | `emily-thompson` |
+
+| 축 | 값 | 비율 |
+|---|---|---|
+| 대소문자 | 전부 소문자 | 90% |
+| | 토큰 첫 글자 대문자 | 10% |
+| 숫자 | 없음 | 72% |
+| | 접미 1~4자리 | 26% |
+| | 접두 1~2자리 | 2% |
+
+**이름은 표기 이름이 아니라 로케일별 ASCII 이름 목록에서 뽑는다**
+(`EMAIL_GIVEN_NAMES`·`EMAIL_FAMILY_NAMES`). 로컬파트가 ASCII 만 받으므로
+`generate_name()` 의 표기 이름을 그대로 넣으면 ko·ja 는 한글·한자가 전량
+탈락해 무작위 글자만 남고, en·vi 는 공백이 점으로 바뀌어 점 100% 가 된다.
+ko·ja 목록은 표기 이름 목록과 같은 순서의 로마자 표기다.
+
+**숫자 접두를 0 으로 두지 않는 이유**는 숫자로 시작하는 이메일이 드물지만
+실재하기 때문이다. 학습에서 완전히 지우면 그 표면형이 분포 밖이 되어, 지금
+없는 구멍이 반대편에 생긴다.
+
+이미 만들어져 있는 코퍼스는 `ner.scripts.rewrite_email_localpart` 로 EMAIL
+span 의 로컬파트만 이 분포로 다시 만든다. 도메인·문맥·다른 라벨은 건드리지
+않고 길이 차이만큼 뒤따르는 엔티티 오프셋을 민다. `data/` 는 gitignore 라, 네
+코퍼스를 치환한 입력·출력 지문과 seed 는
+`augmenters/pii/data/email_localpart_rewrite_ledger.json` 에 커밋해 둔다. EN 은 이
+출력 위에 아래 붙은 문맥 치환을 한 번 더 했다.
+
+### EMAIL 붙은 문맥 (EN)
+
+EN 은 주입한 EMAIL 가운데 일부를 공백이 아닌 글자 뒤에 둔다. en 모델의 토크나이저
+(RoBERTa 바이트 BPE)는 공백 뒤 단어에 `Ġ` 표지를 붙여 다른 토큰으로 쓴다. 그래서
+`at alice@x.com` 의 로컬파트는 `Ġalice` 한 토큰이지만 `<alice@x.com>` 의 로컬파트는
+`al` + `ice` 다. LLM 자연 주입은 주소를 거의 언제나 공백 뒤에 둔다(치환 전
+24,105건 중 3건만 예외). 그래서 모델이 뒤쪽 모양을 보지 못했고, 괄호·`mailto:` 뒤
+주소의 앞쪽을 놓쳤다.
+
+| 종류 | 바꾼 모양 | 비율 |
+|---|---|---|
+| 꺾쇠 | `at <alice@x.com> today` | 5% |
+| 괄호 | `at (alice@x.com) today` | 3% |
+| 큰따옴표 | `at "alice@x.com" today` | 3% |
+| `mailto:` | `at mailto:alice@x.com today` | 2% |
+| 단서어 콜론 | `email alice@x.com` → `email:alice@x.com` | 단서어 뒤 주소의 30% |
+
+비율의 단일 출처는 `augmenters/pii/email_context.py` 의 `EMAIL_WRAP_WEIGHTS`·
+`EMAIL_CUE_COLON_RATE` 이고 위 표는 그 사본이다. 적용 뒤 EN gold 에서 공백 아닌
+글자 뒤의 주소가 14.3% 가 됐다. 콜론을 단서어 뒤에만 넣는 것은 단서어 없이 넣으면
+`at:alice@x.com` 같은 없는 표기가 되기 때문이다.
+
+**위 §주입 방식이 경계하는 규칙 삽입과는 다르다.** 그 경계는 PII 를 문두·문말로
+옮겨 단서어 없이 끼우는 방식을 향한다. 이 치환은 LLM 이 둔 자리와 앞의 단서어
+(`at`·`email`)를 그대로 두고 주소 둘레에 글자만 더하므로 위치 분포가 바뀌지 않는다.
+남는 위험은 "괄호 안 = EMAIL" 같은 지름길이다. 이메일이 아닌 내용을 같은 자리에 넣은
+음성 probe(`tests/server/test_en_email_probe.py`)가 그것을 잰다.
+
+문자열 첫 자리와 개행·탭 뒤는 코퍼스로 다루지 않는다. 그 자리는 토크나이저 쪽의
+앞 공백과 공백류 정규화가 맡는다([4. 분류](4-classification.md) §2). 코퍼스에
+문두 주소를 넣으면 이 문서가 경계하는 위치 지름길이 된다.
+
+적용은 `ner.scripts.rewrite_email_context` 로 하고, 입력·출력 지문과 seed 는
+`augmenters/pii/data/email_context_rewrite_ledger.json` 에 커밋한다. 이 원장은
+로컬파트 치환 원장의 출력 지문에서 출발하고, EN 병합본 지문 검사는 디스크 판본을
+이 원장의 출력 지문과 대조한다. EN 을 다시 주입하면 로컬파트 분포는 생성기가
+맞추지만 이 치환은 다시 돌려야 한다.
 
 ### CLI
 

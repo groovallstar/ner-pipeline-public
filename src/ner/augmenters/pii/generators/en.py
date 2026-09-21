@@ -46,6 +46,11 @@ US_FAMILY_NAMES = [
 
 US_MIDDLE_INITIALS = list('ABCDEFGHJKLMNPRSTW')
 
+# 이메일 로컬파트에 쓰는 이름. 미국 이름은 이미 ASCII 라 표기 목록을 그대로
+# 쓴다.
+EMAIL_GIVEN_NAMES = US_GIVEN_NAMES
+EMAIL_FAMILY_NAMES = US_FAMILY_NAMES
+
 US_STREETS = [
     'Main St', 'Oak Ave', 'Maple Dr', 'Cedar Ln', 'Elm St', 'Washington Ave',
     'Park Blvd', 'Lake Rd', 'Hill St', 'Sunset Blvd', 'Broadway',

@@ -361,3 +361,116 @@ def test_encode_en_numeric_pii_trailing_period(en_tokenizer, label_maps):
     assert (id_spans[0]['start'], id_spans[0]['end']) == (
         entities[0]['start_char'], entities[0]['end_char']
     )
+
+
+# ── 바이트 BPE: 문두 앞 공백·공백류 정규화 ─────────────────────────────────
+#
+# 바이트 BPE 는 공백 뒤 단어에 `Ġ` 를 붙여 다른 토큰으로 쓴다. 문자열 첫 단어와
+# 개행·탭·연속 공백 뒤 단어는 학습에서 거의 못 본 모양이 되어, 그 자리의 주소가
+# 앞쪽을 잃은 채 잡혔다. 아래 검사는 그 자리의 주소가 문중과 같은 토큰으로
+# 인코딩되고, 오프셋은 원문 위치로 돌아오는지를 본다.
+
+EMAIL = 'alice@example.com'
+
+
+@pytest.fixture(scope='module')
+def en_pipeline_tokenizer():
+    pytest.importorskip('transformers')
+    from ner.classifier.data_utils import load_tokenizer
+    return load_tokenizer('roberta-base')
+
+
+def _email_row(text):
+    start = text.index(EMAIL)
+    return {'text': text, 'id': 'w', 'entities': [{
+        'label': 'EMAIL', 'start_char': start,
+        'end_char': start + len(EMAIL), 'text': EMAIL}]}
+
+
+def _real_ids(feat):
+    return [i for i, m in zip(feat['input_ids'], feat['attention_mask']) if m]
+
+
+def test_load_tokenizer_adds_prefix_space_for_byte_level_bpe(
+        en_pipeline_tokenizer):
+    ids = en_pipeline_tokenizer(EMAIL)['input_ids']
+    assert en_pipeline_tokenizer.convert_ids_to_tokens(ids)[1].startswith('Ġ')
+
+
+def test_load_tokenizer_leaves_other_fast_tokenizers_alone(vi_tokenizer):
+    from ner.classifier.data_utils import load_tokenizer
+    text = f'Contact:  {EMAIL}'
+    assert (load_tokenizer('xlm-roberta-base')(text)['input_ids']
+            == vi_tokenizer(text)['input_ids'])
+
+
+def test_prefix_space_survives_save_and_reload(en_pipeline_tokenizer,
+                                               tmp_path):
+    """포장이 저장한 토크나이저를 서버가 다시 열어도 앞 공백이 남는다."""
+    from transformers import AutoTokenizer
+    en_pipeline_tokenizer.save_pretrained(tmp_path)
+    reloaded = AutoTokenizer.from_pretrained(tmp_path, use_fast=True)
+    assert (reloaded(EMAIL)['input_ids']
+            == en_pipeline_tokenizer(EMAIL)['input_ids'])
+
+
+def test_string_start_email_gets_mid_sentence_tokens(en_pipeline_tokenizer,
+                                                     label_maps):
+    label2id, id2label = label_maps
+    alone, offs = encode_row(_email_row(EMAIL), en_pipeline_tokenizer,
+                             label2id, 'en', max_length=32)
+    mid, _ = encode_row(_email_row(f'Contact {EMAIL}'), en_pipeline_tokenizer,
+                        label2id, 'en', max_length=32)
+    assert _real_ids(alone)[1:] == _real_ids(mid)[2:]
+    spans = decode_bio_to_spans(alone['labels'], offs, id2label)
+    assert [(s['type'], s['start'], s['end']) for s in spans] == [
+        ('EMAIL', 0, len(EMAIL))]
+
+
+@pytest.mark.parametrize('template', [
+    'Contact:\n{e}', 'Contact:\r\n{e}', 'Contact:\t{e}', 'Contact:  {e}',
+    '  Contact: {e}\n', 'Contact: {e}  ',
+])
+def test_whitespace_variants_encode_like_one_space(template,
+                                                   en_pipeline_tokenizer,
+                                                   label_maps):
+    """공백류는 공백 한 칸과 같은 토큰이 되고, 정답 span 은 원문 위치로 돈다."""
+    label2id, id2label = label_maps
+    text = template.format(e=EMAIL)
+    feat, offs = encode_row(_email_row(text), en_pipeline_tokenizer,
+                            label2id, 'en', max_length=32)
+    ref, _ = encode_row(_email_row(f'Contact: {EMAIL}'), en_pipeline_tokenizer,
+                        label2id, 'en', max_length=32)
+    assert _real_ids(feat) == _real_ids(ref)
+    start = text.index(EMAIL)
+    spans = decode_bio_to_spans(feat['labels'], offs, id2label)
+    assert [(s['type'], s['start'], s['end']) for s in spans] == [
+        ('EMAIL', start, start + len(EMAIL))]
+
+
+def test_whitespace_run_inside_an_entity_round_trips(en_pipeline_tokenizer,
+                                                     label_maps):
+    """접힌 공백을 품은 엔티티(카드번호 표기)도 원문 span 으로 복원된다."""
+    label2id, id2label = label_maps
+    card = '5291  8884  5255  6661'
+    text = f'Paid with card {card} today.'
+    start = text.index(card)
+    row = {'text': text, 'id': 'c', 'entities': [{
+        'label': 'CREDIT_CARD', 'start_char': start,
+        'end_char': start + len(card), 'text': card}]}
+    feat, offs = encode_row(row, en_pipeline_tokenizer, label2id, 'en',
+                            max_length=32)
+    spans = decode_bio_to_spans(feat['labels'], offs, id2label)
+    assert [(s['type'], s['start'], s['end']) for s in spans] == [
+        ('CREDIT_CARD', start, start + len(card))]
+
+
+def test_non_byte_level_tokenizer_sees_the_raw_text(vi_tokenizer, label_maps):
+    """정규화는 바이트 BPE 에만 건다 — 다른 토크나이저의 입력은 그대로다."""
+    label2id, _ = label_maps
+    text = f'Contact:\n\n{EMAIL}'
+    feat, _ = encode_row(_email_row(text), vi_tokenizer, label2id, 'vi',
+                         max_length=32)
+    raw = vi_tokenizer(text, max_length=32, truncation=True,
+                       padding='max_length')
+    assert feat['input_ids'] == raw['input_ids']

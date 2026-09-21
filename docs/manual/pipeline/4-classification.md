@@ -92,7 +92,7 @@ else:
 
 | 분기 | 조건 | 모델 예 | 정렬 방식 | 의존성 |
 |---|---|---|---|---|
-| **fast** | `tokenizer.is_fast` | XLM-R, mmBERT, DeBERTa-V3 | `return_offsets_mapping=True` + `_trim_offset` | — |
+| **fast** | `tokenizer.is_fast` | XLM-R, mmBERT, DeBERTa-V3, RoBERTa | `return_offsets_mapping=True` + `_trim_offset`. 바이트 BPE 는 앞 공백·공백류 정규화 | — |
 | **PhoBERT** | `_is_phobert` | vinai/phobert | pyvi 단어분절 → 단어별 BPE, 단어 char-span | `pyvi` |
 | **JA slow** | 그 외 slow | tohoku-nlp/bert-base-japanese-v3 | `tokenize()` → `text.find()` greedy, `##` strip | `fugashi`+`unidic-lite` |
 
@@ -118,6 +118,36 @@ entity 밖 char를 들고 있어 검사에서 떨어지고, entity가 문장부�
 경우(`Inc.`)에도 마지막 char가 살아 있어 gold 라벨을 디코드했을 때 원래
 span이 복원된다. 애초에 길이 0인 offset(토크나이저가 연속 공백 자리에 주는
 것)과 `(0,0)` 특수토큰은 그대로 둔다.
+
+### 바이트 BPE 의 앞 공백과 공백류 정규화
+
+en 의 RoBERTa 는 바이트 BPE 다. 이 방식은 공백 뒤 단어에 `Ġ` 표지를 붙여, 같은
+단어라도 앞에 공백이 있는지에 따라 다른 토큰으로 쓴다. 개행·탭은 `Ċ`·`ĉ`, 연속
+공백의 여분은 단독 `Ġ` 로 따로 된 토큰이 된다. 학습 문장은 단어 사이가 공백 한
+칸이라 이 모양들을 거의 보지 못한다. 그래서 그 자리의 주소가 앞쪽을 잃은 채
+잡혔다. `r.patel@bluepine.io` 하나만 넣으면 `patel@bluepine.io` 가 나왔다.
+
+두 장치로 첫 단어와 공백류 뒤 단어를 문중과 같은 토큰으로 맞춘다.
+
+- **앞 공백** — 학습·포장·분석이 `load_tokenizer` 로 토크나이저를 열고, 바이트
+  BPE 는 `add_prefix_space=True` 로 연다. 포장이 이 설정을 `model/` 에 저장하므로
+  서버는 코드 변경 없이 같은 토큰을 받고, 옛 패키지는 옛 설정대로 돈다. 바이트
+  BPE 인지는 pre-tokenizer 가 `ByteLevel` 인지로 가린다. `add_prefix_space` 속성은
+  SentencePiece 계열에도 있어 판별에 쓰지 않는다.
+- **공백류 정규화** — 인코딩 직전에 앞뒤 공백을 떼고 공백류 연속을 공백 한 칸으로
+  접은 텍스트를 넣은 뒤 offset 을 원문 위치로 되돌린다(`canonical_whitespace`).
+  en 코퍼스에는 개행·탭이 없고 연속 공백은 카드번호 표기(`5291  8884 …`) 안에만
+  있어, 접어도 학습 분포 밖으로 나가는 입력이 없다. 이 정규화를 토크나이저 파일이
+  아니라 코드에 두는 것은 transformers v5 가 파일의 커스텀 normalizer 를 다시 로드할
+  때 버리기 때문이다. 서버의 청크 분할은 원문으로 토큰을 센다. 접으면 토큰이 줄기만
+  하므로 원문 셈이 한도를 넉넉하게 지킨다.
+
+두 장치 모두 바이트 BPE 에만 걸린다. ko 의 WordPiece 는 공백 모양을 토큰에 새기지
+않고, SentencePiece 계열의 입력은 그대로다.
+
+문장부호 바로 뒤(`<alice@…`, `mailto:alice@…`)는 토크나이저로 풀지 않는다. 그 앞에
+공백을 끼우면 뒤따르는 모든 단어(`(Seoul)`, `"The`)의 토큰이 함께 바뀐다. 이 자리는
+학습 코퍼스가 맡는다([2. 증강](2-augmentation.md) §EMAIL 붙은 문맥).
 
 ### BIO 라벨 부여 (`_bio_labels_from_offsets`)
 
@@ -313,6 +343,21 @@ BIO id 시퀀스 + char offsets → `{type,start,end}` span. 연속한 동일 of
 충돌하여 제외한 서브워드의 점수는 평균에 포함하지 않는다. 디코딩 규칙이 다른
 과거 점수와 직접 비교하지 않으며, 비교할 때는 같은 디코더로 다시 평가한다.
 
+### merge_email_fragments
+
+디코드한 span 에서 공백 없이 이어진 EMAIL 조각을 한 span 으로 합친다. 서브워드
+마다 따로 구간을 받는 토크나이저(en 의 RoBERTa, ko 의 WordPiece)는 주소의 한
+서브워드만 O 로 떨어져도, 같은 주소 안에서 B 가 다시 나와도 주소를 여러 span
+으로 낸다(`alice42@example.com` → `al` + `42@example.com`). 이메일에는 공백이
+없으므로 사이에 공백이 없는 두 EMAIL 조각은 같은 주소이고, 사이의 O 글자까지
+덮어 합친다. vi(PhoBERT)는 한 단어의 서브워드가 모두 단어 전체 구간을 받아 애초에
+조각나지 않는다.
+
+사이에 공백이 있거나, 합친 결과에 `@` 가 둘 이상이거나(쉼표로 붙여 쓴 주소
+목록), 두 조각 사이에 다른 엔티티가 있으면 합치지 않는다. 합친 span 의 `score`
+는 조각 중 가장 낮은 값이다. 학습 평가(`evaluate_model`)·서버 추론·오류 분석이
+디코드 직후, 임계값보다 먼저 이 함수를 부른다.
+
 ---
 
 ## 6. 신뢰도 임계값 운영점
@@ -381,7 +426,32 @@ results/classifier/{ja,vi,ko,en}/
 ### JA 출하 (deploy)
 
 학습은 CLI(`python -m ner.classifier`)에 흡수하고 배포 추론만 분리한다
-(별도 `train_*` 스크립트 없음).
+(별도 `train_*` 스크립트 없음). issue-262 재출하에 쓴 조건은 다음과 같다 —
+`--group-key id` 는 그 뒤 들어온 누출 가드가 행 단위 분할을 거부하기 때문이고,
+임계값은 모델 종속이라 같은 run 에서 다시 fit 한다.
+
+```bash
+python -m ner.classifier --lang ja --group-key id --seed 1 --train-seed 1 \
+    --valid-ratio 0.1 --test-ratio 0.019 \
+    --boundary-b-weight 1.5 --boundary-i-weight 1.2 \
+    --fit-threshold --threshold-target 0.93 \
+    --output-dir results/classifier/ja/<run>
+python src/ner/scripts/build_ner_prod.py --run-dir results/classifier/ja/<run> --lang ja
+cp results/classifier/ja/<run>/thresholds.json /data/ner/ja/thresholds.json
+```
+
+포장 스크립트는 `thresholds.json` 을 옮기지 않는다. 옮기지 않으면 옛 임계값이
+번들에 남아 새 모델에 걸리므로 위처럼 손으로 덮어쓴다.
+
+VI 는 백본이 CLI 기본값과 다르다. `--model-name` 을 빠뜨리면 `xlm-roberta-base` 로
+학습돼 배포 백본과 어긋난다.
+
+```bash
+python -m ner.classifier --lang vi --model-name vinai/phobert-base-v2 \
+    --group-key orig --seed 42 --train-seed 42 --precision fp16 \
+    --output-dir results/classifier/vi/<run>
+python src/ner/scripts/build_ner_prod.py --run-dir results/classifier/vi/<run> --lang vi
+```
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
@@ -414,7 +484,7 @@ python src/ner/scripts/build_ner_prod.py \
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|
-| 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
+| 포장 | `src/ner/scripts/build_ner_prod.py` | run 의 `best/` + tokenizer(학습과 같은 `load_tokenizer`) → `model/`, 분할 재유도 → `data/`, `metrics.json` 이식, `MODEL_CARD.md` 생성. 학습은 안 한다. 언어는 run 의 `metrics.json` 에서 읽고 `--lang` 은 대조용이다 |
 | 출하 번들 | `/data/ner/en/` | `model/` + `data/{train,valid,test}.jsonl` + `metrics.json` + `MODEL_CARD.md`. `thresholds.json` 없음(VI 와 같이 임계값 미적용) |
 | 배포 metric | `/data/ner/en/metrics.json` | 출하한 run 의 metric 과 포장 정보 |
 | 검사 | `tests/ner/classifier/test_en_deploy_package.py` | 분할 고정값·데이터 지문 · test 그룹 누출 0 · 붕괴 검출 바닥(strict micro-F1 ≥ 0.85) · 오프라인 자립 로드 |
@@ -425,11 +495,13 @@ python src/ner/scripts/build_ner_prod.py \
 대조해 어긋나면 중단한다. 실제로 학습에 쓰이지 않은 분할을 배포 데이터로
 적어 두는 것이 여기서 가능한 가장 조용한 실패이기 때문이다.
 
-**test 홀드아웃이 JA·VI 의 100문장이 아닌 이유** — EN gold 는 EVT 보유 행이
+**test 홀드아웃이 JA 의 100문장이 아닌 이유** — EN gold 는 EVT 보유 행이
 856(1.1%)·PROD 가 1,754(2.3%)라, 100문장을 떼면 두 타입이 각각 한두 행만
-들어와 측정이 성립하지 않는다. JA·VI 는 원본이 작아 그 크기가 불가피했지만
+들어와 측정이 성립하지 않는다. JA 는 원본이 5,270행이라 그 크기가 불가피하지만
 EN 은 76,378행이라 벤치마크와 같은 `test_ratio=0.1`(7,637행)을 그대로 쓴다.
-폴더 구조만 동형이고 홀드아웃 크기는 다르다.
+폴더 구조만 동형이고 홀드아웃 크기는 다르다. VI 도 issue-262 재출하에서
+`test_ratio=0.1`(3,774행)로 옮겼다 — 옛 101행 홀드아웃은 엔티티 보유·문맥어
+3개 이상으로 고른 것인데 그 선별 인자가 지금 CLI 에 없어 재현되지 않는다.
 
 **재현 대조를 하지 않는 이유** — 처음에는 배포런이 같은 시드의 벤치마크 run 을
 재현할 것으로 보고 수치 일치를 검사에 넣었으나, 그 전제가 거짓이다. best 에포크
@@ -463,13 +535,18 @@ KO 도 EN 과 같은 두 단계다 — 학습은 CLI, 포장은 그 산출물을
 ```bash
 # 1) 학습 — 원장 k-fold 와 같은 group-key
 python -m ner.classifier --lang ko --group-key id \
-    --seed 42 --train-seed 42 \
-    --output-dir results/classifier/ko/deploy-trainseed42
+    --seed 42 --train-seed 44 \
+    --output-dir results/classifier/ko/issue262-email-localpart-trainseed44
 
 # 2) 포장 — /data/ner/ko 로
 python src/ner/scripts/build_ner_prod.py \
-    --run-dir results/classifier/ko/deploy-trainseed42 --lang ko
+    --run-dir results/classifier/ko/issue262-email-localpart-trainseed44 --lang ko
 ```
+
+**`--train-seed` 를 valid 로 고르는 이유** — 같은 데이터·같은 데이터 시드에서도
+head 초기화 시드에 따라 EMAIL 이 흔들린다. issue-262 재출하 때 42·43·44 중 42 만
+valid EMAIL F1 이 0.9566 으로 떨어져 44 를 출하했다. test 로 고르면 그 test 로 내는
+판정이 자기 참조가 되므로 기준은 valid 다.
 
 | 아티팩트 | 위치 | 역할 |
 |---|---|---|

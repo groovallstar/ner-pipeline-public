@@ -41,11 +41,13 @@ def test_split_sizes_are_the_locked_ones(pkg):
 
     어긋나면 상수를 고칠 것이 아니라 조사한다 — 코퍼스가 바뀌었거나, 분할
     인자가 바뀌었거나, 패키지가 다른 데이터로 학습된 run 에서 나온 것이다.
+    지문은 EMAIL 붙은 문맥 치환 이후 값이다. 분할 크기는 그 치환과 앞선
+    로컬파트 재생성이 행 수를 바꾸지 않아 그대로다.
     """
     assert pkg['train_samples'] == 61104
     assert pkg['valid_samples'] == 7637
     assert pkg['test_samples'] == 7637
-    assert pkg['data_fingerprint'] == '258166d6972c8144'
+    assert pkg['data_fingerprint'] == '17a7936b5dec7a98'
 
 
 def test_no_group_leak(pkg):

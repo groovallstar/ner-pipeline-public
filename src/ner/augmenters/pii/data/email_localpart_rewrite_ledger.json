@@ -1,0 +1,111 @@
+{
+  "why": "네 디스크 코퍼스의 EMAIL 로컬파트를 목표 표면형 분포로 다시 만든 기록. data/ 는 gitignore 라 치환 전후 판본의 지문이 저장소에 남는 자리는 이 원장뿐이다. 재현은 치환 전 판본(input_sha256)에 같은 seed 로 generated_by 를 다시 돌린다.",
+  "generated_by": "python -m ner.scripts.rewrite_email_localpart",
+  "target": {
+    "form_weights": {
+      "dot": 30,
+      "plain": 22,
+      "single": 20,
+      "initial": 15,
+      "underscore": 8,
+      "hyphen": 5
+    },
+    "capitalized_rate": 0.1,
+    "digit_prefix_rate": 0.02,
+    "digit_suffix_rate": 0.26
+  },
+  "runs": {
+    "ontonotes_en": {
+      "corpus": "data/ontonotes_en/origin.jsonl",
+      "lang": "en",
+      "seed": 42,
+      "input_sha256": "164e60aebaf7600a6dfa0f89aa875b8b708c553f2d894ed5b6c43e7d753443d5",
+      "output_sha256": "a456ad779864b90de478ec36f016118c6eb68c6ffe3092e0f15ff946514c1712",
+      "rows": 76378,
+      "email_spans": 24105,
+      "before": {
+        "digit_prefix": 0.49093549056212404,
+        "dot": 1.0,
+        "capitalized": 1.0,
+        "any_digit": 1.0,
+        "dotless_lower": 0.0
+      },
+      "after": {
+        "digit_prefix": 0.02082555486413607,
+        "dot": 0.2997303464011616,
+        "capitalized": 0.09997925741547396,
+        "any_digit": 0.28554241858535573,
+        "dotless_lower": 0.6309479361128396
+      }
+    },
+    "klue": {
+      "corpus": "data/klue/origin.jsonl",
+      "lang": "ko",
+      "seed": 42,
+      "input_sha256": "da87bdb0e5b6f7e2adb2e034b83320662428a62cc6707ef574c37076772b1718",
+      "output_sha256": "c2cf02befb2b4aa877787520797b6be7f1940c922650d2b1510f1ddad779d79a",
+      "rows": 25989,
+      "email_spans": 8322,
+      "before": {
+        "digit_prefix": 0.4974765681326604,
+        "dot": 0.09913482335976928,
+        "capitalized": 0.0,
+        "any_digit": 1.0,
+        "dotless_lower": 0.9008651766402307
+      },
+      "after": {
+        "digit_prefix": 0.02090843547224225,
+        "dot": 0.3000480653689017,
+        "capitalized": 0.09997596731554914,
+        "any_digit": 0.2821437154530161,
+        "dotless_lower": 0.6325402547464551
+      }
+    },
+    "stockmark": {
+      "corpus": "data/stockmark/origin.jsonl",
+      "lang": "ja",
+      "seed": 42,
+      "input_sha256": "e16937cf2710926302875e085f75b57a1a8df8f02bfb3017cbbcbbe7af06bc53",
+      "output_sha256": "693e2de35418ec6eec234fc1dcc382ebb5290fbcc5bfd7b6a028447b5cc5a860",
+      "rows": 5270,
+      "email_spans": 1013,
+      "before": {
+        "digit_prefix": 0.49950641658440276,
+        "dot": 0.09871668311944719,
+        "capitalized": 0.0,
+        "any_digit": 1.0,
+        "dotless_lower": 0.9012833168805529
+      },
+      "after": {
+        "digit_prefix": 0.019743336623889437,
+        "dot": 0.29615004935834155,
+        "capitalized": 0.08884501480750247,
+        "any_digit": 0.26554787759131293,
+        "dotless_lower": 0.6357354392892399
+      }
+    },
+    "wikiann_vi": {
+      "corpus": "data/wikiann_vi/origin.jsonl",
+      "lang": "vi",
+      "seed": 42,
+      "input_sha256": "ccb8890e35bd7c0b80df4e9a0f86fe9d7fc89f5f5d58ebd03562587dd7bc6c2c",
+      "output_sha256": "264b9bb883346dce69d3a2704b01953f4a9103824559decc4f1260687f9f7cbe",
+      "rows": 37706,
+      "email_spans": 7182,
+      "before": {
+        "digit_prefix": 0.49874686716791977,
+        "dot": 1.0,
+        "capitalized": 1.0,
+        "any_digit": 1.0,
+        "dotless_lower": 0.0
+      },
+      "after": {
+        "digit_prefix": 0.020328599275967696,
+        "dot": 0.2951824004455583,
+        "capitalized": 0.09454191033138401,
+        "any_digit": 0.2827903091060986,
+        "dotless_lower": 0.6357560568086884
+      }
+    }
+  }
+}
