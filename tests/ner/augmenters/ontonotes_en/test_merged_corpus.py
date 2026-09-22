@@ -7,7 +7,6 @@ gitignore 되므로 클론 직후에는 없고, 그때 실패시키면 무관한
 함께 움직여 검사가 자기참조가 된다. 변환·주입을 의도적으로 다시 돌린 사람은 이
 숫자를 손으로 고쳐야 하고, 그 마찰이 목적이다.
 """
-import json
 from pathlib import Path
 
 import pytest
@@ -28,11 +27,6 @@ pytestmark = pytest.mark.skipif(
     reason=f'merged EN corpus not present at {MERGED}',
 )
 
-LEDGER = (
-    Path(__file__).resolve().parents[4] / 'src' / 'ner' / 'augmenters'
-    / 'ontonotes_en' / 'data' / 'fac_disk_migration_ledger.json'
-)
-
 GOLDEN_ROWS = 76378
 GOLDEN_GROUPS = 70641
 GOLDEN_SPANS = 167856
@@ -49,15 +43,6 @@ GOLDEN_LABELS = {
     'PROD': 1990,
     'EVT': 946,
 }
-
-# `FAC` 디스크 마이그레이션 **직전** 판의 값. 위 골든과 함께 두어야 이동량을
-# 실제로 재는 등식이 선다.
-#
-# **역적용으로 복원한 코퍼스에서 세면 안 된다** — 역적용이 원장대로 되돌리므로
-# 차이가 언제나 원장 행 수가 되어 등식이 정의상 참이 된다. 그래서 비교 상대는
-# 마이그레이션 전에 이 파일이 갖고 있던 리터럴이다(git 이력에 남아 있다).
-BEFORE_MIGRATION = {'LOC': 21671, 'ORG': 17379, 'TOTAL': 167871}
-
 
 @pytest.fixture(scope='module')
 def rows():
@@ -85,30 +70,6 @@ def test_label_counts(rows):
             counts[entity['label']] = counts.get(entity['label'], 0) + 1
     assert counts == GOLDEN_LABELS
     assert sum(counts.values()) == GOLDEN_SPANS
-
-
-def test_migration_deltas_equal_the_ledger_counts(rows):
-    """`FAC` 판정을 디스크에 적용한 양을 병합본 안에서 센다 (수락 기준 4).
-
-    등식이 셋인 것은 **이동과 제거가 `ORG` 감소분에 함께 들어가기** 때문이다.
-    하나로 묶으면 둘을 못 가른다 — 이동 하나를 제거로 바꿔도 `ORG` 감소분은
-    그대로라 안 걸린다.
-
-    나머지 불변식(행 수·그룹 수·PII 4 종·안 건드린 NER 타입)은 **아무것도 안
-    옮겨도 전부 성립하므로**, 마이그레이션이 실제로 일어났는지를 재는 것은 이
-    세 등식뿐이다. "재측정해서 갱신했다" 는 자기선언이라 행을 잃어도 초록이
-    된다.
-    """
-    ledger = json.loads(LEDGER.read_text(encoding='utf-8'))
-    moved, removed = len(ledger['move']), len(ledger['remove'])
-    counts = {}
-    for row in rows:
-        for entity in row['entities']:
-            counts[entity['label']] = counts.get(entity['label'], 0) + 1
-
-    assert counts['LOC'] - BEFORE_MIGRATION['LOC'] == moved
-    assert BEFORE_MIGRATION['ORG'] - counts['ORG'] == moved + removed
-    assert BEFORE_MIGRATION['TOTAL'] - sum(counts.values()) == removed
 
 
 def test_spans_are_self_consistent(rows):

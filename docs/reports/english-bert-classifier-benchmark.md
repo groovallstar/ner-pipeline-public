@@ -26,12 +26,10 @@ gold 세대 1 로 잰 것이며 현행 코퍼스로는 재현되지 않는다.**
 아래 본문은 측정 당시 표기를 그대로 둔다 — 조건을 사후에 고쳐 적으면 이 표가
 어느 조건에서 나왔는지가 흐려지기 때문이다.
 
-현행 코퍼스의 지문은 `258166d6972c8144` 이고, 파일별 sha256 과 `FAC` 재라벨로
-손댄 span 은 `src/ner/augmenters/ontonotes_en/data/fac_disk_migration_ledger.json`
-에 있다. 그 원장과 디스크의 `origin.jsonl` 이 어긋나지 않는지는
-`tests/ner/augmenters/ontonotes_en/test_fac_disk_migration_ledger.py` 가 본다 —
-원장이 함께 적는 주입 split 의 지문은 그 파일들이 디스크에서 내려가 대조할
-상대가 없다.
+현행 코퍼스의 지문은 `258166d6972c8144` 이다. 파일별 sha256 과 `FAC` 재라벨로
+손댄 span 을 적은 원장(`src/ner/augmenters/ontonotes_en/data/fac_disk_migration_ledger.json`)과
+그 원장을 디스크의 `origin.jsonl` 과 대조하던 테스트는 일회성 이관 도구와 함께
+지웠다. 둘 다 커밋 `ec1c8eb` 에 남아 있다.
 
 ## 현행 gold 의 `roberta-base` baseline
 
