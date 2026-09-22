@@ -108,7 +108,8 @@ LLM 자연 주입을 다시 돌리면 문맥·다른 라벨·도메인이 전부
 `rewrite_email_localpart` 와 같은 틀로, 이미 있는 `origin.jsonl` 의 DAT 표면만 제자리에서
 바꾼다. 치환 전 파일은 `origin.jsonl.pre-issue-265` 로 남기고 원장은
 `origin.jsonl.dat-surface.json` 에 입출력 sha256 · 목표 비율 · 전후 실측으로 쓴다.
-`data/` 는 gitignore 라 저장소에 안 들어간다. 치환 전 파일은 2026-09-22 에 지웠다
+`data/` 는 gitignore 라 저장소에 안 들어간다. 치환 전 파일과 디스크 원장은 2026-09-22 에
+지웠고 원장은 커밋본 `augmenters/pii/data/vi_dat_surface_rewrite_ledger.json` 만 남는다
 (결정 로그 참고).
 
 ### 표면형과 목표 비율
@@ -175,6 +176,11 @@ DAT F1 0.999 가 그 표기 위에서 나온 값이라 너무 깎으면 무회�
   `*_prod_seed*/` 의 분할 jsonl 은 지우지 않는다. 이 뒤로는 원장의 `input_sha256` 판본이
   디스크에 없어, 치환을 처음부터 다시 돌려 출력 지문을 대조하는 재현은 할 수 없다.
   원장은 무엇이 입력이었는지의 기록으로만 남는다.
+- 2026-09-22 디스크 원장 `origin.jsonl.*.json` 6 개도 지운다. 사용자 결정이다. 읽는 코드·
+  테스트가 없고 같은 내용이 `augmenters/pii/data/*_rewrite_ledger.json` 커밋본에 있다.
+  지우기 직전 네 언어 모두 디스크 `origin.jsonl` 의 sha256 이 마지막 커밋 원장의
+  `output_sha256` 과 같음을 확인했다. 세 치환 스크립트의 `--ledger` 기본값이 출력 옆이라
+  다시 돌리면 이 파일이 다시 생긴다.
 
 ## 구현 단계 (가변)
 
