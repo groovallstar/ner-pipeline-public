@@ -2,7 +2,9 @@
 
 - Issue: https://github.com/groovallstar/ner-pipeline/issues/265
 - PR: https://github.com/groovallstar/ner-pipeline/pull/290 (`develop` 대상. PR 전 검사:
-  develop 은 분기 시점 3b3c049 그대로, 포함 커밋 1개가 모두 이 이슈 것, 예외 없음)
+  develop 은 분기 시점 3b3c049 그대로, 포함 커밋 1개가 모두 이 이슈 것, 예외 없음.
+  PR 생성 뒤 커밋 3개를 더했다 — vi parity 검사, ko parity 원인 판정과 재배포는 사용자
+  결정으로 이 이슈에 합쳤다. 재검사 시점에도 develop 은 3b3c049 그대로다)
 - 브랜치: `feat/issue-265-vi-dat-descriptive-surface` (`origin/develop` 3b3c049 에서 분기,
   예외 없음. 분기 직전 작업 공간은 detached HEAD · clean 이었고 로컬 `develop` 48bf2e9 는
   뒤처져 있어 쓰지 않았다)
