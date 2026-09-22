@@ -24,5 +24,6 @@
 ## 검증
 
 - `uv run pytest tests/ner/scripts -q`
-- shell 변경은 `bash -n src/ner/scripts/*.sh`
-- 각 Python CLI는 `uv run python <script> --help`로 import와 인자 배선을 확인한다.
+- 변경한 셸 파일마다 `bash -n <파일>`을 개별 실행한다.
+- CLI 진입점 변경은 `uv run python <script> --help`로 import와 인자 배선을
+  확인한다. 실제 처리 결과는 관련 테스트나 실행 결과로 별도 검증한다.
