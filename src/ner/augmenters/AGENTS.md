@@ -14,9 +14,7 @@ label과 `[start_char, end_char)` 오프셋을 갖는다.
 - `pii/`의 suffix 모드는 결정적이고, llm 모드는 자연 삽입 후 원본 entity를
   다시 찾아 보존한다. seed와 주입 밀도 계약을 유지한다.
 - `wikiann_vi/`에서 품질 측정(kappa, Wikidata anchor)과 코퍼스 변경
-  (confidence merge, silver gap)을 분리한다.
-- silver gap은 독립 검증된 누락 span만 additive하게 삽입하며 기존 gold를
-  삭제하거나 이동하지 않는다.
+  (confidence merge)을 분리한다.
 
 ## 금지사항
 
