@@ -1,6 +1,6 @@
 """label_merger 단위 테스트."""
-from ner.augmenters.pii.injector import apply_label_merge, merge_entities
-from ner.augmenters.pii.schema import Entity
+from ner.augmenters.injector import apply_label_merge, merge_entities
+from ner.augmenters.schema import Entity
 
 
 def test_name_to_per():

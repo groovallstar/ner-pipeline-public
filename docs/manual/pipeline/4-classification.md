@@ -47,7 +47,7 @@ flowchart LR
 
 ## 1. 입력 계약·라벨 셋
 
-augmenters/pii 출력(단계 2)을 그대로 소비한다.
+augmenters 출력(단계 2)을 그대로 소비한다.
 
 ```jsonl
 {"text": "...",

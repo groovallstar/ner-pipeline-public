@@ -136,13 +136,13 @@ def random_email(
 def locale_module(lang: str):
     """언어 코드에 해당하는 로케일 생성기 모듈."""
     if lang == 'ja':
-        from ner.augmenters.pii.generators import ja as mod
+        from ner.augmenters.generators import ja as mod
     elif lang == 'vi':
-        from ner.augmenters.pii.generators import vi as mod
+        from ner.augmenters.generators import vi as mod
     elif lang == 'ko':
-        from ner.augmenters.pii.generators import ko as mod
+        from ner.augmenters.generators import ko as mod
     elif lang == 'en':
-        from ner.augmenters.pii.generators import en as mod
+        from ner.augmenters.generators import en as mod
     else:
         raise ValueError(f'Unsupported language: {lang}')
     return mod

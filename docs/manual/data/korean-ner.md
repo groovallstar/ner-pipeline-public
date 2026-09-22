@@ -438,7 +438,7 @@ PROD/EVT 등 NER 레이어를 LLM 재라벨로 갈아끼울 때(경계 룰 개�
 
 ### PII 주입은 비가역 — graft 금지
 
-KO PII 4종은 **llm 자연삽입**(`ner.augmenters.pii --mode llm`)으로 주입되며,
+KO PII 4종은 **llm 자연삽입**(`ner.augmenters --mode llm`)으로 주입되며,
 PII 문자열만 끼우는 게 아니라 connective 절("관련 문의는 …으로")까지 더해
 **원문 일부를 재작성**한다. 따라서 PII-주입 텍스트에서 clean 본문을 복원하거나,
 clean gold 의 NER span 을 offset 으로 PII-텍스트에 얹는 graft 는 불가능하다

@@ -5,7 +5,7 @@
 """
 import pytest
 
-from ner.augmenters.pii.__main__ import _build_verify_labeler
+from ner.augmenters.__main__ import _build_verify_labeler
 
 
 def test_en_resolves_to_the_english_labeler():

@@ -4,7 +4,7 @@
 > 검증한다. 두 갈래다 — (3B) 분류 평가의 cross-fold 누출, (3C) PII 주입
 > 교차검증.
 > **대상 코드**: `classifier/kfold_pool` + `data_utils.split_kfold_stratified`,
-> `augmenters/pii/verifier`
+> `augmenters/verifier`
 
 핵심 원칙 — **검증은 라벨을 바꾸지 않는다.** 통계와 불일치 샘플을 리포트로
 남길 뿐 원본 JSONL은 불변이다.

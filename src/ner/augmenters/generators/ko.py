@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import random
 
-from ner.augmenters.pii.generators.base import random_digits
+from ner.augmenters.generators.base import random_digits
 
 KOREAN_FAMILY_NAMES = [
     '김', '이', '박', '최', '정', '강', '조', '윤', '장', '임',

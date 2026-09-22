@@ -9,9 +9,9 @@ from __future__ import annotations
 import random
 from collections.abc import Iterable, Iterator
 
-from ner.augmenters.pii.config import InjectionConfig
-from ner.augmenters.pii.generators.base import generate_pii
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.config import InjectionConfig
+from ner.augmenters.generators.base import generate_pii
+from ner.augmenters.schema import Entity, Record
 
 
 def apply_label_merge(entity: Entity, rules: dict[str, str]) -> Entity:

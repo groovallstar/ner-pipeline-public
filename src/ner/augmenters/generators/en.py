@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import random
 
-from ner.augmenters.pii.generators.base import random_digits
+from ner.augmenters.generators.base import random_digits
 
 US_GIVEN_NAMES = [
     'James', 'Robert', 'John', 'Michael', 'David', 'William', 'Richard',

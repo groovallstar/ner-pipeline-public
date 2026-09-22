@@ -4,11 +4,11 @@ from __future__ import annotations
 import random
 import re
 
-from ner.augmenters.pii.config import InjectionConfig
-from ner.augmenters.pii.generators import vi
-from ner.augmenters.pii.generators.base import generate_pii
-from ner.augmenters.pii.injector import PIIInjector
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.config import InjectionConfig
+from ner.augmenters.generators import vi
+from ner.augmenters.generators.base import generate_pii
+from ner.augmenters.injector import PIIInjector
+from ner.augmenters.schema import Entity, Record
 
 # VI canonical PII 라벨 집합 (NAME/ADDRESS는 병합 전 내부 토큰).
 _VI_PII_CANONICAL = frozenset(
@@ -256,7 +256,7 @@ def test_vi_multiple_injection_no_span_overlap():
 
 def test_vi_connectors_present():
     """_VI_CONNECTORS에 canonical PII 키 전체가 등록되어 있다."""
-    from ner.augmenters.pii.injector import _VI_CONNECTORS
+    from ner.augmenters.injector import _VI_CONNECTORS
     for label in ('NAME', 'PHONE', 'ADDRESS', 'DAT', 'ID_NUM', 'EMAIL',
                   'CREDIT_CARD'):
         assert label in _VI_CONNECTORS, label

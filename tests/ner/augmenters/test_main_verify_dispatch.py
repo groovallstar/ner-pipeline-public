@@ -1,9 +1,9 @@
-"""ner.augmenters.pii.__main__ 의 verify 라벨러 lang 분기 단위 테스트."""
+"""ner.augmenters.__main__ 의 verify 라벨러 lang 분기 단위 테스트."""
 from __future__ import annotations
 
 import pytest
 
-from ner.augmenters.pii import __main__ as pii_main
+from ner.augmenters import __main__ as pii_main
 
 
 @pytest.mark.parametrize('lang,expected_module', [

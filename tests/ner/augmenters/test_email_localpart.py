@@ -8,8 +8,8 @@ import string
 
 import pytest
 
-from ner.augmenters.pii.generators import base
-from ner.augmenters.pii.generators.base import generate_pii
+from ner.augmenters.generators import base
+from ner.augmenters.generators.base import generate_pii
 
 LANGS = ('en', 'ko', 'ja', 'vi')
 SAMPLE = 8000
@@ -105,7 +105,7 @@ def test_local_part_is_a_valid_surface(samples, lang):
 @pytest.mark.parametrize('lang', ('ko', 'ja'))
 def test_cjk_locales_use_romanized_names(samples, lang):
     """ko·ja 로컬파트가 무작위 자모 나열이 아니라 로마자 이름이다."""
-    from ner.augmenters.pii.generators import ja, ko
+    from ner.augmenters.generators import ja, ko
 
     mod = {'ko': ko, 'ja': ja}[lang]
     # 붙여쓰기·이니셜 형태는 구분자가 없어 토큰으로 못 자른다. 그래서

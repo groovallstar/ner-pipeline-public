@@ -42,8 +42,8 @@ flowchart TD
 | 단계 | 핵심 코드 | JA 분기 | VI 분기 | 문서 |
 |---|---|---|---|---|
 | **1 라벨링** | `labelers/{ja,vi}`, `labelers/span_matcher`(ja·vi·ko 공용), `llm_eval`, `metrics` | Stockmark gold | WikiANN, offset-span 경로 | [1-labeling.md](1-labeling.md) |
-| **2 증강** | `augmenters/pii` | PII 주입만 | **재라벨 silver(도구 삭제) → PII 주입** | [2-augmentation.md](2-augmentation.md) |
-| **3 검증** | `classifier/kfold_pool`, `pii/verifier` | PII 교차검증 | **PII 교차검증 + cross-fold 누출** | [3-verification.md](3-verification.md) |
+| **2 증강** | `augmenters` | PII 주입만 | **재라벨 silver(도구 삭제) → PII 주입** | [2-augmentation.md](2-augmentation.md) |
+| **3 검증** | `classifier/kfold_pool`, `augmenters/verifier` | PII 교차검증 | **PII 교차검증 + cross-fold 누출** | [3-verification.md](3-verification.md) |
 | **4 분류** | `classifier/` | BertJapanese (slow) | XLM-R (fast) / PhoBERT (pyvi) | [4-classification.md](4-classification.md) |
 
 **비대칭성** — 코퍼스를 만들 때 증강·검증은 VI 쪽이 무거웠다. VI는 원천 gold가

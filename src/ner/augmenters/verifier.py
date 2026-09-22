@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.schema import Entity, Record
 
 logger = logging.getLogger(__name__)
 
