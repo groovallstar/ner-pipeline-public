@@ -2,14 +2,11 @@
 
 ## 책임과 계약
 
-이 패키지는 PII 합성 주입과 WikiANN VI 재라벨·코퍼스 빌드를 담당한다. 출력
-JSONL은 `text`, `entities`, `id`를 제공하며 entity는 canonical label과
-`[start_char, end_char)` 오프셋을 갖는다.
+이 패키지는 PII 합성 주입을 담당한다. 출력 JSONL은 `text`, `entities`, `id`를
+제공하며 entity는 canonical label과 `[start_char, end_char)` 오프셋을 갖는다.
 
 - `pii/`의 suffix 모드는 결정적이고, llm 모드는 자연 삽입 후 원본 entity를
   다시 찾아 보존한다. seed와 주입 밀도 계약을 유지한다.
-- `wikiann_vi/`에서 품질 측정(kappa, Wikidata anchor)과 코퍼스 변경
-  (confidence merge)을 분리한다.
 
 ## 금지사항
 
@@ -21,5 +18,4 @@ JSONL은 `text`, `entities`, `id`를 제공하며 entity는 canonical label과
 ## 검증
 
 - PII: `uv run pytest tests/ner/augmenters/pii -q`
-- WikiANN VI: `uv run pytest tests/ner/augmenters/wikiann_vi -q`
 - 통합 변경은 `uv run pytest tests/ner/augmenters tests/ner/classifier/test_data_utils.py -q`

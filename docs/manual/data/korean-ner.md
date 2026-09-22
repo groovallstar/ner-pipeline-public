@@ -164,8 +164,7 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 ### 프롬프트 구조
 
-프롬프트 템플릿은 한 벌뿐이다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없음 —
-`augmenters/wikiann_vi/` 재라벨 파이프라인 전용):
+프롬프트 템플릿은 한 벌뿐이다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없다):
 
 | 템플릿 | 변수명 | 용도 | 형식 |
 |--------|--------|------|------|

@@ -3,7 +3,7 @@
 augmenters 가 produce 한 JSONL 파일을 소비한다. 결합도는 얕게 — 직접 import
 결합 없이 파일 형식만 contract 로 사용한다.
 
-JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
+JSONL 입력 형식 (augmenters/pii 출력):
     {"text": "...",
      "entities": [{"label": str, "start_char": int, "end_char": int, "text": str}],
      "id": "..."}

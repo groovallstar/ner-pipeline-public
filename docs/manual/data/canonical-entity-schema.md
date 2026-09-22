@@ -462,11 +462,11 @@ substring 기반 시설 키워드 후처리는 `香港`(港)·`茨城`(城)·`�
 | (WikiANN 미커버) | `PROD`, `EVT` | LLM 재라벨이 신규 추출 |
 | (WikiANN 미커버) | `DAT`, `EMAIL`, `PHONE`, `ID_NUM`, `CREDIT_CARD` | PII 주입 또는 LLM 신규 추출 |
 
-매핑 적용은 `src/ner/augmenters/wikiann_vi/` 의 silver 재라벨 파이프라인에서
-LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨 산출은 위 표대로
-**NER 5종**(`PER/LOC/ORG/PROD/EVT` — `relabel.py`·`prompts.py` 의
-`DEFAULT_ENTITY_TYPES`)이고, PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은
-별도 `augmenters/pii --lang vi` 주입으로 추가된다(JA `data/stockmark/pii_*` 와 동형).
+현 VI 코퍼스는 이 매핑을 silver 재라벨로 적용해 만들었다. LLM 이 본 스키마
+(§1·§2·§3) 기준으로 **NER 5종**(`PER/LOC/ORG/PROD/EVT`)을 다시 달았고, PII
+5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 별도 `augmenters/pii --lang vi` 주입으로
+더했다(JA `data/stockmark/pii_*` 와 동형). 재라벨 도구는 코퍼스를 만든 뒤 지웠고
+커밋 `ec1c8eb` 의 `src/ner/augmenters/wikiann_vi/` 에 남아 있다.
 
 ### 4.3 EN: HF OntoNotes5 → canonical
 

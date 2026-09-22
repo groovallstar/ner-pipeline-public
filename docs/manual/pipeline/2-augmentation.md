@@ -1,9 +1,9 @@
 # 2. 증강 — 합성 PII 주입 + VI 재라벨 silver
 
 > **이 단계가 하는 일**: 학습 코퍼스를 만든다. (a) 네 언어 모두에 합성 PII를
-> 자연 주입하고, (b) VI는 그 전에 WikiANN 3종 gold를 canonical 5종 silver로
-> LLM 재라벨한다.
-> **대상 코드**: `src/ner/augmenters/pii`, `src/ner/augmenters/wikiann_vi`
+> 자연 주입하고, (b) VI 코퍼스는 그 전에 WikiANN 3종 gold를 canonical 5종
+> silver로 LLM 재라벨해 만들었다(§2B).
+> **대상 코드**: `src/ner/augmenters/pii`
 > **산출**: `data/{stockmark,wikiann_vi,klue,ontonotes_en}/*.jsonl`
 > (canonical 10종 평면)
 
@@ -24,8 +24,8 @@ flowchart LR
 각 레인이 하는 일:
 
 - **JA** — 사람 gold 5종에 PII 5종만 자연 주입(재라벨 불필요).
-- **VI** — WikiANN 3종을 재라벨 silver 5종으로 끌어올린 뒤(§2B) PII 주입까지
-  거치는, 증강이 가장 무거운 레인이다.
+- **VI** — 현 코퍼스는 WikiANN 3종을 재라벨 silver 5종으로 끌어올린 뒤(§2B) PII 를
+  주입해 만들었다. 증강이 가장 무거웠던 레인이다.
 - **KO** — KLUE 유래 gold(`DAT` 이미 보유)에 PII 4종만 주입, 검증 없이
   원본 gold를 보존한다.
 - **EN** — 재라벨이 없다. 현 코퍼스는 OntoNotes5 18종을 canonical 6종으로
@@ -276,57 +276,18 @@ mv data/klue/origin.new.jsonl data/klue/origin.jsonl   # 검토 후 gold 로 승
 
 ## 2B. VI 재라벨 silver (VI 전용)
 
-WikiANN-vi 원본은 NER **3종(PER/LOC/ORG)** 자동 silver다. canonical 5종으로
-끌어올리려면 LLM 재라벨이 필요하다. `augmenters/wikiann_vi/`가 이를 전담한다.
+WikiANN-vi 원본은 NER **3종(PER/LOC/ORG)** 자동 silver다. 현 VI 코퍼스는 두
+LLM(Gemma·Qwen)이 문장을 서로 독립으로 다시 읽어 canonical 5종(PROD·EVT 추가)으로
+재라벨하고, 두 결과를 대조해 병합한 silver 위에 PII 5종을 주입해 만들었다. 분류기
+기본 입력은 그 결과인 `data/wikiann_vi/origin.jsonl` 이다.
 
-### 흐름도
+재라벨·병합·품질 측정 도구는 코퍼스를 만든 뒤 지웠다. 지우기 전 코드는 커밋
+`ec1c8eb` 의 `src/ner/augmenters/wikiann_vi/` 에 있고, 재라벨 당시의 품질 측정은
+`docs/reports/vietnamese-ner-silver-quality.md` 에 있다.
 
-```mermaid
-flowchart TD
-    HF["WikiANN 원본 (베트남어)<br/>PER·LOC·ORG 3종 · 단어<br/>BIO"]
-    HF --> LOAD["원본을 읽어 엔티티<br/>위치를 문자 오프셋으로<br/>변환<br/>(단어 BIO → 시작·끝<br/>위치)"]
-    LOAD --> G3["3종 위치 코퍼스<br/>문장 + PER·LOC·ORG 위치"]
-    G3 --> REL["두 LLM(Gemma·Qwen)이<br/>문장을 다시 읽어<br/>5종으로 재라벨 (PROD·<br/>EVT 추가)<br/>두 모델이 서로<br/>독립적으로 수행"]
-    REL --> MERGE["두 모델 결과를 대조해<br/>병합<br/>둘이 합의하면 채택,<br/>한쪽만·불일치면<br/>선택 규칙대로 취사"]
-    MERGE --> M5["병합된 5종 silver"]
-    M5 --> GAP["병합 결과를 저장<br/>형식으로 정리<br/>(주입 전 원문도<br/>함께 보관)"]
-    GAP --> C5["canonical 5종 silver<br/>코퍼스"]
-    C5 --> PII["합성 PII 5종을 문맥에<br/>자연스럽게 주입 (§2A)"]
-    PII --> C10["canonical 10종 평면<br/>코퍼스<br/>(단계 4 학습 입력)"]
-```
+### 병합 때 남긴 span
 
-각 단계의 실제 함수·파일명은 아래 소섹션(재라벨·병합)이 상술한다.
-분류기 기본 입력은 `data/wikiann_vi/origin.jsonl`이고 분할은 분류기 내부
-group K-fold가 맡는다(중간 split 파일 경로는 데이터 재정리로 변동).
-
-> 재라벨 품질 측정(kappa·Wikidata anchor)은 데이터를 바꾸지 않는
-> **독립 검증**이라 [3. 검증](3-verification.md)에서 다룬다.
-> 여기서는 *코퍼스를 만드는* merge만 설명한다.
-
-### 재라벨 — Relabeler
-
-`python -m ner.augmenters.wikiann_vi`(CLI)가 HF 원본을 읽어
-`Relabeler`(`relabel.py`)로 재라벨한다. async vLLM 클라이언트
-(`--concurrency`, `--batch-size` N개 레코드/BATCH 프롬프트). 출력 스키마:
-`{id, text, gold_spans, gold_spans_relabel, relabel_model}`.
-
-```bash
-python -m ner.augmenters.wikiann_vi \
-    --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --base-url http://localhost:8081/v1 \
-    --split test --max-samples 1000 \
-    --output data/wikiann_vi/gemma_test.jsonl
-```
-
-프롬프트(`wikiann_vi/prompts.py`)는 canonical-entity-schema.md §2~3의 경계
-규칙을 추가 명시한다: 정기 리그/대회=ORG·특정 연도판=EVT, 작품(음악·영화·
-책·만화·게임·TV)=PROD, "Danh sách…" 무시, Latin binomial 학명 무시, 모델
-번호 단독 무시, 인프라 운영=ORG·노선=LOC.
-
-### 이중 모델 + 신뢰도 병합 — merge_confidence
-
-Gemma·Qwen 두 모델을 **독립 재라벨**한 뒤 출력을 비교해 신뢰도 4
-카테고리로 분류한다(`merge_confidence.py`):
+두 모델 결과는 신뢰도 4 카테고리로 나뉘었다.
 
 ```
 high          두 모델 동일 span+type
@@ -335,30 +296,29 @@ medium_prec   qwen_only  — Qwen만 단독 검출 (precision 측)
 conflict      같은 offset, type 불일치
 ```
 
-남길 span 은 선택 규칙 하나(`recall_strict_prod`)로 고른다. 출력 레코드의
-`merge_policy` 에 그 이름이 남는다.
+그중 남긴 span 은 선택 규칙 하나(`recall_strict_prod`)로 골랐고, 레코드의
+`merge_policy` 에 그 이름이 남아 있다.
 
-| 타입 | 남기는 span |
+| 타입 | 남긴 span |
 |---|---|
 | PER/LOC/ORG·PROD | high + medium_recall |
 | EVT | high + 한쪽 모델만 낸 span(medium_recall·medium_prec) 중 §3 legit 카테고리 매칭분 |
 
-conflict 와 EVT 외 medium_prec 는 모든 타입에서 버린다. PER/LOC/ORG 는 Gemma 의
-넓은 recall 을 살린다. PROD 는 창작물 제목이 silver 누락을 지배하는데 표면 패턴이
-없어 결정론으로 구제할 수 없으므로 Gemma 단독 검출을 믿는다. EVT 는 Qwen 이
+conflict 와 EVT 외 medium_prec 는 모든 타입에서 버렸다. PER/LOC/ORG 는 Gemma 의
+넓은 recall 을 살렸다. PROD 는 창작물 제목이 silver 누락을 지배하는데 표면 패턴이
+없어 결정론으로 구제할 수 없으므로 Gemma 단독 검출을 믿었다. EVT 는 Qwen 이
 보통명사-핵 서술구를 구조적으로 놓치므로, 한쪽 모델만 낸 span 가운데 §3 가
-EVT 로 명시한 연도대회·조약·전쟁·재해·선거 표면형만 regex 로 다시 확인해 살린다.
+EVT 로 명시한 연도대회·조약·전쟁·재해·선거 표면형만 regex 로 다시 확인해 살렸다.
 
-현 VI 코퍼스는 병합 뒤 외부에서 판정한 EVT 누락분을 한 번 더 채워 넣었다. 그
-판정·삽입 도구는 일회성이라 지웠고, 정량은
-`docs/reports/vietnamese-ner-silver-quality.md` 에 있다.
+병합 뒤에는 외부에서 판정한 EVT 누락분을 한 번 더 채워 넣었다. 정량은 같은
+리포트에 있다.
 
 ### 이중 silver 인식 (해석 주의)
 
 - WikiANN 원본 = Wikipedia 인터링크 기반 자동 silver
 - 본 5종 라벨 = WikiANN silver를 LLM이 재분류한 추가 silver
-- → **이중 silver**. 절대 F1 비교는 부적합하고, 모델 간 상대 순위·
-  cross-model kappa·Wikidata anchor agreement만 해석 대상([3. 검증](3-verification.md)).
+- → **이중 silver**. 절대 F1 비교는 부적합하고, 모델 간 상대 순위만 해석
+  대상이다.
 
 ---
 
@@ -388,5 +348,5 @@ EVT 로 명시한 연도대회·조약·전쟁·재해·선거 표면형만 rege
 
 ---
 
-**다음 단계** → [3. 검증](3-verification.md): 만든 silver·주입 데이터의
-품질과 분류 평가의 무결성(cross-fold 누출)을 독립적으로 검증한다.
+**다음 단계** → [3. 검증](3-verification.md): 주입 데이터와 분류 평가의
+무결성(cross-fold 누출)을 독립적으로 검증한다.
