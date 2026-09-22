@@ -3,8 +3,7 @@
 ## 책임
 
 `src/ner`는 라벨링, 평가, 증강, 토큰 분류 학습, 공용 metric, 실험 유효성,
-배포 보조 스크립트를 제공한다. import는 항상 `ner` top-level 패키지에서
-시작한다.
+배포 보조 스크립트를 제공한다.
 
 ## 입력과 출력
 
@@ -15,8 +14,6 @@
 
 ## 도메인 계약
 
-- KO·JA·VI의 공통 canonical 평면은 NER 5종 `PER LOC ORG PROD EVT`와 PII
-  5종 `DAT EMAIL PHONE ID_NUM CREDIT_CARD`이다.
 - KO의 `DAT`는 KLUE에서 유래하고 나머지 PII 4종은 합성 주입한다.
 - KO의 LOC/ORG 외연은 JA·VI와 다르므로 언어 간 ORG 수치를 직접 비교하지 않는다.
 - 라벨 정의를 복제하지 않고 `docs/manual/data/canonical-entity-schema.md`를
@@ -35,7 +32,6 @@
 
 - canonical label 정의나 공용 metric 구현을 하위 모듈에 복제하지 않는다.
 - 증강, 학습, 평가, 서비스 책임을 한 모듈에 섞지 않는다.
-- import에 `src` 접두어를 붙이지 않는다.
 
 ## 검증
 

@@ -30,5 +30,7 @@ relaxed char-offset span F1을 산출한다. 증강, LLM 라벨링, HF Hub 업�
 ## 검증
 
 - `uv run pytest tests/ner/classifier -q`
-- tokenizer 정렬 변경은 `tests/ner/classifier/test_encode.py`와
-  `uv run python src/ner/scripts/audit_offset_alignment.py --help`도 확인한다.
+- tokenizer 정렬 변경은 `tests/ner/classifier/test_encode.py`로 검증한다.
+- 정렬 audit CLI 진입점 변경은
+  `uv run python src/ner/scripts/audit_offset_alignment.py --help`로 확인한다.
+  도움말 출력은 실제 정렬 audit의 통과 근거가 아니다.
