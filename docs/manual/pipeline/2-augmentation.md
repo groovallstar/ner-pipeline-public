@@ -3,8 +3,7 @@
 > **이 단계가 하는 일**: 학습 코퍼스를 만든다. (a) 네 언어 모두에 합성 PII를
 > 자연 주입하고, (b) VI는 그 전에 WikiANN 3종 gold를 canonical 5종 silver로
 > LLM 재라벨한다.
-> **대상 코드**: `src/ner/augmenters/pii`, `src/ner/augmenters/wikiann_vi`,
-> `src/ner/augmenters/ontonotes_en`
+> **대상 코드**: `src/ner/augmenters/pii`, `src/ner/augmenters/wikiann_vi`
 > **산출**: `data/{stockmark,wikiann_vi,klue,ontonotes_en}/*.jsonl`
 > (canonical 10종 평면)
 
@@ -29,10 +28,12 @@ flowchart LR
   거치는, 증강이 가장 무거운 레인이다.
 - **KO** — KLUE 유래 gold(`DAT` 이미 보유)에 PII 4종만 주입, 검증 없이
   원본 gold를 보존한다.
-- **EN** — 재라벨이 없다. OntoNotes5 18종을 canonical 6종으로 매핑하고 자연문을
-  복원하는 형식 변환만 거친 뒤 PII 4종을 주입한다. 원본 `FAC` 는 표면별 판정
-  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다. 현 코퍼스는 주입 뒤
-  EMAIL 일부를 괄호·따옴표 등에 한 번 붙여 두었다(§EMAIL 붙은 문맥).
+- **EN** — 재라벨이 없다. 현 코퍼스는 OntoNotes5 18종을 canonical 6종으로
+  매핑하고 자연문을 복원하는 형식 변환만 거친 뒤 PII 4종을 주입해 만들었다. 원본
+  `FAC` 는 표면별 판정 표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈렸다.
+  변환 코드는 코퍼스를 만든 뒤 지웠고, 매핑과 판정 표의 정본은 canonical §4.3 이
+  가리킨다. 현 코퍼스는 주입 뒤 EMAIL 일부를 괄호·따옴표 등에 한 번 붙여
+  두었다(§EMAIL 붙은 문맥).
 
 ## 목차
 
