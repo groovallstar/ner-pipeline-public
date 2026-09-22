@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ner.augmenters.pii.config import InjectionConfig
-from ner.augmenters.pii.injector import PIIInjector
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.config import InjectionConfig
+from ner.augmenters.injector import PIIInjector
+from ner.augmenters.schema import Entity, Record
 
 
 def test_load_local_roundtrip(tmp_path: Path):

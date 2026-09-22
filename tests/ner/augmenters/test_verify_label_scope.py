@@ -6,8 +6,8 @@
 구분 없이 `drop_span` 을 걸면 검증 모델의 recall 부족이 사람 주석을 지운다 —
 EN 실측에서 gold NER 8,199 span 중 2,199 개(27%)가 그렇게 사라졌다.
 """
-from ner.augmenters.pii.schema import Entity, Record
-from ner.augmenters.pii.verifier import PIIVerifier, VerifyPolicy
+from ner.augmenters.schema import Entity, Record
+from ner.augmenters.verifier import PIIVerifier, VerifyPolicy
 
 PII_ONLY = ['EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD']
 

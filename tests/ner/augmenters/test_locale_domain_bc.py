@@ -5,7 +5,7 @@
 """
 import random
 
-from ner.augmenters.pii.generators.base import (
+from ner.augmenters.generators.base import (
     EMAIL_DOMAINS,
     generate_pii,
     random_email,

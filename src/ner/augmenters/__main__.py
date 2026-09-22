@@ -1,7 +1,7 @@
 """PII 주입 CLI.
 
 예:
-    python -m ner.augmenters.pii --source stockmark --lang ja \\
+    python -m ner.augmenters --source stockmark --lang ja \\
         --output data/stockmark/pii_test.jsonl --n-samples 100
 """
 from __future__ import annotations
@@ -11,9 +11,9 @@ import json
 import logging
 from pathlib import Path
 
-from ner.augmenters.pii.config import InjectionConfig
-from ner.augmenters.pii.injector import PIIInjector
-from ner.augmenters.pii.stats import compute_stats
+from ner.augmenters.config import InjectionConfig
+from ner.augmenters.injector import PIIInjector
+from ner.augmenters.stats import compute_stats
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ def _build_verify_labeler(
 
 
 def _load_records(args: argparse.Namespace):
-    from ner.augmenters.pii.loaders import load_hf, load_jsonl, load_stockmark
+    from ner.augmenters.loaders import load_hf, load_jsonl, load_stockmark
     if args.source == 'stockmark':
         return load_stockmark(
             split='train', max_samples=args.n_samples,
@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
 
     injected = []
     if args.mode == 'llm':
-        from ner.augmenters.pii.llm_injector import LLMInjector, VllmClient
+        from ner.augmenters.llm_injector import LLMInjector, VllmClient
         inject_url = args.inject_url or args.vllm_url
         inject_model = args.inject_model or args.vllm_model
         client = VllmClient(
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # 교차 검증
     if args.verify == 'vllm':
-        from ner.augmenters.pii.verifier import PIIVerifier, VerifyPolicy
+        from ner.augmenters.verifier import PIIVerifier, VerifyPolicy
         verify_url = args.verify_url or args.vllm_url
         verify_model = args.verify_model or args.vllm_model
         labeler = _build_verify_labeler(

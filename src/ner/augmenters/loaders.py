@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.schema import Entity, Record
 
 
 def load_stockmark(

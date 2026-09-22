@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import re
 
-from ner.augmenters.pii.config import InjectionConfig
-from ner.augmenters.pii.generators import ko
-from ner.augmenters.pii.generators.base import generate_pii
-from ner.augmenters.pii.injector import PIIInjector
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.config import InjectionConfig
+from ner.augmenters.generators import ko
+from ner.augmenters.generators.base import generate_pii
+from ner.augmenters.injector import PIIInjector
+from ner.augmenters.schema import Entity, Record
 
 _RRN_WEIGHTS = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5]
 
@@ -109,7 +109,7 @@ def test_ko_seed_determinism():
 
 
 def test_ko_connectors_present():
-    from ner.augmenters.pii.injector import _KO_CONNECTORS
+    from ner.augmenters.injector import _KO_CONNECTORS
     for label in ('EMAIL', 'PHONE', 'ID_NUM', 'CREDIT_CARD'):
         assert label in _KO_CONNECTORS
         assert '{v}' in _KO_CONNECTORS[label]
@@ -117,7 +117,7 @@ def test_ko_connectors_present():
 
 def test_ko_llm_injection_prompt_natural():
     """llm 모드 ko 프롬프트: 값 포함 + 경직 접두 금지 규칙 명시."""
-    from ner.augmenters.pii.llm_injector import (
+    from ner.augmenters.llm_injector import (
         _EMPTY_PII_LIST, build_injection_prompt,
     )
     prompt = build_injection_prompt(

@@ -30,7 +30,7 @@ JA·VI·KO·EN 이 공유하는 통합 엔티티 라벨 공간. NER/PII 구분 �
 | `ID_NUM` | 개인 식별 번호 | 마이넘버·CCCD·세무번호·사원번호·주민등록번호 등 개인 식별 숫자열 | `284257239645` | `079123456789` |
 | `CREDIT_CARD` | 신용카드 번호 | 13~19자리 카드 번호 (공백·하이픈 구분자 허용) | `4065 0551 3022 4539` | (공통) |
 
-> `augmenters/pii` 의 `generate_address()` 함수가 주소 문자열을 생성하지만,
+> `augmenters` 의 `generate_address()` 함수가 주소 문자열을 생성하지만,
 > 출력 라벨은 `DEFAULT_MERGE_RULES` 의 `'ADDRESS': 'LOC'` 무조건 병합
 > 규칙에 의해 전부 `LOC` 로 변환되어 학습 데이터에 반영된다.
 
@@ -464,7 +464,7 @@ substring 기반 시설 키워드 후처리는 `香港`(港)·`茨城`(城)·`�
 
 현 VI 코퍼스는 이 매핑을 silver 재라벨로 적용해 만들었다. LLM 이 본 스키마
 (§1·§2·§3) 기준으로 **NER 5종**(`PER/LOC/ORG/PROD/EVT`)을 다시 달았고, PII
-5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 별도 `augmenters/pii --lang vi` 주입으로
+5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 별도 `python -m ner.augmenters --lang vi` 주입으로
 더했다(JA `data/stockmark/pii_*` 와 동형). 재라벨 도구는 코퍼스를 만든 뒤 지웠고
 커밋 `ec1c8eb` 의 `src/ner/augmenters/wikiann_vi/` 에 남아 있다.
 

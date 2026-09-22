@@ -12,14 +12,14 @@ import re
 from collections.abc import Iterable, Iterator
 from typing import Protocol, runtime_checkable
 
-from ner.augmenters.pii.config import (
+from ner.augmenters.config import (
     DEFAULT_DENSITY,
     DEFAULT_MERGE_RULES,
     DEFAULT_PII_LABELS,
 )
-from ner.augmenters.pii.generators.base import generate_pii
-from ner.augmenters.pii.injector import merge_entities
-from ner.augmenters.pii.schema import Entity, Record
+from ner.augmenters.generators.base import generate_pii
+from ner.augmenters.injector import merge_entities
+from ner.augmenters.schema import Entity, Record
 
 logger = logging.getLogger(__name__)
 

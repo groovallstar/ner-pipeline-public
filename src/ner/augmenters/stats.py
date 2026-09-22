@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Iterable
 
-from ner.augmenters.pii.schema import Record
+from ner.augmenters.schema import Record
 
 
 def compute_stats(records: Iterable[Record]) -> dict[str, Any]:

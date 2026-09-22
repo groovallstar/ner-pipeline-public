@@ -3,7 +3,7 @@
 > **이 단계가 하는 일**: 학습 코퍼스를 만든다. (a) 네 언어 모두에 합성 PII를
 > 자연 주입하고, (b) VI 코퍼스는 그 전에 WikiANN 3종 gold를 canonical 5종
 > silver로 LLM 재라벨해 만들었다(§2B).
-> **대상 코드**: `src/ner/augmenters/pii`
+> **대상 코드**: `src/ner/augmenters`
 > **산출**: `data/{stockmark,wikiann_vi,klue,ontonotes_en}/*.jsonl`
 > (canonical 10종 평면)
 
@@ -238,14 +238,14 @@ VI 를 다시 주입하면 월-연 표기가 0 이 되어 숫자와 서술형만
 
 ```bash
 # JA — Stockmark에 LLM 자연 주입 + 교차 검증
-python -m ner.augmenters.pii --source stockmark --lang ja \
+python -m ner.augmenters --source stockmark --lang ja \
     --output data/stockmark/pii_test.jsonl --n-samples 1000 \
     --mode llm --vllm-url http://localhost:8081/v1 \
     --vllm-model Qwen/Qwen3.5-27B \
     --verify vllm --verify-policy drop_span
 
 # KO — KLUE gold에 PII 4종만(DAT 제외) 자연 주입, verify 없음
-python -m ner.augmenters.pii --source jsonl --input <주입 전 KLUE gold> \
+python -m ner.augmenters --source jsonl --input <주입 전 KLUE gold> \
     --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
     --inject-url http://localhost:8081/v1 \
     --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
@@ -335,10 +335,10 @@ EVT 로 명시한 연도대회·조약·전쟁·재해·선거 표면형만 rege
 - `label` ∈ canonical 10종, `start_char`/`end_char`는 반-개구간 `[start,end)`
 - VI 코퍼스는 행마다 **주입 전 원문 `orig` 필드**를 보유한다 — 단계 4의
   원문 단위 group K-fold(cross-fold 누출 차단)의 핵심 키다([3. 검증](3-verification.md)·[4. 분류](4-classification.md)). 단,
-  §2A 표준 주입기(`pii/schema.py`의 `Record`)는 `text/entities/id`만
+  §2A 표준 주입기(`augmenters/schema.py`의 `Record`)는 `text/entities/id`만
   보존하고 입력의 `orig`를 떨군다 — VI의 `orig`는 원문을 함께 실어 주는 VI
   전용 빌드가 부여한 것이지 표준 CLI 산물이 아니다.
-- pii CLI는 출력 JSONL 외에 `*.stats.json`(라벨 빈도·char coverage·PII
+- 주입 CLI는 출력 JSONL 외에 `*.stats.json`(라벨 빈도·char coverage·PII
   없는 샘플 비율)을, verify 시 `*.verify.json` 리포트를 부산물로 남긴다.
 - 로딩: JA는 `JapaneseDatasetLoader.load_local(path)`, 분류기는
   `classifier/data_utils.load_jsonl(path)`(canonical 10종 검증 포함).

@@ -9,9 +9,9 @@ import re
 
 import pytest
 
-from ner.augmenters.pii.config import InjectionConfig
-from ner.augmenters.pii.generators import en
-from ner.augmenters.pii.generators.base import generate_pii
+from ner.augmenters.config import InjectionConfig
+from ner.augmenters.generators import en
+from ner.augmenters.generators.base import generate_pii
 
 # 사회보장국이 한 번도 발급하지 않은 SSN 지역번호.
 NEVER_ISSUED_AREAS = {'000', '666'} | {str(n) for n in range(900, 1000)}
