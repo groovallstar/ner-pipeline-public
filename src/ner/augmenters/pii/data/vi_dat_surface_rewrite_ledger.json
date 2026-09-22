@@ -1,0 +1,42 @@
+{
+  "why": "VI 디스크 코퍼스의 DAT 표면형을 목표 분포로 다시 만든 기록. data/ 는 gitignore 라 치환 전후 판본의 지문이 저장소에 남는 자리는 이 원장뿐이다. 재현은 치환 전 판본(input_sha256)에 같은 seed 로 generated_by 를 다시 돌린다.",
+  "generated_by": "python -m ner.scripts.rewrite_vi_dat_surface",
+  "boundary": "앞에 붙는 시간 낱말은 그것을 떼고도 날짜로 읽히면 span 밖에 둔다. 서술형은 앞의 ngày 를 남기고, 월-연은 그 ngày 를 먹고 들어간다.",
+  "target": {
+    "form_weights": {
+      "numeric": 60,
+      "descriptive_full": 30,
+      "month_year": 10
+    }
+  },
+  "runs": {
+    "wikiann_vi": {
+      "corpus": "data/wikiann_vi/origin.jsonl",
+      "lang": "vi",
+      "seed": 42,
+      "input": "data/wikiann_vi/origin.jsonl.pre-issue-265",
+      "input_sha256": "264b9bb883346dce69d3a2704b01953f4a9103824559decc4f1260687f9f7cbe",
+      "output_sha256": "93beaa28972ed415974f068df9aa43045026c2c6df9d21d1a825de0a230394e3",
+      "rows": 37706,
+      "dat_spans": 7104,
+      "before": {
+        "numeric": 1.0,
+        "descriptive_full": 0.0,
+        "month_year": 0.0,
+        "other": 0.0
+      },
+      "after": {
+        "numeric": 0.5964245495495496,
+        "descriptive_full": 0.3079954954954955,
+        "month_year": 0.09557995495495496,
+        "other": 0.0
+      },
+      "fallback": {
+        "unparsed": 0,
+        "preceded_by_time_word": 1,
+        "month_year_without_ngay": 10,
+        "blocked_by_previous_entity": 0
+      }
+    }
+  }
+}

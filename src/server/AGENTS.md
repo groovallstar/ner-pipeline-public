@@ -21,7 +21,8 @@ char offset, text를 보존한다.
 - startup에서 설정을 검증하고 모델을 모두 로드한 뒤 포트를 연다.
 - inference는 언어별 tokenizer와 chunking 경로를 유지하고, batch 결과 순서를
   입력과 1:1로 보존한다.
-- gold entity를 가로지르는 chunk 경계를 만들지 않는다.
+- chunk는 원문의 연속 슬라이스와 시작 오프셋을 보존하고, 예측 span을 원문
+  오프셋으로 복원한다.
 - NER과 번역의 concurrency budget을 분리한다.
 - 언어별 NER tokenizer의 분할·인코딩 구간은 하나의 잠금으로 보호한다.
 - 로그에는 요청 ID, 상태, 지연을 남기되 원문 PII를 노출하지 않는다.
@@ -35,6 +36,12 @@ char offset, text를 보존한다.
 
 ## 검증
 
+- 배포 패키지를 교체하면 그 언어의 parity 검사가 통과하는지 본다.
+  `tests/server/test_inference_integration.py`의 `test_<lang>_parity_baseline_raw`가
+  서버 predict 경로의 strict F1을 그 패키지의 `metrics.json`과 대조한다. 재현을
+  보는 것이 아니라 `model/`·토크나이저·디코드 경로가 그 `metrics.json`을 만든 run과
+  같은 물건인지를 본다. 허용 오차 `_PARITY_ABS`는 정밀도가 아니라 span 몇 개까지
+  달라도 되는지의 값이며, 실패를 통과시키려고 넓히지 않는다.
 - 모델 없는 기본 검사는 다음 명령으로 실행한다. 모델 통합·live 파일은
   수집에서 제외한다.
   ```bash
