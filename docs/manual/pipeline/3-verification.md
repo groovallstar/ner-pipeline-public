@@ -1,122 +1,29 @@
-# 3. 검증 — silver 품질 · 측정 무결성
+# 3. 검증
 
-> **이 단계가 하는 일**: 데이터를 **바꾸지 않고** 품질과 측정의 무결성을
-> 독립적으로 검증한다. 세 갈래다 — (3A) VI silver 품질, (3B) 분류 평가의
-> cross-fold 누출, (3C) PII 주입 교차검증.
-> **대상 코드**: `augmenters/wikiann_vi/{kappa,wikidata_anchor,
-> merge_confidence}`, `llm_eval/{vi_silver_quality,wikiann_vi_gold}`,
-> `classifier/kfold_pool` + `data_utils.split_kfold_stratified`,
+> **이 단계가 하는 일**: 데이터를 **바꾸지 않고** 측정의 무결성을 독립적으로
+> 검증한다. 두 갈래다 — (3B) 분류 평가의 cross-fold 누출, (3C) PII 주입
+> 교차검증.
+> **대상 코드**: `classifier/kfold_pool` + `data_utils.split_kfold_stratified`,
 > `augmenters/pii/verifier`
 
 핵심 원칙 — **검증은 라벨을 바꾸지 않는다.** 통계와 불일치 샘플을 리포트로
-남길 뿐 원본 JSONL은 불변이다(증강 단계의 merge/gold-fix와 직교).
+남길 뿐 원본 JSONL은 불변이다.
+
+VI 재라벨 silver 의 품질 검증(3A, cross-model kappa·Wikidata anchor)은 VI
+코퍼스를 만든 뒤 재라벨 도구와 함께 지웠다. 측정 결과는
+`docs/reports/vietnamese-ner-silver-quality.md` 에, 지우기 전 코드는 커밋
+`ec1c8eb` 의 `src/ner/augmenters/wikiann_vi/` 에 남아 있다. 갈래 번호는 다른
+문서의 링크를 지키려고 3B·3C 그대로 둔다.
 
 | 갈래 | 대상 | 언어 | 산출 |
 |---|---|---|---|
-| 3A silver 품질 | 재라벨 silver | VI | kappa·anchor agreement·gold span F1 |
 | 3B 측정 무결성 | 분류 K-fold 평가 | VI(JA 적용 가능) | cross-fold 누출 0 보장 |
 | 3C PII 주입 | 주입 span | JA·VI·EN | confirmed/missed/conflict |
 
 ## 목차
 
-1. [3A. VI silver 품질 — 3중 검증 레이어](#3a-vi-silver-품질--3중-검증-레이어)
-2. [3B. 측정 무결성 — cross-fold 누출 차단](#3b-측정-무결성--cross-fold-누출-차단)
-3. [3C. PII 주입 교차검증](#3c-pii-주입-교차검증)
-
----
-
-## 3A. VI silver 품질 — 3중 검증 레이어
-
-VI 재라벨 silver(단계 2B)는 **이중 silver**라 절대 F1이 무의미하다. 대신
-세 독립 레이어로 신뢰도를 본다.
-
-```mermaid
-flowchart TD
-    S["VI 재라벨 silver<br/>(라벨을 두 번 자동으로<br/>붙인 데이터)"]
-    S --> L1["레이어 1 · 두 모델이<br/>얼마나 합의하나<br/>Gemma와 Qwen의 라벨<br/>일치도(kappa)를 잰다"]
-    S --> L2["레이어 2 · 바깥 지식과<br/>대조한다<br/>Wikipedia·Wikidata로<br/>엔티티 종류를 독립 확인"]
-    S --> L3["레이어 3 · 원본 정답과<br/>직접 비교<br/>WikiANN 3종 gold로 span<br/>F1을 잰다"]
-```
-
-### 레이어 1 — Cross-model agreement (kappa)
-
-Gemma·Qwen 두 LLM이 독립 라벨링한 결과로 Cohen kappa + per-type 합의율을
-계산한다(`kappa.py`). 두 모델이 같은 판단을 내릴수록 라벨이 모델
-파라미터의 우연이 아니라 신호임을 시사한다. 이 합의 구조가 단계 2B의
-`merge_confidence` 4 카테고리(high/medium_recall/medium_prec/conflict)의
-근거이기도 하다.
-
-### 레이어 2 — Wikidata anchor
-
-LLM이 붙인 라벨이 외부 지식 베이스(Wikipedia·Wikidata) 기준과 얼마나
-정합한지 **사후(post-hoc) 검증**한다. LLM과 무관한 두 번째 증거를 만들기
-위해 Wikipedia 페이지 → Wikidata Q-ID → P31(`instance of`)로 엔티티의
-"종류"를 역추정한다.
-
-- 소스: `augmenters/wikiann_vi/wikidata_anchor.py`
-- 실행: `python -m ner.augmenters.wikiann_vi.wikidata_anchor`
-- 리포트: `docs/reports/vietnamese-ner-silver-quality.md` §5
-
-#### 파이프라인
-
-```mermaid
-flowchart TD
-    A["재라벨된 데이터<br/>(LLM이 붙인 엔티티 목록)"] --> B["엔티티 이름만 중복 없이<br/>모은다"]
-    B --> C["1 · 이름으로 Wikipedia<br/>문서를 찾아<br/>Wikidata 항목 번호를<br/>얻는다"]
-    C --> D["2 · 그 항목이 무슨<br/>종류인지 조회한다<br/>(사람·도시·조직 등)"]
-    D --> E["3 · 조회된 종류를<br/>canonical 5종으로 바꾼다"]
-    E --> F["4 · LLM이 붙인 라벨과<br/>맞는지 비교·집계"]
-```
-
-| 단계 | 함수 | 엔드포인트/테이블 | 비고 |
-|---|---|---|---|
-| 1 | `fetch_qids(titles)` | `vi.wikipedia.org` pageprops | 배치 50, 0.2s sleep, 리다이렉트 `_resolve_title` 역추적 |
-| 2 | `fetch_p31(qids)` | `wikidata.org` wbgetentities | `claims.P31[*].mainsnak.datavalue.value.id` |
-| 3 | `anchor_type(p31)` | `WIKIDATA_TO_CANONICAL`(약 163 Q-ID) | P31 순차 스캔 첫 매칭 |
-| 4 | `run_anchor(...)` | — | match/mismatch, per-type agreement |
-
-#### 중요한 구분 — 타입 Q-ID만 큐레이션
-
-수작업 매핑 테이블은 **엔티티 Q-ID가 아니라 "타입" Q-ID(P31 값)** 목록이다.
-
-| 구분 | 예 | 테이블에 넣는가 |
-|---|---|---|
-| 엔티티 Q-ID | `Q1858`(Hà Nội), `Q8447`(Hồ Chí Minh) | ❌ |
-| 타입 Q-ID(P31 값) | `Q515`(city), `Q5`(human), `Q43229`(organization) | ✅ 5종 매핑 |
-
-데이터에 새 지명이 등장해도 그 P31(예: `Q515` city)이 테이블에 있으면
-자동으로 `LOC`로 앵커링된다 — 테이블 확장은 **새 *타입*이 등장했을 때만**.
-섹션 헤더(`# FAC`/`# CORP`/`# POL`)는 가독성용이며 매핑 값은 모두 5종
-(`FAC/CORP/POL → ORG`, 시설은 LOC가 아닌 ORG).
-
-#### 캐시
-
-- 캐시: `data/wikiann_vi/wikidata_cache.json`,
-  스키마 `{'qid': {표면형: Q-ID}, 'p31': {Q-ID: [P31,...]}}`
-- 캐시에 없는 항목만 네트워크 호출. 매핑 테이블(3단계)은 코드 내장이라
-  **테이블만 확장해 재실행하면 네트워크 재호출 없이 분 단위 재집계** 가능.
-
-#### 한계
-
-1. **커버리지 ~50%** — Wikipedia 미등재 개별 인물/세부 지명/제품은 검증
-   불가. "앵커 일치율"은 매핑 가능 부분집합의 지표.
-2. **수작업 테이블** — 누락 타입이 체계적 에러를 만들 수 있다.
-3. **리다이렉트 왜곡** — 노래→가수 리다이렉트로 엉뚱한 Q-ID(PER) 할당 등.
-4. **P31 복수 해석** — 첫 매칭 규칙이라 city/former country 같은 모호
-   케이스는 스캔 순서에 좌우된다.
-5. **네트워크 의존** — 신규 실행은 수 분, 실패는 `reason='network'` 소프트
-   폴백.
-
-상세 설정 상수·실행 예·표준출력 포맷은 §3A 코드(`wikidata_anchor.py`)와
-리포트 §5 참조.
-
-### 레이어 3 — WikiANN gold 직접 비교
-
-silver의 PER/LOC/ORG만 필터링해 WikiANN 3종 gold와 span F1을 본다
-(`llm_eval/vi_silver_quality.py`, `wikiann_vi_gold.py`). 5종 중 원천에서
-검증 가능한 3종에 대한 하한 신호다. 평가 대상 span은
-`SILVER_SPAN_KEYS = ('gold_spans_relabel_merged', 'gold_spans_relabel')`
-우선순위로 고른다 — merge 결과가 있으면 그것을, 없으면 단독 재라벨을 본다.
+1. [3B. 측정 무결성 — cross-fold 누출 차단](#3b-측정-무결성--cross-fold-누출-차단)
+2. [3C. PII 주입 교차검증](#3c-pii-주입-교차검증)
 
 ---
 

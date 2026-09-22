@@ -462,11 +462,11 @@ substring 기반 시설 키워드 후처리는 `香港`(港)·`茨城`(城)·`�
 | (WikiANN 미커버) | `PROD`, `EVT` | LLM 재라벨이 신규 추출 |
 | (WikiANN 미커버) | `DAT`, `EMAIL`, `PHONE`, `ID_NUM`, `CREDIT_CARD` | PII 주입 또는 LLM 신규 추출 |
 
-매핑 적용은 `src/ner/augmenters/wikiann_vi/` 의 silver 재라벨 파이프라인에서
-LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨 산출은 위 표대로
-**NER 5종**(`PER/LOC/ORG/PROD/EVT` — `relabel.py`·`prompts.py` 의
-`DEFAULT_ENTITY_TYPES`)이고, PII 5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은
-별도 `augmenters/pii --lang vi` 주입으로 추가된다(JA `data/stockmark/pii_*` 와 동형).
+현 VI 코퍼스는 이 매핑을 silver 재라벨로 적용해 만들었다. LLM 이 본 스키마
+(§1·§2·§3) 기준으로 **NER 5종**(`PER/LOC/ORG/PROD/EVT`)을 다시 달았고, PII
+5종(`DAT/EMAIL/PHONE/ID_NUM/CREDIT_CARD`)은 별도 `augmenters/pii --lang vi` 주입으로
+더했다(JA `data/stockmark/pii_*` 와 동형). 재라벨 도구는 코퍼스를 만든 뒤 지웠고
+커밋 `ec1c8eb` 의 `src/ner/augmenters/wikiann_vi/` 에 남아 있다.
 
 ### 4.3 EN: HF OntoNotes5 → canonical
 
@@ -487,8 +487,8 @@ LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨
 | (OntoNotes 미커버) | `EMAIL`, `PHONE`, `ID_NUM`, `CREDIT_CARD` | PII 주입이 추가 |
 
 **`FAC` 판정의 정본은 표다.** 표면 634 개(span 1,110)를 전량 열거한
-`src/ner/augmenters/ontonotes_en/data/fac_labels.json` 이 각 표면에 판정과
-사유를 적고, 표에 없는 표면은 기본값 없이 변환을 세운다. 규칙을 판정자로
+`docs/manual/data/en-fac-verdicts.json` 이 각 표면에 판정과 사유를 적는다.
+변환은 표에 없는 표면이 나오면 기본값 없이 멈췄다. 규칙을 판정자로
 쓰지 않는 것은 규칙이 못 가른 몫이 조용히 기본값으로 흐르기 때문이다 —
 실측으로 어휘 규칙은 634 중 391 만 가르고, 번호 도로(`288`)·접미 없는 철도
 노선명(`the Beijing - Kowloon`)·지하철 시스템(`MRT`)이 전부 나머지에 있다.
@@ -497,14 +497,14 @@ LLM 이 본 스키마(§1·§2·§3) 기준으로 자동 수행한다. 재라벨
 부족한 타입을 만들어냈지만, OntoNotes5 는 사람이 붙인 18 종이라
 `PRODUCT`·`WORK_OF_ART`·`EVENT` 가 이미 있다. 그래서 재라벨이 없고, 대신
 18 종 중 9 종을 버린다 — 위험이 "없는 것을 지어내다 틀리는" 쪽이 아니라
-**"있는 것을 버리다 잃는" 쪽**이다. 그 위험은 매핑표 전수성 게이트와 타입별
-span 카운트 고정이 막는다.
+**"있는 것을 버리다 잃는" 쪽**이다. 코퍼스를 만들 때 그 위험은 매핑표 전수성
+게이트와 타입별 span 카운트 고정이 막았다.
 
 **`FAC` 에서는 그 방어가 다르다.** 원본이 `FAC` 로 태그했어도 canonical 상
 entity 가 아닌 자리가 있어(`had a flea`·`passed away`·`two`) 표의 값역에
-비-entity 가 들어가고, 그만큼 타입별 카운트가 고정값이 아니게 된다. 대신
-`원본 FAC 수 = ORG + LOC + 비-entity` 가 split 별로 성립하는지를 보고,
-버린 자리는 전부 사람이 확인해 사유를 표에 남긴다 — 무엇을 왜 버렸는지가
+비-entity 가 들어가고, 그만큼 타입별 카운트가 고정값이 아니게 된다. 대신 변환
+때 `원본 FAC 수 = ORG + LOC + 비-entity` 가 split 별로 성립하는지를 봤고,
+버린 자리는 전부 사람이 확인해 사유를 표에 남겼다 — 무엇을 왜 버렸는지가
 남지 않으면 "있는 것을 버리다 잃는" 위험이 그대로 열린다.
 
 `DAT` 은 주입하지 않는다 — 원본 `DATE` 가 gold 로 주기 때문이며 KO 가 KLUE 에서
@@ -518,8 +518,9 @@ entity 가 아닌 자리가 있어(`had a flea`·`passed away`·`two`) 표의 �
 생기지 않으므로 **§2.3 은 영어의 이 경우를 결정하지 않는다** — 결정하려면 새
 규정이 필요하고 이 절은 그것을 만들지 않는다.
 
-구현: `src/ner/augmenters/ontonotes_en/mapping.py`(매핑·전수성 게이트·표면별
-판정 조회). 매핑은 코드가 정본이며 이 절은 그 사본이다.
+변환 코드는 현 EN 코퍼스를 만든 뒤 지웠다. 그래서 위 매핑표가 매핑의 정본이고,
+`FAC` 표면별 판정은 `docs/manual/data/en-fac-verdicts.json` 이 정본이다. 지우기 전
+변환 코드(`src/ner/augmenters/ontonotes_en/`)는 커밋 `ec1c8eb` 에 남아 있다.
 
 ## 5. 모호 사례 결정표
 

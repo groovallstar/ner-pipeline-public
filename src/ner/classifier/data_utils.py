@@ -3,7 +3,7 @@
 augmenters 가 produce 한 JSONL 파일을 소비한다. 결합도는 얕게 — 직접 import
 결합 없이 파일 형식만 contract 로 사용한다.
 
-JSONL 입력 형식 (augmenters/pii, augmenters/wikiann_vi 출력):
+JSONL 입력 형식 (augmenters/pii 출력):
     {"text": "...",
      "entities": [{"label": str, "start_char": int, "end_char": int, "text": str}],
      "id": "..."}
@@ -101,10 +101,6 @@ def dataset_fingerprint(rows: List[dict]) -> str:
 
     순서에 민감한 이유: 분할이 seed shuffle 이라 행 순서가 fold 멤버십을 바꾼다.
     행을 재정렬만 해도 test gold 의 fold 분해가 달라지므로 다른 자로 본다.
-
-    지문에서 제외: `--data-extra-train-jsonl`(train 전용 증강)은 별 파일이라
-    이 함수에 넘기는 --data rows 에 애초에 들어오지 않는다 — test gold 를 안
-    바꾸므로 with/without 두 run 이 같은 지문을 갖는 게 옳다.
     """
     h = hashlib.sha256()
     for row in rows:
@@ -621,11 +617,8 @@ def _unfold_offset(index: List[int], start: int, end: int,
     return (pos, pos)
 
 
-def _encode_vi(text: str, tokenizer, max_length: int, trim: bool = True):
-    """VI: fast tokenizer 의 offset_mapping 을 (기본) 공백·후행부호 trim 후 사용.
-
-    trim=False 는 정렬 수정 이전 동작을 재현하는 진단용 — SentencePiece 계열의
-    offset 어긋남으로 라벨이 붕괴(F1 ≈ 0)하는 as-is 벤치마크 재현에만 쓴다.
+def _encode_vi(text: str, tokenizer, max_length: int):
+    """VI: fast tokenizer 의 offset_mapping 을 공백·후행부호 trim 후 사용.
 
     바이트 BPE 는 `canonical_whitespace` 로 접은 텍스트를 인코딩하고 offset 을
     원문 위치로 되돌린다. 다른 fast 토크나이저는 원문을 그대로 넣는다.
@@ -645,7 +638,7 @@ def _encode_vi(text: str, tokenizer, max_length: int, trim: bool = True):
     raw = enc['offset_mapping']
     if index is not None:
         raw = [_unfold_offset(index, s, e, len(text)) for s, e in raw]
-    offsets = [_trim_offset(text, s, e) for s, e in raw] if trim else list(raw)
+    offsets = [_trim_offset(text, s, e) for s, e in raw]
     return (
         {'input_ids': enc['input_ids'], 'attention_mask': enc['attention_mask']},
         offsets,
@@ -754,19 +747,17 @@ def _bio_labels_from_offsets(char_offsets: List[Tuple[int, int]],
     return labels
 
 
-def encode_row(row: dict, tokenizer, label2id, lang: str, max_length: int = 256,
-               trim_offsets: bool = True):
+def encode_row(row: dict, tokenizer, label2id, lang: str, max_length: int = 256):
     """단일 row → (features, char_offsets).
 
     토크나이저 capability 로 분기:
     - fast tokenizer (offset_mapping 지원): _encode_vi 경로 (lang 무관)
     - slow tokenizer: _encode_ja 경로 (BertJapaneseTokenizer 같은 MeCab 기반)
-    lang 인자는 모델 선택의 컨텍스트로만 유지. trim_offsets=False 는 fast 경로
-    의 offset trim 을 끄는 진단용(as-is 붕괴 재현).
+    lang 인자는 모델 선택의 컨텍스트로만 유지.
     """
     text = row['text']
     if getattr(tokenizer, 'is_fast', False):
-        enc, offs = _encode_vi(text, tokenizer, max_length, trim=trim_offsets)
+        enc, offs = _encode_vi(text, tokenizer, max_length)
     elif _is_phobert(tokenizer):
         enc, offs = _encode_phobert(text, tokenizer, max_length)
     else:
@@ -784,18 +775,15 @@ def encode_row(row: dict, tokenizer, label2id, lang: str, max_length: int = 256,
 
 
 def encode_dataset(rows: List[dict], tokenizer, label2id, lang: str,
-                   max_length: int = 256, trim_offsets: bool = True):
+                   max_length: int = 256):
     """전체 dataset 인코딩. (features_list, offsets_list) 반환.
 
     features_list 는 학습/평가 모델 입력, offsets_list 는 평가 시 BIO → span 디코드용.
-    trim_offsets=False 는 fast 경로 offset trim 을 끄는 진단용(as-is 붕괴 재현).
     """
     features = []
     offsets_list = []
     for row in rows:
-        feat, offs = encode_row(
-            row, tokenizer, label2id, lang, max_length, trim_offsets
-        )
+        feat, offs = encode_row(row, tokenizer, label2id, lang, max_length)
         features.append(feat)
         offsets_list.append(offs)
     return features, offsets_list
@@ -823,32 +811,6 @@ def boundary_weights_tensor(label2id: Dict[str, int],
         elif label.startswith('I-'):
             weights[idx] = w_i
     return torch.tensor(weights, dtype=torch.float32)
-
-
-def mask_pii_in_features(features: List[dict], label2id: Dict[str, int]) -> List[dict]:
-    """features 의 labels 에서 PII BIO 라벨을 모두 O 로 치환한 새 features 리스트.
-
-    NER warmup curriculum 의 1단계 학습용. -100(special token)은 보존한다.
-    원본 features 는 변경하지 않음.
-    """
-    o_id = label2id['O']
-    pii_ids = set()
-    for label, idx in label2id.items():
-        if label != 'O' and label[2:] in PII_TYPES:
-            pii_ids.add(idx)
-
-    out = []
-    for f in features:
-        new_labels = [
-            o_id if (lid in pii_ids) else lid
-            for lid in f['labels']
-        ]
-        out.append({
-            'input_ids': f['input_ids'],
-            'attention_mask': f['attention_mask'],
-            'labels': new_labels,
-        })
-    return out
 
 
 def decode_bio_to_spans(label_ids: List[int],

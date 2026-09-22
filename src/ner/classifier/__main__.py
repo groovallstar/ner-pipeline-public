@@ -22,7 +22,6 @@ from ner.classifier.data_utils import (
     group_stats,
     load_jsonl,
     load_tokenizer,
-    mask_pii_in_features,
     split_kfold_stratified,
     split_train_valid_test,
     validate_group_key,
@@ -111,22 +110,8 @@ def main():
         help='Smoke test: 100 train / 50 test / 1 epoch',
     )
     parser.add_argument(
-        '--curriculum', action='store_true',
-        help='Two-stage NER warmup: stage 1 with PII masked to O, stage 2 full 21-class',
-    )
-    parser.add_argument(
-        '--curriculum-stage1-epochs', type=int, default=3,
-        help='Stage 1 epochs when --curriculum (stage 2 uses --epochs)',
-    )
-    parser.add_argument(
         '--precision', choices=['fp16', 'bf16'], default='fp16',
         help='Mixed precision (use bf16 for DeBERTa-v3 family)',
-    )
-    parser.add_argument(
-        '--legacy-no-offset-trim', action='store_true',
-        help='Diagnostic: disable fast-tokenizer offset trim, reproducing '
-             'the pre-fix SentencePiece misalignment collapse (F1 ~ 0). '
-             'Only for as-is benchmark reproduction.',
     )
     parser.add_argument(
         '--metric-mode', choices=['strict', 'relaxed', 'both'], default='both',
@@ -141,12 +126,6 @@ def main():
     parser.add_argument(
         '--boundary-i-weight', type=float, default=None,
         help='Loss weight for I- tokens (entity inside). Default 1.0 = no effect.',
-    )
-    parser.add_argument(
-        '--data-extra-train-jsonl', default=None,
-        help='Extra JSONL appended to TRAIN split only (valid/test stay '
-             'from --data). Used for negative-oversampling experiments '
-             'where leak-free evaluation is required.',
     )
     parser.add_argument(
         '--fit-threshold', action='store_true',
@@ -229,15 +208,6 @@ def main():
         args.epochs = 1
         logger.info('Smoke mode active')
 
-    if args.data_extra_train_jsonl:
-        extra_rows = load_jsonl(args.data_extra_train_jsonl)
-        train_rows = train_rows + extra_rows
-        logger.info(
-            'Appended %d rows from extra JSONL to TRAIN only '
-            '(valid/test from --data split unchanged): total train=%d',
-            len(extra_rows), len(train_rows),
-        )
-
     logger.info(
         'Train=%d, Valid=%d, Test=%d, Epochs=%d, BS=%d, LR=%s, MaxLen=%d',
         len(train_rows), len(valid_rows), len(test_rows),
@@ -249,18 +219,15 @@ def main():
     tokenizer = load_tokenizer(model_name)
     logger.info('Tokenizer fast=%s', tokenizer.is_fast)
 
-    trim_offsets = not args.legacy_no_offset_trim
-    if not trim_offsets:
-        logger.info('Offset trim DISABLED (legacy as-is reproduction)')
     logger.info('Tokenizing and aligning labels...')
     train_features, _ = encode_dataset(
-        train_rows, tokenizer, label2id, args.lang, args.max_length, trim_offsets
+        train_rows, tokenizer, label2id, args.lang, args.max_length
     )
     valid_features, valid_offsets = encode_dataset(
-        valid_rows, tokenizer, label2id, args.lang, args.max_length, trim_offsets
+        valid_rows, tokenizer, label2id, args.lang, args.max_length
     )
     test_features, test_offsets = encode_dataset(
-        test_rows, tokenizer, label2id, args.lang, args.max_length, trim_offsets
+        test_rows, tokenizer, label2id, args.lang, args.max_length
     )
 
     # Boundary-aware weight (B/I/O 차등) — None 이면 표준 CE
@@ -277,71 +244,22 @@ def main():
             args.boundary_b_weight, args.boundary_i_weight,
         )
 
-    if args.curriculum:
-        # Stage 1: PII 라벨을 O 로 마스킹하고 NER warmup
-        stage1_dir = os.path.join(output_dir, 'stage1')
-        os.makedirs(stage1_dir, exist_ok=True)
-        train_features_s1 = mask_pii_in_features(train_features, label2id)
-        valid_features_s1 = mask_pii_in_features(valid_features, label2id)
-        logger.info(
-            'Curriculum stage 1: NER-only warmup (PII labels masked to O), epochs=%d',
-            args.curriculum_stage1_epochs,
-        )
-        s1_elapsed, s1_best = fine_tune(
-            model_name=model_name,
-            train_features=train_features_s1,
-            eval_features=valid_features_s1,
-            label2id=label2id,
-            id2label=id2label,
-            output_dir=stage1_dir,
-            epochs=args.curriculum_stage1_epochs,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            class_weights=cw,
-            precision=args.precision,
-            train_seed=args.train_seed,
-        )
-        logger.info('Stage 1 time: %.1fs (best at %s)', s1_elapsed, s1_best)
-
-        logger.info(
-            'Curriculum stage 2: full 21-class fine-tune from stage1 weights, epochs=%d',
-            args.epochs,
-        )
-        s2_elapsed, best_dir = fine_tune(
-            model_name=model_name,
-            train_features=train_features,
-            eval_features=valid_features,
-            label2id=label2id,
-            id2label=id2label,
-            output_dir=output_dir,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            class_weights=cw,
-            init_model_path=s1_best,
-            precision=args.precision,
-            train_seed=args.train_seed,
-        )
-        elapsed = s1_elapsed + s2_elapsed
-        logger.info('Curriculum total time: %.1fs (stage1=%.1f + stage2=%.1f)',
-                    elapsed, s1_elapsed, s2_elapsed)
-    else:
-        logger.info('Fine-tuning %s ...', model_name)
-        elapsed, best_dir = fine_tune(
-            model_name=model_name,
-            train_features=train_features,
-            eval_features=valid_features,
-            label2id=label2id,
-            id2label=id2label,
-            output_dir=output_dir,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            class_weights=cw,
-            precision=args.precision,
-            train_seed=args.train_seed,
-        )
-        logger.info('Train time: %.1fs', elapsed)
+    logger.info('Fine-tuning %s ...', model_name)
+    elapsed, best_dir = fine_tune(
+        model_name=model_name,
+        train_features=train_features,
+        eval_features=valid_features,
+        label2id=label2id,
+        id2label=id2label,
+        output_dir=output_dir,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        class_weights=cw,
+        precision=args.precision,
+        train_seed=args.train_seed,
+    )
+    logger.info('Train time: %.1fs', elapsed)
 
     is_kfold = args.kfold is not None
 
@@ -450,7 +368,6 @@ def main():
         'lang': args.lang,
         'model_name': model_name,
         'data_path': data_path,
-        'data_extra_train_jsonl': args.data_extra_train_jsonl,
         'train_samples': len(train_rows),
         'valid_samples': len(valid_rows),
         'test_samples': len(test_rows),
@@ -473,10 +390,7 @@ def main():
         'seed': args.seed,
         'train_seed': args.train_seed,
         'precision': args.precision,
-        'offset_trim': trim_offsets,
         'metric_for_best': 'eval_loss',
-        'curriculum': args.curriculum,
-        'curriculum_stage1_epochs': args.curriculum_stage1_epochs if args.curriculum else None,
         'train_time_sec': round(elapsed, 1),
         # 게이트 lock-in (strict) 호환 키
         'overall': strict_m['overall'],

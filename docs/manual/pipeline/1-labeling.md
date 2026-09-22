@@ -134,15 +134,15 @@ canonical **영문 약어**(`PER/LOC/ORG/PROD/EVT` + PII 5종)를 그대로 출�
 | 로더 | `JapaneseDatasetLoader` | `VietnameseDatasetLoader` |
 | gold 진입점 | `loader.load()` | `_load_gold()` (llm_eval/__main__) |
 | 토큰 단위 | 형태소(canonical 덤프) | 단어(word) |
-| HF 원본 로딩 | 없음(덤프 직접) | **단계 2 재라벨 파이프라인**이 담당 |
+| HF 원본 로딩 | 없음(덤프 직접) | 없음(덤프 직접). 원본에서 silver 를 만든 재라벨 도구는 삭제 |
 
 라인 스키마는 공통 `{id, text, entities:[{label, start_char, end_char,
 text}]}`이며, PII 주입 산출물의 `start/end`·`type` 표기도 동일 스키마로
 흡수한다(`label|type`, `start_char|start`, `end_char|end` 허용).
 
-> WikiANN HF 원본(`{tokens, ner_tags}` 단어 BIO)을 읽어 silver로 만드는
-> 책임은 **단계 2**(`augmenters/wikiann_vi`)에 있다. 벤치마크 평가 gold는
-> 이미 materialize된 silver를 읽는다 — 두 경로를 혼동하지 말 것.
+> WikiANN HF 원본(`{tokens, ner_tags}` 단어 BIO)을 읽어 silver로 만든 것은
+> **단계 2**의 재라벨이며, 그 도구는 코퍼스를 만든 뒤 지웠다. 벤치마크 평가
+> gold는 이미 materialize된 silver를 읽는다.
 
 ### 판정 우선순위 (모호 시)
 

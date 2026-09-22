@@ -164,8 +164,7 @@ if label_feature is not None and isinstance(label_feature, ClassLabel):
 
 ### 프롬프트 구조
 
-프롬프트 템플릿은 한 벌뿐이다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없음 —
-`augmenters/wikiann_vi/` 재라벨 파이프라인 전용):
+프롬프트 템플릿은 한 벌뿐이다 (BATCH_PROMPT_TEMPLATE는 라벨러에 없다):
 
 | 템플릿 | 변수명 | 용도 | 형식 |
 |--------|--------|------|------|
@@ -448,11 +447,10 @@ clean gold 의 NER span 을 offset 으로 PII-텍스트에 얹는 graft 는 불�
 
 ### clean NER-only 로 비교
 
-재생성 전후 비교는 **PII 없는 clean gold** 로 한다. 같은 KLUE 본문
-(`klue_to_canonical_gold` 는 결정적 → baseline·신규 text 100% 동일)에 NER 라벨만
-달리하고, `--no-stratify`(PROD/EVT 층화 비활성 = label-불변 split)로 학습해
-fold 멤버십을 재라벨 전후 동일하게 고정한다. PII 는 재생성과 직교하므로
-(주입 로직 불변) NER 무회귀 측정에서 빼도 무방하다.
+재생성 전후 비교는 **PII 없는 clean gold** 로 한다. 같은 KLUE 본문(baseline·신규
+text 가 100% 같아야 한다)에 NER 라벨만 달리하고, `--no-stratify`(PROD/EVT 층화
+비활성 = label-불변 split)로 학습해 fold 멤버십을 재라벨 전후 동일하게 고정한다.
+PII 는 재생성과 직교하므로(주입 로직 불변) NER 무회귀 측정에서 빼도 무방하다.
 
 ### 측정 정직성
 

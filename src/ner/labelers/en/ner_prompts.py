@@ -5,10 +5,11 @@ canonical 10 종 평면 목록(LOC = 지명·주소·경로, ORG = 조직·개�
 
 인프라 경계는 canonical §3 을 따른다 — **개별 구조물은 `ORG`, 여러 지점을
 잇는 경로는 `LOC`** 다. KO 의 narrow-ORG(인공 시설을 아예 버림)를 따르지
-않으며, 같은 선언이 `ner.augmenters.ontonotes_en.mapping` 에도 있다 —
-그쪽은 원본 `FAC` 를 표면별로 두 라벨로 가른다. **선언이 갈리면 검증이
-gold 와 다른 자로 재게 되므로** `tests/ner/labelers/test_en_labeler.py` 가
-이 세 자리(이 docstring · LOC 줄 · ORG 줄)를 문구로 걸어 둔다.
+않으며, 같은 선언이 canonical §4.3 에도 있다 — 그쪽은 원본 `FAC` 를
+표면별로 두 라벨로 가른 판정표(`docs/manual/data/en-fac-verdicts.json`)를
+정본으로 둔다. **선언이 갈리면 검증이 gold 와 다른 자로 재게 되므로**
+`tests/ner/labelers/test_en_labeler.py` 가 이 세 자리(이 docstring · LOC 줄 ·
+ORG 줄)를 문구로 걸어 둔다.
 
 이 라벨러의 현재 용도는 **PII 주입 결과의 교차 검증**이다. LLM 이 주입된
 문장에서 span 을 독립적으로 다시 뽑아 gold 와 대조해야 주입기가 자기 결과를

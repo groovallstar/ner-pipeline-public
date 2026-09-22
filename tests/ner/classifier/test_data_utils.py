@@ -14,7 +14,6 @@ from ner.classifier.data_utils import (
     dataset_fingerprint,
     decode_bio_to_spans,
     group_stats,
-    mask_pii_in_features,
     merge_email_fragments,
     split_holdout_deploy,
     split_kfold_stratified,
@@ -602,40 +601,6 @@ def test_ner_pii_partition():
     assert set(NER_TYPES) | set(PII_TYPES) == set(CANONICAL_LABELS)
     assert len(NER_TYPES) == 5
     assert len(PII_TYPES) == 5
-
-
-def test_mask_pii_in_features():
-    """mask_pii_in_features 가 PII BIO 라벨만 O 로 치환, NER/-100 보존."""
-    label2id, _ = build_label_maps()
-    o_id = label2id['O']
-    features = [{
-        'input_ids': [1, 2, 3, 4, 5, 6],
-        'attention_mask': [1, 1, 1, 1, 1, 1],
-        'labels': [
-            -100,
-            label2id['B-PER'],
-            label2id['I-PER'],
-            label2id['B-EMAIL'],
-            label2id['I-EMAIL'],
-            label2id['B-LOC'],
-        ],
-    }]
-    out = mask_pii_in_features(features, label2id)
-    assert out[0]['labels'] == [
-        -100,
-        label2id['B-PER'],
-        label2id['I-PER'],
-        o_id,
-        o_id,
-        label2id['B-LOC'],
-    ]
-    # 원본 변경 없음
-    assert features[0]['labels'][3] == label2id['B-EMAIL']
-    # input_ids/attention_mask 보존
-    assert out[0]['input_ids'] == features[0]['input_ids']
-
-
-# --- 그룹 키 검증 / 3-way 형제 묶기 ---
 
 
 def _sibling_rows(n_orig: int = 20, per_orig: int = 3) -> List[dict]:

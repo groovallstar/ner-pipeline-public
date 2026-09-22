@@ -65,9 +65,8 @@ def dump_jsonl(rows, path):
 def load_run_metrics(run_dir, expect_lang=None):
     """run 의 metrics.json 을 읽고, 배포 포장이 가능한 run 인지 검사한다.
 
-    포장 가능한 run 은 단일 분할·단일 스테이지다. k-fold 는 교차검증 추정이라
-    배포할 체크포인트 하나를 가리키지 않고, curriculum·extra-train 은 기록된
-    분할만으로 학습 데이터를 재현할 수 없다.
+    포장 가능한 run 은 단일 분할이다. k-fold 는 교차검증 추정이라 배포할
+    체크포인트 하나를 가리키지 않는다.
 
     언어는 run 이 선언한 값을 쓰되, `expect_lang` 이 주어지면 대조한다 —
     출력 경로가 언어에서 유도되므로, 잘못된 run 을 가리켰을 때 조용히 다른
@@ -92,14 +91,6 @@ def load_run_metrics(run_dir, expect_lang=None):
         raise SystemExit(
             'Error: k-fold run cannot be packaged for deployment '
             '(no single checkpoint); use a single-split run')
-    if m.get('curriculum'):
-        raise SystemExit(
-            'Error: curriculum run cannot be packaged — the recorded split '
-            'does not reproduce stage-1 training data')
-    if m.get('data_extra_train_jsonl'):
-        raise SystemExit(
-            'Error: run used --data-extra-train-jsonl; the train split '
-            'cannot be reproduced from the recorded arguments alone')
     return m
 
 

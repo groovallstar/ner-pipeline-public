@@ -93,7 +93,6 @@ def _make_run(tmp_path, lang, model_name, **overrides):
         'max_length': 256,
         'metric_for_best': 'eval_loss',
         'kfold': None,
-        'curriculum': False,
         'overall_strict': dict(per),
         'per_entity_strict': {'PER': dict(per)},
     }

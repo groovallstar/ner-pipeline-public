@@ -78,7 +78,6 @@ def fine_tune(*, model_name: str,
               batch_size: int = 16,
               lr: float = 5e-5,
               class_weights: Optional[torch.Tensor] = None,
-              init_model_path: Optional[str] = None,
               precision: str = 'fp16',
               train_seed: Optional[int] = None) -> Tuple[float, str]:
     """HF Trainer 로 fine-tune. best 모델을 output_dir/best 에 저장.
@@ -87,7 +86,6 @@ def fine_tune(*, model_name: str,
 
     Args:
         class_weights: BIO 21 라벨용 weight tensor (None = 표준 CE)
-        init_model_path: None 또는 기존 HF 모델 경로 (curriculum stage 2 용)
         train_seed: 학습 seed — 데이터 split seed 와 분리. None(기본)이면
             모델 생성 전 시드를 건너뛰어 기존 비시드 헤드 init 동작을
             유지한다(BC). 값을 주면 그 seed 로 헤드 init·dropout·셔플을
@@ -103,9 +101,8 @@ def fine_tune(*, model_name: str,
     if train_seed is not None:
         set_seed(train_seed)
 
-    init_path = init_model_path if init_model_path is not None else model_name
     model = AutoModelForTokenClassification.from_pretrained(
-        init_path,
+        model_name,
         num_labels=len(label2id),
         id2label=id2label,
         label2id=label2id,
