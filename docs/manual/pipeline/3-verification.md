@@ -4,38 +4,36 @@
 > 독립적으로 검증한다. 세 갈래다 — (3A) VI silver 품질, (3B) 분류 평가의
 > cross-fold 누출, (3C) PII 주입 교차검증.
 > **대상 코드**: `augmenters/wikiann_vi/{kappa,wikidata_anchor,
-> merge_confidence}`, `llm_eval/{vi_silver_quality,wikiann_vi_gold}`,
-> `classifier/kfold_pool` + `data_utils.split_kfold_stratified`,
+> merge_confidence}`, `classifier/kfold_pool` + `data_utils.split_kfold_stratified`,
 > `augmenters/pii/verifier`
 
 핵심 원칙 — **검증은 라벨을 바꾸지 않는다.** 통계와 불일치 샘플을 리포트로
-남길 뿐 원본 JSONL은 불변이다(증강 단계의 merge/gold-fix와 직교).
+남길 뿐 원본 JSONL은 불변이다(증강 단계의 merge와 직교).
 
 | 갈래 | 대상 | 언어 | 산출 |
 |---|---|---|---|
-| 3A silver 품질 | 재라벨 silver | VI | kappa·anchor agreement·gold span F1 |
+| 3A silver 품질 | 재라벨 silver | VI | kappa·anchor agreement |
 | 3B 측정 무결성 | 분류 K-fold 평가 | VI(JA 적용 가능) | cross-fold 누출 0 보장 |
 | 3C PII 주입 | 주입 span | JA·VI·EN | confirmed/missed/conflict |
 
 ## 목차
 
-1. [3A. VI silver 품질 — 3중 검증 레이어](#3a-vi-silver-품질--3중-검증-레이어)
+1. [3A. VI silver 품질 검증 레이어](#3a-vi-silver-품질-검증-레이어)
 2. [3B. 측정 무결성 — cross-fold 누출 차단](#3b-측정-무결성--cross-fold-누출-차단)
 3. [3C. PII 주입 교차검증](#3c-pii-주입-교차검증)
 
 ---
 
-## 3A. VI silver 품질 — 3중 검증 레이어
+## 3A. VI silver 품질 검증 레이어
 
 VI 재라벨 silver(단계 2B)는 **이중 silver**라 절대 F1이 무의미하다. 대신
-세 독립 레이어로 신뢰도를 본다.
+두 독립 레이어로 신뢰도를 본다.
 
 ```mermaid
 flowchart TD
     S["VI 재라벨 silver<br/>(라벨을 두 번 자동으로<br/>붙인 데이터)"]
     S --> L1["레이어 1 · 두 모델이<br/>얼마나 합의하나<br/>Gemma와 Qwen의 라벨<br/>일치도(kappa)를 잰다"]
     S --> L2["레이어 2 · 바깥 지식과<br/>대조한다<br/>Wikipedia·Wikidata로<br/>엔티티 종류를 독립 확인"]
-    S --> L3["레이어 3 · 원본 정답과<br/>직접 비교<br/>WikiANN 3종 gold로 span<br/>F1을 잰다"]
 ```
 
 ### 레이어 1 — Cross-model agreement (kappa)
@@ -109,14 +107,6 @@ flowchart TD
 
 상세 설정 상수·실행 예·표준출력 포맷은 §3A 코드(`wikidata_anchor.py`)와
 리포트 §5 참조.
-
-### 레이어 3 — WikiANN gold 직접 비교
-
-silver의 PER/LOC/ORG만 필터링해 WikiANN 3종 gold와 span F1을 본다
-(`llm_eval/vi_silver_quality.py`, `wikiann_vi_gold.py`). 5종 중 원천에서
-검증 가능한 3종에 대한 하한 신호다. 평가 대상 span은
-`SILVER_SPAN_KEYS = ('gold_spans_relabel_merged', 'gold_spans_relabel')`
-우선순위로 고른다 — merge 결과가 있으면 그것을, 없으면 단독 재라벨을 본다.
 
 ---
 

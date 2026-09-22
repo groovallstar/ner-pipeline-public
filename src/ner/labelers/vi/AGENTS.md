@@ -22,5 +22,5 @@ recall-merge 중간 dump는 지정한 span key를 읽어 `gold_spans`로 정규�
 
 ## 검증
 
-- `uv run pytest tests/ner/labelers/vi tests/ner/llm_eval/test_vi_silver_quality.py tests/ner/llm_eval/test_wikiann_vi_gold.py -q`
+- `uv run pytest tests/ner/labelers/vi -q`
 - LLM 호출 단위 테스트는 `AsyncOpenAI` 요청 경계를 mock한다.

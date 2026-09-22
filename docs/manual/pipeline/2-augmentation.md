@@ -13,7 +13,7 @@
 ```mermaid
 flowchart LR
     JA["JA · Stockmark<br/>gold 5종"] --> JP["PII 주입<br/>5종"] --> J10["10종 평면"]
-    VI["VI · WikiANN<br/>3종"] --> VR["2B 재라벨 silver<br/>5종"] --> VG["gold-fix"] --> VP["PII 주입<br/>5종"] --> V10["10종 평면"]
+    VI["VI · WikiANN<br/>3종"] --> VR["2B 재라벨 silver<br/>5종"] --> VP["PII 주입<br/>5종"] --> V10["10종 평면"]
     KO["KO · KLUE 유래<br/>gold 5종+DAT"] --> KP["PII 주입<br/>4종 · DAT 제외"] --> K10["10종 평면"]
     EN["EN · OntoNotes5<br/>18종"] --> EC["형식 변환<br/>5종+DAT"] --> EP["PII 주입<br/>4종 · DAT 제외"] --> E10["10종 평면"]
 ```
@@ -25,8 +25,8 @@ flowchart LR
 각 레인이 하는 일:
 
 - **JA** — 사람 gold 5종에 PII 5종만 자연 주입(재라벨 불필요).
-- **VI** — WikiANN 3종을 재라벨 silver 5종으로 끌어올린 뒤(§2B) gold-fix·
-  PII 주입까지 거치는, 증강이 가장 무거운 레인이다.
+- **VI** — WikiANN 3종을 재라벨 silver 5종으로 끌어올린 뒤(§2B) PII 주입까지
+  거치는, 증강이 가장 무거운 레인이다.
 - **KO** — KLUE 유래 gold(`DAT` 이미 보유)에 PII 4종만 주입, 검증 없이
   원본 gold를 보존한다.
 - **EN** — 재라벨이 없다. OntoNotes5 18종을 canonical 6종으로 매핑하고 자연문을
@@ -286,21 +286,21 @@ flowchart TD
     HF --> LOAD["원본을 읽어 엔티티<br/>위치를 문자 오프셋으로<br/>변환<br/>(단어 BIO → 시작·끝<br/>위치)"]
     LOAD --> G3["3종 위치 코퍼스<br/>문장 + PER·LOC·ORG 위치"]
     G3 --> REL["두 LLM(Gemma·Qwen)이<br/>문장을 다시 읽어<br/>5종으로 재라벨 (PROD·<br/>EVT 추가)<br/>두 모델이 서로<br/>독립적으로 수행"]
-    REL --> MERGE["두 모델 결과를 대조해<br/>병합<br/>둘이 합의하면 채택,<br/>한쪽만·불일치면<br/>정책대로 취사"]
+    REL --> MERGE["두 모델 결과를 대조해<br/>병합<br/>둘이 합의하면 채택,<br/>한쪽만·불일치면<br/>선택 규칙대로 취사"]
     MERGE --> M5["병합된 5종 silver"]
-    M5 --> GAP["누락으로 판정된<br/>엔티티를 되살려 채워넣고<br/>저장 형식으로 정리<br/>(주입 전 원문도 함께<br/>보관)"]
+    M5 --> GAP["병합 결과를 저장<br/>형식으로 정리<br/>(주입 전 원문도<br/>함께 보관)"]
     GAP --> C5["canonical 5종 silver<br/>코퍼스"]
     C5 --> PII["합성 PII 5종을 문맥에<br/>자연스럽게 주입 (§2A)"]
     PII --> C10["canonical 10종 평면<br/>코퍼스<br/>(단계 4 학습 입력)"]
 ```
 
-각 단계의 실제 함수·파일명은 아래 소섹션(재라벨·병합·gold-fix)이 상술한다.
+각 단계의 실제 함수·파일명은 아래 소섹션(재라벨·병합)이 상술한다.
 분류기 기본 입력은 `data/wikiann_vi/origin.jsonl`이고 분할은 분류기 내부
 group K-fold가 맡는다(중간 split 파일 경로는 데이터 재정리로 변동).
 
-> 재라벨 품질 측정(kappa·Wikidata anchor·WikiANN gold 비교)은 데이터를
-> 바꾸지 않는 **독립 검증**이라 [3. 검증](3-verification.md)에서 다룬다.
-> 여기서는 *코퍼스를 만드는* merge·gold-fix만 설명한다.
+> 재라벨 품질 측정(kappa·Wikidata anchor)은 데이터를 바꾸지 않는
+> **독립 검증**이라 [3. 검증](3-verification.md)에서 다룬다.
+> 여기서는 *코퍼스를 만드는* merge만 설명한다.
 
 ### 재라벨 — Relabeler
 
@@ -334,28 +334,23 @@ medium_prec   qwen_only  — Qwen만 단독 검출 (precision 측)
 conflict      같은 offset, type 불일치
 ```
 
-7 정책 중 선택(`--policy`, CLI 기본 `recall`). silver 빌드 권장값은
-`recall_strict`:
+남길 span 은 선택 규칙 하나(`recall_strict_prod`)로 고른다. 출력 레코드의
+`merge_policy` 에 그 이름이 남는다.
 
-| 정책 | PER/LOC/ORG | PROD/EVT |
-|---|---|---|
-| `recall`(CLI 기본) | high + medium_recall | high + medium_recall |
-| `precision` | high + medium_prec | high + medium_prec |
-| `high_only` | high만 | high만 |
-| `full` | 전체(conflict 포함) | 전체 |
-| **`recall_strict`(빌드 권장)** | **high + medium_recall** | **high만** |
+| 타입 | 남기는 span |
+|---|---|
+| PER/LOC/ORG·PROD | high + medium_recall |
+| EVT | high + 한쪽 모델만 낸 span(medium_recall·medium_prec) 중 §3 legit 카테고리 매칭분 |
 
-(+ strict 변형 2종: `recall_strict_evt`=EVT 구제, `recall_strict_prod`=PROD를
-high+medium_recall로 완화.) PROD/EVT는 희소·고난도라 strict로 정밀도를
-지키고, PER/LOC/ORG는 recall을 살린다.
+conflict 와 EVT 외 medium_prec 는 모든 타입에서 버린다. PER/LOC/ORG 는 Gemma 의
+넓은 recall 을 살린다. PROD 는 창작물 제목이 silver 누락을 지배하는데 표면 패턴이
+없어 결정론으로 구제할 수 없으므로 Gemma 단독 검출을 믿는다. EVT 는 Qwen 이
+보통명사-핵 서술구를 구조적으로 놓치므로, 한쪽 모델만 낸 span 가운데 §3 가
+EVT 로 명시한 연도대회·조약·전쟁·재해·선거 표면형만 regex 로 다시 확인해 살린다.
 
-### gold-fix — silver_gap
-
-`silver_gap.apply_silver_gap`은 **외부에서 이미 판정된**(adjudicated) FP→TP
-케이스를 surface 일치·비-겹침 재검증 후 **additive 삽입**한다(etype별 개별
-호출, 기본 `EVT`). 의미적 재감사·판정 자체는 본 함수 밖이며, 그 판정을 만든
-1회성 도구는 폐기돼 재현 경로가 닫혀 있다(방법만 기록). 상세 정량은
-`docs/reports/vietnamese-ner-silver-quality.md`.
+현 VI 코퍼스는 병합 뒤 외부에서 판정한 EVT 누락분을 한 번 더 채워 넣었다. 그
+판정·삽입 도구는 일회성이라 지웠고, 정량은
+`docs/reports/vietnamese-ner-silver-quality.md` 에 있다.
 
 ### 이중 silver 인식 (해석 주의)
 

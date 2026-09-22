@@ -1,7 +1,7 @@
 """두 모델 재라벨 결과를 confidence 태그 부가해 단일 파일로 병합한다.
 
-각 span에 두 모델 합의 수준을 나타내는 `confidence`·`source` 필드를 붙여,
-학습 시 정책(보수 vs recall 강화 등)을 필터 한 줄로 바꿀 수 있게 한다.
+각 span에 두 모델 합의 수준을 나타내는 `confidence`·`source` 필드를 붙이고,
+아래 선택 규칙으로 남길 span 을 고른다.
 
 카테고리 정의 (Gemma=A, Qwen=B 전제):
 - `high`          source=both         : 동일 offset + 동일 타입 (양쪽 합의)
@@ -9,28 +9,15 @@
 - `medium_recall` source=gemma_only   : A만 라벨, B는 skip
 - `medium_prec`   source=qwen_only    : B만 라벨, A는 skip
 
-정책 (span 선택):
-- `recall`        : high + gemma_only (A의 넓은 커버리지, conflict 제외)
-- `precision`     : high + qwen_only  (B의 보수적 커버리지, conflict 제외)
-- `high_only`     : high 만             (양쪽 합의, 최고신뢰)
-- `full`          : 전부 포함 (conflict 포함)
-- `recall_strict` : recall 정책 + PROD/EVT 는 high 만 (PROD/EVT 합의율
-                    낮은 점을 보정하기 위해 신규 type 의 medium 을 drop)
-- `recall_strict_evt` : recall_strict 와 동일하되 EVT single-model 중 §3
-                    명시 legit 카테고리(연도대회·조약·전쟁·재해·선거) 매칭분만
-                    구제. Qwen 의 구조적 EVT recall 병목(보통명사-핵 서술구
-                    누락)이 strict 교집합을 천장 걸어 legit EVT 를 떨구는 회귀
-                    보정. 구제 = §3 결정론 규칙의 regex 재적용(self-confirm 아님)
-- `recall_strict_prod` : recall_strict_evt 와 동일(EVT legit 구제 유지)하되
-                    PROD 를 high → high + medium_recall(gemma_only) 로 완화.
-                    VI PROD 헤드룸은 창작물(노래·영화·앨범·TV 등 임의 제목)
-                    silver 누락이 지배하는데, EVT 와 달리 §3 표면 패턴이 없어
-                    결정론 구제가 불가 → Gemma 의 창작물 recall 을 신뢰해 회복.
-                    단일모델 신뢰라 FP·약한 순환 리스크 동반(사람 spot-audit +
-                    재학습 비-회귀로 가드). conflict·qwen_only PROD 는 drop.
-
-신뢰도 계층별 학습 데이터 활용 구조의 단일-파일 구현.
-타입별 신뢰도 격차를 반영한 type-aware 필터(`recall_strict`)를 함께 제공한다.
+선택 규칙 (`recall_strict_prod`):
+- PER·LOC·ORG·PROD : high + medium_recall. PROD 헤드룸은 창작물(노래·영화·앨범·
+                     TV 등 임의 제목) silver 누락이 지배하는데 표면 패턴이 없어
+                     결정론 구제가 안 되므로 Gemma 의 recall 을 믿는다.
+- EVT              : high + single-model(medium_recall·medium_prec) 중 §3 명시
+                     legit 카테고리(연도대회·조약·전쟁·재해·선거) 매칭분. Qwen 의
+                     구조적 EVT recall 병목(보통명사-핵 서술구 누락)이 교집합을
+                     천장 거는 것을 §3 결정론 규칙의 regex 재적용으로 보정한다.
+- conflict 와 EVT 외 medium_prec 는 모든 타입에서 버린다.
 """
 import argparse
 import json
@@ -42,15 +29,10 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-POLICIES = (
-    'recall', 'precision', 'high_only', 'full', 'recall_strict',
-    'recall_strict_evt', 'recall_strict_prod',
-)
+# 출력 레코드의 `merge_policy` 에 남기는 선택 규칙 이름
+MERGE_POLICY = 'recall_strict_prod'
 
-# recall_strict 에서 high 만 허용할 type — 신규 5종 중 합의율 낮은 두 type
-HIGH_ONLY_TYPES = frozenset({'PROD', 'EVT'})
-
-# ── EVT legit-카테고리 패턴 (recall_strict_evt 구제 게이트) ──────────────
+# ── EVT legit-카테고리 패턴 (single-model EVT 구제 게이트) ──────────────
 # Qwen 은 베트남어 EVT(보통명사-핵 서술구: Cúp·Trận·Công ước·Bão…)를
 # 자유 생성에서 누락하는 구조적 recall 병목이 있어, strict 교집합이 EVT 를
 # Qwen recall 에 천장 건다. §3 가 *명시적으로* EVT 로 규정한 결정론 규칙의
@@ -165,77 +147,26 @@ def categorize_spans(
     return merged
 
 
-def _filter_by_policy(
-    spans: List[dict], policy: str,
-) -> List[dict]:
-    if policy == 'recall':
-        allowed = {'high', 'medium_recall'}
-    elif policy == 'precision':
-        allowed = {'high', 'medium_prec'}
-    elif policy == 'high_only':
-        allowed = {'high'}
-    elif policy == 'full':
-        return list(spans)
-    elif policy == 'recall_strict':
-        # PER/LOC/ORG 는 recall 정책 (high+medium_recall),
-        # PROD/EVT 는 high 만 (합의율 낮은 신규 type 보수 처리).
-        return [
-            s for s in spans
-            if (
-                s['type'] in HIGH_ONLY_TYPES
-                and s['confidence'] == 'high'
-            ) or (
-                s['type'] not in HIGH_ONLY_TYPES
-                and s['confidence'] in {'high', 'medium_recall'}
-            )
-        ]
-    elif policy == 'recall_strict_evt':
-        # recall_strict 와 동일하되, EVT single-model(gemma_only/qwen_only)
-        # 중 §3 legit 카테고리 매칭분을 구제 (Qwen EVT recall 병목 우회).
-        # PROD 는 여전히 high 만, conflict 는 전 type drop.
-        out: List[dict] = []
-        for s in spans:
-            t = s['type']
-            c = s['confidence']
-            if t == 'EVT':
-                if c == 'high' or (
-                    c in {'medium_recall', 'medium_prec'}
-                    and _is_evt_legit(s.get('text', ''))
-                ):
-                    out.append(s)
-            elif t == 'PROD':
-                if c == 'high':
-                    out.append(s)
-            elif c in {'high', 'medium_recall'}:
+def select_spans(spans: List[dict]) -> List[dict]:
+    """confidence 태그가 붙은 span 에서 선택 규칙(모듈 docstring)에 맞는 것만 남긴다."""
+    out: List[dict] = []
+    for s in spans:
+        t = s['type']
+        c = s['confidence']
+        if t == 'EVT':
+            if c == 'high' or (
+                c in {'medium_recall', 'medium_prec'}
+                and _is_evt_legit(s.get('text', ''))
+            ):
                 out.append(s)
-        return out
-    elif policy == 'recall_strict_prod':
-        # recall_strict_evt 와 동일(EVT legit 구제 유지)하되 PROD 를
-        # high + medium_recall(gemma_only) 로 완화 — 창작물(임의 제목,
-        # §3 표면 패턴 부재)을 Gemma recall 로 회복. conflict·qwen_only
-        # PROD 는 drop(단일모델 신뢰는 gemma_only 한정).
-        out = []
-        for s in spans:
-            t = s['type']
-            c = s['confidence']
-            if t == 'EVT':
-                if c == 'high' or (
-                    c in {'medium_recall', 'medium_prec'}
-                    and _is_evt_legit(s.get('text', ''))
-                ):
-                    out.append(s)
-            elif c in {'high', 'medium_recall'}:
-                out.append(s)
-        return out
-    else:
-        raise ValueError(f'unknown policy: {policy}')
-    return [s for s in spans if s['confidence'] in allowed]
+        elif c in {'high', 'medium_recall'}:
+            out.append(s)
+    return out
 
 
 def merge_records(
     gemma_records: List[dict],
     qwen_records: List[dict],
-    policy: str = 'recall',
 ) -> List[dict]:
     """두 JSONL 레코드 리스트를 id 기준으로 매칭해 단일 레코드 리스트 반환.
 
@@ -255,13 +186,13 @@ def merge_records(
             ga.get('gold_spans_relabel', []),
             gb.get('gold_spans_relabel', []),
         )
-        filtered = _filter_by_policy(all_merged, policy)
+        filtered = select_spans(all_merged)
         rec = {
             k: v for k, v in ga.items()
             if k not in ('gold_spans_relabel',)
         }
         rec['gold_spans_relabel_merged'] = filtered
-        rec['merge_policy'] = policy
+        rec['merge_policy'] = MERGE_POLICY
         rec['merge_sources'] = {
             'a': ga.get('relabel_model', 'gemma'),
             'b': gb.get('relabel_model', 'qwen'),
@@ -313,10 +244,6 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--gemma', required=True, help='Gemma JSONL path')
     p.add_argument('--qwen', required=True, help='Qwen JSONL path')
     p.add_argument(
-        '--policy', default='recall', choices=POLICIES,
-        help='Span selection policy',
-    )
-    p.add_argument(
         '--output', required=True, help='Merged JSONL output path',
     )
     return p
@@ -331,8 +258,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     gemma = _load_jsonl(Path(args.gemma))
     qwen = _load_jsonl(Path(args.qwen))
     print(f'Gemma: {len(gemma)} records, Qwen: {len(qwen)} records')
-    merged = merge_records(gemma, qwen, policy=args.policy)
-    print(f'Merged policy={args.policy}: {len(merged)} records')
+    merged = merge_records(gemma, qwen)
+    print(f'Merged policy={MERGE_POLICY}: {len(merged)} records')
     _write_jsonl(Path(args.output), merged)
     print(f'Wrote -> {args.output}')
     _summarize(merged)

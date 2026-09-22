@@ -43,7 +43,7 @@ flowchart TD
 |---|---|---|---|---|
 | **1 라벨링** | `labelers/{ja,vi}`, `labelers/span_matcher`(ja·vi·ko 공용), `llm_eval`, `metrics` | Stockmark gold | WikiANN, offset-span 경로 | [1-labeling.md](1-labeling.md) |
 | **2 증강** | `augmenters/pii`, `augmenters/wikiann_vi` | PII 주입만 | **재라벨 silver → PII 주입** | [2-augmentation.md](2-augmentation.md) |
-| **3 검증** | `wikiann_vi/{kappa,wikidata_anchor,merge_confidence}`, `classifier/kfold_pool`, `pii/verifier` | PII 교차검증 | **kappa + anchor + silver quality + cross-fold 누출** | [3-verification.md](3-verification.md) |
+| **3 검증** | `wikiann_vi/{kappa,wikidata_anchor,merge_confidence}`, `classifier/kfold_pool`, `pii/verifier` | PII 교차검증 | **kappa + anchor + cross-fold 누출** | [3-verification.md](3-verification.md) |
 | **4 분류** | `classifier/` | BertJapanese (slow) | XLM-R (fast) / PhoBERT (pyvi) | [4-classification.md](4-classification.md) |
 
 **비대칭성** — 증강·검증 단계는 VI 쪽이 무겁다. VI는 원천 gold가 3종
