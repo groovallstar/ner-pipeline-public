@@ -1,27 +1,22 @@
-"""한국어 EVT gold 의 canonical 규칙 정합성 감사 + R2 회수 파이프라인.
+"""한국어 EVT gold 의 canonical 규칙 정합성 감사.
 
 canonical `docs/manual/data/canonical-entity-schema.md` §5.3 의 EVT 결정표
-(축1~축3 · R1~R3)에 대해 gold 를 **전수 감사**하고, 규칙이 EVT 라 정한 표면형이
-gold 에서 빠진 곳(완전성 결손)을 dual-LLM 문맥 판정으로 회수한다.
+(축1~축3 · R1~R3)에 대해 gold 를 **전수 감사**한다. 규칙이 EVT 라 정한 표면형이
+gold 에서 빠진 곳(완전성 결손)과 규칙을 어긴 span(정합성 위반)을 함께 센다.
 
-세 모드가 한 계보를 이룬다:
+두 모드 모두 재실행 가능한 기계 게이트다:
 
-- ``audit``  — 규칙 반영률 · 정합성 위반 · 회수 후보를 계산해 JSON 리포트로 낸다.
-              재실행 가능한 기계 게이트라 회수 전후에 같은 명령으로 검증한다.
-- ``judge``  — 회수 후보를 두 LLM 이 독립 판정한다. 합의분만 남기고 불일치(HOLD)는
-              버린다 — 틀린 라벨을 주입하느니 불확실분을 빼는 쪽이 well-posed 다.
-- ``apply``  — 합의 판정 + 기계 결정적 교정을 gold 에 반영하고 provenance 를 남긴다.
+- ``audit``     — 규칙 반영률 · 정합성 위반 · 회수 후보를 계산해 JSON 리포트로 낸다.
+- ``homomorph`` — R2 head 를 공유하는 표면형이 전부 분류됐는지 본다. 미분류가 남으면
+                  실패한다.
 
-**감사와 적용이 같은 판정 함수를 쓴다** — 둘이 갈리면 감사가 통과시킨 gold 를
-적용이 다르게 해석해 반영률이 조용히 안 오른다.
+판정 원장(``--ledger``)은 사람이 NOT 으로 정한 자리를 후보와 분모에서 뺄 때만 읽는다.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import collections
-import hashlib
 import json
 import logging
 import pathlib
@@ -68,7 +63,7 @@ _EXCLUDED_SURFACES = frozenset(
     form for forms in R2_EXCLUDE.values() for form in forms
 )
 
-# bare 로 등장했을 때 EVT 인 어휘 — 감사 버킷과 판정 rubric 이 쓰는 표면형 목록
+# bare 로 등장했을 때 EVT 인 어휘 — 감사 버킷이 쓰는 표면형 목록
 R2_FORMS: Dict[str, str] = {}
 for _form in R2_BARE_STANDALONE:
     R2_FORMS[_form] = "R2단독"
@@ -182,7 +177,7 @@ def followed_by_other_head(text: str, end: int) -> Optional[str]:
     return None
 
 
-# ── IO ─────────────────────────────────────────────────────────────────
+# ── gold IO ────────────────────────────────────────────────────────────
 
 
 def _load_jsonl(path: str) -> List[dict]:
@@ -190,27 +185,9 @@ def _load_jsonl(path: str) -> List[dict]:
         return [json.loads(line) for line in fh if line.strip()]
 
 
-def file_sha256(path: str) -> str:
-    """파일 지문. gold 는 버전 관리 밖이라 회수 전·후를 이걸로만 못 박는다."""
-    digest = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-# ── gold IO ────────────────────────────────────────────────────────────
-
-
 def load_gold(path: str) -> List[dict]:
     with open(path, encoding="utf-8") as fh:
         return [json.loads(line) for line in fh if line.strip()]
-
-
-def dump_gold(rows: Sequence[dict], path: str) -> None:
-    with open(path, "w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def covered_offsets(row: dict) -> Set[int]:
@@ -864,203 +841,6 @@ def find_genitive_residue(
     return out
 
 
-def find_head_candidates(rows: Sequence[dict]) -> List[Candidate]:
-    """head 동형 표면형이 gold 에서 독립·무라벨로 나타난 자리를 회수 후보로 만든다.
-
-    `find_unlabeled_mentions` 과 결정적으로 다른 점은 **탐색 대상이 canonical head
-    에서 온다**는 것이다 — 모델 예측도, 기존 EVT 표면형도 입력이 아니다. 후보
-    모집단을 모델 FP 로 잡으면 gold 가 모델이 이미 발화한 자리에서만 늘어나고,
-    그렇게 만든 gold 로 그 모델을 다시 재면 recall 상승이 구조적으로 보장된다.
-    규칙에서 후보를 만들면 모델이 예측하지 못한 자리도 함께 잡힌다.
-
-    canonical 이 사유코드로 명시 제외한 표면형은 후보에서 뺀다 — 이미 사람이
-    판정해 표에 박은 것을 다시 판정하게 두면, 판정이 canonical 을 덮을 수 있다.
-    (동형 검사의 모집단에는 그대로 남아 `excluded` 로 분류된다.)
-    """
-    surfaces = {i.surface: i.head
-                for i in find_head_homomorph(rows)
-                if i.standalone_hits and i.surface not in _EXCLUDED_SURFACES}
-    out: List[Candidate] = []
-    for idx, row in enumerate(rows):
-        text = row["text"]
-        covered = covered_offsets(row)
-        for surface, head in surfaces.items():
-            pos = text.find(surface)
-            while pos != -1:
-                end = pos + len(surface)
-                if (is_standalone_mention(text, pos, surface)
-                        and not covered & set(range(pos, end))):
-                    out.append(Candidate(
-                        row_index=idx, row_id=str(row.get("id", idx)),
-                        start=pos, end=end, surface=surface,
-                        bucket="B3_head", rule=f"R2원칙 head={head}",
-                        context=text[max(0, pos - 40):end + 40],
-                        evidence=span_evidence(text, end)))
-                pos = text.find(surface, pos + 1)
-    return sorted(out, key=lambda c: (c.surface, c.row_index, c.start))
-
-
-# ── dual-LLM 판정 ──────────────────────────────────────────────────────
-
-JUDGE_SYSTEM = (
-    "당신은 한국어 개체명 인식(NER) 라벨 심판입니다. "
-    "주어진 문맥에서 표시된 표면형이 EVT(행사·사건) 개체명인지 판정합니다. "
-    "반드시 EVT 또는 NOT 한 단어만 출력하세요."
-)
-
-"""판정 rubric 의 R2 목록은 **상수에서 만든다** — 손으로 나열하면 canonical 표와
-어긋난 채로 판정이 돌고, 그 어긋남이 gold 에 그대로 굳는다."""
-_R2_RUBRIC = (
-    "다음 head 로 끝나는 복합명사 — " + "·".join(R2_HEADS)
-    + " / 단독으로도 EVT 인 형 — " + "·".join(R2_BARE_STANDALONE)
-    + " / 의식 — " + "·".join(R2C_CEREMONY)
-)
-
-JUDGE_TEMPLATE = """규칙:
-- EVT = 행사·사건. 회의·회견·의식은 고유명이 없어도 EVT다
-  (""" + _R2_RUBRIC + """).
-- 단, 상설 조직체(위원회·협의회)는 개최되는 회의가 아니라 조직이므로 NOT.
-- 단, 그 행사의 장소·문서를 가리키는 파생어(기자회견장·본회의장·시상식장·기자회견문)는 EVT가 아니다(NOT).
-- 다른 개체(시설·조직·팀·도로)의 이름 일부이면 EVT가 아니다(NOT). 예: "올림픽 공원"의 올림픽, "월드컵 북로"의 월드컵.
-- 실제로 열린/열릴 특정 행사를 가리켜야 EVT다. 일반 개념·비유·부정문 속 막연한 언급이면 NOT.
-
-문장: {context}
-표면형: 「{surface}」
-
-이 문맥에서 「{surface}」는 EVT인가? EVT 또는 NOT 한 단어만 출력:"""
-
-
-async def _ask(client, model: str, prompt: str) -> str:
-    resp = await client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": JUDGE_SYSTEM},
-                  {"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_tokens=8,
-    )
-    raw = (resp.choices[0].message.content or "").strip().upper()
-    return "EVT" if "EVT" in raw else "NOT" if "NOT" in raw else "?"
-
-
-async def _judge_all(
-    cands: Sequence[Candidate], endpoints: Sequence[Tuple[str, str]], concurrency: int
-) -> List[dict]:
-    from openai import AsyncOpenAI
-
-    clients = [(AsyncOpenAI(base_url=url, api_key="EMPTY"), model)
-               for url, model in endpoints]
-    sem = asyncio.Semaphore(concurrency)
-
-    async def one(cand: Candidate) -> dict:
-        prompt = JUDGE_TEMPLATE.format(context=cand.context, surface=cand.surface)
-        async with sem:
-            votes = await asyncio.gather(
-                *[_ask(cli, mdl, prompt) for cli, mdl in clients],
-                return_exceptions=True,
-            )
-        clean = [v if isinstance(v, str) else "?" for v in votes]
-        agree = len(set(clean)) == 1 and clean[0] in ("EVT", "NOT")
-        return {
-            "row_index": cand.row_index, "row_id": cand.row_id,
-            "start": cand.start, "end": cand.end, "surface": cand.surface,
-            "bucket": cand.bucket, "rule": cand.rule, "context": cand.context,
-            "votes": clean, "verdict": clean[0] if agree else "HOLD",
-        }
-
-    return await asyncio.gather(*[one(c) for c in cands])
-
-
-# ── 적용 ───────────────────────────────────────────────────────────────
-
-
-def apply_decisions(
-    rows: List[dict], decisions: Sequence[dict], violations: Sequence[Violation]
-) -> Tuple[List[dict], dict]:
-    """합의 EVT 판정을 삽입하고 정합성 위반을 교정한다 (불변 타입 무영향)."""
-    stats = collections.Counter()
-    # 판정은 **row_id 로** 되돌린다. 위치(row_index)로 붙이면 gold 를 재생성해 행
-    # 순서가 달라졌을 때 엉뚱한 문장에 span 이 조용히 박힌다.
-    index_of = {str(row.get("id", i)): i for i, row in enumerate(rows)}
-    by_row: Dict[int, List[dict]] = collections.defaultdict(list)
-    for dec in decisions:
-        if dec["verdict"] != "EVT":
-            stats["skipped_" + dec["verdict"].lower()] += 1
-            continue
-        idx = index_of.get(str(dec.get("row_id")), dec["row_index"])
-        if idx != dec["row_index"]:
-            stats["row_index_drift"] += 1
-        if rows[idx]["text"][dec["start"]:dec["end"]] != dec["surface"]:
-            stats["surface_mismatch_skipped"] += 1
-            continue
-        by_row[idx].append(dec)
-
-    drops: Dict[int, Set[Tuple[int, int]]] = collections.defaultdict(set)
-    expands: Dict[int, Dict[Tuple[int, int], Tuple[int, int]]] = collections.defaultdict(dict)
-    for vio in violations:
-        if vio.fix == "drop":
-            drops[vio.row_index].add((vio.start, vio.end))
-        elif vio.fix == "expand" and vio.replacement:
-            expands[vio.row_index][(vio.start, vio.end)] = vio.replacement
-
-    out: List[dict] = []
-    for idx, row in enumerate(rows):
-        ents = []
-        for ent in row["entities"]:
-            key = (ent["start_char"], ent["end_char"])
-            if ent["label"] == EVT and key in drops[idx]:
-                stats["violation_dropped"] += 1
-                continue
-            if ent["label"] == EVT and key in expands[idx]:
-                new_start, new_end = expands[idx][key]
-                ent = dict(ent, start_char=new_start, end_char=new_end,
-                           text=row["text"][new_start:new_end])
-                stats["violation_expanded"] += 1
-            ents.append(ent)
-
-        occupied: Set[int] = set()
-        for ent in ents:
-            occupied.update(range(ent["start_char"], ent["end_char"]))
-        for dec in sorted(by_row[idx], key=lambda d: d["start"]):
-            span = set(range(dec["start"], dec["end"]))
-            if span & occupied:
-                stats["insert_clash"] += 1
-                continue
-            ents.append({"label": EVT, "start_char": dec["start"],
-                         "end_char": dec["end"],
-                         "text": row["text"][dec["start"]:dec["end"]]})
-            occupied |= span
-            stats["recovered"] += 1
-        ents.sort(key=lambda e: (e["start_char"], e["end_char"]))
-        out.append({**row, "entities": ents})
-    return out, dict(stats)
-
-
-def verify_invariants(before: Sequence[dict], after: Sequence[dict]) -> dict:
-    """EVT 외 9 종이 byte-identical 인지, span↔원문이 어긋나지 않는지 검사."""
-    assert len(before) == len(after), "row count changed"
-    frozen_before, frozen_after = [], []
-    mismatch = overlap = 0
-    for old, new in zip(before, after):
-        assert old["text"] == new["text"] and old.get("id") == new.get("id"), "row identity changed"
-        frozen_before.append([e for e in old["entities"] if e["label"] != EVT])
-        frozen_after.append([e for e in new["entities"] if e["label"] != EVT])
-        spans = sorted((e["start_char"], e["end_char"]) for e in new["entities"])
-        for (s, e), (ns, _) in zip(spans, spans[1:]):
-            if ns < e:
-                overlap += 1
-        for ent in new["entities"]:
-            if new["text"][ent["start_char"]:ent["end_char"]] != ent["text"]:
-                mismatch += 1
-    canon = json.dumps(frozen_before, ensure_ascii=False, sort_keys=True)
-    return {
-        "frozen_types_identical": canon == json.dumps(frozen_after, ensure_ascii=False, sort_keys=True),
-        "span_text_mismatch": mismatch,
-        "entity_overlap": overlap,
-        "evt_before": sum(1 for r in before for e in r["entities"] if e["label"] == EVT),
-        "evt_after": sum(1 for r in after for e in r["entities"] if e["label"] == EVT),
-    }
-
-
 # ── CLI ────────────────────────────────────────────────────────────────
 
 
@@ -1117,48 +897,6 @@ def cmd_audit(args: argparse.Namespace) -> None:
         )
 
 
-def cmd_judge(args: argparse.Namespace) -> None:
-    rows = load_gold(args.gold)
-    rep = run_audit(rows, include_proc=args.include_proc)
-    cands = rep.candidates
-    if args.limit:
-        cands = cands[:args.limit]
-    endpoints = [(args.url_a, args.model_a), (args.url_b, args.model_b)]
-    logger.info("Judging %d candidates with %d models", len(cands), len(endpoints))
-    results = asyncio.run(_judge_all(cands, endpoints, args.concurrency))
-    with open(args.out, "w", encoding="utf-8") as fh:
-        for res in results:
-            fh.write(json.dumps(res, ensure_ascii=False) + "\n")
-    tally = collections.Counter(r["verdict"] for r in results)
-    total = len(results) or 1
-    logger.info("Verdicts: %s | agreement=%.3f",
-                dict(tally), (total - tally["HOLD"]) / total)
-
-
-def cmd_apply(args: argparse.Namespace) -> None:
-    rows = load_gold(args.gold)
-    decisions = _load_jsonl(args.decisions)
-    violations = find_violations(rows) if args.fix_violations else []
-    new_rows, stats = apply_decisions(rows, decisions, violations)
-    checks = verify_invariants(rows, new_rows)
-    if not checks["frozen_types_identical"]:
-        raise SystemExit("FAIL: non-EVT types changed")
-    if checks["span_text_mismatch"] or checks["entity_overlap"]:
-        raise SystemExit(f"FAIL: integrity broken {checks}")
-    gold_before = file_sha256(args.gold)
-    dump_gold(new_rows, args.out)
-    if args.provenance:
-        with open(args.provenance, "w", encoding="utf-8") as fh:
-            # gold 는 버전 관리 밖이라 이 회수가 어떤 diff 에도 남지 않는다.
-            # 이 원장이 유일한 감사 흔적이므로 전·후 지문을 함께 박는다.
-            json.dump({"stats": stats, "checks": checks,
-                       "gold_sha256": {"before": gold_before,
-                                       "after": file_sha256(args.out)},
-                       "violations": [v.__dict__ for v in violations]},
-                      fh, ensure_ascii=False, indent=2)
-    print(json.dumps({"stats": stats, "checks": checks}, ensure_ascii=False, indent=2))
-
-
 def cmd_homomorph(args: argparse.Namespace) -> None:
     rows = load_gold(args.gold)
     ledger = _load_jsonl(args.ledger) if args.ledger else []
@@ -1176,24 +914,10 @@ def cmd_homomorph(args: argparse.Namespace) -> None:
         )
 
 
-def cmd_head_candidates(args: argparse.Namespace) -> None:
-    rows = load_gold(args.gold)
-    cands = find_head_candidates(rows)
-    with open(args.out, "w", encoding="utf-8") as fh:
-        for cand in cands:
-            fh.write(json.dumps(cand.__dict__, ensure_ascii=False) + "\n")
-    by_surface = collections.Counter(c.surface for c in cands)
-    logger.info("Head-scan candidates: %d sites / %d surfaces",
-                len(cands), len(by_surface))
-    print(json.dumps({"sites": len(cands), "surfaces": len(by_surface),
-                      "by_surface": dict(by_surface.most_common())},
-                     ensure_ascii=False, indent=2))
-
-
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(
-        description="KO EVT canonical rule audit and R2 recovery")
+        description="KO EVT canonical rule audit")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_au = sub.add_parser("audit", help="audit gold against canonical EVT rules")
@@ -1211,28 +935,6 @@ def main() -> None:
                            "candidates and the coverage denominator")
     p_au.set_defaults(func=cmd_audit)
 
-    p_ju = sub.add_parser("judge", help="dual-LLM judgement of recovery candidates")
-    p_ju.add_argument("--gold", required=True)
-    p_ju.add_argument("--out", required=True, help="per-instance provenance JSONL")
-    p_ju.add_argument("--url-a", default="http://localhost:8081/v1")
-    p_ju.add_argument("--model-a", default="cyankiwi/gemma-4-31B-it-AWQ-8bit")
-    p_ju.add_argument("--url-b", default="http://localhost:8082/v1")
-    p_ju.add_argument("--model-b", default="cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit")
-    p_ju.add_argument("--concurrency", type=int, default=16)
-    p_ju.add_argument("--limit", type=int, default=0, help="pilot: first N")
-    p_ju.add_argument("--include-proc", action="store_true",
-                      help="also judge institutional-procedure forms (out of issue #198 scope)")
-    p_ju.set_defaults(func=cmd_judge)
-
-    p_ap = sub.add_parser("apply", help="apply consensus decisions to gold")
-    p_ap.add_argument("--gold", required=True)
-    p_ap.add_argument("--decisions", required=True, help="judge output JSONL")
-    p_ap.add_argument("--out", required=True, help="new gold JSONL")
-    p_ap.add_argument("--provenance", help="write apply provenance JSON here")
-    p_ap.add_argument("--fix-violations", action="store_true",
-                      help="also apply deterministic rule-violation fixes")
-    p_ap.set_defaults(func=cmd_apply)
-
     p_hm = sub.add_parser(
         "homomorph",
         help="consistency gate — every head-homomorph surface must be classified")
@@ -1240,13 +942,6 @@ def main() -> None:
     p_hm.add_argument("--ledger", help="judgement ledger JSONL (NOT verdicts)")
     p_hm.add_argument("--out", help="write result JSON here")
     p_hm.set_defaults(func=cmd_homomorph)
-
-    p_hc = sub.add_parser(
-        "head-candidates",
-        help="rule-based recovery candidates scanned from canonical R2 heads")
-    p_hc.add_argument("--gold", required=True)
-    p_hc.add_argument("--out", required=True, help="candidate JSONL for judgement")
-    p_hc.set_defaults(func=cmd_head_candidates)
 
     args = parser.parse_args()
     args.func(args)

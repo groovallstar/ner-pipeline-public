@@ -1,10 +1,9 @@
 # 2. 증강 — 합성 PII 주입 + VI 재라벨 silver
 
 > **이 단계가 하는 일**: 학습 코퍼스를 만든다. (a) 네 언어 모두에 합성 PII를
-> 자연 주입하고, (b) VI는 그 전에 WikiANN 3종 gold를 canonical 5종 silver로
-> LLM 재라벨한다.
-> **대상 코드**: `src/ner/augmenters/pii`, `src/ner/augmenters/wikiann_vi`,
-> `src/ner/augmenters/ontonotes_en`
+> 자연 주입하고, (b) VI 코퍼스는 그 전에 WikiANN 3종 gold를 canonical 5종
+> silver로 LLM 재라벨해 만들었다(§2B).
+> **대상 코드**: `src/ner/augmenters`
 > **산출**: `data/{stockmark,wikiann_vi,klue,ontonotes_en}/*.jsonl`
 > (canonical 10종 평면)
 
@@ -13,7 +12,7 @@
 ```mermaid
 flowchart LR
     JA["JA · Stockmark<br/>gold 5종"] --> JP["PII 주입<br/>5종"] --> J10["10종 평면"]
-    VI["VI · WikiANN<br/>3종"] --> VR["2B 재라벨 silver<br/>5종"] --> VG["gold-fix"] --> VP["PII 주입<br/>5종"] --> V10["10종 평면"]
+    VI["VI · WikiANN<br/>3종"] --> VR["2B 재라벨 silver<br/>5종"] --> VP["PII 주입<br/>5종"] --> V10["10종 평면"]
     KO["KO · KLUE 유래<br/>gold 5종+DAT"] --> KP["PII 주입<br/>4종 · DAT 제외"] --> K10["10종 평면"]
     EN["EN · OntoNotes5<br/>18종"] --> EC["형식 변환<br/>5종+DAT"] --> EP["PII 주입<br/>4종 · DAT 제외"] --> E10["10종 평면"]
 ```
@@ -25,14 +24,16 @@ flowchart LR
 각 레인이 하는 일:
 
 - **JA** — 사람 gold 5종에 PII 5종만 자연 주입(재라벨 불필요).
-- **VI** — WikiANN 3종을 재라벨 silver 5종으로 끌어올린 뒤(§2B) gold-fix·
-  PII 주입까지 거치는, 증강이 가장 무거운 레인이다.
+- **VI** — 현 코퍼스는 WikiANN 3종을 재라벨 silver 5종으로 끌어올린 뒤(§2B) PII 를
+  주입해 만들었다. 증강이 가장 무거웠던 레인이다.
 - **KO** — KLUE 유래 gold(`DAT` 이미 보유)에 PII 4종만 주입, 검증 없이
   원본 gold를 보존한다.
-- **EN** — 재라벨이 없다. OntoNotes5 18종을 canonical 6종으로 매핑하고 자연문을
-  복원하는 형식 변환만 거친 뒤 PII 4종을 주입한다. 원본 `FAC` 는 표면별 판정
-  표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈린다. 주입 뒤 EMAIL 일부를
-  괄호·따옴표 등에 붙인다(§EMAIL 붙은 문맥).
+- **EN** — 재라벨이 없다. 현 코퍼스는 OntoNotes5 18종을 canonical 6종으로
+  매핑하고 자연문을 복원하는 형식 변환만 거친 뒤 PII 4종을 주입해 만들었다. 원본
+  `FAC` 는 표면별 판정 표로 `ORG`(개별 구조물)·`LOC`(경로)·비-entity 로 갈렸다.
+  변환 코드는 코퍼스를 만든 뒤 지웠고, 매핑과 판정 표의 정본은 canonical §4.3 이
+  가리킨다. 현 코퍼스는 주입 뒤 EMAIL 일부를 괄호·따옴표 등에 한 번 붙여
+  두었다(§EMAIL 붙은 문맥).
 
 ## 목차
 
@@ -151,12 +152,10 @@ ko·ja 목록은 표기 이름 목록과 같은 순서의 로마자 표기다.
 실재하기 때문이다. 학습에서 완전히 지우면 그 표면형이 분포 밖이 되어, 지금
 없는 구멍이 반대편에 생긴다.
 
-이미 만들어져 있는 코퍼스는 `ner.scripts.rewrite_email_localpart` 로 EMAIL
-span 의 로컬파트만 이 분포로 다시 만든다. 도메인·문맥·다른 라벨은 건드리지
-않고 길이 차이만큼 뒤따르는 엔티티 오프셋을 민다. `data/` 는 gitignore 라, 네
-코퍼스를 치환한 입력·출력 지문과 seed 는
-`augmenters/pii/data/email_localpart_rewrite_ledger.json` 에 커밋해 둔다. EN 은 이
-출력 위에 아래 붙은 문맥 치환을 한 번 더 했다.
+생성기를 고치기 전에 만든 네 코퍼스도 EMAIL span 의 로컬파트만 이 분포로 한 번
+다시 만들었다. 도메인·문맥·다른 라벨은 건드리지 않고 길이 차이만큼 뒤따르는
+엔티티 오프셋만 밀었다. 생성기가 같은 분포를 내므로 다시 주입해도 로컬파트 분포는
+그대로다. EN 은 이 출력 위에 아래 붙은 문맥 치환을 한 번 더 했다.
 
 ### EMAIL 붙은 문맥 (EN)
 
@@ -175,8 +174,7 @@ EN 은 주입한 EMAIL 가운데 일부를 공백이 아닌 글자 뒤에 둔다
 | `mailto:` | `at mailto:alice@x.com today` | 2% |
 | 단서어 콜론 | `email alice@x.com` → `email:alice@x.com` | 단서어 뒤 주소의 30% |
 
-비율의 단일 출처는 `augmenters/pii/email_context.py` 의 `EMAIL_WRAP_WEIGHTS`·
-`EMAIL_CUE_COLON_RATE` 이고 위 표는 그 사본이다. 적용 뒤 EN gold 에서 공백 아닌
+위 비율은 EN 코퍼스에 한 번 적용한 치환의 값이다. 적용 뒤 EN gold 에서 공백 아닌
 글자 뒤의 주소가 14.3% 가 됐다. 콜론을 단서어 뒤에만 넣는 것은 단서어 없이 넣으면
 `at:alice@x.com` 같은 없는 표기가 되기 때문이다.
 
@@ -190,11 +188,10 @@ EN 은 주입한 EMAIL 가운데 일부를 공백이 아닌 글자 뒤에 둔다
 앞 공백과 공백류 정규화가 맡는다([4. 분류](4-classification.md) §2). 코퍼스에
 문두 주소를 넣으면 이 문서가 경계하는 위치 지름길이 된다.
 
-적용은 `ner.scripts.rewrite_email_context` 로 하고, 입력·출력 지문과 seed 는
-`augmenters/pii/data/email_context_rewrite_ledger.json` 에 커밋한다. 이 원장은
-로컬파트 치환 원장의 출력 지문에서 출발하고, EN 병합본 지문 검사는 디스크 판본을
-이 원장의 출력 지문과 대조한다. EN 을 다시 주입하면 로컬파트 분포는 생성기가
-맞추지만 이 치환은 다시 돌려야 한다.
+**이 치환은 주입기에 없다.** 기존 EN 코퍼스에 한 번 적용한 뒤 치환 도구를 지웠다.
+그래서 EN 을 다시 주입하면 공백 아닌 글자 뒤의 주소가 치환 전처럼 거의 없는 분포로
+돌아가고, 괄호·`mailto:` 뒤 주소의 앞쪽을 놓치는 결함이 다시 열린다. 다시 주입할
+때는 위 표의 규칙을 주입 경로에 먼저 넣는다.
 
 ### VI DAT 표면형
 
@@ -203,9 +200,8 @@ EN 은 주입한 EMAIL 가운데 일부를 공백이 아닌 글자 뒤에 둔다
 되어 배포 모델이 서술형 날짜를 통째로 놓쳤다. 조각 span 은 미탐지보다 나쁘다 —
 마스킹이 `15` 만 가리고 나머지를 그대로 흘린다.
 
-목표값은 `generators/vi.py` 의 `VIETNAMESE_DAT_PATTERNS` 와
-`scripts/rewrite_vi_dat_surface.py` 의 `DAT_FORM_WEIGHTS` 가 단일 출처이며 아래 표는
-그 사본이다.
+아래 표는 현 VI 코퍼스의 DAT 표면형 비율이다. 숫자와 서술형은 생성기
+(`generators/vi.py` 의 `VIETNAMESE_DAT_PATTERNS`)가 낸다.
 
 | 형식 | 비율 | 예 | span |
 |---|---|---|---|
@@ -221,8 +217,7 @@ EN 은 주입한 EMAIL 가운데 일부를 공백이 아닌 글자 뒤에 둔다
 **월-연 표기는 생성기가 내지 않는다.** 생성기는 값 문자열만 돌려주고 그 앞에 `ngày`
 가 붙을지는 LLM 주입기가 정하는데, 생성기가 그것을 통제하지 못해
 `ngày tháng 5 năm 1988`("날 5월 1988년") 같은 깨진 문맥이 나온다. 그래서 생성기는
-숫자와 `D tháng M năm Y` 를 60:40 으로만 내고, 앞 글자까지 함께 보는 치환 경로가
-그중 일부를 월-연으로 바꾼다.
+숫자와 `D tháng M năm Y` 를 60:40 으로만 낸다.
 
 **연도 단독 `năm Y` 는 주입하지 않는다.** 베트남어 사건명이 `Bầu cử liên bang Úc
 năm 2004` 처럼 연도로 끝나는 꼴이 흔해 그 자리의 옳은 라벨이 `EVT` 이고, 본문의
@@ -230,25 +225,27 @@ năm 2004` 처럼 연도로 끝나는 꼴이 흔해 그 자리의 옳은 라벨�
 단독은 DAT, 단 사건명 꼬리일 때는 EVT" 를 배워야 해서, 얻는 커버리지보다 `EVT` 를
 잃을 위험이 크다.
 
-이미 만들어져 있는 코퍼스는 `ner.scripts.rewrite_vi_dat_surface` 로 DAT span 의
-표면만 이 분포로 다시 만든다. 문맥·다른 라벨은 건드리지 않고 길이 차이만큼 뒤따르는
-엔티티 오프셋을 민다. 월-연으로 바꾸는 자리에서만 앞의 `ngày` 를 함께 먹으며, 먹을
-`ngày` 가 없거나 앞 낱말이 `năm`·`tháng` 인 자리는 숫자 표기로 남긴다. `data/` 는
-gitignore 라 입력·출력 지문과 seed 는
-`augmenters/pii/data/vi_dat_surface_rewrite_ledger.json` 에 커밋한다.
+현 코퍼스는 DAT span 의 표면만 이 분포로 한 번 다시 만들었다. 문맥·다른 라벨은
+건드리지 않고 길이 차이만큼 뒤따르는 엔티티 오프셋만 밀었다. 월-연으로 바꾼
+자리에서만 앞의 `ngày` 를 함께 먹었고, 먹을 `ngày` 가 없거나 앞 낱말이
+`năm`·`tháng` 인 자리는 숫자 표기로 남겼다.
+
+**월-연 표기는 앞 글자까지 함께 보는 이 치환에서만 나왔고, 그 도구는 지웠다.** 그래서
+VI 를 다시 주입하면 월-연 표기가 0 이 되어 숫자와 서술형만 60:40 으로 남는다. 다시
+주입할 때는 앞 `ngày` 를 다루는 위 규칙을 주입 경로에 먼저 넣는다.
 
 ### CLI
 
 ```bash
 # JA — Stockmark에 LLM 자연 주입 + 교차 검증
-python -m ner.augmenters.pii --source stockmark --lang ja \
+python -m ner.augmenters --source stockmark --lang ja \
     --output data/stockmark/pii_test.jsonl --n-samples 1000 \
     --mode llm --vllm-url http://localhost:8081/v1 \
     --vllm-model Qwen/Qwen3.5-27B \
     --verify vllm --verify-policy drop_span
 
 # KO — KLUE gold에 PII 4종만(DAT 제외) 자연 주입, verify 없음
-python -m ner.augmenters.pii --source jsonl --input <주입 전 KLUE gold> \
+python -m ner.augmenters --source jsonl --input <주입 전 KLUE gold> \
     --lang ko --pii-labels EMAIL PHONE ID_NUM CREDIT_CARD --mode llm \
     --inject-url http://localhost:8081/v1 \
     --inject-model cyankiwi/gemma-4-31B-it-AWQ-8bit \
@@ -279,57 +276,18 @@ mv data/klue/origin.new.jsonl data/klue/origin.jsonl   # 검토 후 gold 로 승
 
 ## 2B. VI 재라벨 silver (VI 전용)
 
-WikiANN-vi 원본은 NER **3종(PER/LOC/ORG)** 자동 silver다. canonical 5종으로
-끌어올리려면 LLM 재라벨이 필요하다. `augmenters/wikiann_vi/`가 이를 전담한다.
+WikiANN-vi 원본은 NER **3종(PER/LOC/ORG)** 자동 silver다. 현 VI 코퍼스는 두
+LLM(Gemma·Qwen)이 문장을 서로 독립으로 다시 읽어 canonical 5종(PROD·EVT 추가)으로
+재라벨하고, 두 결과를 대조해 병합한 silver 위에 PII 5종을 주입해 만들었다. 분류기
+기본 입력은 그 결과인 `data/wikiann_vi/origin.jsonl` 이다.
 
-### 흐름도
+재라벨·병합·품질 측정 도구는 코퍼스를 만든 뒤 지웠다. 지우기 전 코드는 커밋
+`ec1c8eb` 의 `src/ner/augmenters/wikiann_vi/` 에 있고, 재라벨 당시의 품질 측정은
+`docs/reports/vietnamese-ner-silver-quality.md` 에 있다.
 
-```mermaid
-flowchart TD
-    HF["WikiANN 원본 (베트남어)<br/>PER·LOC·ORG 3종 · 단어<br/>BIO"]
-    HF --> LOAD["원본을 읽어 엔티티<br/>위치를 문자 오프셋으로<br/>변환<br/>(단어 BIO → 시작·끝<br/>위치)"]
-    LOAD --> G3["3종 위치 코퍼스<br/>문장 + PER·LOC·ORG 위치"]
-    G3 --> REL["두 LLM(Gemma·Qwen)이<br/>문장을 다시 읽어<br/>5종으로 재라벨 (PROD·<br/>EVT 추가)<br/>두 모델이 서로<br/>독립적으로 수행"]
-    REL --> MERGE["두 모델 결과를 대조해<br/>병합<br/>둘이 합의하면 채택,<br/>한쪽만·불일치면<br/>정책대로 취사"]
-    MERGE --> M5["병합된 5종 silver"]
-    M5 --> GAP["누락으로 판정된<br/>엔티티를 되살려 채워넣고<br/>저장 형식으로 정리<br/>(주입 전 원문도 함께<br/>보관)"]
-    GAP --> C5["canonical 5종 silver<br/>코퍼스"]
-    C5 --> PII["합성 PII 5종을 문맥에<br/>자연스럽게 주입 (§2A)"]
-    PII --> C10["canonical 10종 평면<br/>코퍼스<br/>(단계 4 학습 입력)"]
-```
+### 병합 때 남긴 span
 
-각 단계의 실제 함수·파일명은 아래 소섹션(재라벨·병합·gold-fix)이 상술한다.
-분류기 기본 입력은 `data/wikiann_vi/origin.jsonl`이고 분할은 분류기 내부
-group K-fold가 맡는다(중간 split 파일 경로는 데이터 재정리로 변동).
-
-> 재라벨 품질 측정(kappa·Wikidata anchor·WikiANN gold 비교)은 데이터를
-> 바꾸지 않는 **독립 검증**이라 [3. 검증](3-verification.md)에서 다룬다.
-> 여기서는 *코퍼스를 만드는* merge·gold-fix만 설명한다.
-
-### 재라벨 — Relabeler
-
-`python -m ner.augmenters.wikiann_vi`(CLI)가 HF 원본을 읽어
-`Relabeler`(`relabel.py`)로 재라벨한다. async vLLM 클라이언트
-(`--concurrency`, `--batch-size` N개 레코드/BATCH 프롬프트). 출력 스키마:
-`{id, text, gold_spans, gold_spans_relabel, relabel_model}`.
-
-```bash
-python -m ner.augmenters.wikiann_vi \
-    --model cyankiwi/gemma-4-31B-it-AWQ-8bit \
-    --base-url http://localhost:8081/v1 \
-    --split test --max-samples 1000 \
-    --output data/wikiann_vi/gemma_test.jsonl
-```
-
-프롬프트(`wikiann_vi/prompts.py`)는 canonical-entity-schema.md §2~3의 경계
-규칙을 추가 명시한다: 정기 리그/대회=ORG·특정 연도판=EVT, 작품(음악·영화·
-책·만화·게임·TV)=PROD, "Danh sách…" 무시, Latin binomial 학명 무시, 모델
-번호 단독 무시, 인프라 운영=ORG·노선=LOC.
-
-### 이중 모델 + 신뢰도 병합 — merge_confidence
-
-Gemma·Qwen 두 모델을 **독립 재라벨**한 뒤 출력을 비교해 신뢰도 4
-카테고리로 분류한다(`merge_confidence.py`):
+두 모델 결과는 신뢰도 4 카테고리로 나뉘었다.
 
 ```
 high          두 모델 동일 span+type
@@ -338,35 +296,29 @@ medium_prec   qwen_only  — Qwen만 단독 검출 (precision 측)
 conflict      같은 offset, type 불일치
 ```
 
-7 정책 중 선택(`--policy`, CLI 기본 `recall`). silver 빌드 권장값은
-`recall_strict`:
+그중 남긴 span 은 선택 규칙 하나(`recall_strict_prod`)로 골랐고, 레코드의
+`merge_policy` 에 그 이름이 남아 있다.
 
-| 정책 | PER/LOC/ORG | PROD/EVT |
-|---|---|---|
-| `recall`(CLI 기본) | high + medium_recall | high + medium_recall |
-| `precision` | high + medium_prec | high + medium_prec |
-| `high_only` | high만 | high만 |
-| `full` | 전체(conflict 포함) | 전체 |
-| **`recall_strict`(빌드 권장)** | **high + medium_recall** | **high만** |
+| 타입 | 남긴 span |
+|---|---|
+| PER/LOC/ORG·PROD | high + medium_recall |
+| EVT | high + 한쪽 모델만 낸 span(medium_recall·medium_prec) 중 §3 legit 카테고리 매칭분 |
 
-(+ strict 변형 2종: `recall_strict_evt`=EVT 구제, `recall_strict_prod`=PROD를
-high+medium_recall로 완화.) PROD/EVT는 희소·고난도라 strict로 정밀도를
-지키고, PER/LOC/ORG는 recall을 살린다.
+conflict 와 EVT 외 medium_prec 는 모든 타입에서 버렸다. PER/LOC/ORG 는 Gemma 의
+넓은 recall 을 살렸다. PROD 는 창작물 제목이 silver 누락을 지배하는데 표면 패턴이
+없어 결정론으로 구제할 수 없으므로 Gemma 단독 검출을 믿었다. EVT 는 Qwen 이
+보통명사-핵 서술구를 구조적으로 놓치므로, 한쪽 모델만 낸 span 가운데 §3 가
+EVT 로 명시한 연도대회·조약·전쟁·재해·선거 표면형만 regex 로 다시 확인해 살렸다.
 
-### gold-fix — silver_gap
-
-`silver_gap.apply_silver_gap`은 **외부에서 이미 판정된**(adjudicated) FP→TP
-케이스를 surface 일치·비-겹침 재검증 후 **additive 삽입**한다(etype별 개별
-호출, 기본 `EVT`). 의미적 재감사·판정 자체는 본 함수 밖이며, 그 판정을 만든
-1회성 도구는 폐기돼 재현 경로가 닫혀 있다(방법만 기록). 상세 정량은
-`docs/reports/vietnamese-ner-silver-quality.md`.
+병합 뒤에는 외부에서 판정한 EVT 누락분을 한 번 더 채워 넣었다. 정량은 같은
+리포트에 있다.
 
 ### 이중 silver 인식 (해석 주의)
 
 - WikiANN 원본 = Wikipedia 인터링크 기반 자동 silver
 - 본 5종 라벨 = WikiANN silver를 LLM이 재분류한 추가 silver
-- → **이중 silver**. 절대 F1 비교는 부적합하고, 모델 간 상대 순위·
-  cross-model kappa·Wikidata anchor agreement만 해석 대상([3. 검증](3-verification.md)).
+- → **이중 silver**. 절대 F1 비교는 부적합하고, 모델 간 상대 순위만 해석
+  대상이다.
 
 ---
 
@@ -383,10 +335,10 @@ high+medium_recall로 완화.) PROD/EVT는 희소·고난도라 strict로 정밀
 - `label` ∈ canonical 10종, `start_char`/`end_char`는 반-개구간 `[start,end)`
 - VI 코퍼스는 행마다 **주입 전 원문 `orig` 필드**를 보유한다 — 단계 4의
   원문 단위 group K-fold(cross-fold 누출 차단)의 핵심 키다([3. 검증](3-verification.md)·[4. 분류](4-classification.md)). 단,
-  §2A 표준 주입기(`pii/schema.py`의 `Record`)는 `text/entities/id`만
+  §2A 표준 주입기(`augmenters/schema.py`의 `Record`)는 `text/entities/id`만
   보존하고 입력의 `orig`를 떨군다 — VI의 `orig`는 원문을 함께 실어 주는 VI
   전용 빌드가 부여한 것이지 표준 CLI 산물이 아니다.
-- pii CLI는 출력 JSONL 외에 `*.stats.json`(라벨 빈도·char coverage·PII
+- 주입 CLI는 출력 JSONL 외에 `*.stats.json`(라벨 빈도·char coverage·PII
   없는 샘플 비율)을, verify 시 `*.verify.json` 리포트를 부산물로 남긴다.
 - 로딩: JA는 `JapaneseDatasetLoader.load_local(path)`, 분류기는
   `classifier/data_utils.load_jsonl(path)`(canonical 10종 검증 포함).
@@ -396,5 +348,5 @@ high+medium_recall로 완화.) PROD/EVT는 희소·고난도라 strict로 정밀
 
 ---
 
-**다음 단계** → [3. 검증](3-verification.md): 만든 silver·주입 데이터의
-품질과 분류 평가의 무결성(cross-fold 누출)을 독립적으로 검증한다.
+**다음 단계** → [3. 검증](3-verification.md): 주입 데이터와 분류 평가의
+무결성(cross-fold 누출)을 독립적으로 검증한다.

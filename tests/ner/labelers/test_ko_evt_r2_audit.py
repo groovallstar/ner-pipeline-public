@@ -1,8 +1,4 @@
-"""KO EVT R2 감사·회수 하네스 테스트.
-
-감사와 적용이 같은 판정을 쓰는지가 핵심이다 — 둘이 갈리면 감사가 통과시킨 gold 를
-적용이 다르게 해석해 반영률이 조용히 안 오른다.
-"""
+"""KO EVT R2 감사 하네스 테스트."""
 
 import pytest
 
@@ -14,10 +10,8 @@ from ner.labelers.ko.ko_evt_r2_audit import (
     R2_EXCLUDE,
     R2_HEADS,
     R2C_CEREMONY,
-    apply_decisions,
     check_homomorph,
     find_bare_asymmetry,
-    find_head_candidates,
     find_head_homomorph,
     find_unlabeled_mentions,
     find_violations,
@@ -26,7 +20,6 @@ from ner.labelers.ko.ko_evt_r2_audit import (
     parse_canonical_r2,
     r2_rule_of,
     run_audit,
-    verify_invariants,
 )
 
 
@@ -139,67 +132,6 @@ def test_find_violations_axis3_trim_and_overlap_guard():
     assert [v for v in find_violations(rows_clash) if v.kind == "A3_axis3_trim"] == []
 
 
-# ── 적용 ───────────────────────────────────────────────────────────────
-
-
-def test_apply_inserts_consensus_and_skips_hold():
-    rows = [_row("a", "긴급 기자회견을 열었다", []),
-            _row("b", "시상식을 열었다", [])]
-    decisions = [
-        {"row_index": 0, "start": 3, "end": 7, "surface": "기자회견", "verdict": "EVT"},
-        {"row_index": 1, "start": 0, "end": 3, "surface": "시상식", "verdict": "HOLD"},
-    ]
-    new_rows, stats = apply_decisions(rows, decisions, [])
-    assert stats["recovered"] == 1 and stats["skipped_hold"] == 1
-    assert new_rows[0]["entities"][0] == {
-        "label": "EVT", "start_char": 3, "end_char": 7, "text": "기자회견"}
-    assert new_rows[1]["entities"] == []
-
-
-def test_apply_drops_and_expands_violations():
-    # 확장 대상은 EVT 어휘에 있어야 인식된다 — row "a" 가 `브라질 월드컵` 을 공급한다
-    rows = [
-        _row("a", "브라질 월드컵이 열렸다", [("EVT", 0, 7)]),
-        _row("b", "브라질 월드컵을 봤다", [("EVT", 4, 7)]),
-        _row("c", "테러가 발생했다", [("EVT", 0, 2)]),
-    ]
-    new_rows, stats = apply_decisions(rows, [], find_violations(rows))
-    assert stats["violation_dropped"] == 1 and stats["violation_expanded"] == 1
-    assert new_rows[2]["entities"] == []
-    span, = new_rows[1]["entities"]
-    assert (span["start_char"], span["end_char"], span["text"]) == (0, 7, "브라질 월드컵")
-
-
-def test_apply_maps_by_row_id_not_position():
-    """gold 행 순서가 달라져도 판정이 원래 문장에 붙어야 한다."""
-    rows = [_row("z", "시상식을 열었다", []),
-            _row("a", "긴급 기자회견을 열었다", [])]      # 판정 당시엔 index 0 이었다
-    decisions = [{"row_index": 0, "row_id": "a", "start": 3, "end": 7,
-                  "surface": "기자회견", "verdict": "EVT"}]
-    new_rows, stats = apply_decisions(rows, decisions, [])
-    assert stats["row_index_drift"] == 1 and stats["recovered"] == 1
-    assert new_rows[0]["entities"] == []
-    assert new_rows[1]["entities"][0]["text"] == "기자회견"
-
-
-def test_apply_skips_decision_whose_surface_moved():
-    rows = [_row("a", "완전히 다른 문장이다", [])]
-    decisions = [{"row_index": 0, "row_id": "a", "start": 3, "end": 7,
-                  "surface": "기자회견", "verdict": "EVT"}]
-    new_rows, stats = apply_decisions(rows, decisions, [])
-    assert stats["surface_mismatch_skipped"] == 1
-    assert new_rows[0]["entities"] == []
-
-
-def test_apply_refuses_to_clash_with_existing_span():
-    rows = [_row("a", "기자회견을 열었다", [("PER", 0, 2)])]
-    decisions = [{"row_index": 0, "start": 0, "end": 4, "surface": "기자회견",
-                  "verdict": "EVT"}]
-    new_rows, stats = apply_decisions(rows, decisions, [])
-    assert stats["insert_clash"] == 1 and "recovered" not in stats
-    assert [e["label"] for e in new_rows[0]["entities"]] == ["PER"]
-
-
 # ── bare 비대칭 (보고 전용) ────────────────────────────────────────────
 
 
@@ -219,13 +151,6 @@ def test_bare_asymmetry_is_not_a_gate():
     rep = run_audit(rows)
     assert len(rep.bare_asymmetry) == 1
     assert rep.violations == []
-
-
-def test_judge_rubric_lists_every_r2_form():
-    """판정 rubric 이 canonical R2 표와 어긋나면 그 어긋남이 gold 에 굳는다."""
-    from ner.labelers.ko.ko_evt_r2_audit import JUDGE_TEMPLATE, R2_FORMS
-
-    assert [f for f in R2_FORMS if f not in JUDGE_TEMPLATE] == []
 
 
 # ── canonical ↔ 코드 동기 ──────────────────────────────────────────────
@@ -494,35 +419,3 @@ def test_audit_ledger_matches_sites_not_surfaces():
                "surface": "다보스포럼", "verdict": "NOT"}]
     rep = run_audit(rows, ledger=ledger)
     assert [(c.row_id, c.start) for c in rep.candidates] == [("b", 0)]
-
-
-def test_head_candidates_come_from_rules_not_predictions():
-    """후보는 canonical head 스캔에서 온다 — 모델 예측이 입력이 아니다.
-
-    후보 모집단을 모델 FP 로 잡으면 gold 가 모델이 이미 발화한 자리에서만 늘어
-    recall 상승이 구조적으로 보장되고, 그 gold 로 그 모델을 다시 재면 순환이다.
-    """
-    cands = find_head_candidates(_homomorph_rows())
-    surfaces = {c.surface for c in cands}
-    assert surfaces == {"주교회의"}
-    # canonical 이 명시 제외한 것을 다시 판정 대상으로 올리면 판정이 표를 덮는다
-    assert "군법회의" not in surfaces
-    assert cands[0].rule == "R2원칙 head=회의"
-
-
-# ── 불변식 ─────────────────────────────────────────────────────────────
-
-
-def test_verify_invariants_detects_frozen_type_change():
-    before = [_row("a", "박씨가 왔다", [("PER", 0, 1)])]
-    after = [_row("a", "박씨가 왔다", [("LOC", 0, 1)])]
-    assert verify_invariants(before, after)["frozen_types_identical"] is False
-
-
-def test_verify_invariants_passes_on_evt_only_change():
-    before = [_row("a", "기자회견을 열었다", [("PER", 6, 8)])]
-    after = _row("a", "기자회견을 열었다", [("EVT", 0, 4), ("PER", 6, 8)])
-    checks = verify_invariants(before, [after])
-    assert checks["frozen_types_identical"] is True
-    assert checks["span_text_mismatch"] == 0 and checks["entity_overlap"] == 0
-    assert (checks["evt_before"], checks["evt_after"]) == (0, 1)

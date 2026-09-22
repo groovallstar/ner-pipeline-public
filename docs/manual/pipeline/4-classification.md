@@ -47,7 +47,7 @@ flowchart LR
 
 ## 1. 입력 계약·라벨 셋
 
-augmenters/pii·augmenters/wikiann_vi 출력(단계 2)을 그대로 소비한다.
+augmenters 출력(단계 2)을 그대로 소비한다.
 
 ```jsonl
 {"text": "...",
@@ -107,8 +107,7 @@ SentencePiece 계열이 char-offset을 어긋나게 하는 두 경우를 교정�
 
 선행 공백 + 후행 `.`/`,`(`_TRAIL_PUNCT`)를 trim하면 토크나이저 무관하게
 정렬되고, 이미 분리하는 XLM-R 계열엔 사실상 no-op이다. `)`·`:` 등은 entity에
-정당히 포함될 수 있어 trim 대상에서 제외. `--legacy-no-offset-trim`으로 끌
-수 있다(진단·구 동작 재현).
+정당히 포함될 수 있어 trim 대상에서 제외.
 
 **trim 결과가 비면 원래 offset을 돌려준다.** 토큰이 공백·문장부호만으로
 이뤄지면 trim이 그것을 통째로 지워 길이 0이 되는데, 아래 포함 검사가 양끝을
@@ -232,7 +231,7 @@ elapsed, best_dir = fine_tune(
     model_name=..., train_features=..., eval_features=...,
     label2id=..., id2label=..., output_dir=...,
     epochs=5, batch_size=16, lr=5e-5,
-    class_weights=None, init_model_path=None,
+    class_weights=None,
     precision='fp16', train_seed=None,
 )
 ```
@@ -248,13 +247,6 @@ elapsed, best_dir = fine_tune(
 `B-`/`I-`/`O` 토큰별 weight를 줘 entity 경계 학습을 강조할 수 있고, CLI
 `--boundary-b-weight`/`--boundary-i-weight`로 노출된다(미지정 시 1.0 = 표준
 CE).
-
-### NER warmup curriculum
-
-`mask_pii_in_features`가 features의 PII BIO 라벨을 모두 `O`로 치환한 새
-리스트를 만든다(원본 불변, `-100` 보존). 1단계에서 NER만 학습 → 2단계에서
-`init_model_path`로 이어 PII 포함 전체 학습하는 curriculum용. CLI
-`--curriculum --curriculum-stage1-epochs N`으로 기동한다.
 
 ### 재현성·정밀도
 
@@ -380,9 +372,6 @@ baseline으로 보존.
 python -m ner.classifier --lang ja --fit-threshold
 python -m ner.classifier --lang ja --confidence-thresholds path/to/thresholds.json
 ```
-
-`--data-extra-train-jsonl PATH`는 별 JSONL을 train split에만 합치고
-valid/test는 `--data` 원본 split 유지(oversampling 보강 시 leak 방지, BC).
 
 ---
 
@@ -630,7 +619,7 @@ python -m pytest tests/ner/classifier/ -q
 ```
 
 - `test_data_utils.py` — 라벨 맵 / BIO 정렬 / span 디코드 / split 결정성 /
-  층화·group K-fold 무결성·BC / curriculum mask
+  층화·group K-fold 무결성·BC
 - `test_encode.py` — 실제 토크나이저(JA·VI·DeBERTa-V3·PhoBERT) round-trip
 - `test_error_analysis.py` — span 오류 분류·집계·검수 샘플링
 - `test_kfold_pool.py` — pooled F1 손계산 일치 / cross-fold 누출 검출·카운트

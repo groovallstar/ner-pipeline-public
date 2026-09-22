@@ -1,10 +1,9 @@
 """영어 라벨러 — 프롬프트·설정 계약. 네트워크를 쓰지 않는다.
 
 라벨러의 실제 추출 품질은 vLLM 이 있어야 재므로 여기서는 다루지 않는다.
-이 파일이 고정하는 것은 **라벨 공간과 경계 선언이 매핑표와 어긋나지 않는가**
-이며, 어긋나면 주입 검증이 gold 와 다른 자로 재게 된다.
+이 파일이 고정하는 것은 **라벨 공간과 경계 선언이 canonical §4.3 과 어긋나지
+않는지**이며, 어긋나면 주입 검증이 gold 와 다른 자로 재게 된다.
 """
-from ner.augmenters.ontonotes_en.mapping import PRODUCED_LABELS
 from ner.labelers.en import DEFAULT_ENTITY_TYPES, SINGLE_PROMPT_TEMPLATE
 from ner.labelers.en.vllm_ner_labeler import VllmNERLabeler
 
@@ -25,11 +24,6 @@ def _labelled_line(label: str) -> str:
 def test_entity_types_are_the_canonical_ten():
     assert set(DEFAULT_ENTITY_TYPES) == CANONICAL_10
     assert len(DEFAULT_ENTITY_TYPES) == 10
-
-
-def test_labeler_covers_every_label_the_converter_produces():
-    """변환기가 만드는 라벨을 라벨러가 모르면 검증에서 전부 missed 가 된다."""
-    assert PRODUCED_LABELS <= set(DEFAULT_ENTITY_TYPES)
 
 
 def test_prompt_takes_the_expected_placeholders():

@@ -42,14 +42,15 @@ flowchart TD
 | 단계 | 핵심 코드 | JA 분기 | VI 분기 | 문서 |
 |---|---|---|---|---|
 | **1 라벨링** | `labelers/{ja,vi}`, `labelers/span_matcher`(ja·vi·ko 공용), `llm_eval`, `metrics` | Stockmark gold | WikiANN, offset-span 경로 | [1-labeling.md](1-labeling.md) |
-| **2 증강** | `augmenters/pii`, `augmenters/wikiann_vi` | PII 주입만 | **재라벨 silver → PII 주입** | [2-augmentation.md](2-augmentation.md) |
-| **3 검증** | `wikiann_vi/{kappa,wikidata_anchor,merge_confidence}`, `classifier/kfold_pool`, `pii/verifier` | PII 교차검증 | **kappa + anchor + silver quality + cross-fold 누출** | [3-verification.md](3-verification.md) |
+| **2 증강** | `augmenters` | PII 주입만 | **재라벨 silver(도구 삭제) → PII 주입** | [2-augmentation.md](2-augmentation.md) |
+| **3 검증** | `classifier/kfold_pool`, `augmenters/verifier` | PII 교차검증 | **PII 교차검증 + cross-fold 누출** | [3-verification.md](3-verification.md) |
 | **4 분류** | `classifier/` | BertJapanese (slow) | XLM-R (fast) / PhoBERT (pyvi) | [4-classification.md](4-classification.md) |
 
-**비대칭성** — 증강·검증 단계는 VI 쪽이 무겁다. VI는 원천 gold가 3종
-silver뿐이라 5종 재라벨·이중 silver 검증이 필요한 반면, JA는 5종 사람
-gold라 재라벨·anchor 검증이 불필요하다. 그래서 단계 문서를 언어별로 쪼개지
-않고 단계당 1개로 두되 분기 섹션으로 비대칭을 드러낸다.
+**비대칭성** — 코퍼스를 만들 때 증강·검증은 VI 쪽이 무거웠다. VI는 원천 gold가
+3종 silver뿐이라 5종 재라벨·이중 silver 검증이 필요했던 반면, JA는 5종 사람
+gold라 재라벨·anchor 검증이 불필요했다. VI 재라벨·검증 도구는 코퍼스를 만든 뒤
+지웠다. 단계 문서는 언어별로 쪼개지 않고 단계당 1개로 두되 분기 섹션으로
+비대칭을 드러낸다.
 
 ---
 
@@ -70,7 +71,9 @@ PII 5종:  DAT  EMAIL  PHONE  ID_NUM  CREDIT_CARD
 
 ## 단계 하나가 빠지는 영어 경로
 
-EN 은 위 네 단계를 그대로 타지 않는다. **1 단계(라벨링)가 없다.**
+EN 은 위 네 단계를 그대로 타지 않는다. **1 단계(라벨링)가 없다.** 아래는 현 EN
+코퍼스를 만든 경로이며, 변환·그룹 복원 코드는 코퍼스를 만든 뒤 지웠다. 지우기 전
+코드는 커밋 `ec1c8eb` 의 `src/ner/augmenters/ontonotes_en/` 에 남아 있다.
 
 ```mermaid
 flowchart TD
@@ -92,16 +95,16 @@ EN 은 둘 다 필요 없다. OntoNotes5 가 `PRODUCT`·`WORK_OF_ART`·`EVENT` �
 **네 언어 중 EN 만 원천이 넘친다.** 그래서 이 파이프라인의 위험도 반대편에
 있다 — ja·vi 는 "없는 것을 지어내다 틀리는" 위험이었지만 EN 은 "있는 것을
 버리다 잃는" 위험이다. 18 타입 중 9 타입(28,418 span)을 실제로 버린다.
-그 위험을 막는 것이 매핑표 전수성 게이트와 타입별 span 카운트 고정이다
-(`src/ner/augmenters/ontonotes_en/`).
+코퍼스를 만들 때 그 위험은 매핑표 전수성 게이트와 타입별 span 카운트 고정이
+막았다. 매핑의 정본은 canonical §4.3 이다.
 
-### 1' 변환 단계가 하는 일
+### 1' 변환 단계가 한 일
 
-| 하는 일 | 왜 필요한가 |
+| 한 일 | 필요했던 이유 |
 |---|---|
 | 자연문 복원 | 원본이 토큰 배열이라 이 저장소의 공용 통화인 char-offset span 이 안 나온다. 영어는 복원 규칙이 결정적이라 가능하다 |
 | 18 → 6 매핑 | 대부분은 canonical 규칙이 이미 강제하던 것이지만 인프라 경계는 고른 것이라(KO 는 인공 시설을 통째로 버린다) 기준 파일에 §4.3 으로 적었다. EN 은 §3 대로 **개별 구조물은 `ORG`, 여러 지점을 잇는 경로는 `LOC`** 이며, 원본 `FAC` 가 둘을 한 타입에 담아 판정이 표면별이다 |
-| 엔티티↔원본 토큰 대조 | 변환기가 자기 결과를 자기가 통과시키지 못하게 한다 — 비교 상대가 우리가 만들지 않은 원본 토큰 배열이다 |
+| 엔티티↔원본 토큰 대조 | 변환기가 자기 결과를 자기가 통과시키지 못하게 했다 — 비교 상대가 우리가 만들지 않은 원본 토큰 배열이었다 |
 
 ### 검증에서 갈리는 지점
 

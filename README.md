@@ -42,7 +42,7 @@ LLM 라벨링은 **vLLM 하나**다 — 로컬 GPU 에 띄운 vLLM 의 OpenAI �
 src/ner/
 ├── labelers/{ko,ja,vi,en}/  # 언어별 LLM 라벨러
 ├── llm_eval/              # 벤치마크 오케스트레이션·리포트
-├── augmenters/{pii,wikiann_vi,ontonotes_en}/  # 학습 데이터 증강
+├── augmenters/            # 학습 데이터 증강 (합성 PII 주입)
 ├── classifier/            # BERT 토큰 분류 파인튜닝
 ├── metrics/               # span/BIO 메트릭 공용 구현
 ├── validity/              # K-fold 분산·비교타당성 게이트 (재학습 0회)
