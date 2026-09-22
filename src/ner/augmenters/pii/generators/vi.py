@@ -119,17 +119,41 @@ def generate_address(rng: random.Random | None = None) -> str:
     )
 
 
+# 날짜 표면형과 목표 비율(숫자 60 : 서술형 40). 숫자 표기를 과반으로 남기는 것은
+# 그것이 서식·증서·기록에 실제로 쓰이는 표기이고, 현 DAT metric 이 그 표기 위에서
+# 나온 값이라 너무 깎으면 무회귀 기준이 흔들리기 때문이다.
+VIETNAMESE_DAT_PATTERNS = (
+    ('{d:02d}/{m:02d}/{y:04d}', 20),
+    ('{y:04d}-{m:02d}-{d:02d}', 20),
+    ('{d:02d}-{m:02d}-{y:04d}', 20),
+    ('{d} tháng {m} năm {y}', 40),
+)
+
+
 def generate_dat(rng: random.Random | None = None) -> str:
-    """베트남식 날짜 (출생일·사건일·일반 표기 공통)."""
+    """베트남식 날짜 (출생일·사건일·일반 표기 공통).
+
+    숫자 표기 세 가지와 서술형 `D tháng M năm Y` 를 낸다. 서술형은 베트남어의
+    일상 날짜 표기인데 예전에는 숫자 표기만 내서 학습 커버리지가 0 이었고,
+    그래서 모델이 `ngày 15 tháng 3 năm 2024` 를 조각내거나 통째로 놓쳤다.
+
+    값 앞에 `ngày` 는 붙이지 않는다. 그 자리를 채우는 것은 LLM 주입기이고,
+    gold span 도 `ngày` 를 밖에 둔다. 생성기가 달고 나가면 `ngày ngày 15 ...`
+    가 된다.
+
+    월-연 표기 `tháng M năm Y` 는 여기서 내지 않는다. 값 앞에 `ngày` 가 붙을지를
+    생성기가 통제하지 못해 `ngày tháng 5 năm 1988` 같은 깨진 문맥이 나온다.
+    앞 글자까지 함께 보는 코퍼스 치환 경로만 그 형식을 안전하게 만들 수 있다.
+    """
     r = rng or random
     y = r.randint(1950, 2005)
     m = r.randint(1, 12)
     d = r.randint(1, 28)
-    pattern = r.choice([
-        '{d:02d}/{m:02d}/{y:04d}',
-        '{y:04d}-{m:02d}-{d:02d}',
-        '{d:02d}-{m:02d}-{y:04d}',
-    ])
+    pattern = r.choices(
+        [p for p, _ in VIETNAMESE_DAT_PATTERNS],
+        weights=[w for _, w in VIETNAMESE_DAT_PATTERNS],
+        k=1,
+    )[0]
     return pattern.format(y=y, m=m, d=d)
 
 

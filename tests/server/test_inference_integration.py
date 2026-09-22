@@ -40,16 +40,27 @@ _EN_TEST = os.path.join(_CONFIG.model_root, 'en', 'data', 'test.jsonl')
 _JA_METRICS = os.path.join(_CONFIG.model_root, 'ja', 'metrics.json')
 _KO_METRICS = os.path.join(_CONFIG.model_root, 'ko', 'metrics.json')
 _EN_METRICS = os.path.join(_CONFIG.model_root, 'en', 'metrics.json')
+_VI_METRICS = os.path.join(_CONFIG.model_root, 'vi', 'metrics.json')
 _JA_PARITY_READY = (os.path.isdir(_JA_DIR) and os.path.isfile(_JA_TEST)
                     and os.path.isfile(_JA_METRICS))
 _KO_PARITY_READY = (os.path.isdir(_KO_DIR) and os.path.isfile(_KO_TEST)
                     and os.path.isfile(_KO_METRICS))
 _EN_PARITY_READY = (os.path.isdir(_EN_DIR) and os.path.isfile(_EN_TEST)
                     and os.path.isfile(_EN_METRICS))
+_VI_PARITY_READY = (os.path.isdir(_VI_DIR) and os.path.isfile(_VI_TEST)
+                    and os.path.isfile(_VI_METRICS))
+
 _JA_CHUNK_READY = os.path.isdir(_JA_DIR) and os.path.isfile(_JA_TEST)
 _VI_CHUNK_READY = os.path.isdir(_VI_DIR) and os.path.isfile(_VI_TEST)
 _KO_CHUNK_READY = os.path.isdir(_KO_DIR) and os.path.isfile(_KO_TEST)
 _EN_CHUNK_READY = os.path.isdir(_EN_DIR) and os.path.isfile(_EN_TEST)
+
+# parity 대조의 허용 오차. 부동소수점 정밀도 손잡이가 아니라 **span 몇 개까지
+# 달라도 같은 패키지로 볼 것인가**의 손잡이다 — test support 가 수천 규모라
+# span 하나가 F1 을 1e-4 안팎 움직인다. 그래서 이 값은 "한 자리까지는 배치
+# 구성·드라이버 차이로 보고 넘긴다" 는 선언이고, 그보다 크면 모델·토크나이저·
+# 디코드 경로 중 하나가 갈렸다고 읽는다.
+_PARITY_ABS = 1e-4
 
 
 def _assert_offsets_consistent(model, text):
@@ -422,9 +433,9 @@ def test_ja_parity_operating_point():
     expected = json.load(open(_JA_METRICS, encoding='utf-8'))[
         'confidence_threshold']['overall_operating']
     got = _overall_f1(model, rows, apply_threshold=True)
-    assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
-    assert got['precision'] == pytest.approx(expected['precision'], abs=1e-6)
-    assert got['recall'] == pytest.approx(expected['recall'], abs=1e-6)
+    assert got['f1'] == pytest.approx(expected['f1'], abs=_PARITY_ABS)
+    assert got['precision'] == pytest.approx(expected['precision'], abs=_PARITY_ABS)
+    assert got['recall'] == pytest.approx(expected['recall'], abs=_PARITY_ABS)
 
 
 @pytest.mark.skipif(not _JA_PARITY_READY,
@@ -437,7 +448,7 @@ def test_ja_parity_baseline_raw():
     expected = json.load(open(_JA_METRICS, encoding='utf-8'))[
         'confidence_threshold']['overall_baseline']
     got = _overall_f1(model, rows, apply_threshold=False)
-    assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
+    assert got['f1'] == pytest.approx(expected['f1'], abs=_PARITY_ABS)
 
 
 @pytest.mark.skipif(not _KO_PARITY_READY,
@@ -455,9 +466,9 @@ def test_ko_parity_baseline_raw():
     rows = load_jsonl(_KO_TEST)
     expected = json.load(open(_KO_METRICS, encoding='utf-8'))['overall_strict']
     got = _overall_f1(model, rows, apply_threshold=False)
-    assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
-    assert got['precision'] == pytest.approx(expected['precision'], abs=1e-6)
-    assert got['recall'] == pytest.approx(expected['recall'], abs=1e-6)
+    assert got['f1'] == pytest.approx(expected['f1'], abs=_PARITY_ABS)
+    assert got['precision'] == pytest.approx(expected['precision'], abs=_PARITY_ABS)
+    assert got['recall'] == pytest.approx(expected['recall'], abs=_PARITY_ABS)
     assert got['support'] == expected['support']
 
 
@@ -476,9 +487,34 @@ def test_en_parity_baseline_raw():
     rows = load_jsonl(_EN_TEST)
     expected = json.load(open(_EN_METRICS, encoding='utf-8'))['overall_strict']
     got = _overall_f1(model, rows, apply_threshold=False)
-    assert got['f1'] == pytest.approx(expected['f1'], abs=1e-6)
-    assert got['precision'] == pytest.approx(expected['precision'], abs=1e-6)
-    assert got['recall'] == pytest.approx(expected['recall'], abs=1e-6)
+    assert got['f1'] == pytest.approx(expected['f1'], abs=_PARITY_ABS)
+    assert got['precision'] == pytest.approx(expected['precision'],
+                                             abs=_PARITY_ABS)
+    assert got['recall'] == pytest.approx(expected['recall'], abs=_PARITY_ABS)
+    assert got['support'] == expected['support']
+
+
+@pytest.mark.skipif(not _VI_PARITY_READY,
+                    reason='vi model/test/metrics not all present')
+def test_vi_parity_baseline_raw():
+    """vi: 서버 predict 의 raw F1 이 배포 metrics.json 과 일치.
+
+    vi 는 thresholds 없이 출하돼 raw 가 운영점이므로 대조 대상이 하나다
+    (ko·en 과 같은 모양). 토크나이저가 slow(`PhobertTokenizer`)이고 fast 판이
+    없어, 배포 패키지가 동봉한 토크나이저가 갈리면 학습 경로와 다른 분절이
+    나온다. 이 대조가 그 자리를 잡는다.
+
+    네 언어 중 vi 만 이 검사가 없어서 배포 교체를 눈으로 대조해 왔다.
+    """
+    model = LangModel('vi', _VI_DIR, _CONFIG.thresholds_path('vi'),
+                      _CONFIG.max_length)
+    rows = load_jsonl(_VI_TEST)
+    expected = json.load(open(_VI_METRICS, encoding='utf-8'))['overall_strict']
+    got = _overall_f1(model, rows, apply_threshold=False)
+    assert got['f1'] == pytest.approx(expected['f1'], abs=_PARITY_ABS)
+    assert got['precision'] == pytest.approx(expected['precision'],
+                                             abs=_PARITY_ABS)
+    assert got['recall'] == pytest.approx(expected['recall'], abs=_PARITY_ABS)
     assert got['support'] == expected['support']
 
 
