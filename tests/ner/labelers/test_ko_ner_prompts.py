@@ -1,6 +1,6 @@
 """한국어 NER 프롬프트의 규칙 정합성 테스트.
 
-**few-shot 예시도 규칙의 일부다**(`docs/specs/coding-conventions.md`). 규칙 문장을
+**few-shot 예시도 규칙의 일부다**(`docs/manual/specs/coding-conventions.md`). 규칙 문장을
 고치고 예시를 안 고치면 프롬프트가 같은 모양에 두 답을 가르치는데, 그건 어느 한쪽을
 고르는 것보다 무조건 나쁘고 **어떤 기계 검사도 안 잡는다** — 게이트는 diff 의 글자만
 읽고, 라벨러 출력은 LLM 을 불러야 보인다. 그래서 예시에서 기계로 확인할 수 있는 것을
