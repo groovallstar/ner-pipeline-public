@@ -6,9 +6,10 @@
 
 - `docs/issues/`에는 AI가 작업을 이어가고 이력을 추적할 작업 기록을 둔다.
   이슈·작업 문서의 생성·갱신 절차와 양식은 [이슈 문서 지침](issues/AGENTS.md)을 따른다.
-- `docs/specs/`에는 설계·요구사항·규약을 둔다.
 - `docs/manual/`에는 현재 구현의 사용·운영 방법과 데이터 스키마를 둔다.
+  설계·요구사항·규약은 그 하위 `docs/manual/specs/`에 둔다.
 - `docs/reports/`에는 사람에게 전달할 실험·평가 결과와 분석을 둔다.
+  리포트 작성 기준은 [리포트 지침](reports/AGENTS.md)을 따른다.
 - `docs/wiki/`에는 LLM Wiki 자료를 둔다. 위키 작업은 `docwiki` 스킬을 따른다.
 
 ## 공통 작성 기준

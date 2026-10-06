@@ -27,7 +27,12 @@ def compute_offset_span_f1(
     Returns:
         {"overall": {"f1", "precision", "recall", "support"},
          "per_entity": {"人名": {"f1", ...}, ...}}
+
+    Raises:
+        ValueError: 정답과 예측의 문장 수가 다를 때 발생한다.
+            엔티티가 없는 문장도 빈 리스트로 포함해야 한다.
     """
+    _validate_sentence_counts(gold_spans_list, pred_spans_list)
     all_gold: set = set()
     all_pred: set = set()
     per_entity_gold: Dict[str, set] = {}
@@ -84,7 +89,12 @@ def compute_offset_span_f1_relaxed(
     Returns:
         {"overall": {"f1", "precision", "recall", "support"},
          "per_entity": {entity: {"f1", ...}, ...}}
+
+    Raises:
+        ValueError: 정답과 예측의 문장 수가 다를 때 발생한다.
+            엔티티가 없는 문장도 빈 리스트로 포함해야 한다.
     """
+    _validate_sentence_counts(gold_spans_list, pred_spans_list)
     overall_cor = 0
     overall_par = 0
     overall_pos = 0
@@ -140,6 +150,17 @@ def compute_offset_span_f1_relaxed(
 
     return {"overall": overall, "per_entity": per_entity_out}
 
+
+def _validate_sentence_counts(
+    gold_spans_list: List[List[dict]],
+    pred_spans_list: List[List[dict]],
+) -> None:
+    """문장 누락이 채점에서 숨겨지지 않도록 양쪽 문장 수를 확인한다."""
+    if len(gold_spans_list) != len(pred_spans_list):
+        raise ValueError(
+            'Sentence count mismatch: '
+            f'gold={len(gold_spans_list)}, pred={len(pred_spans_list)}'
+        )
 
 def _prf_from_counts(tp: int, pred_count: int, gold_count: int) -> dict:
     """카운트로부터 precision, recall, F1을 계산한다."""
